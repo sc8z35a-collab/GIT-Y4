@@ -181,7 +181,7 @@ export class SpatialForestAudio {
     src.start(t, Math.random() * 1.5, 0.32);
   }
 
-  updateEngine(active, speedNorm = 0) {
+  updateEngine(active, speedNorm = 0, profile = 'diesel') {
     if (!this.ctx || this.muted) {
       if (this.engineGain && this.ctx) {
         this.engineGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.12);
@@ -203,9 +203,10 @@ export class SpatialForestAudio {
       this.engineOsc.start();
     }
     const t = this.ctx.currentTime;
-    const targetGain = active ? (0.048 + Math.min(1, speedNorm) * 0.045) : 0.0;
-    const targetFreq = 44 + Math.min(1, speedNorm) * 42;
-    const targetCutoff = 115 + Math.min(1, speedNorm) * 165;
+    const isKei = profile === 'kei';
+    const targetGain = active ? ((isKei ? 0.036 : 0.048) + Math.min(1, speedNorm) * 0.040) : 0.0;
+    const targetFreq = (isKei ? 68 : 44) + Math.min(1, speedNorm) * (isKei ? 74 : 42);
+    const targetCutoff = (isKei ? 195 : 115) + Math.min(1, speedNorm) * (isKei ? 260 : 165);
     this.engineGain.gain.setTargetAtTime(targetGain, t, 0.10);
     this.engineOsc.frequency.setTargetAtTime(targetFreq, t, 0.09);
     this.engineFilt.frequency.setTargetAtTime(targetCutoff, t, 0.10);

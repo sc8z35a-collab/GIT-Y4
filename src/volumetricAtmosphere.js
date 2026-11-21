@@ -82,6 +82,7 @@ const MIST_FRAG = /* glsl */ `
   uniform float uTime;
   uniform vec3 uMistColor;
   uniform vec4 uCamperPose;
+  uniform vec4 uKeiPose;
   varying vec2 vUv;
   varying vec3 vWorldPos;
 
@@ -114,7 +115,7 @@ const MIST_FRAG = /* glsl */ `
   }
 
   void main() {
-    // Mask mist out of Main Tower, Neighbor Annex, Concrete Warehouse, AND Movable Giant Camper OBB!
+    // Mask mist out of Main Tower, Neighbor Annex, Concrete Warehouse, Movable Giant Camper, AND Movable Daily Kei-Van!
     float dx1 = max(max(0.0 - vWorldPos.x, vWorldPos.x - 5.0), 0.0);
     float dz1 = max(max(0.0 - vWorldPos.z, vWorldPos.z - 11.2), 0.0);
     float distMain = length(vec2(dx1, dz1));
@@ -134,7 +135,14 @@ const MIST_FRAG = /* glsl */ `
     );
     float distCamper = length(max(abs(locC) - vec2(1.42, 3.82), 0.0));
 
-    float outsideDist = min(min(min(distMain, distAnnex), distStorage), distCamper);
+    vec2 relK = vWorldPos.xz - uKeiPose.xy;
+    vec2 locK = vec2(
+      relK.x * uKeiPose.z - relK.y * uKeiPose.w,
+      relK.x * uKeiPose.w + relK.y * uKeiPose.z
+    );
+    float distKei = length(max(abs(locK) - vec2(0.82, 1.78), 0.0));
+
+    float outsideDist = min(min(min(min(distMain, distAnnex), distStorage), distCamper), distKei);
     float houseMask = smoothstep(0.35, 2.0, outsideDist);
 
     float radialFade = 1.0 - smoothstep(22.0, 46.0, length(vWorldPos.xz - vec2(1.0, 4.5)));
@@ -156,6 +164,7 @@ export function createVolumetricAtmosphere(scene) {
   const uniforms = {
     uTime: { value: 0 },
     uCamperPose: { value: new THREE.Vector4(7.75, 5.75, 1.0, 0.0) },
+    uKeiPose: { value: new THREE.Vector4(3.55, -3.60, 1.0, 0.0) },
   };
 
   function addMoonShaft(x, y, z, w, length, rotX, rotY, rotZ, opacity = 0.088) {
@@ -220,6 +229,7 @@ export function createVolumetricAtmosphere(scene) {
         uTime: uniforms.uTime,
         uMistColor: { value: new THREE.Color(layer.col) },
         uCamperPose: uniforms.uCamperPose,
+        uKeiPose: uniforms.uKeiPose,
       },
       transparent: true,
       depthWrite: false,
@@ -234,7 +244,7 @@ export function createVolumetricAtmosphere(scene) {
 
   return {
     group,
-    update(elapsed, camperPose = null) {
+    update(elapsed, camperPose = null, keiPose = null) {
       uniforms.uTime.value = elapsed;
       if (camperPose) {
         uniforms.uCamperPose.value.set(
@@ -242,6 +252,14 @@ export function createVolumetricAtmosphere(scene) {
           camperPose.cz,
           Math.cos(camperPose.yaw),
           Math.sin(camperPose.yaw),
+        );
+      }
+      if (keiPose) {
+        uniforms.uKeiPose.value.set(
+          keiPose.cx,
+          keiPose.cz,
+          Math.cos(keiPose.yaw),
+          Math.sin(keiPose.yaw),
         );
       }
     },

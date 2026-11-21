@@ -99,7 +99,7 @@ export class AdaptiveMobileEngine {
    * 3-Building Spatial Portal Light Culler (Main 6-Level Tower + Annex 4-Level + Concrete Storage 2-Level):
    * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant on POCO F7!
    */
-  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', propStates }) {
+  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', doorOpenMap = {}, propStates }) {
     for (const entry of this.house.interiorLights) {
       if (entry.name === 'Tatami_Lantern' && !propStates.lantern_1f) {
         entry.light.intensity = 0;
@@ -128,9 +128,14 @@ export class AdaptiveMobileEngine {
       if (b === 'both') {
         weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
       } else if (activeBuilding === 'courtyard') {
-        // Outdoors in the compound courtyard: keep strictly <= 6 GPU lights active on POCO F7!
-        if (entry.floor === 1 && (entry.zone === 'exterior' || (b === 'main' && entry.zone === 'ldk'))) {
-          weight = entry.zone === 'exterior' ? 1.0 : 0.42;
+        // Outdoors in the compound courtyard: keep strictly <= 7 GPU lights active on POCO F7!
+        const keiDoorOpen = Boolean(doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D']);
+        if (b === 'kei' && keiDoorOpen) {
+          weight = 0.90; // Authentic automatic dome light when opening Kei-Van cargo doors!
+        } else if (entry.floor === 1 && entry.zone === 'exterior') {
+          weight = 1.0;
+        } else if (!keiDoorOpen && entry.floor === 1 && b === 'main' && entry.zone === 'ldk') {
+          weight = 0.42;
         }
       } else if (b === activeBuilding) {
         if (entry.floor === currentFloor) {
@@ -144,7 +149,7 @@ export class AdaptiveMobileEngine {
         } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
           weight = 0.20;
         }
-      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage' && b !== 'camper') {
+      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage' && b !== 'camper' && b !== 'kei') {
         weight = 0.55;
       }
 

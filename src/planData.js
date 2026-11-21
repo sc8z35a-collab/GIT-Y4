@@ -1616,12 +1616,13 @@ const STORAGE_2F = {
 };
 
 import { CAMPER, CAMPER_SHEETS } from './camperData.js';
-export { CAMPER, CAMPER_SHEETS };
+import { KEI, KEI_PLAN } from './keiData.js';
+export { CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN };
 
 export const FLOORS = [FLOOR_B1F, FLOOR_1F, FLOOR_2F, FLOOR_3F, FLOOR_4F, FLOOR_RF];
 export const ANNEX_FLOORS = [ANNEX_1F, ANNEX_2F, ANNEX_3F, ANNEX_ATTIC];
 export const STORAGE_FLOORS = [STORAGE_1F, STORAGE_2F];
-export const BLUEPRINT_SHEETS = [...FLOORS, ...ANNEX_FLOORS, ...STORAGE_FLOORS, ...CAMPER_SHEETS];
+export const BLUEPRINT_SHEETS = [...FLOORS, ...ANNEX_FLOORS, ...STORAGE_FLOORS, ...CAMPER_SHEETS, KEI_PLAN];
 export const ALL_ROOMS = BLUEPRINT_SHEETS.flatMap((f) => f.rooms);
 export const ROOMS = FLOOR_1F.rooms;
 export const WALLS = FLOOR_1F.walls;
@@ -1637,6 +1638,7 @@ export const FINISH_SCHEDULE = [
   { floor: '倉庫棟1〜2F', room: '別棟2×2m 灰色RC倉庫（計4室）', floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート', wallTex: 'concrete_pcon', wallName: '低天井コンクリート固め (CH1,920)', accentTex: 'metal_grate', accentName: '外鉄骨階段・スチール棚・鋼製扉' },
   { floor: 'RV 1F', room: '巨大キャンピングカー1F 全14室＋極狭廊下', floorTex: 'wood_walnut_floor', floorName: 'ウォールナット / 防滑ゴム / 浴室タイル', wallTex: 'exterior_siding_grey', wallName: '断熱装甲FRP外装・木縦格子・装甲シェルター', accentTex: 'tile_emerald_gloss', accentName: '高天井CH3,020天窓・W460廊下' },
   { floor: 'RV 2F', room: '巨大キャンピングカー2F ロフト2室＋ブリッジ', floorTex: 'carpet_beige', floorName: '防音ベージュカーペット / 琉球半帖畳', wallTex: 'plywood_attic', wallName: '構造合板ロフト内装・上部パノラマ窓', accentTex: 'wood_walnut_floor', accentName: '強化ガラス手摺吹抜・STC1梯子' },
+  { floor: '軽バン', room: '日常使い軽自動車(3.40×1.48×1.80m・1席+荷室)', floorTex: 'rubber_black_stud', floorName: '荷室防滑リブゴム＋コンパネ合板下地', wallTex: 'panel_white_vert', wallName: '商用アイボリー鋼板外装・合板DIY内張', accentTex: 'crate_wood', accentName: 'RHD1席のみ・DIY2段棚・オリコン' },
 ];
 
 export const OPENING_SCHEDULE = [
@@ -1646,6 +1648,8 @@ export const OPENING_SCHEDULE = [
   { code: 'DAR-1〜5', kind: '隣棟 屋根裏 5部屋引戸', size: 'W720〜740×H1740', spec: '6寸勾配小屋裏対応 ローハイト引戸×5（全5室独立アクセス）' },
   { code: 'DS-1〜22 / STS1', kind: 'コンクリート倉庫棟 鋼製扉・外階段', size: 'W700〜720×H1760', spec: '低天井RC倉庫 1F/2F外開鋼製扉・間仕切鉄引戸・外鉄骨階段(11段)' },
   { code: 'DC-1〜14 / STC1', kind: '巨大キャンピングカー全15扉・ロフト梯子', size: 'W460〜580×H1880', spec: '外開RV扉(DC-1)・14室全引戸(装甲扉DC-10含む)・STC1ロフト階段(9段)' },
+  { code: 'DK-D / DK-L / DK-R', kind: '日常使い軽バン 運転席扉・スライド・跳上ハッチ', size: 'W800〜1180×H1300', spec: '右運転席外開(DK-D)・左外スライド荷室扉(DK-L)・リア跳上ハッチ(DK-R)' },
 ];
+
 
 

@@ -6,6 +6,7 @@ import { injectForestWindShader } from './volumetricAtmosphere.js';
 import { buildAnnex3D } from './buildAnnex3d.js';
 import { buildStorage3D } from './buildStorage3d.js';
 import { buildCamper3D } from './buildCamper3d.js';
+import { buildKeiCar3D } from './buildKeiCar3d.js';
 
 export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
@@ -1386,6 +1387,19 @@ export function buildHouse3D(scene) {
   });
 
   // =========================================================================
+  // 10b. MOVABLE DAILY-DRIVER KEI-VAN (KEI-340: 3.40m × 1.48m × H1.80m)
+  // =========================================================================
+  const kei = buildKeiCar3D({
+    scene,
+    exteriorGroup,
+    mat,
+    addBox,
+    interactiveDoors,
+    interactiveProps,
+    interiorLights,
+  });
+
+  // =========================================================================
   // 11. POCO F7 (ADRENO 825) UV-BAKED CANONICAL STATIC GEOMETRY BATCHING
   // =========================================================================
   const { batchedGroup, stats: batchStats } = batchStaticGroups(
@@ -1394,14 +1408,14 @@ export function buildHouse3D(scene) {
   );
   root.add(batchedGroup);
 
-  // Combine batching stats across static buildings + movable camper's internal UV batch
-  const combinedBefore = batchStats.beforeMeshes + camper.batchStats.beforeMeshes;
-  const combinedAfter = batchStats.afterDrawCalls + camper.batchStats.afterDrawCalls;
+  // Combine batching stats across static buildings + movable camper + movable kei-van
+  const combinedBefore = batchStats.beforeMeshes + camper.batchStats.beforeMeshes + kei.batchStats.beforeMeshes;
+  const combinedAfter = batchStats.afterDrawCalls + camper.batchStats.afterDrawCalls + kei.batchStats.afterDrawCalls;
   const combinedBatchStats = {
     beforeMeshes: combinedBefore,
     afterDrawCalls: combinedAfter,
     reductionPct: combinedBefore > 0 ? Math.round(((combinedBefore - combinedAfter) / combinedBefore) * 100) : 0,
-    totalTriangles: batchStats.totalTriangles + camper.batchStats.totalTriangles,
+    totalTriangles: batchStats.totalTriangles + camper.batchStats.totalTriangles + kei.batchStats.totalTriangles,
   };
 
   return {
@@ -1416,6 +1430,7 @@ export function buildHouse3D(scene) {
     ffSeeds,
     windTimeUniform,
     camper,
+    kei,
     batchStats: combinedBatchStats,
   };
 }
