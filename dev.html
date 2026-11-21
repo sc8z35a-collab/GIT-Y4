@@ -10,22 +10,20 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <title>NARROW-50 TOWER | 深い森の3階建て+屋根裏 5m×10m — 一人称内装探索</title>
-  <meta name="description" content="深い森の奥に佇む 5,000×10,000mm 3階建て＋6寸勾配屋根裏部屋の狭小住宅を、POCO F7 (Adreno 825 / 120Hz) 最適化エンジンで一人称探索するオフライン対応PWAと4層1/50実施設計図面。" />
+  <title>NARROW-50 TOWER | 深い森の地下1階＋4階建て＋屋根裏 5m×10m — 一人称内装探索</title>
+  <meta name="description" content="深い森の奥に佇む 5,000×10,000mm 地下1階セメント倉庫＋地上4階建(4F 5室+1×2mバルコニー)＋6寸勾配屋根裏部屋の狭小住宅を、POCO F7最適化エンジンで一人称探索するオフライン対応PWAと6層1/50実施設計図面。" />
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
   <div id="stage" class="stage">
-    <!-- Full-Viewport 100vw × 100vh First-Person 3D Interior Canvas -->
     <div id="canvas-3d" class="canvas-3d"></div>
 
-    <!-- Safe WebGL Error Fallback (Hidden unless browser/GPU lacks WebGL) -->
     <div id="webgl-error" class="webgl-error hidden" role="alert">
       <h2>3D WebGLの初期化に失敗しました</h2>
       <p id="webgl-error-msg">ハードウェアアクセラレーションが有効なブラウザでお試しください。</p>
     </div>
 
-    <!-- POCO F7 Dual-Thumb Touch Surface (Multi-touch left joystick + right look) -->
+    <!-- POCO F7 Dual-Thumb Touch Surface -->
     <div id="touch-layer" class="touch-layer" aria-hidden="true">
       <div id="joy-zone" class="joy-zone">
         <div id="joy-base" class="joy-base hidden">
@@ -36,7 +34,6 @@
       <div id="look-zone" class="look-zone"></div>
     </div>
 
-    <!-- Center Crosshair & Diegetic Interaction Prompt -->
     <div id="reticle" class="reticle" aria-hidden="true">
       <div class="reticle-dot"></div>
       <div class="reticle-ring"></div>
@@ -46,7 +43,6 @@
       <span id="interact-label">ドアを開ける</span>
     </button>
 
-    <!-- Minimal Whisper Top HUD -->
     <header class="hud-top">
       <div id="room-pill" class="room-pill">
         <span id="floor-badge" class="floor-badge">1F</span>
@@ -58,42 +54,39 @@
         <button id="btn-install" class="hud-btn hud-btn-install hidden" type="button" title="PWAとしてホーム画面に追加">アプリ追加</button>
         <button id="btn-flash" class="hud-btn" type="button" title="懐中電灯 [F]">懐中電灯</button>
         <button id="btn-audio" class="hud-btn" type="button" title="森の環境音・足音">音: ON</button>
-        <button id="btn-map" class="hud-btn" type="button" title="4層 実施設計 1/50 間取り図 [M]">間取り図</button>
+        <button id="btn-map" class="hud-btn" type="button" title="6層 実施設計 1/50 間取り図 [M]">間取り図</button>
         <button id="btn-perf" class="hud-btn hud-btn-mono" type="button" title="POCO F7 最適化テレメトリ [P]">F7</button>
       </div>
     </header>
 
-    <!-- Optional Toggleable POCO F7 / Adreno 825 Live Telemetry Pill (Hidden by default, press P or F7) -->
     <aside id="perf-panel" class="perf-panel hidden" aria-label="POCO F7 最適化モニター">
       <div class="perf-title">POCO F7 · Adreno 825 TBDR Engine</div>
       <div id="perf-grid" class="perf-grid"></div>
     </aside>
 
-    <!-- Mobile Right-Thumb Quick Ergonomic Buttons (shown on touch devices) -->
     <div id="mobile-actions" class="mobile-actions">
       <button id="mob-interact" class="mob-btn mob-btn-primary hidden" type="button">操作</button>
       <button id="mob-flash" class="mob-btn" type="button">ライト</button>
       <button id="mob-crouch" class="mob-btn" type="button">しゃがむ</button>
     </div>
 
-    <!-- Subtle Bottom-Left Controls Hint -->
     <footer id="controls-hint" class="controls-hint">
-      <span><kbd>WASD</kbd> 移動・階段昇降</span>
+      <span><kbd>WASD</kbd> 移動・全6層階段昇降</span>
       <span><kbd>Shift</kbd> 速歩</span>
       <span><kbd>C</kbd> しゃがむ</span>
       <span><kbd>マウス</kbd> 視点（クリックでFPSロック / ドラッグ対応）</span>
       <span><kbd>E</kbd> ドア・照明</span>
       <span><kbd>F</kbd> 懐中電灯</span>
-      <span><kbd>M</kbd> 4層間取り図</span>
+      <span><kbd>M</kbd> 6層間取り図</span>
     </footer>
 
-    <!-- Slide-Over 4-Level 1/50 JIS Architectural Blueprint & Specification Modal (Toggle with M) -->
-    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 4層平面詳細図">
+    <!-- Slide-Over 6-Level 1/50 JIS Architectural Blueprint & Specification Modal -->
+    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 6層平面詳細図">
       <div class="map-sheet">
         <div class="map-header">
           <div>
-            <h2>NARROW-50 TOWER 実施設計 4層平面詳細図 (1/50) + 断面略図</h2>
-            <p class="map-sub">5,000 × 10,000 mm（3階建 150.00 m² + 6寸勾配屋根裏 有効 28.50 m²）｜赤点が現在位置・視線方向</p>
+            <h2>NARROW-50 TOWER 実施設計 6層平面詳細図 (1/50) + 断面略図</h2>
+            <p class="map-sub">B1F 3×7m＋倉庫3室(棚15基) ｜ 1〜4F 5×10m(4F プロ監修5室+1×2mバルコニー) ｜ 6寸勾配屋根裏</p>
           </div>
           <div class="map-header-right">
             <button id="btn-export-svg" class="map-action-btn" type="button">SVG保存</button>
@@ -103,15 +96,17 @@
 
         <div class="map-toolbar">
           <div id="bp-floor-tabs" class="floor-tabs" role="tablist" aria-label="表示フロア切替">
-            <button class="floor-tab active" data-floor="0" type="button" role="tab">1F 玄関・LDK</button>
-            <button class="floor-tab" data-floor="1" type="button" role="tab">2F 書斎・浴室・寝室</button>
-            <button class="floor-tab" data-floor="2" type="button" role="tab">3F 茶室・樹冠アトリエ</button>
-            <button class="floor-tab" data-floor="3" type="button" role="tab">屋根裏部屋 (6寸勾配)</button>
+            <button class="floor-tab" data-floor="0" type="button" role="tab">B1F 地下倉庫</button>
+            <button class="floor-tab active" data-floor="1" type="button" role="tab">1F 玄関・LDK</button>
+            <button class="floor-tab" data-floor="2" type="button" role="tab">2F 書斎・寝室</button>
+            <button class="floor-tab" data-floor="3" type="button" role="tab">3F 茶室・バー</button>
+            <button class="floor-tab" data-floor="4" type="button" role="tab">4F 5室+バルコニー</button>
+            <button class="floor-tab" data-floor="5" type="button" role="tab">屋根裏部屋</button>
           </div>
 
           <div class="map-layers" id="bp-layers">
             <label class="layer-chip active"><input type="checkbox" data-layer="dimensions" checked />寸法・通り芯</label>
-            <label class="layer-chip active"><input type="checkbox" data-layer="furniture" checked />家具・階段</label>
+            <label class="layer-chip active"><input type="checkbox" data-layer="furniture" checked />家具・棚・階段</label>
             <label class="layer-chip active"><input type="checkbox" data-layer="lighting" checked />照明・SW</label>
             <label class="layer-chip"><input type="checkbox" data-layer="outlets" />コンセント</label>
             <label class="layer-chip"><input type="checkbox" data-layer="plumbing" />給排水・換気</label>
@@ -134,11 +129,11 @@
               <table id="table-areas" class="arch-table"></table>
             </div>
             <div class="spec-card">
-              <h3>全4層 内部・外部仕上表（提供素材121種）</h3>
+              <h3>全6層 内部・外部仕上表（提供素材121種）</h3>
               <table id="table-finishes" class="arch-table"></table>
             </div>
             <div class="spec-card">
-              <h3>建具・階段表（ドア・窓・積層直階段）</h3>
+              <h3>建具・5層積層階段表</h3>
               <table id="table-openings" class="arch-table"></table>
             </div>
           </div>

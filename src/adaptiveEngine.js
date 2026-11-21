@@ -1,6 +1,6 @@
 /**
  * INNOVATIONS 2 & 5: POCO F7 (Adreno 825 / 120Hz) Dynamic Resolution Scaler (DRS),
- * Demand-Driven Shadow Scheduler, and 4-Level Spatial Portal Light-Budget Culler.
+ * Demand-Driven Shadow Scheduler, and 6-Level Spatial Portal Light-Budget Culler (B1F..RF).
  */
 
 const DRS_STEPS = [0.85, 1.0, 1.25, 1.5, 1.75, 2.0];
@@ -24,7 +24,6 @@ export class AdaptiveMobileEngine {
     this.shadowSecTimer = 0;
     this.lastShadowRate = 0;
 
-    // Demand-driven shadow caching: bake static shadows once, only re-render when dynamic light/door moves
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
     this._applyPixelRatio();
@@ -93,13 +92,12 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * 4-Level Vertical + Room Spatial Portal Light Culler:
-   * Strictly keeps <= 4–5 interior point lights active on the GPU at any instant,
-   * even across a 4-story residence with 14+ fixtures!
+   * 6-Level Vertical Spatial Portal Light Culler (B1F, 1F, 2F, 3F, 4F, RF):
+   * Strictly keeps <= 3–6 interior point lights active on the GPU at any instant,
+   * and keeps B1F authentically dim/isolated without warm 1F bleed!
    */
   _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, propStates }) {
     for (const entry of this.house.interiorLights) {
-      // Interactive fixture off-state overrides
       if (entry.name === 'Tatami_Lantern' && !propStates.lantern_1f) {
         entry.light.intensity = 0;
         entry.light.visible = false;
@@ -120,11 +118,9 @@ export class AdaptiveMobileEngine {
       if (entry.floor === currentFloor) {
         weight = 1.0;
       } else if (activeFlight !== null && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
-        // When walking on a stairwell between two floors, softly crossfade stairwell hall lights!
-        weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'sanctuary' ? 0.65 : 0.15;
-      } else if (Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
-        // Subtle bleed down/up the open stairwell shaft
-        weight = 0.22;
+        weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' ? 0.65 : 0.12;
+      } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
+        weight = 0.20;
       }
 
       const targetInt = entry.baseInt * weight;
