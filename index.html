@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05090e" />
+  <title>NARROW-50 | 深い森の 5m×10m 1LDK — 一人称内装探索</title>
+  <meta name="description" content="深い森の奥に佇む 5,000×10,000mm 狭小平屋 1LDK を、POCO F7 (Adreno 825 / 120Hz) 最適化エンジンで一人称探索するリアルタイム3D建築体験と1/50実施設計図面。" />
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="stage" class="stage">
+    <!-- Full-Viewport 100vw × 100vh First-Person 3D Interior Canvas -->
+    <div id="canvas-3d" class="canvas-3d"></div>
+
+    <!-- POCO F7 Dual-Thumb Touch Surface (Multi-touch left joystick + right look) -->
+    <div id="touch-layer" class="touch-layer" aria-hidden="true">
+      <div id="joy-zone" class="joy-zone">
+        <div id="joy-base" class="joy-base hidden">
+          <div class="joy-sprint-ring"></div>
+          <div id="joy-knob" class="joy-knob"></div>
+        </div>
+      </div>
+      <div id="look-zone" class="look-zone"></div>
+    </div>
+
+    <!-- Center Crosshair & Diegetic Interaction Prompt -->
+    <div id="reticle" class="reticle" aria-hidden="true">
+      <div class="reticle-dot"></div>
+      <div class="reticle-ring"></div>
+    </div>
+    <button id="interact-prompt" class="interact-prompt hidden" type="button">
+      <span class="prompt-key">E</span>
+      <span id="interact-label">ドアを開ける</span>
+    </button>
+
+    <!-- Minimal Whisper Top HUD -->
+    <header class="hud-top">
+      <div id="room-pill" class="room-pill">
+        <span id="room-code" class="room-code">R08</span>
+        <span id="room-name" class="room-name">LDK（リビング・ダイニング）</span>
+      </div>
+
+      <div class="hud-actions">
+        <button id="btn-flash" class="hud-btn" type="button" title="懐中電灯 [F]">懐中電灯</button>
+        <button id="btn-audio" class="hud-btn" type="button" title="森の環境音・足音">音: ON</button>
+        <button id="btn-map" class="hud-btn" type="button" title="実施設計 1/50 間取り図 [M]">間取り図</button>
+        <button id="btn-perf" class="hud-btn hud-btn-mono" type="button" title="POCO F7 最適化テレメトリ [P]">F7</button>
+      </div>
+    </header>
+
+    <!-- Optional Toggleable POCO F7 / Adreno 825 Live Telemetry Pill (Hidden by default, press P or F7) -->
+    <aside id="perf-panel" class="perf-panel hidden" aria-label="POCO F7 最適化モニター">
+      <div class="perf-title">POCO F7 · Adreno 825 TBDR Engine</div>
+      <div id="perf-grid" class="perf-grid"></div>
+    </aside>
+
+    <!-- Mobile Right-Thumb Quick Ergonomic Buttons (shown on touch devices) -->
+    <div id="mobile-actions" class="mobile-actions">
+      <button id="mob-interact" class="mob-btn mob-btn-primary hidden" type="button">操作</button>
+      <button id="mob-flash" class="mob-btn" type="button">ライト</button>
+      <button id="mob-crouch" class="mob-btn" type="button">しゃがむ</button>
+    </div>
+
+    <!-- Subtle Bottom-Left Controls Hint -->
+    <footer id="controls-hint" class="controls-hint">
+      <span><kbd>WASD</kbd> 移動</span>
+      <span><kbd>Shift</kbd> 速歩</span>
+      <span><kbd>C</kbd> しゃがむ</span>
+      <span><kbd>マウス</kbd> 視点（クリックでFPSロック / ドラッグ対応）</span>
+      <span><kbd>E</kbd> 開閉</span>
+      <span><kbd>F</kbd> 懐中電灯</span>
+      <span><kbd>M</kbd> 実施間取り図</span>
+    </footer>
+
+    <!-- Slide-Over 1/50 JIS Architectural Blueprint & Specification Modal (Toggle with M) -->
+    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 平面詳細図">
+      <div class="map-sheet">
+        <div class="map-header">
+          <div>
+            <h2>NARROW-50 実施設計 平面詳細図 (1/50)</h2>
+            <p class="map-sub">5,000 × 10,000 mm（延床 50.00 m² / 15.13 坪）｜赤点が現在位置・視線方向</p>
+          </div>
+          <div class="map-header-right">
+            <button id="btn-export-svg" class="map-action-btn" type="button">SVG保存</button>
+            <button id="btn-close-map" class="map-close-btn" type="button">閉じる [M]</button>
+          </div>
+        </div>
+
+        <div class="map-layers" id="bp-layers">
+          <label class="layer-chip active"><input type="checkbox" data-layer="dimensions" checked />寸法・通り芯</label>
+          <label class="layer-chip active"><input type="checkbox" data-layer="furniture" checked />家具・有効幅</label>
+          <label class="layer-chip active"><input type="checkbox" data-layer="lighting" checked />照明・スイッチ</label>
+          <label class="layer-chip"><input type="checkbox" data-layer="outlets" />コンセント</label>
+          <label class="layer-chip"><input type="checkbox" data-layer="plumbing" />給排水・換気</label>
+          <label class="layer-chip active"><input type="checkbox" data-layer="flow" checked />動線計画</label>
+          <label class="layer-chip active"><input type="checkbox" data-layer="materials" checked />床仕上色</label>
+        </div>
+
+        <div class="map-body">
+          <div class="map-svg-panel">
+            <div id="blueprint-mount" class="blueprint-mount"></div>
+            <div id="room-detail-bar" class="room-detail-bar">
+              図面上の各部屋にカーソルを合わせると、寸法・床レベル・採用素材が表示されます。
+            </div>
+          </div>
+
+          <div class="map-specs">
+            <div class="spec-card">
+              <h3>求積・天井高一覧</h3>
+              <table id="table-areas" class="arch-table"></table>
+            </div>
+            <div class="spec-card">
+              <h3>内部・外部仕上表（提供素材）</h3>
+              <table id="table-finishes" class="arch-table"></table>
+            </div>
+            <div class="spec-card">
+              <h3>建具表（ドア・窓サッシ）</h3>
+              <table id="table-openings" class="arch-table"></table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
