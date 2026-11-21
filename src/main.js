@@ -1,4 +1,4 @@
-import { FLOORS, FINISH_SCHEDULE, OPENING_SCHEDULE } from './planData.js';
+import { HOUSE, FLOORS, FINISH_SCHEDULE, OPENING_SCHEDULE } from './planData.js';
 import { FirstPersonHouseExplorer } from './scene3d.js';
 import { ArchitecturalBlueprint2D } from './blueprint2d.js';
 
@@ -31,9 +31,8 @@ const tableAreas = document.getElementById('table-areas');
 
 let mapVisible = false;
 let perfVisible = false;
-let lastPose = { floor: 0, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
+let lastPose = { floor: HOUSE.spawnFloor, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
 
-// 0. Register Offline PWA Service Worker & Capture Install Prompt (for POCO F7 Chrome / Desktop)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
@@ -53,14 +52,11 @@ window.addEventListener('appinstalled', () => {
 btnInstall.addEventListener('click', async () => {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
-  try {
-    await deferredInstallPrompt.userChoice;
-  } catch (_) {}
+  try { await deferredInstallPrompt.userChoice; } catch (_) {}
   deferredInstallPrompt = null;
   btnInstall.classList.add('hidden');
 });
 
-// 1. Initialize 4-Level 1/50 JIS CAD Blueprint inside the toggleable [M] drawer
 const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
   onRoomHover: (room) => {
     if (!room) {
@@ -72,9 +68,12 @@ const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
 });
 
 function renderFloorAreaTable(floorIdx) {
-  const fl = FLOORS[floorIdx] || FLOORS[0];
+  const fl = FLOORS[floorIdx] || FLOORS[HOUSE.spawnFloor];
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
+  const summaryLabel = fl.isBasement
+    ? '地下1階計 (3×7m主空間 + 倉庫3室・棚15基)'
+    : (fl.isAttic ? '屋根裏計 (有効 28.5m²)' : (fl.hasBalcony ? '4F計 (5室 + 1×2mバルコニー)' : `${fl.code} フロア計`));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
@@ -87,9 +86,9 @@ function renderFloorAreaTable(floorIdx) {
         </tr>
       `).join('')}
       <tr style="background:#f3efe6;font-weight:700;">
-        <td>${fl.code} フロア計 (全4層延床 150.0m² + 小屋裏 28.5m²)</td>
+        <td>${summaryLabel}</td>
         <td class="num">5000×10000</td>
-        <td class="num">${fl.isAttic ? '有効 28.50m²' : '50.00m²'}</td>
+        <td class="num">${fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²')}</td>
         <td>室計 ${netSum.toFixed(1)}m²</td>
       </tr>
     </tbody>
@@ -110,15 +109,13 @@ document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
   btn.addEventListener('click', () => selectBlueprintFloor(Number(btn.dataset.floor)));
 });
 
-renderFloorAreaTable(0);
+renderFloorAreaTable(HOUSE.spawnFloor);
 
 function toggleMap(force = null) {
   mapVisible = force !== null ? force : !mapVisible;
   mapModal.classList.toggle('hidden', !mapVisible);
   btnMap.classList.toggle('active', mapVisible);
-  if (mapVisible) {
-    selectBlueprintFloor(lastPose.floor);
-  }
+  if (mapVisible) selectBlueprintFloor(lastPose.floor);
   if (explorer) explorer.setMapOpen(mapVisible);
 }
 
@@ -144,7 +141,6 @@ function togglePerf(force = null) {
   }
 }
 
-// 2. Initialize Pure First-Person Dark-Forest 4-Level Protagonist Explorer (with safe WebGL boundary)
 let explorer = null;
 try {
   explorer = new FirstPersonHouseExplorer(canvas3dEl, {
@@ -186,7 +182,6 @@ try {
   webglErrorMsgEl.textContent = `WebGL初期化エラー: ${err?.message || err}`;
 }
 
-// 3. HUD Button Wiring
 btnFlash.addEventListener('click', () => explorer && explorer.toggleFlashlight());
 mobFlash.addEventListener('click', () => explorer && explorer.toggleFlashlight());
 mobCrouch.addEventListener('click', () => explorer && explorer.toggleCrouch());
@@ -197,7 +192,6 @@ btnPerf.addEventListener('click', () => togglePerf());
 interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
 mobInteract.addEventListener('click', () => explorer && explorer.interact());
 
-// 4. POCO F7 Dual-Thumb Multi-Touch Controller (Simultaneous Left Analog Stick + Right Look)
 const joyZone = document.getElementById('joy-zone');
 const joyBase = document.getElementById('joy-base');
 const joyKnob = document.getElementById('joy-knob');
@@ -272,7 +266,6 @@ function releaseLook(e) {
 lookZone.addEventListener('pointerup', releaseLook);
 lookZone.addEventListener('pointercancel', releaseLook);
 
-// 5. Blueprint Layer Checkboxes & SVG Download
 document.querySelectorAll('#bp-layers input[type="checkbox"]').forEach((cb) => {
   cb.addEventListener('change', () => {
     cb.closest('.layer-chip').classList.toggle('active', cb.checked);
@@ -291,7 +284,6 @@ document.getElementById('btn-export-svg').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-// 6. Populate Multi-Floor Finish & Opening Schedules
 document.getElementById('table-finishes').innerHTML = `
   <thead><tr><th>階</th><th>室・部位</th><th>床仕上</th><th>壁仕上</th><th>アクセント</th></tr></thead>
   <tbody>
@@ -321,7 +313,6 @@ document.getElementById('table-openings').innerHTML = `
   </tbody>
 `;
 
-// 7. Verification Query Parameters (for automated inspection — no UI camera presets exposed)
 const params = new URLSearchParams(window.location.search);
 if (explorer) {
   const floorParam = params.has('floor') ? Number(params.get('floor')) : null;

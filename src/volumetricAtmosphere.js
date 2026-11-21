@@ -1,11 +1,8 @@
 import * as THREE from 'three';
 
 /**
- * INNOVATION 3: TBDR-Optimized Volumetric Moonlight Shafts across ALL 4 Levels (1F, 2F, 3F, Gable Attic),
- * Drifting Forest Ground Mist, and GPU Vertex-Shader Instanced Cedar Wind Sway.
- *
- * Designed specifically for Adreno 825 (POCO F7): zero raymarching loops, pure analytic
- * Fresnel + FBM GLSL shaders costing < 0.25 ms total per frame at 120Hz.
+ * INNOVATION 3: TBDR-Optimized Volumetric Moonlight Shafts across ALL Above-Ground Levels
+ * (1F, 2F, 3F, 4F + Balcony, Gable Attic), Drifting Forest Mist, and GPU Cedar Wind Sway.
  */
 
 const SHAFT_VERT = /* glsl */ `
@@ -116,13 +113,12 @@ const MIST_FRAG = /* glsl */ `
   }
 
   void main() {
-    // Strictly exclude 5m × 10m house tower footprint so drifting mist stays outside in the forest
     float dx = max(max(0.0 - vWorldPos.x, vWorldPos.x - 5.0), 0.0);
-    float dz = max(max(0.0 - vWorldPos.z, vWorldPos.z - 10.0), 0.0);
+    float dz = max(max(0.0 - vWorldPos.z, vWorldPos.z - 11.2), 0.0);
     float outsideDist = length(vec2(dx, dz));
     float houseMask = smoothstep(0.35, 2.2, outsideDist);
 
-    float radialFade = 1.0 - smoothstep(14.0, 36.0, length(vWorldPos.xz - vec2(2.5, 5.0)));
+    float radialFade = 1.0 - smoothstep(14.0, 38.0, length(vWorldPos.xz - vec2(2.5, 5.0)));
 
     vec2 p1 = vWorldPos.xz * 0.15 + vec2(uTime * 0.045, uTime * 0.022);
     vec2 p2 = vWorldPos.xz * 0.30 + vec2(-uTime * 0.032, uTime * 0.038);
@@ -163,29 +159,33 @@ export function createVolumetricAtmosphere(scene) {
     group.add(m1);
   }
 
-  // 1F Moonlight Shafts (W1-2 South Terrace, W1-3 Tatami, W1-1 North Gear Room)
+  // 1F Moonlight Shafts
   addMoonShaft(1.50, 1.05, 8.95, 1.25, 2.70, 0.56, 0.16, 0.0, 0.090);
   addMoonShaft(2.55, 1.05, 8.95, 1.15, 2.65, 0.56, -0.14, 0.0, 0.080);
   addMoonShaft(4.15, 1.18, 9.20, 0.78, 1.85, 0.52, -0.12, 0.0, 0.072);
   addMoonShaft(3.55, 1.18, 0.92, 1.20, 2.00, -0.58, 0.08, 0.0, 0.062);
 
-  // 2F Moonlight Shafts (W2-5 Master Suite South, W2-2 Study North)
+  // 2F Moonlight Shafts
   addMoonShaft(1.75, 2.75 + 1.15, 8.95, 1.65, 2.55, 0.56, 0.12, 0.0, 0.082);
   addMoonShaft(3.55, 2.75 + 1.20, 0.92, 1.20, 2.00, -0.58, 0.08, 0.0, 0.064);
 
-  // 3F Moonlight Shafts (W3-4 Treetop Observatory South, W3-2 Tea Room North)
+  // 3F Moonlight Shafts
   addMoonShaft(1.75, 5.50 + 1.18, 8.95, 1.75, 2.60, 0.54, 0.10, 0.0, 0.092);
   addMoonShaft(3.55, 5.50 + 1.15, 0.92, 1.20, 1.95, -0.58, 0.06, 0.0, 0.068);
 
-  // Attic (RF) Dramatic Gable Apex Moonlight Shafts (W4-2 South Sanctuary & W4-1 North Storage)
-  addMoonShaft(2.50, 8.15 + 1.18, 8.92, 1.45, 2.45, 0.56, 0.04, 0.0, 0.105);
-  addMoonShaft(2.50, 8.15 + 1.15, 1.05, 1.20, 2.15, -0.58, -0.05, 0.0, 0.078);
+  // 4F Moonlight Shafts (Library W4F-5 & Sky Lounge Balcony Door D4-6)
+  addMoonShaft(1.28, 8.15 + 1.05, 9.05, 1.35, 2.15, 0.54, 0.12, 0.0, 0.086);
+  addMoonShaft(3.65, 8.15 + 1.05, 9.15, 1.15, 2.10, 0.54, -0.08, 0.0, 0.088);
 
-  // Layered Drifting Forest Mist Sheets (ground mist at Y=0.26m & mid-canopy mist at Y=5.8m)
+  // Attic (RF at baseY=10.50m) Dramatic Gable Apex Moonlight Shafts
+  addMoonShaft(2.50, 10.50 + 1.18, 8.92, 1.45, 2.45, 0.56, 0.04, 0.0, 0.105);
+  addMoonShaft(2.50, 10.50 + 1.15, 1.05, 1.20, 2.15, -0.58, -0.05, 0.0, 0.078);
+
+  // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 4F Balcony!)
   [
     { y: 0.26, col: 0x1b2b38 },
     { y: 1.05, col: 0x152330 },
-    { y: 5.85, col: 0x111f2c },
+    { y: 7.40, col: 0x11202e },
   ].forEach((layer) => {
     const mistMat = new THREE.ShaderMaterial({
       vertexShader: MIST_VERT,
@@ -198,7 +198,7 @@ export function createVolumetricAtmosphere(scene) {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(72, 72), mistMat);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(76, 76), mistMat);
     plane.rotation.x = -Math.PI / 2;
     plane.position.set(2.5, layer.y, 5.0);
     plane.renderOrder = 2;
@@ -213,10 +213,6 @@ export function createVolumetricAtmosphere(scene) {
   };
 }
 
-/**
- * Inject GPU-only midnight mountain wind sway into instanced cedar canopy MeshStandardMaterials.
- * Zero CPU matrix updates per frame!
- */
 export function injectForestWindShader(material, windTimeUniform) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uWindTime = windTimeUniform;
@@ -232,7 +228,7 @@ export function injectForestWindShader(material, windTimeUniform) {
          #ifdef USE_INSTANCING
            vec3 instOrigin = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
            float swayWeight = clamp((position.y + 0.5) * 0.85, 0.0, 1.0);
-           float heightAmp = 0.045 + clamp(instOrigin.y * 0.004, 0.0, 0.08);
+           float heightAmp = 0.045 + clamp(instOrigin.y * 0.004, 0.0, 0.09);
            float phase = instOrigin.x * 0.42 + instOrigin.z * 0.35 + uWindTime * 1.10;
            transformed.x += sin(phase) * heightAmp * swayWeight;
            transformed.z += cos(phase * 0.83) * (heightAmp * 0.78) * swayWeight;
