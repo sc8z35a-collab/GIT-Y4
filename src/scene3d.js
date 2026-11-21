@@ -7,7 +7,7 @@ import { AdaptiveMobileEngine } from './adaptiveEngine.js';
 import { SpatialForestAudio } from './audioEngine.js';
 import {
   FLOORS, HOUSE, ANNEX, ANNEX_FLOORS, getAnnexAtticCeilingY,
-  STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, getAtticCeilingY,
+  STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, SHEET_OFFSETS, getAtticCeilingY,
   ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, getFloorByPhysicalIndex,
 } from './planData.js';
 
@@ -131,15 +131,15 @@ export class FirstPersonHouseExplorer {
     this.scene.add(this.hemiLight);
 
     this.moonLight = new THREE.DirectionalLight(0x7ea8d8, 1.38);
-    this.moonLight.position.set(-10.0, 24.0, 26.0);
-    this.moonLight.target.position.set(0.5, 5.0, 4.5);
+    this.moonLight.position.set(-10.0, 29.0, 28.0);
+    this.moonLight.target.position.set(0.5, 7.5, 4.5);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.mapSize.set(1024, 1024);
     this.moonLight.shadow.camera.near = 2;
-    this.moonLight.shadow.camera.far = 66;
+    this.moonLight.shadow.camera.far = 76;
     this.moonLight.shadow.camera.left = -22;
     this.moonLight.shadow.camera.right = 22;
-    this.moonLight.shadow.camera.top = 20;
+    this.moonLight.shadow.camera.top = 24;
     this.moonLight.shadow.camera.bottom = -16;
     this.moonLight.shadow.bias = -0.0007;
     this.moonLight.shadow.normalBias = 0.03;
@@ -147,7 +147,7 @@ export class FirstPersonHouseExplorer {
     this.scene.add(this.moonLight.target);
 
     const northMoon = new THREE.DirectionalLight(0x52759e, 0.62);
-    northMoon.position.set(6.5, 19.0, -16.0);
+    northMoon.position.set(6.5, 24.0, -17.0);
     this.scene.add(northMoon);
   }
 
@@ -952,9 +952,9 @@ export class FirstPersonHouseExplorer {
       if (this.activeStairBuilding === 'annex') {
         const asb = ANNEX.stairWorld;
         const t = Math.max(0, Math.min(1, (asb.bottomZ - z) / (asb.bottomZ - asb.topZ)));
-        const y0 = FLOORS[this.activeFlight].baseY;
-        const y1 = FLOORS[this.activeFlight + 1].baseY;
-        return y0 + (y1 - y0) * t;
+        const a0 = ANNEX_FLOORS[Math.max(0, this.activeFlight - 1)];
+        const a1 = ANNEX_FLOORS[Math.min(ANNEX_FLOORS.length - 1, this.activeFlight)];
+        return a0.baseY + (a1.baseY - a0.baseY) * t;
       }
       const sb = HOUSE.stairBox;
       const t = Math.max(0, Math.min(1, (sb.bottomZ - z) / (sb.bottomZ - sb.topZ)));
@@ -1033,6 +1033,15 @@ export class FirstPersonHouseExplorer {
       if (x >= -1.2 && z > 9.95) return baseY - 0.04;
       return baseY;
     }
+    if (this.currentFloor === 5) {
+      if (x > 3.55 && z > 3.50 && z < 5.95) return baseY - 0.02; // 5R04 Hinoki Sky Bath waterproof drop
+      if (x < 0.05 && z >= 6.15 && z <= 8.85) return baseY - 0.04; // 5R07 West Canopy Spa Deck
+      return baseY;
+    }
+    if (this.currentFloor === 6) {
+      if (z > 9.95) return baseY - 0.04; // 6R07 Full-Width South Sky Observatory Terrace
+      return baseY;
+    }
     return baseY;
   }
 
@@ -1108,6 +1117,18 @@ export class FirstPersonHouseExplorer {
         return 'wood';
       }
       if (x < 2.15 && z < 1.55) return 'tatami';
+      return 'wood';
+    }
+    if (this.currentFloor === 5) {
+      if (x < 0.05) return 'wood'; // 5R07 West Spa Cedar Deck
+      if (x < 2.20 && z < 6.00) return 'tile'; // 5R01/5R06 Terrazzo hall & spine
+      if (x > 3.55 && z > 3.50 && z < 5.95) return 'tile'; // 5R04 Granite Sky Bath
+      if (x > 2.55 && z > 6.00) return 'tile'; // 5R05 Emerald Terrazzo Botanical Lab
+      return 'wood';
+    }
+    if (this.currentFloor === 6) {
+      if (x > 2.50 && x < 4.60 && z > 0.40 && z < 3.20) return 'tatami'; // 6R02 Starlight Ryukyu Tatami
+      if (x > 2.20 && z > 3.50 && z < 5.95) return 'tile'; // 6R03 Black Marble Powder & 6R04 Stone Cellar
       return 'wood';
     }
     if (x > 1.30 && x < 3.70 && z > 6.15 && z < 8.75) return 'tatami';
@@ -1277,10 +1298,20 @@ export class FirstPersonHouseExplorer {
         ) return true;
       } else {
         const bal = HOUSE.balcony4F;
-        const onBalcony = z >= 9.75 && x >= bal.minX + r && x <= bal.maxX - r && z <= bal.maxZ - r;
+        const onBalcony = z >= 9.55 && x >= bal.minX + r && x <= bal.maxX - r && z <= bal.maxZ - r;
         const inInterior = x >= 0.15 + r && x <= 4.85 - r && z >= 0.15 + r && z <= 9.85 - r;
         if (!inInterior && !onBalcony) return true;
       }
+    } else if (this.currentFloor === 5) {
+      const bal5 = HOUSE.balcony5F;
+      const onBalcony5 = x >= bal5.minX + r && x <= 0.45 && z >= bal5.minZ + r && z <= bal5.maxZ - r;
+      const inInterior = x >= 0.15 + r && x <= 4.85 - r && z >= 0.15 + r && z <= 9.85 - r;
+      if (!inInterior && !onBalcony5) return true;
+    } else if (this.currentFloor === 6) {
+      const bal6 = HOUSE.balcony6F;
+      const onBalcony6 = z >= 9.55 && x >= bal6.minX + r && x <= bal6.maxX - r && z <= bal6.maxZ - r;
+      const inInterior = x >= 0.15 + r && x <= 4.85 - r && z >= 0.15 + r && z <= 9.85 - r;
+      if (!inInterior && !onBalcony6) return true;
     } else {
       if (x < 0.15 + r || x > 4.85 - r || z < 0.15 + r || z > 9.85 - r) return true;
     }
@@ -1647,13 +1678,17 @@ export class FirstPersonHouseExplorer {
     const propStates = {};
     for (const p of this.house.interactiveProps) propStates[p.id] = p.isOn;
 
-    for (const lname of ['Tatami_Lantern', 'Attic_Lantern', 'Annex_Cafe_Lamp']) {
+    const flickerCfg = [
+      ['Tatami_Lantern', propStates.lantern_1f, 0.05, 0.025],
+      ['Attic_Lantern', propStates.lantern_attic, 0.05, 0.025],
+      ['Annex_Cafe_Lamp', propStates.lamp_annex_cafe, 0.04, 0.02],
+      ['5F_Conservatory_Lamp', propStates.lamp_5f_conservatory, 0.04, 0.018],
+      ['6F_Hearth_Fire', propStates.fireplace_6f, 0.14, 0.08],
+    ];
+    for (const [lname, isOn, a1, a2] of flickerCfg) {
       const entry = this.house.interiorLights.find((l) => l.name === lname);
-      const isOn = lname === 'Tatami_Lantern'
-        ? propStates.lantern_1f
-        : (lname === 'Attic_Lantern' ? propStates.lantern_attic : propStates.lamp_annex_cafe);
       if (entry && isOn && entry.light.visible) {
-        entry.light.intensity += (Math.sin(elapsed * 3.1) * 0.05 + Math.sin(elapsed * 7.3) * 0.025) * dt * 9;
+        entry.light.intensity += (Math.sin(elapsed * 3.1) * a1 + Math.sin(elapsed * 7.3) * a2) * dt * 9;
       }
     }
 
@@ -1670,7 +1705,7 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all 5 units + Deep Basement B1F..B3F
+    // Acoustic occlusion across all 5 units + 10-Level Main Tower (B3F..6F+RF)
     if (this.currentFloor <= 0) {
       this.audio.updateOcclusion(0.02);
     } else if (this.activeBuilding === 'kei') {
@@ -1683,11 +1718,13 @@ export class FirstPersonHouseExplorer {
       const lzA = this.playerPos.z - ANNEX.originZ;
       const outside1F = this.currentFloor === 1 && this.activeBuilding === 'courtyard';
       const onMainBal4F = this.currentFloor === 4 && this.activeBuilding === 'main' && this.playerPos.z > 9.90;
+      const onMainBal5F = this.currentFloor === 5 && this.activeBuilding === 'main' && this.playerPos.x < 0.05;
+      const onMainBal6F = this.currentFloor === 6 && this.activeBuilding === 'main' && this.playerPos.z > 9.90;
       const onAnnexBal3F = this.currentFloor === 3 && this.activeBuilding === 'annex' && (lzA < 0.05 || lzA > 7.95 || lxA < 0.05);
       const onStorageExt =
         (this.activeFlight !== null && this.activeStairBuilding === 'storage') ||
         (this.currentFloor === 2 && this.activeBuilding === 'storage' && this.playerPos.z < STORAGE.originZ + 0.05);
-      const isFullyOutdoors = outside1F || onMainBal4F || onAnnexBal3F || onStorageExt;
+      const isFullyOutdoors = outside1F || onMainBal4F || onMainBal5F || onMainBal6F || onAnnexBal3F || onStorageExt;
 
       if (isFullyOutdoors) {
         this.audio.updateOcclusion(1.0);
@@ -1701,9 +1738,15 @@ export class FirstPersonHouseExplorer {
           ? Math.max(0, 1 - Math.hypot(this.playerPos.x - (ANNEX.originX + 3.90), this.playerPos.z - ANNEX.originZ) / 4.0) * 0.85 : 0;
         const balDoorBoost =
           (this.currentFloor === 4 && this.activeBuilding === 'main' && doorOpenMap['D4-6']) ||
+          (this.currentFloor === 5 && this.activeBuilding === 'main' && doorOpenMap['D5-5']) ||
+          (this.currentFloor === 6 && this.activeBuilding === 'main' && doorOpenMap['D6-5']) ||
           (this.currentFloor === 3 && this.activeBuilding === 'annex' && (doorOpenMap['DA3-B1'] || doorOpenMap['DA3-B2'] || doorOpenMap['DA3-B3']))
-            ? 0.65 : 0;
-        const atticWindBoost = (this.currentFloor === 5 || (this.currentFloor === 4 && this.activeBuilding === 'annex')) ? 0.48 : 0;
+            ? 0.68 : 0;
+        const atticWindBoost =
+          (this.currentFloor === HOUSE.atticFloor && this.activeBuilding === 'main') ||
+          (this.currentFloor === 4 && this.activeBuilding === 'annex')
+            ? 0.52
+            : ((this.currentFloor === 5 || this.currentFloor === 6) && this.activeBuilding === 'main' ? 0.28 : 0);
         const windowBoost = Math.max(0, 1 - Math.abs(this.playerPos.z - 9.85) / 4.5) * 0.35;
         this.audio.updateOcclusion(Math.min(1.0, Math.max(d1Boost, da1Boost, balDoorBoost, windowBoost, atticWindBoost)));
       }
@@ -1750,8 +1793,16 @@ export class FirstPersonHouseExplorer {
         const aNames = { 1: '隣棟 1F↔2F 階段', 2: '隣棟 2F↔3F 階段', 3: '隣棟 3F↔屋根裏 階段' };
         return { id: 'annex_stair', code: `STA${this.activeFlight}`, floor: this.currentFloor, building: 'annex', nameJp: aNames[this.activeFlight] || '隣棟 階段' };
       }
-      const fNames = ['B1F↔1F 地下コンクリート階段', '1F↔2F 階段', '2F↔3F 階段', '3F↔4F 階段', '4F↔屋根裏 階段'];
-      return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, building: 'main', nameJp: fNames[this.activeFlight] };
+      const fNames = [
+        'B1F↔1F 地下コンクリート階段',
+        '1F↔2F 階段',
+        '2F↔3F 階段',
+        '3F↔4F 階段',
+        '4F↔5F 階段',
+        '5F↔6F 階段',
+        '6F↔屋根裏 階段',
+      ];
+      return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, building: 'main', nameJp: fNames[this.activeFlight] || '母屋 階段' };
     }
 
     if (this.activeBuilding === 'kei') {
@@ -1894,7 +1945,7 @@ export class FirstPersonHouseExplorer {
         const inCamper = this.activeBuilding === 'camper';
         const inAnnex = this.activeBuilding === 'annex';
         const inStorage = this.activeBuilding === 'storage';
-        let sheetIndex = this.currentFloor + 2; // 0=B3F, 1=B2F, 2=B1F, 3=1F..7=RF!
+        let sheetIndex = this.currentFloor + 2; // 0=B3F, 1=B2F, 2=B1F, 3=1F..8=6F, 9=RF!
         let floorCode = this.activeBuilding === 'courtyard'
           ? '中庭'
           : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code);
@@ -1904,7 +1955,7 @@ export class FirstPersonHouseExplorer {
         let localDz = _lookDir.z;
 
         if (inKei) {
-          sheetIndex = 16;
+          sheetIndex = SHEET_OFFSETS.kei;
           floorCode = this.drivingVehicle === 'kei' ? '軽運転' : '軽バン';
           const kl = this.worldToKeiLocal(this.playerPos.x, this.playerPos.z);
           localX = kl.lx;
@@ -1915,7 +1966,7 @@ export class FirstPersonHouseExplorer {
           localDx = _lookDir.x * c - _lookDir.z * s;
           localDz = _lookDir.x * s + _lookDir.z * c;
         } else if (inCamper) {
-          sheetIndex = this.currentFloor === 2 ? 15 : 14;
+          sheetIndex = SHEET_OFFSETS.camper + (this.currentFloor === 2 ? 1 : 0);
           floorCode = this.drivingVehicle === 'camper' ? 'RV運転' : (this.currentFloor === 2 ? 'RV 2F' : 'RV 1F');
           const cl = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
           localX = cl.lx;
@@ -1926,13 +1977,13 @@ export class FirstPersonHouseExplorer {
           localDx = _lookDir.x * c - _lookDir.z * s;
           localDz = _lookDir.x * s + _lookDir.z * c;
         } else if (inStorage) {
-          sheetIndex = this.currentFloor === 2 ? 13 : 12;
+          sheetIndex = SHEET_OFFSETS.storage + (this.currentFloor === 2 ? 1 : 0);
           floorCode = this.currentFloor === 2 ? '倉庫2F' : '倉庫1F';
           localX = this.playerPos.x - STORAGE.originX;
           localZ = this.playerPos.z - STORAGE.originZ;
         } else if (inAnnex) {
           const aIdx = Math.max(0, Math.min(ANNEX_FLOORS.length - 1, this.currentFloor - 1));
-          sheetIndex = 8 + aIdx;
+          sheetIndex = SHEET_OFFSETS.annex + aIdx;
           floorCode = ANNEX_FLOORS[aIdx].code;
           localX = this.playerPos.x - ANNEX.originX;
           localZ = this.playerPos.z - ANNEX.originZ;

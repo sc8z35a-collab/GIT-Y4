@@ -18,7 +18,7 @@ export class ArchitecturalBlueprint2D {
   constructor(container, callbacks = {}) {
     this.container = container;
     this.callbacks = callbacks;
-    this.activeFloor = 3; // Default Main 1F (Sheet Index 3 of 17)
+    this.activeFloor = 3; // Default Main 1F (Sheet Index 3 of 19)
     this.lastPose = null;
     this.scale = 100;
     this.padL = 175;
@@ -183,6 +183,18 @@ export class ArchitecturalBlueprint2D {
       this.padR = 130;
       this.padT = 270;
       this.padB = 365;
+    } else if (floor.hasBalcony5F) {
+      this.scale = 100;
+      this.padL = 215;
+      this.padR = 165;
+      this.padT = 245;
+      this.padB = 345;
+    } else if (floor.hasBalcony6F) {
+      this.scale = 100;
+      this.padL = 175;
+      this.padR = 165;
+      this.padT = 245;
+      this.padB = 385;
     } else {
       this.scale = 100;
       this.padL = 175;
@@ -512,7 +524,7 @@ export class ArchitecturalBlueprint2D {
         g.appendChild(el('rect', { x: this.px(2.85), y: this.pz(-1.10), width: 210, height: 110, fill: '#dde2db', stroke: '#8c9689', 'stroke-width': 0.9 }));
         g.appendChild(el('text', { x: this.px(3.90), y: this.pz(-0.52), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#4c5749', 'font-weight': 600 }, '離れ玄関ポーチ・石灯籠'));
         g.appendChild(el('rect', { x: this.px(5.15), y: this.pz(0.0), width: 105, height: bDepth * sc, fill: '#eef2ea', stroke: '#8fa18a', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
-        g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m：石灯籠苔中庭 → 母屋 (5×10m 8層)'));
+        g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m：石灯籠苔中庭 → 母屋 (5×10m 地下3層＋地上6階・全10層)'));
         g.appendChild(el('text', { x: this.px(2.50), y: this.pz(8.42), 'text-anchor': 'middle', 'font-size': 9.4, fill: '#5b6b59', 'font-weight': 600 }, '南面：老杉の森（離れカフェ南大窓ビュー）'));
       } else if (floor.hasAnnexBalconies) {
         ANNEX.balconies3F.forEach((b) => {
@@ -537,7 +549,7 @@ export class ArchitecturalBlueprint2D {
         g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.52), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#6b655c' }, '隣棟 切妻屋根 軒先ライン (6寸勾配 軒+9,550〜棟+10,950 / 全5部屋)'));
       } else {
         g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.34), 'text-anchor': 'middle', 'font-size': 9.0, fill: '#5b6b59' }, '北面：老杉の森（隣棟2F 樹冠ビュー）'));
-        g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m向かい：母屋 5×10m タワー棟'));
+        g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m向かい：母屋 5×10m 6階建タワー棟'));
       }
       return;
     }
@@ -570,14 +582,48 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: this.px(3.65), y: this.pz(11.30), 'text-anchor': 'middle', 'font-size': 8.5, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W 2,000'));
       g.appendChild(el('line', { x1: this.px(4.82), y1: this.pz(10.0), x2: this.px(4.82), y2: this.pz(11.0), stroke: '#9c4722', 'stroke-width': 0.9 }));
       g.appendChild(el('text', { x: this.px(5.16), y: this.pz(10.55), 'text-anchor': 'middle', 'font-size': 8.5, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'D 1,000'));
+    } else if (floor.hasBalcony5F) {
+      const bal5 = HOUSE.balcony5F;
+      g.appendChild(el('rect', {
+        x: this.px(bal5.minX), y: this.pz(bal5.minZ), width: (bal5.maxX - bal5.minX) * sc, height: (bal5.maxZ - bal5.minZ) * sc,
+        fill: 'url(#pat-deck)', stroke: '#1c1e22', 'stroke-width': 2.2,
+      }));
+      g.appendChild(el('line', { x1: this.px(bal5.minX), y1: this.pz(6.05), x2: this.px(bal5.maxX), y2: this.pz(6.05), stroke: '#9c4722', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: this.px(-0.50), y: this.pz(5.96), 'text-anchor': 'middle', 'font-size': 8.0, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W 1,000'));
+      g.appendChild(el('line', { x1: this.px(-1.14), y1: this.pz(bal5.minZ), x2: this.px(-1.14), y2: this.pz(bal5.maxZ), stroke: '#9c4722', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: this.px(-1.24), y: this.pz(7.50), 'text-anchor': 'middle', 'font-size': 8.0, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace', transform: `rotate(-90 ${this.px(-1.24)} ${this.pz(7.50)})` }, 'D 2,600 (西スパデッキ)'));
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.32), 'text-anchor': 'middle', 'font-size': 9.0, fill: '#5b6b59' }, '北面：老杉樹冠ビュー (5FL+10,500 / 建築模型工房・サウナ＆桧展望浴)'));
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.45), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#5b6b59' }, '南面：ボタニカル温室パノラマ（西デッキは隣棟軒先より水平1,150・垂直1,200離隔）'));
+    } else if (floor.hasBalcony6F) {
+      const bal6 = HOUSE.balcony6F;
+      g.appendChild(el('rect', {
+        x: this.px(bal6.minX), y: this.pz(bal6.minZ), width: (bal6.maxX - bal6.minX) * sc, height: (bal6.maxZ - bal6.minZ) * sc,
+        fill: 'url(#pat-deck)', stroke: '#1c1e22', 'stroke-width': 2.2,
+      }));
+      // Overhead cedar & steel louver pergola projection (dashed JIS overhead convention)
+      g.appendChild(el('rect', {
+        x: this.px(bal6.minX + 0.06), y: this.pz(bal6.minZ + 0.06), width: (bal6.maxX - bal6.minX - 0.12) * sc, height: (bal6.maxZ - bal6.minZ - 0.12) * sc,
+        fill: 'none', stroke: '#7c5a38', 'stroke-width': 0.85, 'stroke-dasharray': '6 3',
+      }));
+      for (let lx = 0.55; lx <= 4.45; lx += 0.48) {
+        g.appendChild(el('line', {
+          x1: this.px(lx), y1: this.pz(bal6.minZ + 0.06), x2: this.px(lx), y2: this.pz(bal6.maxZ - 0.06),
+          stroke: '#7c5a38', 'stroke-width': 0.65, 'stroke-dasharray': '4 3', opacity: 0.65,
+        }));
+      }
+      g.appendChild(el('line', { x1: this.px(bal6.minX), y1: this.pz(11.28), x2: this.px(bal6.maxX), y2: this.pz(11.28), stroke: '#9c4722', 'stroke-width': 0.95 }));
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(11.42), 'text-anchor': 'middle', 'font-size': 8.4, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W 4,600 × D 1,100 全幅南スカイ展望テラス（頭上杉パーゴラ・鉄骨アウトリガー4基）'));
+      g.appendChild(el('line', { x1: this.px(4.94), y1: this.pz(10.0), x2: this.px(4.94), y2: this.pz(11.10), stroke: '#9c4722', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: this.px(5.26), y: this.pz(10.58), 'text-anchor': 'middle', 'font-size': 8.2, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'D 1,100'));
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.32), 'text-anchor': 'middle', 'font-size': 9.0, fill: '#5b6b59' }, '北面：老杉樹冠上空・満天星空パノラマ (6FL+13,250 / クラウン天空天文階)'));
     } else if (floor.isAttic) {
       g.appendChild(el('rect', {
         x: this.px(-0.50), y: this.pz(-0.45), width: (HOUSE.width + 1.0) * sc, height: (HOUSE.depth + 0.90) * sc,
         fill: 'none', stroke: '#7a756b', 'stroke-width': 0.9, 'stroke-dasharray': '7 4',
       }));
-      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.58), 'text-anchor': 'middle', 'font-size': 9, fill: '#6b655c' }, '切妻屋根 軒先ライン (東西出500 / 南北ケラバ出450 / 6寸勾配)'));
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.58), 'text-anchor': 'middle', 'font-size': 8.6, fill: '#6b655c' }, '切妻屋根 軒先ライン (6寸勾配・RFL+16,100〜棟+18,930＋避雷針+20,420)'));
     } else {
-      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.32), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#5b6b59' }, `北面：老杉の森（樹高20〜31m・${floor.code}樹冠ビュー）`));
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.32), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#5b6b59' }, `北面：老杉の森（樹高22〜34m・${floor.code}樹冠ビュー）`));
       g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.45), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#5b6b59' }, `南面：月光の杉林・${floor.code}パノラマ樹冠展望`));
     }
   }
@@ -679,7 +725,7 @@ export class ArchitecturalBlueprint2D {
 
     if (floor.isAttic && !isStorage && !isCamper && !isKei) {
       const maxD = isAnnex ? ANNEX.depth - 0.15 : HOUSE.depth - 0.15;
-      const ridgeLbl = isAnnex ? '棟木ライン CH2,800 (6寸勾配)' : '棟木ライン CH2,830 (6寸勾配頂部)';
+      const ridgeLbl = isAnnex ? '棟木ライン CH2,800 (6寸勾配)' : '棟木ライン CH2,830 (6寸勾配頂部 +18,930)';
       g.appendChild(el('line', { x1: this.px(2.50), y1: this.pz(0.15), x2: this.px(2.50), y2: this.pz(maxD), stroke: '#9c4722', 'stroke-width': 1.4, 'stroke-dasharray': '12 4 3 4' }));
       g.appendChild(el('text', { x: this.px(2.56), y: this.pz(0.55), 'font-size': 8.2, fill: '#9c4722', 'font-weight': 700 }, ridgeLbl));
       [1.28, 3.72].forEach((cx) => {
@@ -727,15 +773,16 @@ export class ArchitecturalBlueprint2D {
 
   _drawGridAxes(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
     const isDeep = Boolean(floor.isDeepB2 || floor.isDeepB3);
+    const hasWestBal = floor.hasAnnexBalconies || floor.hasBalcony5F;
     const axes = isDeep
       ? this._getDeepAxes(floor)
       : (isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES))));
     const topOff = isDeep ? -0.80 : (isKei ? -0.50 : (isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15))));
     const topLineOff = isDeep ? -0.40 : (isKei ? -0.36 : (isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95))));
-    const leftOff = isDeep ? -1.85 : (isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15))));
-    const leftLineOff = isDeep ? -1.45 : (isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95))));
+    const leftOff = isDeep ? -1.85 : (isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (hasWestBal ? -1.42 : -1.15))));
+    const leftLineOff = isDeep ? -1.45 : (isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (hasWestBal ? -1.24 : -0.95))));
     const rightEnd = isDeep ? bWidth + 0.35 : (isKei ? bWidth + 0.16 : (isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85)));
-    const botEnd = isDeep ? bDepth + 0.30 : (isKei ? bDepth + 0.22 : (isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies ? bDepth + 1.15 : bDepth + 0.85))));
+    const botEnd = isDeep ? bDepth + 0.30 : (isKei ? bDepth + 0.22 : (isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies || floor.hasBalcony6F ? bDepth + 1.18 : bDepth + 0.85))));
 
     axes.x.forEach((ax) => {
       const x = this.px(ax.pos);
@@ -821,25 +868,20 @@ export class ArchitecturalBlueprint2D {
       }
     };
 
-    if (sIdx === 0) {
+    if (floor.isDeepB3) {
       // SHEET 0: B3F WARM WOODEN SHELTER (3.2×12.5m) + SHOWER + TOILET + BEDROOM + 2×6m FOOD VAULT!
-      // B301 Warm Shelter Living
       box(0.08, 3.85, 0.62, 0.58, 'HEPA', '#cfd7df');
       box(2.26, 4.15, 0.76, 0.58, '暖炉', '#f8d7be');
       box(0.14, 5.15, 0.88, 1.55, '木製卓', '#f3e5cf');
       box(2.14, 5.45, 0.82, 1.90, 'ソファ', '#d8e0e8');
       box(0.06, 8.70, 0.36, 1.85, '木製本棚', '#efe3d1');
-      // B302 Shower Room (X=1.75..3.20, Z=8.60..10.40)
       box(2.58, 8.70, 0.50, 0.90, 'シャワー', '#d0e9f7');
       box(2.68, 9.76, 0.42, 0.54, 'ベンチ', '#f3e5cf');
-      // B303 Toilet Room (X=1.75..3.20, Z=10.50..12.10)
       box(2.64, 10.95, 0.48, 0.52, 'WC', '#fff');
       box(2.50, 11.62, 0.62, 0.38, '手洗', '#eef7fc');
-      // B304 Wooden Bedroom (X=0.00..3.20, Z=12.20..16.10)
       box(1.52, 13.08, 1.58, 2.02, '木造クイーンベッド', '#f4ece3');
       box(0.08, 12.45, 0.56, 1.10, '書斎机', '#f3e5cf');
       box(0.06, 13.68, 0.54, 1.24, '衣類棚', '#efe3d1');
-      // B305 2.0m×6.0m Food Storage Warehouse (X=0.60..2.60, Z=16.25..22.25)
       [16.85, 18.25, 19.65, 20.95].forEach((rz, idx) => {
         box(0.62, rz - 0.52, 0.46, 1.04, idx % 2 === 0 ? '水20L' : '食料棚', idx % 2 === 0 ? '#cfe4f5' : '#e8dcc7');
         box(2.12, rz - 0.52, 0.46, 1.04, idx % 2 === 0 ? '非常食' : '米・缶詰', '#e4dfcf');
@@ -849,18 +891,15 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 1) {
+    if (floor.isDeepB2) {
       // SHEET 1: B2F 10m×10m STUDIO + 4×6m B202 CONTROL ROOM + 6×4m B203 LOUNGE/GEAR ROOM!
-      // B201 Studio Perimeter Props (huge 8.5×8.5m oak center open!)
       box(9.40, 3.12, 0.50, 0.46, 'PA', '#cfd7df');
       box(9.40, 8.12, 0.50, 0.46, 'PA', '#cfd7df');
       box(1.22, 11.99, 1.85, 0.52, 'スタジオベンチ', '#d8e0e8');
       box(9.56, 10.15, 0.38, 1.40, '機材棚', '#cfd7df');
-      // B202 (4m×6m) Control & Recording Room
       box(10.61, 3.24, 0.88, 2.15, 'ミキシング卓', '#e6dcd0');
       box(13.51, 3.68, 0.58, 1.85, '音響ラック', '#cfd7df');
       box(13.42, 6.48, 0.65, 1.55, 'シンセ卓', '#efe3d1');
-      // B203 (6m×4m) Lounge & Training Room
       box(4.40, 15.79, 2.10, 0.82, 'ラウンジソファ', '#d8e0e8');
       box(4.82, 14.84, 1.25, 0.62, '卓', '#f3e5cf');
       box(9.26, 13.58, 0.52, 2.85, '機材ケース棚', '#cfd7df');
@@ -869,7 +908,7 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 14) {
+    if (floor.building === 'camper' && floor.camperLevel === 1) {
       // ULTRA-DETAILED CAMPER 1F MECHANICAL & ARCHITECTURAL FIXTURES (ALL 14 ROOMS + W560 CORRIDOR!)
       box(0.11, 0.08, 2.48, 0.34, '計器盤 / GPSコンソール', '#e2e6eb');
       g.appendChild(el('circle', { cx: this.px(0.72), cy: this.pz(0.49), r: 16, fill: 'none', stroke: '#1c1e22', 'stroke-width': 2.0 }));
@@ -908,7 +947,7 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 15) {
+    if (floor.building === 'camper' && floor.camperLevel === 2) {
       box(1.06, 0.18, 1.52, 1.72, 'キングサイズ寝台マット', '#f7ede0');
       box(1.31, 0.20, 0.42, 0.26, '枕', '#fff');
       box(1.91, 0.20, 0.42, 0.26, '枕', '#fff');
@@ -920,6 +959,89 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
+    if (floor.building === 'kei') {
+      box(0.07, 0.07, 1.34, 0.27, 'インストルメントパネル', '#dde2e8');
+      box(0.90, 0.24, 0.36, 0.11, '計器盤', '#fef3c7');
+      [0.94, 1.06, 1.18].forEach((ppx, pi) => {
+        box(ppx - 0.025, 0.20, 0.05, 0.08, ['C', 'B', 'A'][pi], '#cbd5e1');
+      });
+      g.appendChild(el('circle', { cx: this.px(1.08), cy: this.pz(0.46), r: 17, fill: 'none', stroke: '#1c1e22', 'stroke-width': 2.2 }));
+      g.appendChild(el('circle', { cx: this.px(1.08), cy: this.pz(0.46), r: 4, fill: '#1c1e22' }));
+      g.appendChild(el('line', { x1: this.px(1.08) - 15, y1: this.pz(0.46), x2: this.px(1.08) + 15, y2: this.pz(0.46), stroke: '#1c1e22', 'stroke-width': 1.3 }));
+      g.appendChild(el('circle', { cx: this.px(0.76), cy: this.pz(0.58), r: 5.5, fill: '#334155', stroke: '#111', 'stroke-width': 0.8 }));
+      g.appendChild(el('text', { x: this.px(0.76), y: this.pz(0.58) + 2.2, 'text-anchor': 'middle', 'font-size': 5.8, fill: '#fff', 'font-weight': 700 }, 'MT'));
+      box(0.73, 0.72, 0.06, 0.22, '', '#475569');
+      box(0.84, 0.58, 0.48, 0.44, '運転席(1脚のみ)', '#cbd9e8');
+      box(0.85, 0.96, 0.46, 0.10, '背もたれ', '#94a3b8');
+      box(0.96, 0.98, 0.24, 0.07, '', '#64748b');
+      g.appendChild(el('line', { x1: this.px(0.79), y1: this.pz(1.15), x2: this.px(1.41), y2: this.pz(1.15), stroke: '#1c1e22', 'stroke-width': 2.6 }));
+      g.appendChild(el('text', { x: this.px(1.10), y: this.pz(1.12), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#1c1e22' }, '荷室仕切バー'));
+      box(0.08, 0.46, 0.26, 0.44, '工具箱', '#cfdbe8');
+      box(0.09, 0.94, 0.07, 0.18, '傘', '#cbd5e1');
+      box(0.06, 2.35, 0.18, 0.62, '', '#e2e6ea');
+      box(1.24, 2.35, 0.18, 0.62, '', '#e2e6ea');
+      box(1.07, 1.36, 0.34, 1.88, '', '#f5ebdc');
+      box(1.09, 1.43, 0.30, 0.46, 'オリコン×2', '#d7e2d3');
+      box(1.10, 2.06, 0.28, 0.44, '日用品箱', '#eadcc7');
+      box(1.10, 2.75, 0.28, 0.38, '非常工具', '#f4d3d0');
+      g.appendChild(el('text', { x: this.px(1.24), y: this.pz(1.31), 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#7c5a38' }, 'DIY 2段合板棚'));
+      box(0.08, 2.28, 0.32, 0.48, 'クーラー', '#d1e6dc');
+      box(0.08, 2.82, 0.32, 0.44, '木箱+シート', '#e8dcc7');
+      const hx = this.px(0.74);
+      const hy = this.pz(2.58);
+      g.appendChild(el('circle', { cx: hx, cy: hy, r: 0.20 * sc, fill: 'rgba(156,71,34,0.12)', stroke: '#9c4722', 'stroke-width': 1.0, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('ellipse', { cx: hx, cy: hy, rx: 0.18 * sc, ry: 0.095 * sc, fill: 'rgba(156,71,34,0.22)', stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('circle', { cx: hx, cy: hy, r: 0.075 * sc, fill: '#fff', stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: hx, y: hy + 0.27 * sc, 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#9c4722' }, '主人公進入確認 (Ø400)'));
+      return;
+    }
+
+    if (floor.building === 'storage') {
+      box(1.58, 0.19, 0.28, 0.68, '棚', '#aeb4ba');
+      box(1.58, 1.13, 0.28, 0.68, '棚', '#aeb4ba');
+      return;
+    }
+
+    if (floor.building === 'annex') {
+      if (floor.physicalFloor === 1) {
+        box(4.46, 0.42, 0.36, 1.05, '靴ベンチ');
+        box(0.47, 0.20, 1.55, 0.68, '作業台');
+        box(0.22, 1.56, 0.48, 0.48, '木箱');
+        box(3.07, 1.78, 0.95, 0.48, '造作洗面');
+        box(3.34, 3.21, 0.42, 0.62, 'WC');
+        box(4.21, 4.17, 0.62, 1.95, 'カフェキッチン', '#f5efe6');
+        box(2.42, 5.26, 0.86, 1.18, 'ダイニング');
+        box(0.20, 5.90, 0.78, 1.56, 'デニムソファ', '#d8e0e8');
+        box(1.24, 6.24, 0.48, 0.88, 'ロー卓');
+        g.appendChild(el('circle', { cx: this.px(0.55), cy: this.pz(7.56), r: 14, fill: '#fff2d2', stroke: '#c97f2b', 'stroke-width': 1.1 }));
+      } else if (floor.physicalFloor === 2) {
+        box(4.43, 0.57, 0.38, 1.15, '書庫棚');
+        box(1.67, 0.19, 1.65, 0.38, '読書ベンチ');
+        box(3.27, 3.45, 0.82, 0.82, 'ちゃぶ台');
+        box(2.17, 5.78, 1.56, 1.92, 'クイーンベッド', '#f4ece3');
+        box(4.29, 6.00, 0.52, 1.60, 'ワードローブ');
+      } else if (floor.physicalFloor === 3) {
+        box(0.20, 0.22, 1.08, 0.48, '書斎机');
+        box(2.48, 1.24, 1.85, 0.86, 'ゲストベッド', '#f4ece3');
+        box(4.43, 2.34, 0.38, 1.12, '書庫棚');
+        box(3.30, 3.96, 0.70, 0.68, '茶卓');
+        box(1.08, 7.24, 1.15, 0.55, '作業台');
+        box(3.28, 5.94, 1.35, 0.68, 'サロンソファ', '#d8e0e8');
+      } else {
+        box(0.24, 0.24, 0.42, 0.42, '木箱');
+        box(0.68, 0.38, 0.54, 0.54, '座布団', '#d8e0e8');
+        box(4.06, 0.46, 0.58, 0.58, '木箱');
+        box(4.02, 1.40, 0.48, 0.52, '麻袋');
+        box(4.19, 3.12, 0.58, 1.25, '工作台');
+        box(0.21, 6.18, 0.38, 1.15, '古書棚');
+        box(1.07, 6.49, 0.76, 0.52, '座卓');
+        box(3.28, 6.48, 0.74, 0.54, '畳卓');
+        g.appendChild(el('circle', { cx: this.px(3.25), cy: this.pz(6.75), r: 12, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.1 }));
+      }
+      return;
+    }
+
+    // Main Tower Upper & B1F levels (sheetIndex 2=B1F, 3=1F, 4=2F, 5=3F, 6=4F, 7=5F, 8=6F, 9=RF Attic)
     if (sIdx === 2) {
       const zones = [[2.85, 5.10], [5.20, 7.45], [7.55, 9.85]];
       zones.forEach(([z1, z2]) => {
@@ -981,6 +1103,63 @@ export class ArchitecturalBlueprint2D {
       box(3.42, 7.41, 0.86, 0.54, '大理石卓');
       box(4.17, 10.32, 0.36, 0.36, '腰掛');
     } else if (sIdx === 7) {
+      // 5F: Architect's Model Studio, Hinoki Finnish Dry Sauna, Canopy Sky Bath, Botanical Conservatory & West Deck!
+      box(0.40, 0.18, 1.35, 0.36, '盆栽ベンチ', '#e8efe2');
+      box(2.87, 0.21, 1.56, 0.74, '', '#f5eee3');
+      box(3.12, 0.30, 0.92, 0.56, '製図台・青写真', '#dbe9f6');
+      g.appendChild(el('circle', { cx: this.px(3.65), cy: this.pz(1.24), r: 14, fill: '#d8e0e8', stroke: '#5c5348', 'stroke-width': 0.9 }));
+      box(4.14, 1.71, 0.64, 0.82, '1/50模型台', '#e4d6c2');
+      box(2.55, 2.89, 1.38, 0.54, '5段フラットファイル');
+      box(4.33, 3.01, 0.42, 0.38, '筒');
+      box(2.29, 4.98, 1.18, 0.40, '下段ベンチ', '#efe2ce');
+      box(2.29, 5.38, 1.18, 0.52, '上段ベンチ', '#e8d5b8');
+      box(2.99, 3.60, 0.42, 0.36, '炉', '#f6c8b6');
+      g.appendChild(el('circle', { cx: this.px(2.58), cy: this.pz(3.76), r: 9, fill: '#efe2ce', stroke: '#7c5a38', 'stroke-width': 0.8 }));
+      box(3.63, 5.01, 1.18, 0.90, '桧縁黒御影浴槽', '#cfeaf7');
+      g.appendChild(el('circle', { cx: this.px(4.58), cy: this.pz(3.88), r: 10, fill: '#eef7fc', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '3 2' }));
+      box(4.39, 3.67, 0.30, 0.22, '桶');
+      box(2.89, 6.12, 1.78, 0.46, '3段LED植物育成ラック', '#d7e8d2');
+      box(4.19, 7.22, 0.62, 1.92, 'ハーブ調合大理石台', '#f4f0e8');
+      box(2.66, 8.08, 0.88, 0.64, '鉄瓶茶卓');
+      box(0.67, 8.67, 0.86, 0.74, '外気浴チェア', '#d8e0e8');
+      g.appendChild(el('circle', { cx: this.px(2.02), cy: this.pz(9.12), r: 14, fill: '#efe2ce', stroke: '#5c5348', 'stroke-width': 0.85 }));
+      g.appendChild(el('circle', { cx: this.px(0.46), cy: this.pz(9.52), r: 13, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.2 }));
+      box(-0.84, 6.29, 0.56, 0.46, '腰掛');
+      box(-0.76, 8.32, 0.36, 0.36, '灯');
+    } else if (sIdx === 8) {
+      // 6F: Crown Observatory Salon, Hanging Hearth, Espresso Bar, Starlight Tatami & Full-Width South Sky Terrace!
+      box(0.48, 0.18, 1.24, 0.34, '星図コンソール', '#e2e0dd');
+      box(3.47, 0.22, 1.34, 1.96, '星見デイベッド', '#f4ece3');
+      box(2.87, 2.80, 1.06, 0.56, '文机・抹茶・香炉');
+      box(3.13, 2.21, 0.54, 0.54, '座布団', '#f2dcd6');
+      box(4.42, 2.68, 0.40, 0.68, '床間');
+      box(2.93, 3.71, 0.50, 1.06, '黒大理石洗面', '#e2e0dd');
+      box(2.61, 5.21, 0.42, 0.62, 'WC');
+      box(4.46, 3.62, 0.36, 1.92, 'ワイン棚12本', '#e8dcc7');
+      box(3.63, 3.59, 0.62, 0.54, 'クーラー', '#d5e2ee');
+      box(2.43, 6.08, 1.04, 0.36, 'LPターンテーブル');
+      box(2.21, 6.11, 0.22, 0.26, 'SP');
+      box(3.47, 6.11, 0.22, 0.26, 'SP');
+      box(0.92, 7.06, 1.66, 0.72, '天空展望ソファ', '#e5e2dc');
+      box(1.18, 8.14, 1.14, 0.52, '黒大理石卓', '#dedcd8');
+      g.appendChild(el('circle', { cx: this.px(0.52), cy: this.pz(8.20), r: 28, fill: '#d8dadf', stroke: '#4a4f57', 'stroke-width': 0.9 }));
+      g.appendChild(el('circle', { cx: this.px(0.52), cy: this.pz(8.20), r: 16, fill: '#3a3d42', stroke: '#1c1e22', 'stroke-width': 1.0 }));
+      g.appendChild(el('circle', { cx: this.px(0.52), cy: this.pz(8.20), r: 7, fill: '#ff7b2e', stroke: '#b9381c', 'stroke-width': 0.8 }));
+      g.appendChild(el('text', { x: this.px(0.52), y: this.pz(8.56), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#b9381c' }, '吊り暖炉[E]'));
+      g.appendChild(el('circle', { cx: this.px(1.48), cy: this.pz(9.32), r: 18, fill: 'rgba(180,130,60,0.14)', stroke: '#8a5a20', 'stroke-width': 1.0, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('line', { x1: this.px(1.48), y1: this.pz(9.02), x2: this.px(1.56), y2: this.pz(9.68), stroke: '#8a5a20', 'stroke-width': 3.2 }));
+      g.appendChild(el('text', { x: this.px(1.48), y: this.pz(8.94), 'text-anchor': 'middle', 'font-size': 6.5, 'font-weight': 700, fill: '#7c4e18' }, '赤道儀望遠鏡'));
+      box(0.27, 9.21, 0.46, 0.34, '星図台');
+      box(4.19, 6.50, 0.62, 1.84, '伊エスプレッソBAR', '#f5efe6');
+      [6.98, 7.86].forEach((bz) => {
+        g.appendChild(el('circle', { cx: this.px(3.82), cy: this.pz(bz), r: 13, fill: '#e8d8c4', stroke: '#5c5348', 'stroke-width': 0.85 }));
+      });
+      box(0.27, 10.18, 0.42, 0.68, '植栽', '#d7e8d2');
+      g.appendChild(el('circle', { cx: this.px(1.05), cy: this.pz(10.78), r: 8, fill: '#efe2ce', stroke: '#8a5a20', 'stroke-width': 1.0 }));
+      g.appendChild(el('circle', { cx: this.px(4.22), cy: this.pz(10.52), r: 18, fill: '#fff', stroke: '#5c5348', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: this.px(4.22), y: this.pz(10.55), 'text-anchor': 'middle', 'font-size': 6.2, fill: '#3d3832', 'font-weight': 600 }, 'ビストロ'));
+      box(4.08, 10.02, 0.44, 0.34, '椅子');
+    } else if (sIdx === 9) {
       box(3.94, 1.04, 0.62, 0.62, '木箱');
       box(3.89, 1.85, 0.66, 0.60, 'ロープ箱');
       box(3.95, 2.86, 0.55, 1.05, '麻袋');
@@ -989,78 +1168,6 @@ export class ArchitecturalBlueprint2D {
       box(0.25, 6.88, 0.54, 1.15, '軒下収納');
       box(4.20, 7.02, 0.52, 1.05, 'チェスト');
       g.appendChild(el('circle', { cx: this.px(2.50), cy: this.pz(7.45), r: 15, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.2 }));
-    } else if (sIdx === 8) {
-      box(4.46, 0.42, 0.36, 1.05, '靴ベンチ');
-      box(0.47, 0.20, 1.55, 0.68, '作業台');
-      box(0.22, 1.56, 0.48, 0.48, '木箱');
-      box(3.07, 1.78, 0.95, 0.48, '造作洗面');
-      box(3.34, 3.21, 0.42, 0.62, 'WC');
-      box(4.21, 4.17, 0.62, 1.95, 'カフェキッチン', '#f5efe6');
-      box(2.42, 5.26, 0.86, 1.18, 'ダイニング');
-      box(0.20, 5.90, 0.78, 1.56, 'デニムソファ', '#d8e0e8');
-      box(1.24, 6.24, 0.48, 0.88, 'ロー卓');
-      g.appendChild(el('circle', { cx: this.px(0.55), cy: this.pz(7.56), r: 14, fill: '#fff2d2', stroke: '#c97f2b', 'stroke-width': 1.1 }));
-    } else if (sIdx === 9) {
-      box(4.43, 0.57, 0.38, 1.15, '書庫棚');
-      box(1.67, 0.19, 1.65, 0.38, '読書ベンチ');
-      box(3.27, 3.45, 0.82, 0.82, 'ちゃぶ台');
-      box(2.17, 5.78, 1.56, 1.92, 'クイーンベッド', '#f4ece3');
-      box(4.29, 6.00, 0.52, 1.60, 'ワードローブ');
-    } else if (sIdx === 10) {
-      box(0.20, 0.22, 1.08, 0.48, '書斎机');
-      box(2.48, 1.24, 1.85, 0.86, 'ゲストベッド', '#f4ece3');
-      box(4.43, 2.34, 0.38, 1.12, '書庫棚');
-      box(3.30, 3.96, 0.70, 0.68, '茶卓');
-      box(1.08, 7.24, 1.15, 0.55, '作業台');
-      box(3.28, 5.94, 1.35, 0.68, 'サロンソファ', '#d8e0e8');
-    } else if (sIdx === 11) {
-      box(0.24, 0.24, 0.42, 0.42, '木箱');
-      box(0.68, 0.38, 0.54, 0.54, '座布団', '#d8e0e8');
-      box(4.06, 0.46, 0.58, 0.58, '木箱');
-      box(4.02, 1.40, 0.48, 0.52, '麻袋');
-      box(4.19, 3.12, 0.58, 1.25, '工作台');
-      box(0.21, 6.18, 0.38, 1.15, '古書棚');
-      box(1.07, 6.49, 0.76, 0.52, '座卓');
-      box(3.28, 6.48, 0.74, 0.54, '畳卓');
-      g.appendChild(el('circle', { cx: this.px(3.25), cy: this.pz(6.75), r: 12, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.1 }));
-    } else if (sIdx === 16) {
-      box(0.07, 0.07, 1.34, 0.27, 'インストルメントパネル', '#dde2e8');
-      box(0.90, 0.24, 0.36, 0.11, '計器盤', '#fef3c7');
-      [0.94, 1.06, 1.18].forEach((ppx, pi) => {
-        box(ppx - 0.025, 0.20, 0.05, 0.08, ['C', 'B', 'A'][pi], '#cbd5e1');
-      });
-      g.appendChild(el('circle', { cx: this.px(1.08), cy: this.pz(0.46), r: 17, fill: 'none', stroke: '#1c1e22', 'stroke-width': 2.2 }));
-      g.appendChild(el('circle', { cx: this.px(1.08), cy: this.pz(0.46), r: 4, fill: '#1c1e22' }));
-      g.appendChild(el('line', { x1: this.px(1.08) - 15, y1: this.pz(0.46), x2: this.px(1.08) + 15, y2: this.pz(0.46), stroke: '#1c1e22', 'stroke-width': 1.3 }));
-      g.appendChild(el('circle', { cx: this.px(0.76), cy: this.pz(0.58), r: 5.5, fill: '#334155', stroke: '#111', 'stroke-width': 0.8 }));
-      g.appendChild(el('text', { x: this.px(0.76), y: this.pz(0.58) + 2.2, 'text-anchor': 'middle', 'font-size': 5.8, fill: '#fff', 'font-weight': 700 }, 'MT'));
-      box(0.73, 0.72, 0.06, 0.22, '', '#475569');
-      box(0.84, 0.58, 0.48, 0.44, '運転席(1脚のみ)', '#cbd9e8');
-      box(0.85, 0.96, 0.46, 0.10, '背もたれ', '#94a3b8');
-      box(0.96, 0.98, 0.24, 0.07, '', '#64748b');
-      g.appendChild(el('line', { x1: this.px(0.79), y1: this.pz(1.15), x2: this.px(1.41), y2: this.pz(1.15), stroke: '#1c1e22', 'stroke-width': 2.6 }));
-      g.appendChild(el('text', { x: this.px(1.10), y: this.pz(1.12), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#1c1e22' }, '荷室仕切バー'));
-      box(0.08, 0.46, 0.26, 0.44, '工具箱', '#cfdbe8');
-      box(0.09, 0.94, 0.07, 0.18, '傘', '#cbd5e1');
-      box(0.06, 2.35, 0.18, 0.62, '', '#e2e6ea');
-      box(1.24, 2.35, 0.18, 0.62, '', '#e2e6ea');
-      box(1.07, 1.36, 0.34, 1.88, '', '#f5ebdc');
-      box(1.09, 1.43, 0.30, 0.46, 'オリコン×2', '#d7e2d3');
-      box(1.10, 2.06, 0.28, 0.44, '日用品箱', '#eadcc7');
-      box(1.10, 2.75, 0.28, 0.38, '非常工具', '#f4d3d0');
-      g.appendChild(el('text', { x: this.px(1.24), y: this.pz(1.31), 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#7c5a38' }, 'DIY 2段合板棚'));
-      box(0.08, 2.28, 0.32, 0.48, 'クーラー', '#d1e6dc');
-      box(0.08, 2.82, 0.32, 0.44, '木箱+シート', '#e8dcc7');
-      const hx = this.px(0.74);
-      const hy = this.pz(2.58);
-      g.appendChild(el('circle', { cx: hx, cy: hy, r: 0.20 * sc, fill: 'rgba(156,71,34,0.12)', stroke: '#9c4722', 'stroke-width': 1.0, 'stroke-dasharray': '3 2' }));
-      g.appendChild(el('ellipse', { cx: hx, cy: hy, rx: 0.18 * sc, ry: 0.095 * sc, fill: 'rgba(156,71,34,0.22)', stroke: '#9c4722', 'stroke-width': 1.1 }));
-      g.appendChild(el('circle', { cx: hx, cy: hy, r: 0.075 * sc, fill: '#fff', stroke: '#9c4722', 'stroke-width': 1.1 }));
-      g.appendChild(el('text', { x: hx, y: hy + 0.27 * sc, 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#9c4722' }, '主人公進入確認 (Ø400)'));
-      return;
-    } else {
-      box(1.58, 0.19, 0.28, 0.68, '棚', '#aeb4ba');
-      box(1.58, 1.13, 0.28, 0.68, '棚', '#aeb4ba');
     }
   }
 
@@ -1251,15 +1358,21 @@ export class ArchitecturalBlueprint2D {
         continue;
       }
 
-      const isNarrow = r.w <= 1.05 && !isStorage && !isCamper;
-      const boxW = isCamper ? (r.w > 1.5 ? 148 : 112) : (isNarrow ? 82 : (isStorage ? 168 : 114));
+      const isNarrow = r.w <= 1.32 && !isStorage && !isCamper;
+      const titleStr = `${r.code} ${r.nameJp}`;
+      const maxRoomW = Math.max(76, Math.round(r.w * this.scale - 6));
+      const desiredW = Math.min(isStorage ? 168 : 156, Math.max(82, titleStr.length * 6.9 + 12));
+      const boxW = isCamper ? (r.w > 1.5 ? 148 : 112) : (isStorage ? 168 : Math.min(desiredW, isNarrow ? maxRoomW : 152));
+      const titleFont = isCamper
+        ? 7.1
+        : Math.max(5.3, Math.min(isNarrow ? 6.8 : 7.8, ((boxW - 10) / Math.max(1, titleStr.length)) * 1.02));
       const boxH = isCamper ? 30 : 34;
       const grp = el('g', { style: 'pointer-events:none' });
-      grp.appendChild(el('rect', { x: cx - boxW / 2, y: cy - boxH / 2, width: boxW, height: boxH, rx: 3.2, fill: 'rgba(255,255,255,0.88)', stroke: 'rgba(28,30,34,0.22)', 'stroke-width': 0.65 }));
-      grp.appendChild(el('text', { x: cx, y: cy - 3.5, 'text-anchor': 'middle', 'font-size': isCamper ? 7.1 : (isNarrow ? 7.0 : 7.8), 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp}`));
-      grp.appendChild(el('text', { x: cx, y: cy + 5.5, 'text-anchor': 'middle', 'font-size': 6.5, fill: '#5b5852' }, `${r.area.toFixed(2)}m² · ${r.ch}`));
+      grp.appendChild(el('rect', { x: cx - boxW / 2, y: cy - boxH / 2, width: boxW, height: boxH, rx: 3.2, fill: 'rgba(255,255,255,0.90)', stroke: 'rgba(28,30,34,0.24)', 'stroke-width': 0.65 }));
+      grp.appendChild(el('text', { x: cx, y: cy - 3.5, 'text-anchor': 'middle', 'font-size': titleFont.toFixed(1), 'font-weight': 700, fill: '#1c1e22' }, titleStr));
+      grp.appendChild(el('text', { x: cx, y: cy + 5.5, 'text-anchor': 'middle', 'font-size': 6.3, fill: '#5b5852' }, `${r.area.toFixed(2)}m² · ${r.ch}`));
       if (!isCamper) {
-        grp.appendChild(el('text', { x: cx, y: cy + 13.5, 'text-anchor': 'middle', 'font-size': 6.4, fill: '#8a5328', 'font-family': 'monospace' }, `${r.fl} / ${r.ch}`));
+        grp.appendChild(el('text', { x: cx, y: cy + 13.5, 'text-anchor': 'middle', 'font-size': 6.2, fill: '#8a5328', 'font-family': 'monospace' }, `${r.fl} / ${r.ch}`));
       }
       g.appendChild(grp);
     }
@@ -1299,10 +1412,11 @@ export class ArchitecturalBlueprint2D {
     }
 
     const axes = isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES)));
+    const hasWestBal = floor.hasAnnexBalconies || floor.hasBalcony5F;
     const dimHOuterY = isKei ? this.pz(-0.66) : (isCamper ? this.pz(-0.92) : (isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55))));
     const dimHInnerY = isKei ? this.pz(-0.34) : (isCamper ? this.pz(-0.46) : (isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78))));
-    const dimVOuterX = isKei ? this.px(-0.74) : (isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (floor.hasAnnexBalconies ? this.px(-1.78) : this.px(-1.52))));
-    const dimVInnerX = isKei ? this.px(-0.42) : (isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (floor.hasAnnexBalconies ? this.px(-1.54) : this.px(-0.78))));
+    const dimVOuterX = isKei ? this.px(-0.74) : (isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (hasWestBal ? this.px(-1.78) : this.px(-1.52))));
+    const dimVInnerX = isKei ? this.px(-0.42) : (isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (hasWestBal ? this.px(-1.54) : this.px(-0.78))));
 
     dimH(0, bWidth, dimHOuterY, Math.round(bWidth * 1000).toLocaleString());
     const xs = axes.x;
@@ -1688,94 +1802,112 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: dxR + 5, y: vy(0.30), 'font-size': 6.2, 'font-family': 'monospace', fill: '#444' }, '+300'));
       g.appendChild(el('text', { x: vx(3.75), y: glY + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, '全長 L = 7,500 ｜ 全幅 W = 2,700 ｜ 拡幅廊下 W = 560 mm'));
     } else {
-      g.appendChild(el('text', { x: secX + 10, y: secY + 14, 'font-size': 7.8, 'font-weight': 700, fill: '#1c1e22' },
-        '全5拠点 断面比較（隣棟｜母屋8層 B3F〜RF＋ELV-1｜軽バン｜RC倉庫｜巨大RV）'));
+      g.appendChild(el('text', { x: secX + 10, y: secY + 14, 'font-size': 7.5, 'font-weight': 700, fill: '#1c1e22' },
+        '全5拠点 断面比較（隣棟｜母屋10層 B3F〜6F+RF＋ELV-1｜軽｜RC倉庫｜RV）'));
 
-      const sx = (m) => secX + 102 + m * 9.5;
-      const sy = (m) => secY + 106 - m * 5.9; // Cleanly fits +13.3m RF down to -11.4m ELV Pit!
+      const sx = (m) => secX + 100 + m * 9.4;
+      const sy = (m) => secY + 120 - m * 4.65; // Cleanly fits +20.42m lightning mast down to -11.40m ELV Pit!
 
       g.appendChild(el('line', { x1: secX + 10, y1: sy(0), x2: secX + secW - 10, y2: sy(0), stroke: '#5a6354', 'stroke-width': 1.4 }));
-      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.2, fill: '#5a6354' }, 'GL'));
+      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.0, fill: '#5a6354' }, 'GL'));
 
-      // 1. Neighbor Annex (-7.6 .. -2.6)
+      // 1. Neighbor Annex (-7.6 .. -2.6, sheets 10..13)
       [
-        { sIdx: 8, y0: 0.00, y1: 2.75, txt: '隣1F' },
-        { sIdx: 9, y0: 2.75, y1: 5.50, txt: '隣2F' },
-        { sIdx: 10, y0: 5.50, y1: 8.15, txt: '隣3F' },
+        { sIdx: 10, y0: 0.00, y1: 2.75, txt: '隣1F' },
+        { sIdx: 11, y0: 2.75, y1: 5.50, txt: '隣2F' },
+        { sIdx: 12, y0: 5.50, y1: 8.15, txt: '隣3F' },
       ].forEach((b) => {
         const act = floor.sheetIndex === b.sIdx;
         g.appendChild(el('rect', {
-          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 9.5, height: sy(b.y0) - sy(b.y1),
+          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 9.4, height: sy(b.y0) - sy(b.y1),
           fill: act ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
         }));
-        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.2, 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
+        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.0, 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
       });
-      const arAct = floor.sheetIndex === 11;
+      const arAct = floor.sheetIndex === 13;
       g.appendChild(el('polygon', {
         points: `${sx(-7.6)},${sy(8.15)} ${sx(-7.6)},${sy(9.55)} ${sx(-5.1)},${sy(10.95)} ${sx(-2.6)},${sy(9.55)} ${sx(-2.6)},${sy(8.15)}`,
         fill: arAct ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': arAct ? 1.5 : 0.85,
       }));
-      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.05), 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏'));
 
-      // 2. Main Tower — ALL 8 LEVELS (B3F -10.2m -> B2F -6.6m -> B1F -2.4m -> 1F..4F..RF +13.3m)!
+      // 2. Main Tower — ALL 10 LEVELS (B3F -10.2m -> B2F -6.6m -> B1F -2.4m -> 1F..6F -> RF +18.93m + Mast +20.42m)!
       [
-        { sIdx: 0, x0: 0.0, w: 5.0, y0: -10.20, y1: -6.60, txt: 'B3F 避難庫' },
-        { sIdx: 1, x0: 0.0, w: 8.6, y0: -6.60, y1: -2.40, txt: 'B2F 10×10スタジオ' },
-        { sIdx: 2, x0: 0.0, w: 5.0, y0: -2.40, y1: 0.00, txt: 'B1F' },
-        { sIdx: 3, x0: 0.0, w: 5.0, y0: 0.00, y1: 2.75, txt: '1F' },
-        { sIdx: 4, x0: 0.0, w: 5.0, y0: 2.75, y1: 5.50, txt: '2F' },
-        { sIdx: 5, x0: 0.0, w: 5.0, y0: 5.50, y1: 8.15, txt: '3F' },
-        { sIdx: 6, x0: 0.0, w: 5.0, y0: 8.15, y1: 10.50, txt: '4F' },
+        { sIdx: 0, x0: 0.0, w: 5.0, y0: -10.20, y1: -6.60, txt: 'B3F 避難', tx: 1.70 },
+        { sIdx: 1, x0: 0.0, w: 8.6, y0: -6.60, y1: -2.40, txt: 'B2F 10×10', tx: 6.75 },
+        { sIdx: 2, x0: 0.0, w: 5.0, y0: -2.40, y1: 0.00, txt: 'B1F', tx: 1.70 },
+        { sIdx: 3, x0: 0.0, w: 5.0, y0: 0.00, y1: 2.75, txt: '1F', tx: 1.70 },
+        { sIdx: 4, x0: 0.0, w: 5.0, y0: 2.75, y1: 5.50, txt: '2F', tx: 2.50 },
+        { sIdx: 5, x0: 0.0, w: 5.0, y0: 5.50, y1: 8.15, txt: '3F', tx: 2.50 },
+        { sIdx: 6, x0: 0.0, w: 5.0, y0: 8.15, y1: 10.50, txt: '4F', tx: 2.50 },
+        { sIdx: 7, x0: 0.0, w: 5.0, y0: 10.50, y1: 13.25, txt: '5F スパ', tx: 2.50 },
+        { sIdx: 8, x0: 0.0, w: 5.0, y0: 13.25, y1: 16.10, txt: '6F 天文', tx: 2.50 },
       ].forEach((b) => {
         const act = b.sIdx === floor.sheetIndex;
+        const fill = act
+          ? 'rgba(217, 70, 38, 0.28)'
+          : (b.sIdx === 0 ? '#eadbc5' : (b.sIdx <= 2 ? '#dcdde0' : (b.sIdx >= 7 ? '#f4efe4' : '#f8f5ef')));
         g.appendChild(el('rect', {
-          x: sx(b.x0), y: sy(b.y1), width: b.w * 9.5, height: sy(b.y0) - sy(b.y1),
-          fill: act ? 'rgba(217, 70, 38, 0.28)' : (b.sIdx <= 2 ? (b.sIdx === 0 ? '#eadbc5' : '#dcdde0') : '#f8f5ef'),
-          stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
+          x: sx(b.x0), y: sy(b.y1), width: b.w * 9.4, height: sy(b.y0) - sy(b.y1),
+          fill, stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
         }));
-        g.appendChild(el('text', { x: sx(b.x0 + b.w * 0.46), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.2, 'text-anchor': 'middle', 'font-size': 5.3, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732' }, b.txt));
+        g.appendChild(el('text', { x: sx(b.tx), y: (sy(b.y0) + sy(b.y1)) / 2 + 1.9, 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732' }, b.txt));
       });
-      // Vertical ELV-1 Direct-to-Ground Shaft (B3F -11.4m -> 1F +2.70m)!
+      // Vertical ELV-1 Direct-to-Ground Shaft (B3F -11.40m -> 1F +2.70m)!
       g.appendChild(el('rect', {
-        x: sx(3.4), y: sy(2.70), width: 1.45 * 9.5, height: sy(-11.40) - sy(2.70),
-        fill: 'rgba(16, 185, 129, 0.28)', stroke: '#059669', 'stroke-width': 1.2,
+        x: sx(3.45), y: sy(2.70), width: 1.45 * 9.4, height: sy(-11.40) - sy(2.70),
+        fill: 'rgba(16, 185, 129, 0.26)', stroke: '#059669', 'stroke-width': 1.1,
       }));
-      g.appendChild(el('text', { x: sx(4.12), y: sy(-4.2), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: '#065f46', transform: `rotate(-90 ${sx(4.12)} ${sy(-4.2)})` }, 'ELV-1 直通'));
+      g.appendChild(el('text', { x: sx(4.18), y: sy(-4.4), 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 700, fill: '#065f46', transform: `rotate(-90 ${sx(4.18)} ${sy(-4.4)})` }, 'ELV-1 直通'));
 
-      const mAttAct = floor.sheetIndex === 7;
+      // Cantilevered 5F West Spa Deck silhouette (clearly clearing Neighbor Annex roof!)
+      g.appendChild(el('rect', {
+        x: sx(-1.00), y: sy(11.55), width: 1.00 * 9.4, height: sy(10.50) - sy(11.55),
+        fill: floor.sheetIndex === 7 ? 'rgba(217, 70, 38, 0.28)' : 'rgba(156,71,34,0.14)', stroke: '#9c4722', 'stroke-width': 0.8,
+      }));
+
+      // Main Tower Gable Attic RF (sheet 9, +16.10..18.93m) + Rooftop Lightning Mast (+20.42m)
+      const mAttAct = floor.sheetIndex === 9;
       g.appendChild(el('polygon', {
-        points: `${sx(0)},${sy(10.50)} ${sx(0)},${sy(11.92)} ${sx(2.5)},${sy(13.33)} ${sx(5)},${sy(11.92)} ${sx(5)},${sy(10.50)}`,
+        points: `${sx(0)},${sy(16.10)} ${sx(0)},${sy(17.52)} ${sx(2.5)},${sy(18.93)} ${sx(5)},${sy(17.52)} ${sx(5)},${sy(16.10)}`,
         fill: mAttAct ? 'rgba(217, 70, 38, 0.25)' : '#f8f5ef', stroke: '#2c2f36', 'stroke-width': mAttAct ? 1.5 : 0.85,
       }));
-      g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, 'RF'));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(16.95), 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, 'RF'));
+      g.appendChild(el('line', { x1: sx(2.5), y1: sy(18.93), x2: sx(2.5), y2: sy(20.42), stroke: '#9c4722', 'stroke-width': 1.0 }));
+      g.appendChild(el('circle', { cx: sx(2.5), cy: sy(20.42), r: 1.5, fill: '#9c4722' }));
 
-      // 3. Daily Kei-Van (5.6..7.15)
-      g.appendChild(el('rect', { x: sx(5.6), y: sy(1.80), width: 1.55 * 9.5, height: sy(0.30) - sy(1.80), fill: isKei ? 'rgba(217,70,38,0.32)' : '#e6ece8', stroke: isKei ? '#b9381c' : '#1d7a8c', 'stroke-width': isKei ? 1.5 : 1.0 }));
-      g.appendChild(el('text', { x: sx(6.38), y: sy(2.8), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: isKei ? '#b9381c' : '#1d7a8c' }, '軽'));
+      // 3. Daily Kei-Van (5.6..7.15, sheet 18)
+      g.appendChild(el('rect', { x: sx(5.6), y: sy(1.80), width: 1.55 * 9.4, height: sy(0.30) - sy(1.80), fill: isKei ? 'rgba(217,70,38,0.32)' : '#e6ece8', stroke: isKei ? '#b9381c' : '#1d7a8c', 'stroke-width': isKei ? 1.5 : 1.0 }));
+      g.appendChild(el('text', { x: sx(6.38), y: sy(2.85), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: isKei ? '#b9381c' : '#1d7a8c' }, '軽'));
 
-      // 4. Concrete Warehouse (7.8..9.8)
-      const s1Act = floor.sheetIndex === 12;
-      const s2Act = floor.sheetIndex === 13;
-      g.appendChild(el('rect', { x: sx(7.8), y: sy(2.12), width: 2.0 * 9.5, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.85 }));
-      g.appendChild(el('rect', { x: sx(7.8), y: sy(4.28), width: 2.0 * 9.5, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.85 }));
-      g.appendChild(el('text', { x: sx(8.8), y: sy(2.0), 'text-anchor': 'middle', 'font-size': 5.0, fill: '#222' }, '倉庫'));
+      // 4. Concrete Warehouse (7.8..9.8, sheets 14..15)
+      const s1Act = floor.sheetIndex === 14;
+      const s2Act = floor.sheetIndex === 15;
+      g.appendChild(el('rect', { x: sx(7.8), y: sy(2.12), width: 2.0 * 9.4, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.85 }));
+      g.appendChild(el('rect', { x: sx(7.8), y: sy(4.28), width: 2.0 * 9.4, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.85 }));
+      g.appendChild(el('text', { x: sx(8.8), y: sy(5.15), 'text-anchor': 'middle', 'font-size': 5.0, fill: '#3a3f46', 'font-weight': 600 }, '倉庫'));
 
-      // 5. Movable Giant Camper (10.6..13.3)
-      g.appendChild(el('rect', { x: sx(10.6), y: sy(3.40), width: 2.7 * 9.5, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.0 }));
-      g.appendChild(el('text', { x: sx(11.95), y: sy(1.6), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
+      // 5. Movable Giant Camper (10.6..13.3, sheets 16..17)
+      g.appendChild(el('rect', { x: sx(10.6), y: sy(3.40), width: 2.7 * 9.4, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.0 }));
+      g.appendChild(el('text', { x: sx(11.95), y: sy(1.65), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
+
+      g.appendChild(el('text', { x: sx(-5.1), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': 700, fill: '#3d523a' }, '隣棟5×8m'));
+      g.appendChild(el('text', { x: sx(2.5), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': 700, fill: '#1c1e22' }, '母屋10層(B3〜6F)'));
+      g.appendChild(el('text', { x: sx(10.6), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: '#4f555c' }, '軽・RC倉庫・RV'));
 
       [
-        [13.33, '+13.3m'],
-        [8.15, '+8.15m'],
-        [0.00, '±0.0m'],
+        [18.93, '+18.9m 棟'],
+        [13.25, '+13.3m 6F'],
+        [10.50, '+10.5m 5F'],
+        [0.00, '±0.0m GL'],
         [-6.60, '-6.6m B2'],
         [-10.20, '-10.2m B3'],
       ].forEach(([m, txt]) => {
-        g.appendChild(el('text', { x: secX + 276, y: sy(m) + 2.2, 'font-size': 5.8, fill: '#5b5852', 'font-family': 'monospace' }, txt));
+        g.appendChild(el('text', { x: secX + 266, y: m === 0 ? sy(m) - 2.5 : sy(m) + 2.0, 'font-size': 5.5, fill: '#5b5852', 'font-family': 'monospace' }, txt));
       });
     }
 
-    // --- JIS Title Block (All 17 Sheets!) ---
+    // --- JIS Title Block (All 19 Sheets!) ---
     const tbX = 394;
     const tbW = VW - tbX - 28;
     g.appendChild(el('rect', { x: tbX, y: baseTop, width: tbW, height: secH, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1 }));
@@ -1783,14 +1915,14 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.6, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 地下3層＋直通ELV ｜ 隣棟 ｜ RC倉庫 ｜ 巨大RV ｜ 軽バン'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.3, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 (地下3層+地上6階・全10層+ELV-1) ｜ 隣棟 ｜ RC倉庫 ｜ RV ｜ 軽バン'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.3, 'font-weight': 700, fill: '#9c4722' }, `図面名称 : ${floor.titleJp}`));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.4, fill: '#5b5852' }, '全17図面 : 母屋8層(B3〜RF) ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 巨大RV(W560拡幅) ｜ 軽バン(1/20)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.4, fill: '#0f4c81', 'font-weight': 700 }, '深地下設備 : B2F 10×10m CH3.8m木床&RC鏡スタジオ＋4×6m×2室 ｜ B3F W520通路→ELV-1地上直通'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.4, fill: '#9c4722' }, 'B3F避難施設 : 3.2×12.5m 木造シェルター(シャワー/WC/寝室)＋奥扉 2×6m 食料備蓄倉庫'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.4, fill: '#1d7a8c', 'font-weight': 700 }, '可動車両 : 巨大RV(拡幅W560廊下・14室+2F) ＆ 軽バン KEI-340(1席+進入荷室・相互SAT衝突)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.4, fill: '#5b5852' }, '全19図面 : 母屋10層(B3〜6F+RF) ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 巨大RV(W560拡幅) ｜ 軽バン(1/20)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.3, fill: '#0f4c81', 'font-weight': 700 }, '母屋6階＋深地下 : SRC耐震 H18.93m(5F工房/サウナ/桧展望浴・6F天文階) ＋ B2F鏡スタジオ ＋ B3F避難庫＆ELV-1直通'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.3, fill: '#9c4722' }, '隣棟＆倉庫 : 隣棟「森の離れ」延154.3m²(3F 6室+3B+5室RF) ｜ RC倉庫 2×2m 4室 ｜ B3F 3.2×12.5m避難＋2×6m食料庫'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.3, fill: '#1d7a8c', 'font-weight': 700 }, '可動車両 : 巨大RV(拡幅W560廊下・14室+2F) ＆ 軽バン KEI-340(1席+進入荷室・相互SAT衝突)'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.4, fill: '#1c1e22' }, floor.isDeepB3 ? '縮尺 : B3F平面 1/100 ｜ ELV-1機構縦断面 1/35 ｜ MRLトラクション昇降行程 10,200 mm' : (isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT 厳格衝突判定' : '縮尺 : S = 1/50〜1/100 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地')));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.2, fill: '#6c665d' }, '母屋B3F〜RF＋リアルエレベーター・隣棟・RC倉庫・巨大RV・軽バン 全17図面＆完全一人称探索'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.2, fill: '#6c665d' }, '母屋B3F〜6F+RF＋リアルELV-1・隣棟・RC倉庫・巨大RV・軽バン 全19図面＆完全一人称探索'));
 
     svg.appendChild(g);
   }
