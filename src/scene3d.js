@@ -5,9 +5,9 @@ import { createVolumetricAtmosphere } from './volumetricAtmosphere.js';
 import { SinglePassPostFX } from './postfx.js';
 import { AdaptiveMobileEngine } from './adaptiveEngine.js';
 import { SpatialForestAudio } from './audioEngine.js';
-import { ROOMS } from './planData.js';
+import { FLOORS, HOUSE, getAtticCeilingY } from './planData.js';
 
-// Pre-allocated zero-GC hot-loop scratch math objects (eliminates Android/V8 GC frame spikes at 120Hz)
+// Pre-allocated zero-GC hot-loop scratch math objects
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
 const _input = new THREE.Vector3();
@@ -20,14 +20,16 @@ export class FirstPersonHouseExplorer {
     this.container = container;
     this.callbacks = callbacks;
 
-    // Protagonist spawns directly inside LDK looking across the dark moody Living/Tatami Nook out into the deep cedar forest
-    this.playerPos = new THREE.Vector3(1.58, 0.0, 6.18);
+    // Protagonist spawns directly inside 1F LDK looking across dark moody Living/Tatami Nook & deep cedar forest
+    this.currentFloor = 0; // 0: 1F, 1: 2F, 2: 3F, 3: RF (屋根裏部屋)
+    this.activeFlight = null; // null or 0 (ST1), 1 (ST2), 2 (ST3)
+    this.playerPos = new THREE.Vector3(1.62, 0.0, 6.25);
     this.playerVel = new THREE.Vector3();
     this.floorY = 0.0;
     this.eyeHeight = 1.56;
     this.targetEyeHeight = 1.56;
     this.crouching = false;
-    this.playerRadius = 0.23;
+    this.playerRadius = 0.21;
 
     this.yaw = Math.PI - 0.24;
     this.pitch = -0.04;
@@ -40,7 +42,6 @@ export class FirstPersonHouseExplorer {
     this.bobAmount = 0;
     this.prevBobSin = 0;
 
-    // Desktop & Virtual Mobile Touch Inputs
     this.keys = new Set();
     this.virtualMove = { x: 0, z: 0, sprint: false };
     this.isLocked = false;
@@ -65,14 +66,13 @@ export class FirstPersonHouseExplorer {
 
     this._initEvents();
     this._updateCameraTransform(0);
-    // Initial one-shot static shadow bake
     this.adaptive.markShadowsDirty();
     this._startLoop();
   }
 
   _initRenderer() {
     this.renderer = new THREE.WebGLRenderer({
-      antialias: false, // SinglePassPostFX RT handles hardware 2x MSAA directly on Adreno tile memory
+      antialias: false,
       powerPreference: 'high-performance',
       preserveDrawingBuffer: true,
     });
@@ -80,7 +80,7 @@ export class FirstPersonHouseExplorer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.04;
+    this.renderer.toneMappingExposure = 1.06;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(this.renderer.domElement);
   }
@@ -88,8 +88,7 @@ export class FirstPersonHouseExplorer {
   _initScene() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x050a10);
-    // Layered nocturnal forest fog tuned so 4-5 receding ranks of dark cedars read crisply through every window!
-    this.scene.fog = new THREE.FogExp2(0x070e16, 0.038);
+    this.scene.fog = new THREE.FogExp2(0x070e16, 0.032);
 
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -98,35 +97,33 @@ export class FirstPersonHouseExplorer {
 
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.06, 95);
+    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.06, 110);
     this.scene.add(this.camera);
   }
 
   _initDarkForestLighting() {
-    // Low moody nocturnal hemisphere fill so interior corners stay genuinely dark & intimate
-    this.hemiLight = new THREE.HemisphereLight(0x28405e, 0x090807, 0.13);
+    this.hemiLight = new THREE.HemisphereLight(0x2b4566, 0x090807, 0.14);
     this.scene.add(this.hemiLight);
 
-    // Pale silver-blue moonlight grazing cedar trunks & boughs outside and casting forest shadows across the Engawa
-    this.moonLight = new THREE.DirectionalLight(0x7ca6d4, 1.32);
-    this.moonLight.position.set(-5.5, 13.0, 20.0);
-    this.moonLight.target.position.set(2.5, 1.2, 8.0);
+    // Pale silver-blue moonlight grazing the 3-story tower & 22m cedar canopy
+    this.moonLight = new THREE.DirectionalLight(0x7ea8d8, 1.38);
+    this.moonLight.position.set(-7.5, 21.0, 24.0);
+    this.moonLight.target.position.set(2.5, 4.5, 6.0);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.mapSize.set(1024, 1024);
     this.moonLight.shadow.camera.near = 2;
-    this.moonLight.shadow.camera.far = 42;
-    this.moonLight.shadow.camera.left = -13;
-    this.moonLight.shadow.camera.right = 13;
-    this.moonLight.shadow.camera.top = 15;
-    this.moonLight.shadow.camera.bottom = -15;
+    this.moonLight.shadow.camera.far = 52;
+    this.moonLight.shadow.camera.left = -16;
+    this.moonLight.shadow.camera.right = 16;
+    this.moonLight.shadow.camera.top = 18;
+    this.moonLight.shadow.camera.bottom = -16;
     this.moonLight.shadow.bias = -0.0007;
     this.moonLight.shadow.normalBias = 0.03;
     this.scene.add(this.moonLight);
     this.scene.add(this.moonLight.target);
 
-    // Subtle cool moon bounce illuminating North woods outside Bedroom W1 & Front Door D1
-    const northMoon = new THREE.DirectionalLight(0x52759e, 0.58);
-    northMoon.position.set(5.5, 10.0, -14.0);
+    const northMoon = new THREE.DirectionalLight(0x52759e, 0.62);
+    northMoon.position.set(6.5, 16.0, -16.0);
     this.scene.add(northMoon);
   }
 
@@ -143,7 +140,6 @@ export class FirstPersonHouseExplorer {
     this.flashlight.target = this.flashlightTarget;
   }
 
-  // --- Public Protagonist & Mobile Touch APIs ---
   setVirtualMove(nx, nz, sprint = false) {
     this.virtualMove.x = nx;
     this.virtualMove.z = nz;
@@ -193,7 +189,12 @@ export class FirstPersonHouseExplorer {
     }
   }
 
-  setPose(x, z, yaw, pitch = -0.04) {
+  setPose(x, z, yaw, pitch = -0.04, floorIdx = null) {
+    if (floorIdx !== null && floorIdx >= 0 && floorIdx <= 3) {
+      this.currentFloor = floorIdx;
+      this.activeFlight = null;
+      if (this.adaptive) this.adaptive.snapFloorLights(floorIdx);
+    }
     this.playerPos.set(x, 0, z);
     this.floorY = this._computeFloorY(x, z);
     this.yaw = yaw;
@@ -241,7 +242,7 @@ export class FirstPersonHouseExplorer {
             const p = dom.requestPointerLock();
             if (p && typeof p.catch === 'function') p.catch(() => {});
           } catch (_) {
-            // Drag-look fallback works seamlessly
+            // Drag-look fallback
           }
         }
       }
@@ -329,8 +330,8 @@ export class FirstPersonHouseExplorer {
 
   _raycastInteractable() {
     const targets = [
-      ...this.house.interactiveDoors.map((d) => d.mesh),
-      ...this.house.interactiveProps.map((p) => p.mesh),
+      ...this.house.interactiveDoors.filter((d) => Math.abs(d.floor - this.currentFloor) <= 1).map((d) => d.mesh),
+      ...this.house.interactiveProps.filter((p) => p.floor === this.currentFloor).map((p) => p.mesh),
     ];
     this.raycaster.setFromCamera(this.centerNDC, this.camera);
     this.raycaster.far = 2.65;
@@ -340,7 +341,7 @@ export class FirstPersonHouseExplorer {
     if (obj.userData.doorId) {
       const door = this.house.interactiveDoors.find((d) => d.id === obj.userData.doorId);
       if (door) {
-        const shortName = door.label.split(' ')[0];
+        const shortName = door.label.split(' ')[1] || door.label;
         return { kind: 'door', item: door, prompt: `${shortName}を${door.isOpen ? '閉める' : '開ける'}` };
       }
     }
@@ -367,48 +368,129 @@ export class FirstPersonHouseExplorer {
   }
 
   _computeFloorY(x, z) {
-    if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) return -0.15;
-    if (x < 1.55 && z < 1.45) return -0.12;
-    if (x > 3.50 && z > 3.50 && z < 5.30) return -0.02;
-    if (x > 3.53 && z > 8.53) return 0.32;
-    return 0.0;
+    const sb = HOUSE.stairBox;
+    // Continuous elevation along active stair flight ST1 / ST2 / ST3
+    if (this.activeFlight !== null) {
+      const t = Math.max(0, Math.min(1, (sb.bottomZ - z) / (sb.bottomZ - sb.topZ)));
+      const y0 = FLOORS[this.activeFlight].baseY;
+      const y1 = FLOORS[this.activeFlight + 1].baseY;
+      return y0 + (y1 - y0) * t;
+    }
+
+    const baseY = FLOORS[this.currentFloor].baseY;
+    if (this.currentFloor === 0) {
+      if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) return -0.18;
+      if (x < 2.15 && z < 1.35) return -0.12; // Genkan Doma
+      if (x > 3.44 && z > 8.44) return 0.32;  // Raised Tatami Nook
+      return 0.0;
+    }
+    if (this.currentFloor === 1) {
+      if (x > 3.55 && z > 3.50 && z < 5.95) return baseY - 0.02; // Unit Bath
+      return baseY;
+    }
+    return baseY;
   }
 
   _getSurfaceMaterial(x, z) {
-    if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) return 'earth';
-    if (x > 3.53 && z > 8.53) return 'tatami';
-    if ((x < 1.55 && z < 1.45) || (x > 1.15 && z > 3.50 && z < 5.30) || (x > 3.60 && z > 5.30 && z < 8.38)) return 'tile';
+    if (this.activeFlight !== null) return 'wood';
+    if (this.currentFloor === 0) {
+      if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) return 'earth';
+      if (x > 3.44 && z > 8.44) return 'tatami';
+      if ((x < 2.15 && z < 1.35) || (x > 2.20 && z < 5.25)) return 'tile';
+      return 'wood';
+    }
+    if (this.currentFloor === 1) {
+      if (x > 2.20 && z > 3.50 && z < 5.95) return 'tile';
+      if (x > 2.20 && z < 3.50) return 'tatami'; // soft carpet
+      return 'wood';
+    }
+    if (this.currentFloor === 2) {
+      if (x > 2.20 && z < 3.50) return 'tatami';
+      if (x > 2.20 && x < 3.50 && z > 3.50 && z < 5.95) return 'tile';
+      return 'wood';
+    }
+    // Attic
+    if (x > 1.30 && x < 3.70 && z > 6.15 && z < 8.75) return 'tatami';
     return 'wood';
   }
 
   _collidesAt(x, z) {
-    if (x < -3.5 || x > 8.5 || z < -5.2 || z > 12.6) return true;
     const r = this.playerRadius;
     const r2 = r * r;
-    const statics = this.house.staticColliders;
+    const sb = HOUSE.stairBox;
+
+    // While walking up or down a staircase flight, strictly constrain protagonist inside the stairwell channel
+    if (this.activeFlight !== null) {
+      if (x < sb.minX + r || x > sb.maxX - r) return true;
+      return false;
+    }
+
+    // Exterior bounds only permitted on 1F; upper floors stay inside interior walls
+    if (this.currentFloor === 0) {
+      if (x < -3.5 || x > 8.5 || z < -6.5 || z > 12.6) return true;
+    } else {
+      if (x < 0.15 + r || x > 4.85 - r || z < 0.15 + r || z > 9.85 - r) return true;
+    }
+
+    const statics = this.house.collidersByFloor[this.currentFloor] || [];
     for (let i = 0; i < statics.length; i++) {
       const b = statics[i];
       const cx = x < b.minX ? b.minX : (x > b.maxX ? b.maxX : x);
       const cz = z < b.minZ ? b.minZ : (z > b.maxZ ? b.maxZ : z);
       if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) return true;
     }
+
     const doors = this.house.interactiveDoors;
     for (let i = 0; i < doors.length; i++) {
       const d = doors[i];
-      if (d.progress < 0.55) {
+      if (d.floor === this.currentFloor && d.progress < 0.55) {
         const b = d.collider;
         const cx = x < b.minX ? b.minX : (x > b.maxX ? b.maxX : x);
         const cz = z < b.minZ ? b.minZ : (z > b.maxZ ? b.maxZ : z);
         if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) return true;
       }
     }
-    const trees = this.house.treeColliders;
-    for (let i = 0; i < trees.length; i++) {
-      const t = trees[i];
-      const md = r + t.r;
-      if ((x - t.x) * (x - t.x) + (z - t.z) * (z - t.z) < md * md) return true;
+
+    if (this.currentFloor === 0) {
+      const trees = this.house.treeColliders;
+      for (let i = 0; i < trees.length; i++) {
+        const t = trees[i];
+        const md = r + t.r;
+        if ((x - t.x) * (x - t.x) + (z - t.z) * (z - t.z) < md * md) return true;
+      }
     }
     return false;
+  }
+
+  _updateStairTransitions(prevZ) {
+    const sb = HOUSE.stairBox;
+    const x = this.playerPos.x;
+    const z = this.playerPos.z;
+    const inStairX = x >= sb.minX && x <= sb.maxX;
+
+    if (this.activeFlight === null) {
+      if (inStairX) {
+        // Stepping North onto the bottom of the upward flight (1F->2F, 2F->3F, 3F->Attic)
+        if (prevZ >= sb.bottomZ - 0.04 && z < sb.bottomZ && this.currentFloor < 3) {
+          this.activeFlight = this.currentFloor;
+        }
+        // Stepping South onto the top of the downward flight (2F->1F, 3F->2F, Attic->3F)
+        else if (prevZ <= sb.topZ + 0.04 && z > sb.topZ && this.currentFloor > 0) {
+          this.activeFlight = this.currentFloor - 1;
+        }
+      }
+    } else {
+      // Exiting top of stair flight -> advance to upper floor
+      if (z <= sb.topZ) {
+        this.currentFloor = this.activeFlight + 1;
+        this.activeFlight = null;
+      }
+      // Exiting bottom of stair flight -> return to lower floor
+      else if (z >= sb.bottomZ) {
+        this.currentFloor = this.activeFlight;
+        this.activeFlight = null;
+      }
+    }
   }
 
   _updateMovement(dt) {
@@ -418,20 +500,19 @@ export class FirstPersonHouseExplorer {
     _right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
     _input.set(0, 0, 0);
 
-    // Keyboard input
     if (this.keys.has('w') || this.keys.has('arrowup')) _input.add(_forward);
     if (this.keys.has('s') || this.keys.has('arrowdown')) _input.sub(_forward);
     if (this.keys.has('d') || this.keys.has('arrowright')) _input.add(_right);
     if (this.keys.has('a') || this.keys.has('arrowleft')) _input.sub(_right);
 
-    // POCO F7 Analog Virtual Thumbstick input
     if (Math.abs(this.virtualMove.x) > 0.04 || Math.abs(this.virtualMove.z) > 0.04) {
       _input.addScaledVector(_right, this.virtualMove.x);
       _input.addScaledVector(_forward, -this.virtualMove.z);
     }
 
     const sprinting = (this.keys.has('shift') || this.virtualMove.sprint) && !this.crouching;
-    const maxSpeed = this.crouching ? 1.05 : (sprinting ? 2.75 : 1.72);
+    const stairSlow = this.activeFlight !== null ? 0.85 : 1.0;
+    const maxSpeed = (this.crouching ? 1.05 : (sprinting ? 2.75 : 1.75)) * stairSlow;
     const mag = Math.min(1.0, _input.length());
     if (mag > 0.01) {
       _input.normalize().multiplyScalar(maxSpeed * mag);
@@ -440,17 +521,26 @@ export class FirstPersonHouseExplorer {
       this.playerVel.lerp(_zero, Math.min(1, dt * 13));
     }
 
+    const prevZ = this.playerPos.z;
     const nextX = this.playerPos.x + this.playerVel.x * dt;
     if (!this._collidesAt(nextX, this.playerPos.z)) this.playerPos.x = nextX;
     const nextZ = this.playerPos.z + this.playerVel.z * dt;
     if (!this._collidesAt(this.playerPos.x, nextZ)) this.playerPos.z = nextZ;
 
-    // Smooth vertical floor & crouch lerp
-    const targetFloorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
-    this.floorY += (targetFloorY - this.floorY) * Math.min(1, dt * 10);
-    this.eyeHeight += (this.targetEyeHeight - this.eyeHeight) * Math.min(1, dt * 9);
+    this._updateStairTransitions(prevZ);
 
-    // Natural head-bob + stride-synchronized material footsteps!
+    // Smooth vertical elevation + automatic sloped-ceiling head ducking under low Attic eaves
+    const targetFloorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
+    const lerpRate = this.activeFlight !== null ? 18 : 11;
+    this.floorY += (targetFloorY - this.floorY) * Math.min(1, dt * lerpRate);
+
+    let desiredEye = this.crouching ? 1.04 : 1.56;
+    if (this.currentFloor === 3 && this.activeFlight === null) {
+      const ceilClearance = getAtticCeilingY(this.playerPos.x) - HOUSE.atticBaseY - 0.24;
+      desiredEye = Math.min(desiredEye, Math.max(0.95, ceilClearance));
+    }
+    this.eyeHeight += (desiredEye - this.eyeHeight) * Math.min(1, dt * 9);
+
     const horizSpeed = Math.hypot(this.playerVel.x, this.playerVel.z);
     if (horizSpeed > 0.16) {
       this.bobPhase += dt * (horizSpeed * 4.5);
@@ -492,7 +582,6 @@ export class FirstPersonHouseExplorer {
   }
 
   _updateWorldSystems(dt, elapsed) {
-    // Animate doors and track whether any door moved (triggers demand-driven shadow refresh)
     let anyDoorAnimating = false;
     const doorOpenMap = {};
     for (const d of this.house.interactiveDoors) {
@@ -508,19 +597,24 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // Update GPU wind uniform & volumetric god-rays/mist
     this.house.windTimeUniform.value = elapsed;
     this.atmosphere.update(elapsed);
 
-    // Subtle breathing flicker on Washi Paper Lantern
-    const lanternProp = this.house.interactiveProps.find((p) => p.id === 'lantern');
-    const lanternOn = Boolean(lanternProp && lanternProp.isOn);
-    const lanternEntry = this.house.interiorLights.find((l) => l.name === 'Tatami_Lantern');
-    if (lanternEntry && lanternOn && lanternEntry.light.visible) {
-      lanternEntry.light.intensity += (Math.sin(elapsed * 3.1) * 0.05 + Math.sin(elapsed * 7.3) * 0.025) * dt * 10;
+    const propStates = {};
+    for (const p of this.house.interactiveProps) {
+      propStates[p.id] = p.isOn;
     }
 
-    // Drifting exterior forest fireflies
+    // Subtle organic breathing flicker on active lanterns (1F Washi + Attic Iron Lantern)
+    for (const lname of ['Tatami_Lantern', 'Attic_Lantern']) {
+      const entry = this.house.interiorLights.find((l) => l.name === lname);
+      const isOn = lname === 'Tatami_Lantern' ? propStates.lantern_1f : propStates.lantern_attic;
+      if (entry && isOn && entry.light.visible) {
+        entry.light.intensity += (Math.sin(elapsed * 3.1) * 0.05 + Math.sin(elapsed * 7.3) * 0.025) * dt * 9;
+      }
+    }
+
+    // Drifting forest fireflies from ground up to Attic treetops
     const posAttr = this.house.fireflies.geometry.attributes.position;
     const seeds = this.house.ffSeeds;
     for (let i = 0; i < seeds.length; i++) {
@@ -534,26 +628,34 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion: wind gets clearer outside, near open Front Door D1, or near South Terrace Window W2
-    const outside = this.playerPos.z < 0.0 || this.playerPos.z > 10.0;
-    const d1Boost = doorOpenMap.D1 ? Math.max(0, 1 - Math.hypot(this.playerPos.x - 0.95, this.playerPos.z) / 4.0) * 0.85 : 0;
-    const w2Boost = Math.max(0, 1 - Math.abs(this.playerPos.z - 9.85) / 4.5) * 0.35;
-    this.audio.updateOcclusion(outside ? 1.0 : Math.min(1.0, Math.max(d1Boost, w2Boost)));
+    // Acoustic occlusion: wind is clearest outside on 1F, near South treetop windows, or in the Attic under the gable roof!
+    const outside = this.currentFloor === 0 && (this.playerPos.z < 0.0 || this.playerPos.z > 10.0);
+    const d1Boost = this.currentFloor === 0 && doorOpenMap['D1-1']
+      ? Math.max(0, 1 - Math.hypot(this.playerPos.x - 1.10, this.playerPos.z) / 4.0) * 0.85
+      : 0;
+    const atticWindBoost = this.currentFloor === 3 ? 0.48 : 0;
+    const windowBoost = Math.max(0, 1 - Math.abs(this.playerPos.z - 9.85) / 4.5) * 0.35;
+    this.audio.updateOcclusion(outside ? 1.0 : Math.min(1.0, Math.max(d1Boost, windowBoost, atticWindBoost)));
 
-    return { anyDoorAnimating, doorOpenMap, lanternOn };
+    return { anyDoorAnimating, doorOpenMap, propStates };
   }
 
   _detectCurrentRoom() {
     const x = this.playerPos.x;
     const z = this.playerPos.z;
-    if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) {
-      return { id: 'exterior', code: 'EXT', nameJp: '深い森・玄関ポーチ', area: 50.0, jo: 0, ch: '森の奥' };
+    if (this.activeFlight !== null) {
+      const fNames = ['1F→2F 階段', '2F→3F 階段', '3F→屋根裏 階段'];
+      return { id: 'stair', code: `ST${this.activeFlight + 1}`, floor: this.currentFloor, nameJp: fNames[this.activeFlight] };
     }
-    for (let i = ROOMS.length - 1; i >= 0; i--) {
-      const r = ROOMS[i];
+    if (this.currentFloor === 0 && (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0)) {
+      return { id: 'exterior', code: 'EXT', floor: 0, nameJp: '深い森・苔石アプローチ' };
+    }
+    const floorRooms = FLOORS[this.currentFloor].rooms;
+    for (let i = floorRooms.length - 1; i >= 0; i--) {
+      const r = floorRooms[i];
       if (x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d) return r;
     }
-    return null;
+    return floorRooms[0] || null;
   }
 
   _startLoop() {
@@ -568,7 +670,7 @@ export class FirstPersonHouseExplorer {
 
       this._updateMovement(dt);
       this._updateCameraTransform(elapsed);
-      const { anyDoorAnimating, doorOpenMap, lanternOn } = this._updateWorldSystems(dt, elapsed);
+      const { anyDoorAnimating, doorOpenMap, propStates } = this._updateWorldSystems(dt, elapsed);
 
       const room = this._detectCurrentRoom();
       const cameraMoved = Math.abs(this.playerPos.x - this.prevCamX) > 0.003 ||
@@ -580,26 +682,23 @@ export class FirstPersonHouseExplorer {
       this.prevYaw = this.yaw;
       this.prevPitch = this.pitch;
 
-      // POCO F7 Adaptive DRS + Demand-Driven Shadows + Spatial Room Light Culler
       this.adaptive.update(rawDtMs, dt, {
         anyDoorAnimating,
         flashlightOn: this.flashlightOn,
         cameraMoved,
-        roomId: room ? room.id : null,
+        currentFloor: this.currentFloor,
+        activeFlight: this.activeFlight,
         doorOpenMap,
-        lanternOn,
+        propStates,
       });
 
-      // Eye dark-adaptation target exposure (gently brighter in deep unlit hallway/exterior, calmer near bright lantern/flashlight)
-      const isDarkZone = room && (room.id === 'exterior' || room.id === 'passage' || room.id === 'wc');
-      const targetExposure = this.flashlightOn ? 1.06 : (isDarkZone ? 1.24 : 1.14);
+      const isDarkZone = room && (room.id === 'exterior' || room.id.includes('passage') || room.id.includes('gallery') || room.id === 'stair');
+      const targetExposure = this.flashlightOn ? 1.06 : (isDarkZone ? 1.26 : 1.15);
       this.postfx.render(this.scene, this.camera, elapsed, targetExposure);
 
-      // Crosshair aim detection
       const aim = this.mapOpen ? null : this._raycastInteractable();
       if (this.callbacks.onAimChange) this.callbacks.onAimChange(aim);
 
-      // Update room HUD & 2D map pose
       if (this.callbacks.onPoseUpdate) {
         this.camera.getWorldDirection(_lookDir);
         this.callbacks.onPoseUpdate({
@@ -607,11 +706,12 @@ export class FirstPersonHouseExplorer {
           z: this.playerPos.z,
           dx: _lookDir.x,
           dz: _lookDir.z,
+          floor: this.currentFloor,
+          floorCode: FLOORS[this.currentFloor].code,
           room,
         });
       }
 
-      // Throttled telemetry push (fires on frame 1 right after postfx.render, then 4Hz)
       this.telemetryTimer += dt;
       if (!this.firstTelemetryPushed || this.telemetryTimer >= 0.25) {
         this.firstTelemetryPushed = true;
