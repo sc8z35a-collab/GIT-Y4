@@ -301,12 +301,12 @@ export function buildCamper3D(ctx) {
   // Front Loft Deck (CL01: full width 0.07..2.63, vz = 0.07..2.17)
   const deckMat = makeSurfaceMat('wood_walnut_floor', 2.5, 2.2);
   addCBox(camperStatic, 2.56, 0.06, 2.10, deckMat, 1.35, y2 - 0.03, 1.12, true);
-  // West Loft Skybridge Deck (CL00: vx = 0.07..1.12, vz = 2.17..5.25 -> leaves vx=1.12..2.63 OPEN to CH 3.02m!)
-  addCBox(camperStatic, 1.05, 0.06, 3.08, deckMat, 0.595, y2 - 0.03, 3.71, true);
-  // Rear Loft Deck (CL02: vz = 5.25..7.43, slotted cleanly around STC1 stair hatch vx=1.12..1.58, vz=6.54..6.96!)
+  // West Loft Skybridge Deck (CL00: vx = 0.07..1.07, vz = 2.17..5.25 -> leaves vx=1.07..2.63 OPEN to CH 3.02m!)
+  addCBox(camperStatic, 1.00, 0.06, 3.08, deckMat, 0.57, y2 - 0.03, 3.71, true);
+  // Rear Loft Deck (CL02: vz = 5.25..7.43, slotted cleanly around STC1 stair hatch vx=1.07..1.63, vz=6.54..6.96!)
   addCBox(camperStatic, 2.56, 0.06, 1.29, deckMat, 1.35, y2 - 0.03, 5.895, true);  // North of hatch (5.25..6.54)
-  addCBox(camperStatic, 1.05, 0.06, 0.42, deckMat, 0.595, y2 - 0.03, 6.75, true);  // West of hatch
-  addCBox(camperStatic, 1.05, 0.06, 0.42, deckMat, 2.105, y2 - 0.03, 6.75, true);  // East of hatch
+  addCBox(camperStatic, 1.00, 0.06, 0.42, deckMat, 0.57, y2 - 0.03, 6.75, true);   // West of hatch
+  addCBox(camperStatic, 1.00, 0.06, 0.42, deckMat, 2.13, y2 - 0.03, 6.75, true);   // East of hatch
   addCBox(camperStatic, 2.56, 0.06, 0.47, deckMat, 1.35, y2 - 0.03, 7.195, true);  // South top landing (6.96..7.43)
 
   // 2F Loft Finish Carpets / Tatami

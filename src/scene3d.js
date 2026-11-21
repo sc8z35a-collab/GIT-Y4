@@ -8,6 +8,7 @@ import { SpatialForestAudio } from './audioEngine.js';
 import {
   FLOORS, HOUSE, ANNEX, ANNEX_FLOORS, getAnnexAtticCeilingY,
   STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, getAtticCeilingY,
+  ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, getFloorByPhysicalIndex,
 } from './planData.js';
 
 const _forward = new THREE.Vector3();
@@ -33,13 +34,16 @@ export class FirstPersonHouseExplorer {
     this.container = container;
     this.callbacks = callbacks;
 
-    // 5-Unit Forest Compound:
-    // - Main Tower (0=B1F..5=RF), Neighbor Annex (1..4), Concrete Warehouse (1..2)
-    // - Movable Giant Overland Camper (2.7×7.5×H3.4m) + Movable Daily-Driver Kei-Van (3.4×1.48×H1.8m)
+    // 5-Unit Forest Compound + Deep Basement Expansion (B3F..RF + Real Traction Elevator ELV-1):
+    // - Main Tower (-2=B3F, -1=B2F, 0=B1F..5=RF), Neighbor Annex (1..4), Concrete Warehouse (1..2)
+    // - Movable Giant Overland Camper (2.7×7.5×H3.4m, W560 corridor) + Movable Daily-Driver Kei-Van (3.4×1.48×H1.8m)
     this.currentFloor = HOUSE.spawnFloor; // 1 (1F LDK)
     this.activeFlight = null;
     this.activeBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper' | 'kei' | 'courtyard'
     this.activeStairBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper'
+    this.inElevator = false;
+    this.nearElevator = false;
+    this.lastElvHudSig = '';
     this.playerPos = new THREE.Vector3(1.62, 0.0, 6.25);
     this.playerVel = new THREE.Vector3();
     this.floorY = 0.0;
@@ -610,14 +614,62 @@ export class FirstPersonHouseExplorer {
     }
   }
 
+  _isPointInElevatorCab(x, z, floorIdx) {
+    if (floorIdx > 1) return false;
+    const C = ELEVATOR.cab;
+    return x >= C.minX - 0.14 && x <= C.maxX + 0.08 && z >= C.minZ - 0.06 && z <= C.maxZ + 0.06;
+  }
+
+  selectElevatorFloor(floor) {
+    this.audio.init();
+    if (this.house.elevator) this.house.elevator.selectFloor(floor);
+  }
+
+  callElevator(floor = this.currentFloor) {
+    this.audio.init();
+    if (this.house.elevator) this.house.elevator.callToFloor(floor);
+  }
+
+  openElevatorDoors() {
+    this.audio.init();
+    if (this.house.elevator) this.house.elevator.openDoorsNow();
+  }
+
+  closeElevatorDoors() {
+    this.audio.init();
+    if (this.house.elevator) this.house.elevator.closeDoorsNow();
+  }
+
+  snapElevator(floor, open = true) {
+    if (this.house.elevator) {
+      this.house.elevator.snapToFloor(floor, open);
+      if (this.inElevator) {
+        this.currentFloor = floor;
+        this.floorY = this.house.elevator.cabY;
+        this._updateCameraTransform(0);
+      }
+    }
+  }
+
+  snapElevatorMidShaft(y, targetFloor = 1) {
+    if (this.house.elevator) {
+      this.house.elevator.snapMidShaft(y, targetFloor);
+      if (this.inElevator) {
+        this.floorY = this.house.elevator.cabY;
+        this._updateCameraTransform(0);
+      }
+    }
+  }
+
   setPose(x, z, yaw, pitch = -0.04, floorIdx = null) {
-    if (floorIdx !== null && floorIdx >= 0 && floorIdx < FLOORS.length) {
+    if (floorIdx !== null && floorIdx >= -2 && floorIdx < FLOORS.length) {
       this.currentFloor = floorIdx;
       this.activeFlight = null;
     }
     this.playerPos.set(x, 0, z);
     this.activeBuilding = this._getBuildingAt(x, z);
-    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding);
+    this.inElevator = this._isPointInElevatorCab(x, z, this.currentFloor);
+    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding, this.inElevator);
     this.floorY = this._computeFloorY(x, z);
     this.eyeHeight = this._computeDesiredEyeHeight(x, z);
     this.yaw = yaw;
@@ -701,6 +753,12 @@ export class FirstPersonHouseExplorer {
         if (k === 'escape' && this.callbacks.onToggleMap) this.callbacks.onToggleMap();
         return;
       }
+      if (this.inElevator || this.nearElevator) {
+        if (k === '1') { this.selectElevatorFloor(1); return; }
+        if (k === '2') { this.selectElevatorFloor(0); return; }
+        if (k === '3') { this.selectElevatorFloor(-1); return; }
+        if (k === '4') { this.selectElevatorFloor(-2); return; }
+      }
       if (k === 'h') { this.toggleVehicleHeadlights(); return; }
       if (k === 'f') {
         if (this.drivingVehicle) this.toggleVehicleHeadlights();
@@ -740,7 +798,9 @@ export class FirstPersonHouseExplorer {
     if (this.drivingVehicle) return null;
     const targets = [
       ...this.house.interactiveDoors.filter((d) => Math.abs(d.floor - this.currentFloor) <= 1).map((d) => d.mesh),
-      ...this.house.interactiveProps.filter((p) => p.floor === this.currentFloor).map((p) => p.mesh),
+      ...this.house.interactiveProps
+        .filter((p) => (p.isElevatorBtn && this.inElevator) || p.floor === this.currentFloor)
+        .map((p) => p.mesh),
     ];
     this.raycaster.setFromCamera(this.centerNDC, this.camera);
     this.raycaster.far = 2.65;
@@ -773,6 +833,8 @@ export class FirstPersonHouseExplorer {
         this.toggleVehicleDrive('camper');
       } else if (hit.item.id === 'kei_drive') {
         this.toggleVehicleDrive('kei');
+      } else if (hit.item.isElevatorBtn || hit.item.isElevatorCall) {
+        hit.item.toggle();
       } else {
         hit.item.toggle();
         this.audio.playClick(hit.item.isOn);
@@ -784,6 +846,7 @@ export class FirstPersonHouseExplorer {
 
   _getBuildingAt(x, z) {
     if (this.drivingVehicle) return this.drivingVehicle;
+    if (this.currentFloor < 0) return 'main';
     if (this.activeFlight !== null) return this.activeStairBuilding;
 
     const cl = this.worldToCamperLocal(x, z);
@@ -818,6 +881,7 @@ export class FirstPersonHouseExplorer {
   _computeDesiredEyeHeight(x, z) {
     if (this.drivingVehicle === 'kei') return 0.98;
     if (this.drivingVehicle === 'camper') return 1.20;
+    if (this.inElevator) return this.crouching ? 1.04 : 1.54;
     // Daily-Driver Kei-Van interior (CH 1.38m -> authentic crouching walk-in cargo posture 1.04m!)
     if (this.activeBuilding === 'kei' && this.currentFloor === 1) {
       return this.crouching ? 0.88 : 1.04;
@@ -832,6 +896,9 @@ export class FirstPersonHouseExplorer {
 
     let desiredEye = this.crouching ? 1.04 : 1.56;
     if (this.crouching) return desiredEye;
+
+    // B2F (CH 3.80m studio) & B3F (CH 2.80m wooden shelter): full standing height!
+    if (this.currentFloor < 0) return desiredEye;
 
     // Low-ceiling 2m×2m Concrete Warehouse (CH 1.92m, door lintels 1.76m)
     if (this.activeBuilding === 'storage') {
@@ -859,7 +926,18 @@ export class FirstPersonHouseExplorer {
   }
 
   _computeFloorY(x, z) {
+    if (this.inElevator && this.house.elevator) {
+      return this.house.elevator.cabY;
+    }
     if (this.activeFlight !== null) {
+      if (this.activeFlight === 'st_b2') {
+        const t = Math.max(0, Math.min(1, (z - STAIR_B1_B2.topZ) / (STAIR_B1_B2.bottomZ - STAIR_B1_B2.topZ)));
+        return STAIR_B1_B2.topY + (STAIR_B1_B2.bottomY - STAIR_B1_B2.topY) * t;
+      }
+      if (this.activeFlight === 'st_b3') {
+        const t = Math.max(0, Math.min(1, (z - STAIR_B2_B3.topZ) / (STAIR_B2_B3.bottomZ - STAIR_B2_B3.topZ)));
+        return STAIR_B2_B3.topY + (STAIR_B2_B3.bottomY - STAIR_B2_B3.topY) * t;
+      }
       if (this.activeStairBuilding === 'camper') {
         const cl = this.worldToCamperLocal(x, z);
         const st = CAMPER.stairLocal;
@@ -885,12 +963,20 @@ export class FirstPersonHouseExplorer {
       return y0 + (y1 - y0) * t;
     }
 
+    if (this.currentFloor === -2) {
+      if (x > 1.75 && z > 8.60 && z < 10.40) return FLOOR_B3F.baseY - 0.02;
+      return FLOOR_B3F.baseY;
+    }
+    if (this.currentFloor === -1) {
+      return FLOOR_B2F.baseY;
+    }
+
     const cl = this.worldToCamperLocal(x, z);
     const inCamper = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
     const kl = this.worldToKeiLocal(x, z);
     const inKei = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
 
-    const baseY = FLOORS[this.currentFloor].baseY;
+    const baseY = getFloorByPhysicalIndex(this.currentFloor).baseY;
     if (this.currentFloor === 1) {
       if (inKei) return KEI.floorWorldY;
       // Smooth step-in outside Kei-Van Left Sliding Door (DK-L) and Rear Liftgate (DK-R)!
@@ -903,7 +989,7 @@ export class FirstPersonHouseExplorer {
         return -0.18 + (KEI.floorWorldY + 0.18) * t;
       }
       if (inCamper) {
-        if (cl.lx < 1.08 && cl.lz > 3.69 && cl.lz < 5.25) return CAMPER.floor1WorldY - 0.02;
+        if (cl.lx < 1.03 && cl.lz > 3.69 && cl.lz < 5.25) return CAMPER.floor1WorldY - 0.02;
         return CAMPER.floor1WorldY;
       }
       if (cl.lx >= -0.36 && cl.lx < 0.0 && cl.lz >= 2.15 && cl.lz <= 2.82) {
@@ -951,15 +1037,24 @@ export class FirstPersonHouseExplorer {
   }
 
   _getSurfaceMaterial(x, z) {
+    if (this.inElevator) return 'tile';
     if (this.activeFlight !== null) {
+      if (this.activeFlight === 'st_b2' || this.activeFlight === 'st_b3') return 'tile';
       if (this.activeStairBuilding === 'storage') return 'tile';
       return this.activeStairBuilding === 'main' && this.activeFlight === 0 ? 'tile' : 'wood';
+    }
+    if (this.currentFloor === -1) {
+      return z < 2.85 ? 'tile' : 'wood';
+    }
+    if (this.currentFloor === -2) {
+      if (z < 3.60 || z > 16.15 || (x > 1.70 && z >= 8.55 && z <= 12.15)) return 'tile';
+      return 'wood';
     }
     if (this.activeBuilding === 'kei') return 'tile';
     if (this.activeBuilding === 'camper') {
       const cl = this.worldToCamperLocal(x, z);
       if (this.currentFloor === 2) return cl.lz < 2.17 || cl.lz > 5.25 ? 'tatami' : 'wood';
-      if (cl.lz < 1.25 || (cl.lx < 1.08 && cl.lz > 2.85) || (cl.lx > 1.62 && cl.lz > 2.85 && cl.lz < 6.05)) return 'tile';
+      if (cl.lz < 1.25 || (cl.lx < 1.03 && cl.lz > 2.85) || (cl.lx > 1.67 && cl.lz > 2.85 && cl.lz < 6.05)) return 'tile';
       return 'wood';
     }
     if (this.currentFloor === 0) return 'tile';
@@ -1070,6 +1165,14 @@ export class FirstPersonHouseExplorer {
     const r2 = r * r;
 
     if (this.activeFlight !== null) {
+      if (this.activeFlight === 'st_b2') {
+        if (x < STAIR_B1_B2.minX + r || x > STAIR_B1_B2.maxX - r) return true;
+        return false;
+      }
+      if (this.activeFlight === 'st_b3') {
+        if (x < STAIR_B2_B3.minX + r || x > STAIR_B2_B3.maxX - r) return true;
+        return false;
+      }
       if (this.activeStairBuilding === 'camper') {
         const cl = this.worldToCamperLocal(x, z);
         const st = CAMPER.stairLocal;
@@ -1083,11 +1186,33 @@ export class FirstPersonHouseExplorer {
       return false;
     }
 
-    if (this.currentFloor === 0) {
-      if (x < 0.15 + r || x > 4.85 - r || z < 2.45 + r || z > 9.85 - r) return true;
+    // Dynamic Mechanical Safety Door Interlock for Real Traction Elevator ELV-1 (floors B3F..1F)
+    if (this.currentFloor <= 1 && this.house.elevator) {
+      const elv = this.house.elevator;
+      const doorPassable = elv.currentStopFloor === this.currentFloor && elv.phase !== 'MOVING' && elv.doorProgress > 0.65;
+      if (!doorPassable) {
+        const bx1 = 3.16; const bx2 = 3.36; const bz1 = 1.24; const bz2 = 2.26;
+        const cx = x < bx1 ? bx1 : (x > bx2 ? bx2 : x);
+        const cz = z < bz1 ? bz1 : (z > bz2 ? bz2 : z);
+        if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) return true;
+      }
+      if (this.inElevator) {
+        const C = ELEVATOR.cab;
+        if (x > C.maxX - r || z < C.minZ + r || z > C.maxZ - r) return true;
+        const inDoorOpeningZ = z >= ELEVATOR.door.minZ + r * 0.7 && z <= ELEVATOR.door.maxZ - r * 0.7;
+        if (x < C.minX + r && (!doorPassable || !inDoorOpeningZ)) return true;
+      }
+    }
+
+    if (this.currentFloor === -2) {
+      if (x < -1.25 || x > 4.75 || z < 0.85 || z > 22.35) return true;
+    } else if (this.currentFloor === -1) {
+      if (x < -1.25 || x > 14.25 || z < 0.70 || z > 17.10) return true;
+    } else if (this.currentFloor === 0) {
+      if (x < -1.20 || x > 4.95 || z < 0.75 || z > 9.95) return true;
     } else if (this.currentFloor === 1) {
       if (x < -14.5 || x > 15.2 || z < -15.2 || z > 14.5) return true;
-      // Strict Movable Giant Camper 1F exterior shell + 14-room + 460mm corridor collision!
+      // Strict Movable Giant Camper 1F exterior shell + 14-room + widened 560mm corridor collision!
       const cl = this.worldToCamperLocal(x, z);
       if (cl.lx >= -r - 0.16 && cl.lx <= CAMPER.width + r + 0.16 && cl.lz >= -r - 0.18 && cl.lz <= CAMPER.length + r + 0.18) {
         if (this._collidesInCamperLocal(cl.lx, cl.lz, 1)) return true;
@@ -1103,7 +1228,7 @@ export class FirstPersonHouseExplorer {
         if (cl.lx < 0.07 + r || cl.lx > CAMPER.width - 0.07 - r || cl.lz < 0.07 + r || cl.lz > CAMPER.length - 0.07 - r) {
           return true;
         }
-        if (cl.lx > 1.08 - r && cl.lz > 2.17 && cl.lz < 5.25) return true;
+        if (cl.lx > 1.03 - r && cl.lz > 2.17 && cl.lz < 5.25) return true;
         if (this._collidesInCamperLocal(cl.lx, cl.lz, 2)) return true;
         return false;
       }
@@ -1209,6 +1334,32 @@ export class FirstPersonHouseExplorer {
     const curCl = this.worldToCamperLocal(x, z);
 
     if (this.activeFlight === null) {
+      // Deep Basement Stair ST_B2: B1F (0) <-> B2F (-1) (descends South +Z)
+      if (x >= STAIR_B1_B2.minX && x <= STAIR_B1_B2.maxX) {
+        if (this.currentFloor === 0 && prevZ <= STAIR_B1_B2.topZ + 0.04 && z > STAIR_B1_B2.topZ) {
+          this.activeFlight = 'st_b2';
+          this.activeStairBuilding = 'main';
+          return;
+        }
+        if (this.currentFloor === -1 && prevZ >= STAIR_B1_B2.bottomZ - 0.04 && z < STAIR_B1_B2.bottomZ) {
+          this.activeFlight = 'st_b2';
+          this.activeStairBuilding = 'main';
+          return;
+        }
+      }
+      // Deep Basement Stair ST_B3: B2F (-1) <-> B3F (-2) (descends South +Z)
+      if (x >= STAIR_B2_B3.minX && x <= STAIR_B2_B3.maxX) {
+        if (this.currentFloor === -1 && prevZ <= STAIR_B2_B3.topZ + 0.04 && z > STAIR_B2_B3.topZ) {
+          this.activeFlight = 'st_b3';
+          this.activeStairBuilding = 'main';
+          return;
+        }
+        if (this.currentFloor === -2 && prevZ >= STAIR_B2_B3.bottomZ - 0.04 && z < STAIR_B2_B3.bottomZ) {
+          this.activeFlight = 'st_b3';
+          this.activeStairBuilding = 'main';
+          return;
+        }
+      }
       if (this.activeBuilding === 'camper' && curCl.lx >= cst.minX && curCl.lx <= cst.maxX) {
         if (this.currentFloor === 1 && prevCl.lz <= cst.bottomZ + 0.04 && curCl.lz > cst.bottomZ) {
           this.activeFlight = 1;
@@ -1221,7 +1372,7 @@ export class FirstPersonHouseExplorer {
           return;
         }
       }
-      if (x >= sb.minX && x <= sb.maxX) {
+      if (this.currentFloor >= 0 && x >= sb.minX && x <= sb.maxX) {
         if (prevZ >= sb.bottomZ - 0.04 && z < sb.bottomZ && this.currentFloor < maxFloor) {
           this.activeFlight = this.currentFloor;
           this.activeStairBuilding = 'main';
@@ -1229,7 +1380,7 @@ export class FirstPersonHouseExplorer {
           this.activeFlight = this.currentFloor - 1;
           this.activeStairBuilding = 'main';
         }
-      } else if (x >= asb.minX && x <= asb.maxX) {
+      } else if (this.currentFloor >= 1 && x >= asb.minX && x <= asb.maxX) {
         if (this.currentFloor >= 1 && this.currentFloor < 4 && prevZ >= asb.bottomZ - 0.04 && z < asb.bottomZ) {
           this.activeFlight = this.currentFloor;
           this.activeStairBuilding = 'annex';
@@ -1237,7 +1388,7 @@ export class FirstPersonHouseExplorer {
           this.activeFlight = this.currentFloor - 1;
           this.activeStairBuilding = 'annex';
         }
-      } else if (x >= ssb.minX && x <= ssb.maxX) {
+      } else if (this.currentFloor >= 1 && x >= ssb.minX && x <= ssb.maxX) {
         if (this.currentFloor === 1 && prevZ >= ssb.bottomZ - 0.04 && z < ssb.bottomZ) {
           this.activeFlight = 1;
           this.activeStairBuilding = 'storage';
@@ -1245,6 +1396,22 @@ export class FirstPersonHouseExplorer {
           this.activeFlight = 1;
           this.activeStairBuilding = 'storage';
         }
+      }
+    } else if (this.activeFlight === 'st_b2') {
+      if (z <= STAIR_B1_B2.topZ) {
+        this.currentFloor = 0;
+        this.activeFlight = null;
+      } else if (z >= STAIR_B1_B2.bottomZ) {
+        this.currentFloor = -1;
+        this.activeFlight = null;
+      }
+    } else if (this.activeFlight === 'st_b3') {
+      if (z <= STAIR_B2_B3.topZ) {
+        this.currentFloor = -1;
+        this.activeFlight = null;
+      } else if (z >= STAIR_B2_B3.bottomZ) {
+        this.currentFloor = -2;
+        this.activeFlight = null;
       }
     } else if (this.activeStairBuilding === 'camper') {
       if (curCl.lz >= cst.topZ) {
@@ -1336,9 +1503,31 @@ export class FirstPersonHouseExplorer {
     this._updateStairTransitions(prevX, prevZ);
     this.activeBuilding = this._getBuildingAt(this.playerPos.x, this.playerPos.z);
 
-    const targetFloorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
-    const lerpRate = this.activeFlight !== null ? 18 : 11;
-    this.floorY += (targetFloorY - this.floorY) * Math.min(1, dt * lerpRate);
+    // Update Elevator Cab Presence & Proximity
+    const elv = this.house.elevator;
+    if (elv && this.currentFloor <= 1 && this.activeBuilding === 'main') {
+      const inFootprint = this._isPointInElevatorCab(this.playerPos.x, this.playerPos.z, this.currentFloor);
+      if (inFootprint && (this.inElevator || Math.abs(this.floorY - elv.cabY) < 1.25)) {
+        this.inElevator = true;
+      } else if (!inFootprint) {
+        this.inElevator = false;
+      }
+      this.nearElevator = !this.inElevator
+        && this.playerPos.x >= 1.85 && this.playerPos.x <= 3.34
+        && this.playerPos.z >= 0.85 && this.playerPos.z <= 2.75;
+    } else {
+      this.inElevator = false;
+      this.nearElevator = false;
+    }
+
+    if (this.inElevator && elv) {
+      // Zero-lag solid vertical platform lock to real-time moving traction elevator cab!
+      this.floorY = elv.cabY;
+    } else {
+      const targetFloorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
+      const lerpRate = this.activeFlight !== null ? 18 : 11;
+      this.floorY += (targetFloorY - this.floorY) * Math.min(1, dt * lerpRate);
+    }
 
     const desiredEye = this._computeDesiredEyeHeight(this.playerPos.x, this.playerPos.z);
     this.eyeHeight += (desiredEye - this.eyeHeight) * Math.min(1, dt * 9);
@@ -1400,6 +1589,58 @@ export class FirstPersonHouseExplorer {
       }
     }
 
+    // Real-Time MRL Traction Elevator Physics, Audio Cues & Rider Floor Sync!
+    const elv = this.house.elevator;
+    if (elv) {
+      elv.update(dt);
+      if (elv.phase === 'MOVING' || elv.phase === 'OPENING' || elv.phase === 'CLOSING') {
+        anyDoorAnimating = true;
+      }
+      if (elv.buttonBeepPending) {
+        this.audio.playElevatorButton();
+        elv.buttonBeepPending = false;
+      }
+      if (elv.doorSoundPending) {
+        this.audio.playElevatorDoor(elv.doorSoundPending === 'open');
+        elv.doorSoundPending = null;
+      }
+      if (elv.chimePending) {
+        this.audio.playElevatorChime();
+        elv.chimePending = false;
+      }
+      const hearMotor = (this.inElevator || this.nearElevator) && elv.phase === 'MOVING';
+      this.audio.updateElevatorMotor(hearMotor, Math.abs(elv.velocity) / ELEVATOR.maxSpeed);
+
+      if (this.inElevator) {
+        this.floorY = elv.cabY;
+        if (elv.phase === 'OPENING' || elv.phase === 'IDLE_OPEN') {
+          this.currentFloor = elv.currentStopFloor;
+        } else if (elv.phase === 'MOVING') {
+          let nearFl = this.currentFloor;
+          let bestD = Infinity;
+          for (const st of ELEVATOR.stops) {
+            const d = Math.abs(st.y - elv.cabY);
+            if (d < bestD) { bestD = d; nearFl = st.floor; }
+          }
+          this.currentFloor = nearFl;
+        }
+      }
+
+      if (this.callbacks.onElevatorChange) {
+        const showHud = !this.drivingVehicle && !this.mapOpen && (this.inElevator || this.nearElevator);
+        const st = elv.getState();
+        const sig = `${showHud}|${this.inElevator}|${st.floorCode}|${st.currentStopFloor}|${st.targetFloor}|${st.phase}|${Math.round(st.speedMs * 10)}|${this.currentFloor}`;
+        if (sig !== this.lastElvHudSig) {
+          this.lastElvHudSig = sig;
+          this.callbacks.onElevatorChange(showHud, {
+            ...st,
+            inCab: this.inElevator,
+            playerFloor: this.currentFloor,
+          });
+        }
+      }
+    }
+
     this.house.windTimeUniform.value = elapsed;
     this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
 
@@ -1429,8 +1670,8 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all 5 units (Main, Annex, Storage, Giant Camper, Daily Kei-Van!)
-    if (this.currentFloor === 0) {
+    // Acoustic occlusion across all 5 units + Deep Basement B1F..B3F
+    if (this.currentFloor <= 0) {
       this.audio.updateOcclusion(0.02);
     } else if (this.activeBuilding === 'kei') {
       const keiOpen = doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D'];
@@ -1474,6 +1715,14 @@ export class FirstPersonHouseExplorer {
   _detectCurrentRoom() {
     const x = this.playerPos.x;
     const z = this.playerPos.z;
+    if (this.inElevator && this.house.elevator) {
+      const st = this.house.elevator.getState();
+      const targetCode = ELEVATOR.stops.find((s) => s.floor === st.targetFloor)?.code || '1F';
+      const msg = st.phase === 'MOVING'
+        ? `リアルELV 昇降中 (${st.speedMs.toFixed(1)}m/s → ${targetCode})`
+        : `地上直通リアルエレベーター (${st.floorCode} 停止中)`;
+      return { id: 'elevator_cab', code: 'ELV-1', floor: this.currentFloor, building: 'main', nameJp: msg };
+    }
     if (this.drivingVehicle === 'kei') {
       const kmh = Math.round(Math.abs(this.house.kei.speed) * 3.6);
       const tag = this.vehicleBlockedTimer > 0 ? ' [衝突停止]' : '';
@@ -1485,6 +1734,12 @@ export class FirstPersonHouseExplorer {
       return { id: 'camper_driving', code: '運転中', floor: 1, building: 'camper', nameJp: `巨大キャンピングカー走行中 (${kmh} km/h)${tag}` };
     }
     if (this.activeFlight !== null) {
+      if (this.activeFlight === 'st_b2') {
+        return { id: 'stair_b2', code: 'ST_B2', floor: this.currentFloor, building: 'main', nameJp: 'B1F↔B2F スタジオ直通コンクリート階段' };
+      }
+      if (this.activeFlight === 'st_b3') {
+        return { id: 'stair_b3', code: 'ST_B3', floor: this.currentFloor, building: 'main', nameJp: 'B2F↔B3F シェルター直通コンクリート階段' };
+      }
       if (this.activeStairBuilding === 'camper') {
         return { id: 'camper_stair', code: 'STC1', floor: this.currentFloor, building: 'camper', nameJp: 'キャンピングカー 1F↔2Fロフト階段' };
       }
@@ -1560,7 +1815,14 @@ export class FirstPersonHouseExplorer {
       return { id: 'exterior', code: 'EXT', floor: 1, building: 'courtyard', nameJp: '深い森・苔石アプローチ' };
     }
 
-    const floorRooms = FLOORS[this.currentFloor].rooms;
+    if (this.currentFloor === -1 && x < 0.0) {
+      return { id: 'b2_stair_landing', code: 'ST_B2', floor: -1, building: 'main', nameJp: 'B2F 階段踊場（スタジオ正面扉前）' };
+    }
+    if (this.currentFloor === -2 && x < 0.0) {
+      return { id: 'b3_stair_landing', code: 'ST_B3', floor: -2, building: 'main', nameJp: 'B3F 階段踊場（木造シェルター連絡口）' };
+    }
+
+    const floorRooms = getFloorByPhysicalIndex(this.currentFloor).rooms;
     for (let i = floorRooms.length - 1; i >= 0; i--) {
       const r = floorRooms[i];
       if (x >= r.x && x <= r.x + r.w && z >= r.z && z <= r.z + r.d) return r;
@@ -1573,9 +1835,9 @@ export class FirstPersonHouseExplorer {
     const start = prev;
     const tick = (now) => {
       this.rafId = requestAnimationFrame(tick);
-      const rawDtMs = now - prev;
-      const dt = Math.min(0.05, rawDtMs / 1000);
-      const elapsed = (now - start) / 1000;
+      const rawDtMs = Math.max(0, now - prev);
+      const dt = Math.max(0, Math.min(0.05, rawDtMs / 1000));
+      const elapsed = Math.max(0, (now - start) / 1000);
       prev = now;
 
       this._updateMovement(dt);
@@ -1599,12 +1861,22 @@ export class FirstPersonHouseExplorer {
         currentFloor: this.currentFloor,
         activeFlight: this.activeFlight,
         activeBuilding: this.activeBuilding,
+        inElevator: this.inElevator,
         doorOpenMap,
         propStates,
       });
 
+      // Keep deep underground spaces crystal clear (no exterior forest fog bleed!)
+      if (this.scene.fog) {
+        const targetFog = this.currentFloor < 0 || this.inElevator ? 0.004 : 0.030;
+        this.scene.fog.density += (targetFog - this.scene.fog.density) * Math.min(1, dt * 8);
+      }
+
       let targetExposure = 1.15;
       if (this.flashlightOn) targetExposure = 1.06;
+      else if (this.inElevator) targetExposure = 1.18;
+      else if (this.currentFloor === -1) targetExposure = 1.14;
+      else if (this.currentFloor === -2) targetExposure = 1.16;
       else if (this.currentFloor === 0) targetExposure = 1.02;
       else if (this.activeBuilding === 'storage') targetExposure = 1.08;
       else if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') targetExposure = 1.18;
@@ -1622,15 +1894,17 @@ export class FirstPersonHouseExplorer {
         const inCamper = this.activeBuilding === 'camper';
         const inAnnex = this.activeBuilding === 'annex';
         const inStorage = this.activeBuilding === 'storage';
-        let sheetIndex = this.currentFloor;
-        let floorCode = this.activeBuilding === 'courtyard' ? '中庭' : FLOORS[this.currentFloor].code;
+        let sheetIndex = this.currentFloor + 2; // 0=B3F, 1=B2F, 2=B1F, 3=1F..7=RF!
+        let floorCode = this.activeBuilding === 'courtyard'
+          ? '中庭'
+          : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code);
         let localX = this.playerPos.x;
         let localZ = this.playerPos.z;
         let localDx = _lookDir.x;
         let localDz = _lookDir.z;
 
         if (inKei) {
-          sheetIndex = 14;
+          sheetIndex = 16;
           floorCode = this.drivingVehicle === 'kei' ? '軽運転' : '軽バン';
           const kl = this.worldToKeiLocal(this.playerPos.x, this.playerPos.z);
           localX = kl.lx;
@@ -1641,7 +1915,7 @@ export class FirstPersonHouseExplorer {
           localDx = _lookDir.x * c - _lookDir.z * s;
           localDz = _lookDir.x * s + _lookDir.z * c;
         } else if (inCamper) {
-          sheetIndex = this.currentFloor === 2 ? 13 : 12;
+          sheetIndex = this.currentFloor === 2 ? 15 : 14;
           floorCode = this.drivingVehicle === 'camper' ? 'RV運転' : (this.currentFloor === 2 ? 'RV 2F' : 'RV 1F');
           const cl = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
           localX = cl.lx;
@@ -1652,13 +1926,13 @@ export class FirstPersonHouseExplorer {
           localDx = _lookDir.x * c - _lookDir.z * s;
           localDz = _lookDir.x * s + _lookDir.z * c;
         } else if (inStorage) {
-          sheetIndex = this.currentFloor === 2 ? 11 : 10;
+          sheetIndex = this.currentFloor === 2 ? 13 : 12;
           floorCode = this.currentFloor === 2 ? '倉庫2F' : '倉庫1F';
           localX = this.playerPos.x - STORAGE.originX;
           localZ = this.playerPos.z - STORAGE.originZ;
         } else if (inAnnex) {
           const aIdx = Math.max(0, Math.min(ANNEX_FLOORS.length - 1, this.currentFloor - 1));
-          sheetIndex = 6 + aIdx;
+          sheetIndex = 8 + aIdx;
           floorCode = ANNEX_FLOORS[aIdx].code;
           localX = this.playerPos.x - ANNEX.originX;
           localZ = this.playerPos.z - ANNEX.originZ;
