@@ -70,15 +70,29 @@ const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
 function renderFloorAreaTable(sheetIdx) {
   const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[HOUSE.spawnFloor];
   const isAnnex = fl.building === 'annex';
+  const isStorage = fl.building === 'storage';
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
-  const summaryLabel = isAnnex
-    ? `${fl.code}計（隣棟 5×8m 木造2階建）`
-    : (fl.isBasement
-      ? '地下1階計 (3×7m主空間 + 倉庫3室・棚15基)'
-      : (fl.isAttic ? '屋根裏計 (有効 28.5m²)' : (fl.hasBalcony ? '4F計 (5室 + 1×2mバルコニー)' : `${fl.code} フロア計`)));
-  const footprintStr = isAnnex ? '5000×8000' : '5000×10000';
-  const grossStr = isAnnex ? '40.00m²' : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²'));
+  let summaryLabel = `${fl.code} フロア計`;
+  if (isStorage) {
+    summaryLabel = `${fl.code}計（RC倉庫 2×2m・低天井2階建 計4室）`;
+  } else if (isAnnex) {
+    if (fl.hasAnnexBalconies) summaryLabel = '隣棟3F計（6室＋1×1.6mバルコニー×3）';
+    else if (fl.isAttic) summaryLabel = '隣棟屋根裏計（全5室・6寸勾配小屋裏）';
+    else summaryLabel = `${fl.code}計（隣棟 5×8m 3階建＋屋根裏）`;
+  } else if (fl.isBasement) {
+    summaryLabel = '地下1階計 (3×7m主空間 + 倉庫3室・棚15基)';
+  } else if (fl.isAttic) {
+    summaryLabel = '母屋屋根裏計 (有効 28.5m²)';
+  } else if (fl.hasBalcony) {
+    summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
+  }
+  const footprintStr = isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000');
+  const grossStr = isStorage
+    ? '4.00m² (2F延8.0m²)'
+    : (isAnnex
+      ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
+      : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²')));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>

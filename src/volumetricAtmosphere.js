@@ -113,7 +113,7 @@ const MIST_FRAG = /* glsl */ `
   }
 
   void main() {
-    // Mask mist out of Main Tower (X=0..5, Z=0..11.2) AND Neighboring 5x8m Annex (X=-7.6..-2.6, Z=1.0..9.0)
+    // Mask mist out of Main Tower (0..5, 0..11.2), Neighbor Annex (-7.6..-2.6, 1..9), & Concrete Warehouse (6.6..8.6, -1.2..0.8)
     float dx1 = max(max(0.0 - vWorldPos.x, vWorldPos.x - 5.0), 0.0);
     float dz1 = max(max(0.0 - vWorldPos.z, vWorldPos.z - 11.2), 0.0);
     float distMain = length(vec2(dx1, dz1));
@@ -122,10 +122,14 @@ const MIST_FRAG = /* glsl */ `
     float dz2 = max(max(1.0 - vWorldPos.z, vWorldPos.z - 9.0), 0.0);
     float distAnnex = length(vec2(dx2, dz2));
 
-    float outsideDist = min(distMain, distAnnex);
+    float dx3 = max(max(6.6 - vWorldPos.x, vWorldPos.x - 8.6), 0.0);
+    float dz3 = max(max(-1.2 - vWorldPos.z, vWorldPos.z - 0.8), 0.0);
+    float distStorage = length(vec2(dx3, dz3));
+
+    float outsideDist = min(min(distMain, distAnnex), distStorage);
     float houseMask = smoothstep(0.35, 2.0, outsideDist);
 
-    float radialFade = 1.0 - smoothstep(18.0, 42.0, length(vWorldPos.xz - vec2(-1.5, 5.0)));
+    float radialFade = 1.0 - smoothstep(20.0, 44.0, length(vWorldPos.xz - vec2(0.0, 4.5)));
 
     vec2 p1 = vWorldPos.xz * 0.15 + vec2(uTime * 0.045, uTime * 0.022);
     vec2 p2 = vWorldPos.xz * 0.30 + vec2(-uTime * 0.032, uTime * 0.038);
@@ -188,9 +192,11 @@ export function createVolumetricAtmosphere(scene) {
   addMoonShaft(2.50, 10.50 + 1.18, 8.92, 1.45, 2.45, 0.56, 0.04, 0.0, 0.105);
   addMoonShaft(2.50, 10.50 + 1.15, 1.05, 1.20, 2.15, -0.58, -0.05, 0.0, 0.078);
 
-  // Neighboring 5x8m Annex (ANNEX-40) Moonlight Shafts (1F Cafe South Terrace & 2F Master South)
+  // Neighboring 5x8m Annex (ANNEX-40) Moonlight Shafts (1F, 2F, 3F, Attic!)
   addMoonShaft(-5.75, 1.10, 8.15, 1.55, 2.55, 0.56, 0.12, 0.0, 0.085);
   addMoonShaft(-5.65, 2.75 + 1.15, 8.15, 1.50, 2.45, 0.54, 0.10, 0.0, 0.082);
+  addMoonShaft(-4.00, 5.50 + 1.10, 8.15, 1.25, 2.10, 0.54, -0.08, 0.0, 0.082);
+  addMoonShaft(-5.10, 8.15 + 1.15, 8.05, 1.35, 2.25, 0.56, 0.04, 0.0, 0.095);
 
   // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 4F Balcony & Annex!)
   [

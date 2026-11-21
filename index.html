@@ -10,11 +10,11 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <title>NARROW-50 TOWER ＋ 隣棟 ANNEX-40 | 深い森の母屋6層＋隣棟5m×8m 2階建 — 一人称内装探索</title>
-  <meta name="description" content="深い森の奥に佇む母屋(5m×10m B1Fセメント倉庫＋地上4階＋屋根裏)と、西2.6mの石灯籠中庭越しに建つ隣棟「森の離れ」(5m×8m 2階建)を、POCO F7最適化エンジンで一人称徒歩探索するオフライン対応PWAと2棟8図面1/50実施設計図。" />
-  <script type="module" crossorigin src="./assets/dev-rYdVwbO2.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/three-vendor-BO6xHGxD.js">
-  <link rel="stylesheet" crossorigin href="./assets/dev-DZNekf66.css">
+  <title>NARROW-50 ＋ 隣棟 ANNEX-40 (3F+屋根裏) ＋ RC倉庫棟 STORAGE-4 | 深い森の3棟12層 一人称探索</title>
+  <meta name="description" content="深い森の奥に佇む母屋(5m×10m 地下1階セメント倉庫＋地上4階＋屋根裏)、西2.6mの隣棟「森の離れ」(5m×8m 3階建6室＋1×1.6mバルコニー×3＋5室屋根裏)、東1.6mのコンクリート倉庫棟(2m×2m 低天井2階建4室)をPOCO F7最適化エンジンで一人称徒歩探索するオフライン対応PWAと3棟12図面実施設計図。" />
+  <script type="module" crossorigin src="./assets/dev-BZfveIFn.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/three-vendor-DRrgZ7b3.js">
+  <link rel="stylesheet" crossorigin href="./assets/dev-DS_5ASGI.css">
 </head>
 <body>
   <div id="stage" class="stage">
@@ -56,7 +56,7 @@
         <button id="btn-install" class="hud-btn hud-btn-install hidden" type="button" title="PWAとしてホーム画面に追加">アプリ追加</button>
         <button id="btn-flash" class="hud-btn" type="button" title="懐中電灯 [F]">懐中電灯</button>
         <button id="btn-audio" class="hud-btn" type="button" title="森の環境音・足音">音: ON</button>
-        <button id="btn-map" class="hud-btn" type="button" title="2棟8図面 実施設計 1/50 間取り図 [M]">間取り図</button>
+        <button id="btn-map" class="hud-btn" type="button" title="3棟12図面 実施設計 間取り図 [M]">間取り図</button>
         <button id="btn-perf" class="hud-btn hud-btn-mono" type="button" title="POCO F7 最適化テレメトリ [P]">F7</button>
       </div>
     </header>
@@ -73,22 +73,22 @@
     </div>
 
     <footer id="controls-hint" class="controls-hint">
-      <span><kbd>WASD</kbd> 母屋6層・中庭・隣棟2階建を徒歩移動</span>
+      <span><kbd>WASD</kbd> 母屋6層・隣棟3F+屋根裏・RC倉庫2階建を徒歩移動</span>
       <span><kbd>Shift</kbd> 速歩</span>
       <span><kbd>C</kbd> しゃがむ</span>
       <span><kbd>マウス</kbd> 視点（クリックでFPSロック / ドラッグ対応）</span>
       <span><kbd>E</kbd> ドア・照明</span>
       <span><kbd>F</kbd> 懐中電灯</span>
-      <span><kbd>M</kbd> 2棟間取り図</span>
+      <span><kbd>M</kbd> 3棟12図面</span>
     </footer>
 
-    <!-- Slide-Over Twin-House (8 Sheets) 1/50 JIS Architectural Blueprint & Specification Modal -->
-    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 2棟8図面平面詳細図">
+    <!-- Slide-Over 3-Building (12 Sheets) JIS Architectural Blueprint & Specification Modal -->
+    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 3棟12図面平面詳細図">
       <div class="map-sheet">
         <div class="map-header">
           <div>
-            <h2>NARROW-50 TOWER ＋ 隣棟 ANNEX-40 実施設計平面詳細図 (1/50)</h2>
-            <p class="map-sub">母屋 5×10m（B1F〜4F＋屋根裏）｜ 石灯籠苔中庭 2.6m ｜ 隣棟「森の離れ」5×8m 木造2階建（片流れ屋根）</p>
+            <h2>NARROW-50 ＋ 隣棟 ANNEX-40 ＋ RC倉庫棟 STORAGE-4 実施設計図 (12図面)</h2>
+            <p class="map-sub">母屋 5×10m（B1F〜4F+屋根裏）｜ 隣棟 5×8m（1〜3F 6室+1×1.6mバルコニー×3＋屋根裏5室）｜ 別棟RC倉庫 2×2m（低天井2階建4室）</p>
           </div>
           <div class="map-header-right">
             <button id="btn-export-svg" class="map-action-btn" type="button">SVG保存</button>
@@ -99,13 +99,17 @@
         <div class="map-toolbar">
           <div id="bp-floor-tabs" class="floor-tabs" role="tablist" aria-label="表示フロア切替">
             <button class="floor-tab" data-floor="0" type="button" role="tab">B1F 地下</button>
-            <button class="floor-tab active" data-floor="1" type="button" role="tab">1F 母屋</button>
-            <button class="floor-tab" data-floor="2" type="button" role="tab">2F 母屋</button>
-            <button class="floor-tab" data-floor="3" type="button" role="tab">3F 母屋</button>
-            <button class="floor-tab" data-floor="4" type="button" role="tab">4F 5室+バルコニー</button>
-            <button class="floor-tab" data-floor="5" type="button" role="tab">屋根裏</button>
-            <button class="floor-tab" data-floor="6" type="button" role="tab">隣棟1F (5×8m)</button>
-            <button class="floor-tab" data-floor="7" type="button" role="tab">隣棟2F (5×8m)</button>
+            <button class="floor-tab active" data-floor="1" type="button" role="tab">母屋1F</button>
+            <button class="floor-tab" data-floor="2" type="button" role="tab">母屋2F</button>
+            <button class="floor-tab" data-floor="3" type="button" role="tab">母屋3F</button>
+            <button class="floor-tab" data-floor="4" type="button" role="tab">母屋4F(5室)</button>
+            <button class="floor-tab" data-floor="5" type="button" role="tab">母屋屋根裏</button>
+            <button class="floor-tab" data-floor="6" type="button" role="tab">隣棟1F</button>
+            <button class="floor-tab" data-floor="7" type="button" role="tab">隣棟2F</button>
+            <button class="floor-tab" data-floor="8" type="button" role="tab">隣棟3F(6室+3B)</button>
+            <button class="floor-tab" data-floor="9" type="button" role="tab">隣棟屋根裏(5室)</button>
+            <button class="floor-tab" data-floor="10" type="button" role="tab">倉庫1F(2×2m)</button>
+            <button class="floor-tab" data-floor="11" type="button" role="tab">倉庫2F(2×2m)</button>
           </div>
 
           <div class="map-layers" id="bp-layers">
@@ -133,11 +137,11 @@
               <table id="table-areas" class="arch-table"></table>
             </div>
             <div class="spec-card">
-              <h3>母屋6層＋隣棟2層 仕上表（提供素材121種）</h3>
+              <h3>全3棟12層 仕上表（提供素材121種）</h3>
               <table id="table-finishes" class="arch-table"></table>
             </div>
             <div class="spec-card">
-              <h3>建具・積層階段表（母屋＋隣棟）</h3>
+              <h3>建具・階段表（母屋＋隣棟＋RC倉庫棟）</h3>
               <table id="table-openings" class="arch-table"></table>
             </div>
           </div>
