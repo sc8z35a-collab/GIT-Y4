@@ -18,7 +18,7 @@ export class ArchitecturalBlueprint2D {
   constructor(container, callbacks = {}) {
     this.container = container;
     this.callbacks = callbacks;
-    this.activeFloor = 3; // Default Main 1F (Sheet Index 3 of 17)
+    this.activeFloor = 4; // Default Main 1F (Sheet Index 4 of 18)
     this.lastPose = null;
     this.scale = 100;
     this.padL = 175;
@@ -82,7 +82,7 @@ export class ArchitecturalBlueprint2D {
     const isStorageSheet = floor.building === 'storage';
     const isCamperSheet = floor.building === 'camper';
     const isKeiSheet = floor.building === 'kei';
-    const poseSheet = pose.sheetIndex !== undefined ? pose.sheetIndex : (pose.floor + 2);
+    const poseSheet = pose.sheetIndex !== undefined ? pose.sheetIndex : (pose.floor + 3);
     const sameSheet = poseSheet === this.activeFloor;
     this.camGroup.setAttribute('opacity', sameSheet ? '1' : '0.24');
 
@@ -122,8 +122,8 @@ export class ArchitecturalBlueprint2D {
       mapZ = pose.z - ANNEX.originZ;
     }
 
-    const maxW = floor.width || HOUSE.width;
-    const maxD = floor.depth || HOUSE.depth;
+    const maxW = floor.isDeepB4 ? 4.95 : (floor.width || HOUSE.width);
+    const maxD = floor.isDeepB4 ? 16.65 : (floor.depth || HOUSE.depth);
     const cx = this.px(Math.max(-1.2, Math.min(maxW + 1.0, mapX)));
     const cz = this.pz(Math.max(-1.0, Math.min(maxD + 1.0, mapZ)));
     const ang = (Math.atan2(pose.dz, pose.dx) * 180) / Math.PI;
@@ -138,21 +138,30 @@ export class ArchitecturalBlueprint2D {
     const isStorage = floor.building === 'storage';
     const isCamper = floor.building === 'camper';
     const isKei = floor.building === 'kei';
+    const isDeepB4 = Boolean(floor.isDeepB4);
     const isDeepB3 = Boolean(floor.isDeepB3);
     const isDeepB2 = Boolean(floor.isDeepB2);
-    const bWidth = floor.width || HOUSE.width;
-    const bDepth = floor.depth || HOUSE.depth;
+    const bWidth = isDeepB4 ? 4.95 : (floor.width || HOUSE.width);
+    const bDepth = isDeepB4 ? 16.65 : (floor.depth || HOUSE.depth);
 
-    if (isDeepB3) {
-      // Sheet 0: B3F Left Plan (W520 Corridor + 3.2×12.5m Wooden Shelter + 2×6m Food Vault)
-      // + Right Column: Full Vertical MRL Traction Elevator Engineering Cross-Section (B3F -> 1F Ground)!
+    if (isDeepB4) {
+      // Sheet 0: B4F Left Plan (ELV-1 Only Access + 2.70×15.50m High-Ceiling Clandestine Gang Research Lab)
+      // + Right Column: Longitudinal Section A-A', Transverse Vault Section B-B' (CH 3.55m), & Spec Schedule!
+      this.scale = 52;
+      this.padL = 138;
+      this.padR = 540;
+      this.padT = 148;
+      this.padB = 268;
+    } else if (isDeepB3) {
+      // Sheet 1: B3F Left Plan (W520 Corridor + 3.2×12.5m Wooden Shelter + 2×6m Food Vault)
+      // + Right Column: Full Vertical 5-Stop MRL Traction Elevator Engineering Cross-Section (B4F -14.2m -> 1F Ground)!
       this.scale = 46;
       this.padL = 136;
       this.padR = 548;
       this.padT = 148;
       this.padB = 268;
     } else if (isDeepB2) {
-      // Sheet 1: B2F High-Ceiling 10×10m Studio + 2× (4×6m) Connected Rooms + ST_B2/ST_B3/ELV-1
+      // Sheet 2: B2F High-Ceiling 10×10m Studio + 2× (4×6m) Connected Rooms + ST_B2/ST_B3/ELV-1
       this.scale = 48;
       this.padL = 146;
       this.padR = 110;
@@ -289,6 +298,7 @@ export class ArchitecturalBlueprint2D {
     this._drawRoomLabels(this.layerGroups.labels, floor, isStorage, isCamper, isKei);
     this._drawDimensions(this.layerGroups.dimensions, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
     this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage, isCamper, isKei);
+    if (isDeepB4) this._drawB4LabEngineeringView(svg, VW, VH);
     if (isDeepB3) this._drawElevatorEngineeringView(svg, VW, VH);
     if (isKei) this._drawKeiEngineeringViews(svg, VW, VH);
     this._drawTitleBlockAndSection(svg, floor, VW, VH, isCamper, isKei);
@@ -303,17 +313,21 @@ export class ArchitecturalBlueprint2D {
       ? '3,400×1,480×H1,800mm'
       : (isCamper
         ? '2,700×7,500×H3,400mm'
-        : (floor.isDeepB3
-          ? 'シェルター 3,200×12,500 ＋ 食料庫 2,000×6,000 ＋ ELV-1 (昇降10.2m)'
-          : (floor.isDeepB2
-            ? 'スタジオ 10,000×10,000 (CH3,800) ＋ 4,000×6,000×2室'
-            : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`)));
+        : (floor.isDeepB4
+          ? 'ELV-1専用・内法 2,700×15,500 (CH3,550 / B3F直下4m)'
+          : (floor.isDeepB3
+            ? 'シェルター3.2×12.5m＋食料庫2×6m＋5停止ELV(14.2m)'
+            : (floor.isDeepB2
+              ? 'スタジオ 10,000×10,000 (CH3,800) ＋ 4,000×6,000×2室'
+              : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`))));
     const scaleTag = isKei
       ? '1/20 三面精密設計'
-      : (floor.isDeepB3 ? '1/100 平面＋ELV機構縦断面' : (floor.isDeepB2 ? '1/100 大空間スタジオ' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50'))));
-    g.appendChild(el('text', { x: 28, y: 42, 'font-size': (isCamper || isKei || floor.isDeepB3 || floor.isDeepB2) ? 9.8 : 11.2, 'font-weight': 700, fill: '#1c1e22', 'letter-spacing': 0.2 },
+      : (floor.isDeepB4
+        ? '1/85 平面＋縦横断面'
+        : (floor.isDeepB3 ? '1/100 平面＋5停止ELV縦断面' : (floor.isDeepB2 ? '1/100 大空間スタジオ' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50')))));
+    g.appendChild(el('text', { x: 28, y: 42, 'font-size': (floor.isDeepB4 || floor.isDeepB3) ? 8.3 : ((isCamper || isKei || floor.isDeepB2) ? 9.6 : 11.2), 'font-weight': 700, fill: floor.isDeepB4 ? '#7f1d1d' : '#1c1e22', 'letter-spacing': 0.15 },
       `実施設計 ${floor.titleJp} (${scaleTag}) — ${sizeTxt}`));
-    g.appendChild(el('text', { x: 28, y: 59, 'font-size': (isCamper || isKei || floor.isDeepB3 || floor.isDeepB2) ? 8.0 : 8.5, fill: '#5b5852' },
+    g.appendChild(el('text', { x: 28, y: 59, 'font-size': (isCamper || isKei || floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2) ? 8.0 : 8.5, fill: '#5b5852' },
       `${floor.subtitle}  |  基準床 ${floor.floorLabel}`));
 
     const nc = el('g', { transform: `translate(${VW - 56}, 52)` });
@@ -338,13 +352,32 @@ export class ArchitecturalBlueprint2D {
     // Counterweight on East rail + Center-Opening Door indicator on West face
     g.appendChild(el('rect', { x: x + w - 10, y: y + h * 0.2, width: 7, height: h * 0.6, fill: '#334155' }));
     g.appendChild(el('line', { x1: x, y1: this.pz(ELEVATOR.door.minZ), x2: x, y2: this.pz(ELEVATOR.door.maxZ), stroke: '#059669', 'stroke-width': 3.2 }));
-    g.appendChild(el('rect', { x: x + w * 0.08, y: y + h * 0.34, width: w * 0.84, height: 22, rx: 3, fill: 'rgba(255,255,255,0.92)', stroke: '#0f4c81', 'stroke-width': 0.8 }));
-    g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.34 + 9.5, 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#0f4c81' }, floorLabel));
-    g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.34 + 18.5, 'text-anchor': 'middle', 'font-size': 6.0, 'font-family': 'monospace', fill: '#059669', 'font-weight': 700 }, 'B3F↔1F(10.2m)'));
+    g.appendChild(el('rect', { x: x + w * 0.06, y: y + h * 0.34, width: w * 0.88, height: 22, rx: 3, fill: 'rgba(255,255,255,0.94)', stroke: '#0f4c81', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.34 + 9.5, 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 700, fill: '#0f4c81' }, floorLabel));
+    g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.34 + 18.5, 'text-anchor': 'middle', 'font-size': 5.8, 'font-family': 'monospace', fill: '#059669', 'font-weight': 700 }, 'B4F↔1F(14.2m)'));
   }
 
   _drawExteriorContext(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
     const sc = this.scale;
+
+    if (floor.isDeepB4) {
+      // Deep Subterranean Granite Bedrock Enclosure framing B4F (B4FL -14,200 mm, 4.00m below B3F — ZERO STAIRS!)
+      g.appendChild(el('rect', { x: this.px(0.05), y: this.pz(0.35), width: 5.05 * sc, height: 16.55 * sc, fill: 'url(#hatch-earth)', stroke: '#7f1d1d', 'stroke-width': 1.0, opacity: 0.62 }));
+      // ELV-1 Sole Access Shaft Plan Symbol at X=3.25..4.85, Z=0.85..2.65
+      this._drawElevatorShaftPlanSymbol(g, 'ELV-1 唯一到達口');
+      // Classified Access Stamp (explicitly verifying Zero Stairs!)
+      g.appendChild(el('rect', { x: this.px(3.55), y: this.pz(3.05), width: 1.48 * sc, height: 1.35 * sc, rx: 4, fill: 'rgba(127,29,29,0.10)', stroke: '#991b1b', 'stroke-width': 1.1, 'stroke-dasharray': '4 2' }));
+      g.appendChild(el('text', { x: this.px(4.29), y: this.pz(3.45), 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 800, fill: '#991b1b' }, 'CLASSIFIED'));
+      g.appendChild(el('text', { x: this.px(4.29), y: this.pz(3.75), 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#7f1d1d' }, '階段一切なし'));
+      g.appendChild(el('text', { x: this.px(4.29), y: this.pz(4.02), 'text-anchor': 'middle', 'font-size': 6.0, 'font-family': 'monospace', fill: '#334155' }, 'ELV-1 専用到達'));
+      g.appendChild(el('text', { x: this.px(4.29), y: this.pz(4.26), 'text-anchor': 'middle', 'font-size': 5.8, 'font-family': 'monospace', fill: '#0f4c81', 'font-weight': 700 }, 'B3F直下 -4.00m'));
+      // Section Cut Lines A-A' (Longitudinal) and B-B' (Transverse)
+      g.appendChild(el('line', { x1: this.px(1.90), y1: this.pz(0.42), x2: this.px(1.90), y2: this.pz(16.75), stroke: '#0f4c81', 'stroke-width': 0.9, 'stroke-dasharray': '10 3 2 3', opacity: 0.72 }));
+      g.appendChild(el('text', { x: this.px(1.90), y: this.pz(16.82), 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#0f4c81' }, "A-A' 縦断面線"));
+      g.appendChild(el('line', { x1: this.px(0.15), y1: this.pz(5.10), x2: this.px(3.75), y2: this.pz(5.10), stroke: '#0369a1', 'stroke-width': 0.9, 'stroke-dasharray': '8 3 2 3', opacity: 0.75 }));
+      g.appendChild(el('text', { x: this.px(3.82), y: this.pz(5.13), 'font-size': 7.0, 'font-weight': 700, fill: '#0369a1' }, "B-B'"));
+      return;
+    }
 
     if (floor.isDeepB3) {
       // Subterranean bedrock hatch framing B3F (B3FL -10,200 mm!)
@@ -512,7 +545,7 @@ export class ArchitecturalBlueprint2D {
         g.appendChild(el('rect', { x: this.px(2.85), y: this.pz(-1.10), width: 210, height: 110, fill: '#dde2db', stroke: '#8c9689', 'stroke-width': 0.9 }));
         g.appendChild(el('text', { x: this.px(3.90), y: this.pz(-0.52), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#4c5749', 'font-weight': 600 }, '離れ玄関ポーチ・石灯籠'));
         g.appendChild(el('rect', { x: this.px(5.15), y: this.pz(0.0), width: 105, height: bDepth * sc, fill: '#eef2ea', stroke: '#8fa18a', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
-        g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m：石灯籠苔中庭 → 母屋 (5×10m 8層)'));
+        g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m：石灯籠苔中庭 → 母屋 (5×10m 9層)'));
         g.appendChild(el('text', { x: this.px(2.50), y: this.pz(8.42), 'text-anchor': 'middle', 'font-size': 9.4, fill: '#5b6b59', 'font-weight': 600 }, '南面：老杉の森（離れカフェ南大窓ビュー）'));
       } else if (floor.hasAnnexBalconies) {
         ANNEX.balconies3F.forEach((b) => {
@@ -550,8 +583,8 @@ export class ArchitecturalBlueprint2D {
       this._drawElevatorShaftPlanSymbol(g, 'ELV-1');
       g.appendChild(el('rect', { x: this.px(-1.10), y: this.pz(5.55), width: 1.10 * sc, height: 4.30 * sc, fill: '#e8dfd4', stroke: '#9c4722', 'stroke-width': 1.2 }));
       g.appendChild(el('text', { x: this.px(-0.58), y: this.pz(7.70), 'text-anchor': 'middle', 'font-size': 7.8, 'font-weight': 700, fill: '#9c4722', transform: `rotate(-90 ${this.px(-0.58)} ${this.pz(7.70)})` }, 'ST_B2 DN B2Fスタジオへ (18段)'));
-      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.38), 'text-anchor': 'middle', 'font-size': 9.5, fill: '#4f555c', 'font-weight': 600 }, 'RC地下擁壁（灰色セメント・低天井 CH2,020・ST_B2階段＋ELV-1直通乗場）'));
-    } else if (floor.sheetIndex === 3) {
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.38), 'text-anchor': 'middle', 'font-size': 9.5, fill: '#4f555c', 'font-weight': 600 }, 'RC地下擁壁（灰色セメント・低天井 CH2,020・ST_B2階段＋ELV-1 5停止直通乗場）'));
+    } else if (floor.sheetIndex === 4) {
       g.appendChild(el('rect', { x: this.px(0.10), y: this.pz(-1.20), width: 210, height: 120, fill: '#dde2db', stroke: '#8c9689', 'stroke-width': 0.9 }));
       g.appendChild(el('text', { x: this.px(1.15), y: this.pz(-0.55), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#4c5749', 'font-weight': 600 }, '玄関ポーチ・苔石森道'));
       g.appendChild(el('text', { x: this.px(-0.36), y: this.pz(5.0), 'text-anchor': 'middle', 'font-size': 8.4, fill: '#3d523a', 'font-weight': 700, transform: `rotate(-90 ${this.px(-0.36)} ${this.pz(5.0)})` }, '← 西2.6m 隣棟「森の離れ」(5×8m 3F+屋根裏)'));
@@ -607,6 +640,22 @@ export class ArchitecturalBlueprint2D {
         if (this.callbacks.onRoomHover) this.callbacks.onRoomHover(null);
       });
       g.appendChild(rect);
+    }
+
+    if (floor.isDeepB4) {
+      // Recessed Illuminated Central Cable/Drain Trench (X=1.74..2.18, Z=1.05..15.95)
+      g.appendChild(el('rect', { x: this.px(1.74), y: this.pz(1.05), width: 0.44 * sc, height: 14.90 * sc, fill: 'url(#pat-grate)', stroke: '#0284c7', 'stroke-width': 0.85, opacity: 0.72 }));
+      // Overhead 15m Yellow Steel I-Beam Monorail Crane Projection (CL X=1.96)
+      g.appendChild(el('line', { x1: this.px(1.96), y1: this.pz(1.15), x2: this.px(1.96), y2: this.pz(15.75), stroke: '#d97706', 'stroke-width': 1.4, 'stroke-dasharray': '7 3' }));
+      // Overhead HEPA Negative-Pressure Exhaust Duct Projection along West Ceiling (X=0.72..1.04)
+      g.appendChild(el('rect', { x: this.px(0.72), y: this.pz(1.05), width: 0.30 * sc, height: 15.05 * sc, fill: 'none', stroke: '#475569', 'stroke-width': 0.75, 'stroke-dasharray': '4 3', opacity: 0.65 }));
+      // 8 Reinforced Concrete Portal Ceiling Ribs (projected transverse dashed lines)
+      [1.55, 3.55, 5.55, 7.55, 9.55, 11.55, 13.55, 15.55].forEach((rz) => {
+        g.appendChild(el('line', { x1: this.px(0.55), y1: this.pz(rz), x2: this.px(3.25), y2: this.pz(rz), stroke: '#64748b', 'stroke-width': 0.65, 'stroke-dasharray': '3 3', opacity: 0.55 }));
+      });
+      // Outer Clear 2.70m × 15.50m Research Vault Dimension Highlight
+      g.appendChild(el('rect', { x: this.px(0.55), y: this.pz(0.85), width: 2.70 * sc, height: 15.50 * sc, fill: 'none', stroke: '#7f1d1d', 'stroke-width': 1.35, 'stroke-dasharray': '6 3' }));
+      return;
     }
 
     if (floor.isDeepB3) {
@@ -671,7 +720,7 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: this.px(0.72), y: this.pz(2.80), width: 1.26 * sc, height: 1.95 * sc, fill: 'none', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
     }
 
-    if (floor.isBasement && !floor.isDeepB2 && !floor.isDeepB3) {
+    if (floor.isBasement && !floor.isDeepB2 && !floor.isDeepB3 && !floor.isDeepB4) {
       g.appendChild(el('line', { x1: this.px(0.18), y1: this.pz(9.55), x2: this.px(3.12), y2: this.pz(9.55), stroke: '#2c3e50', 'stroke-width': 1, 'stroke-dasharray': '4 3' }));
       g.appendChild(el('text', { x: this.px(1.65), y: this.pz(9.48), 'text-anchor': 'middle', 'font-size': 8.5, 'font-weight': 700, fill: '#2c3e50', 'font-family': 'monospace' }, '主空間 内法 W 3,000 × D 7,000 mm'));
       g.appendChild(el('rect', { x: this.px(2.94), y: this.pz(3.00), width: 18, height: 665, fill: '#aeb4ba', stroke: '#5c636b', 'stroke-width': 0.6 }));
@@ -689,6 +738,24 @@ export class ArchitecturalBlueprint2D {
   }
 
   _getDeepAxes(floor) {
+    if (floor.isDeepB4) {
+      return {
+        x: [
+          { id: 'LX1', pos: 0.55 },
+          { id: 'LX2', pos: 1.90 },
+          { id: 'LX3', pos: 3.25 },
+          { id: 'LX4', pos: 4.85 },
+        ],
+        z: [
+          { id: 'LZ1', pos: 0.85 },
+          { id: 'LZ2', pos: 3.30 },
+          { id: 'LZ3', pos: 6.90 },
+          { id: 'LZ4', pos: 10.30 },
+          { id: 'LZ5', pos: 13.50 },
+          { id: 'LZ6', pos: 16.35 },
+        ],
+      };
+    }
     if (floor.isDeepB3) {
       return {
         x: [
@@ -726,14 +793,14 @@ export class ArchitecturalBlueprint2D {
   }
 
   _drawGridAxes(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
-    const isDeep = Boolean(floor.isDeepB2 || floor.isDeepB3);
+    const isDeep = Boolean(floor.isDeepB2 || floor.isDeepB3 || floor.isDeepB4);
     const axes = isDeep
       ? this._getDeepAxes(floor)
       : (isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES))));
-    const topOff = isDeep ? -0.80 : (isKei ? -0.50 : (isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15))));
-    const topLineOff = isDeep ? -0.40 : (isKei ? -0.36 : (isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95))));
-    const leftOff = isDeep ? -1.85 : (isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15))));
-    const leftLineOff = isDeep ? -1.45 : (isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95))));
+    const topOff = floor.isDeepB4 ? -0.75 : (isDeep ? -0.80 : (isKei ? -0.50 : (isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15)))));
+    const topLineOff = floor.isDeepB4 ? -0.30 : (isDeep ? -0.40 : (isKei ? -0.36 : (isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95)))));
+    const leftOff = floor.isDeepB4 ? -1.05 : (isDeep ? -1.85 : (isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15)))));
+    const leftLineOff = floor.isDeepB4 ? -0.62 : (isDeep ? -1.45 : (isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95)))));
     const rightEnd = isDeep ? bWidth + 0.35 : (isKei ? bWidth + 0.16 : (isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85)));
     const botEnd = isDeep ? bDepth + 0.30 : (isKei ? bDepth + 0.22 : (isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies ? bDepth + 1.15 : bDepth + 0.85))));
 
@@ -752,7 +819,7 @@ export class ArchitecturalBlueprint2D {
   }
 
   _drawStairwellSymbol(g, floor, isAnnex, isStorage, isCamper) {
-    if (floor.isDeepB2 || floor.isDeepB3) return;
+    if (floor.isDeepB2 || floor.isDeepB3 || floor.isDeepB4) return;
     let sb;
     if (isCamper) {
       sb = { minX: CAMPER.stairLocal.minX, maxX: CAMPER.stairLocal.maxX, topZ: CAMPER.stairLocal.bottomZ, bottomZ: CAMPER.stairLocal.topZ, treads: CAMPER.stairLocal.treads };
@@ -802,11 +869,11 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: cx - 44, y: yBot - 48, width: 88, height: 16, rx: 3, fill: '#fff', stroke: '#1c1e22', 'stroke-width': 0.75 }));
       g.appendChild(el('text', { x: cx, y: yBot - 37, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#1c1e22' }, floor.stairUp.label));
     }
-    if (floor.stairDown && floor.sheetIndex !== 2) {
+    if (floor.stairDown && floor.sheetIndex !== 3) {
       g.appendChild(el('rect', { x: cx - 40, y: yTop + 16, width: 80, height: 16, rx: 3, fill: '#fff8ec', stroke: '#9c4722', 'stroke-width': 0.75 }));
       g.appendChild(el('text', { x: cx, y: yTop + 27, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#9c4722' }, floor.stairDown.label));
     }
-    if (floor.stairUp && floor.stairDown && floor.sheetIndex !== 2) {
+    if (floor.stairUp && floor.stairDown && floor.sheetIndex !== 3) {
       g.appendChild(el('line', { x1, y1: yTop + h * 0.44, x2, y2: yTop + h * 0.56, stroke: '#9c4722', 'stroke-width': 1.2 }));
     }
   }
@@ -817,29 +884,62 @@ export class ArchitecturalBlueprint2D {
     const box = (x, z, w, d, label, fill = '#fffdf8') => {
       g.appendChild(el('rect', { x: this.px(x), y: this.pz(z), width: w * sc, height: d * sc, fill, stroke: '#5c5348', 'stroke-width': 0.85, rx: 1.5 }));
       if (label) {
-        g.appendChild(el('text', { x: this.px(x + w / 2), y: this.pz(z + d / 2) + 2.4, 'text-anchor': 'middle', 'font-size': (floor.isDeepB3 || floor.isDeepB2) ? 6.2 : 6.9, fill: '#3d3832', 'font-weight': 600 }, label));
+        g.appendChild(el('text', { x: this.px(x + w / 2), y: this.pz(z + d / 2) + 2.4, 'text-anchor': 'middle', 'font-size': (floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2) ? 6.0 : 6.9, fill: '#3d3832', 'font-weight': 600 }, label));
       }
     };
 
     if (sIdx === 0) {
-      // SHEET 0: B3F WARM WOODEN SHELTER (3.2×12.5m) + SHOWER + TOILET + BEDROOM + 2×6m FOOD VAULT!
-      // B301 Warm Shelter Living
+      // SHEET 0: B4F CLANDESTINE GANG RESEARCH LABORATORY (2.70m × 15.50m × CH 3.55m, 5 SEQUENTIAL ZONES!)
+      // Zone 1 (B401): Biometric Airlock & Decon Entry (Z=0.85..3.25)
+      box(0.60, 0.96, 0.58, 0.58, '洗眼ｼｬﾜｰ', '#d0e9f7');
+      box(0.60, 1.72, 0.52, 1.25, '防護服棚', '#cfd7df');
+      box(2.74, 2.68, 0.44, 0.48, '生体認証', '#fde68a');
+      // Zone 2 (B402): Chemical & Pharmacology Synthesis Lab (Z=3.35..6.85)
+      box(0.58, 3.62, 0.72, 1.85, 'ﾄﾞﾗﾌﾄﾁｬﾝﾊﾞ', '#cfe9e8');
+      [5.78, 6.12, 6.46].forEach((cz, gi) => {
+        const cols = ['#16a34a', '#2563eb', '#dc2626'];
+        g.appendChild(el('circle', { cx: this.px(0.84), cy: this.pz(cz), r: 0.14 * sc, fill: '#fff', stroke: cols[gi], 'stroke-width': 1.2 }));
+        g.appendChild(el('text', { x: this.px(0.84), y: this.pz(cz) + 2, 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 700, fill: cols[gi] }, ['N2', 'Ar', 'O2'][gi]));
+      });
+      box(2.58, 3.60, 0.62, 1.48, '顕微鏡卓', '#e2eceb');
+      box(2.58, 5.18, 0.62, 1.42, '遠心/試薬', '#d9e6e5');
+      // Zone 3 (B403): Cyber Cryptanalysis & Tactical Command (Z=6.95..10.25)
+      box(0.58, 7.12, 0.74, 1.82, '5画面司令卓', '#cfd9ee');
+      box(0.58, 9.04, 0.70, 1.08, '42U鯖×3', '#334155');
+      g.appendChild(el('text', { x: this.px(0.93), y: this.pz(9.58) + 2, 'text-anchor': 'middle', 'font-size': 5.6, fill: '#fff', 'font-weight': 700 }, '42U鯖×3'));
+      box(2.60, 7.25, 0.58, 2.72, '相関板/無線', '#f3e5cf');
+      // Zone 4 (B404): 5-Axis CNC Fabrication & Gadget Prototyping (Z=10.35..13.45)
+      box(0.58, 10.52, 0.78, 1.18, '5軸CNC', '#d4d9df');
+      box(0.58, 11.82, 0.70, 0.68, '3Dﾌﾟﾘﾝﾀ', '#e3d8f2');
+      box(0.58, 12.60, 0.68, 0.70, '赤工具箱', '#f6c8c6');
+      box(2.56, 10.55, 0.64, 2.65, 'ﾄﾞﾛｰﾝ試作台', '#efe3d1');
+      // Zone 5 (B405): Classified Core Containment & Cryo Vault (Z=13.55..16.35)
+      box(0.58, 13.72, 0.66, 0.96, '-80℃冷凍', '#cfe2f2');
+      box(0.58, 14.92, 0.70, 1.12, '装甲金庫', '#94a3b8');
+      box(2.64, 13.80, 0.56, 2.25, '48kWh電源', '#d8e0e8');
+      // Rotating Luminous Core Containment Pedestal (Center-South of B405)
+      const coreX = this.px(1.90);
+      const coreZ = this.pz(15.22);
+      g.appendChild(el('circle', { cx: coreX, cy: coreZ, r: 0.44 * sc, fill: 'rgba(6, 182, 212, 0.16)', stroke: '#0891b2', 'stroke-width': 1.4 }));
+      g.appendChild(el('circle', { cx: coreX, cy: coreZ, r: 0.25 * sc, fill: 'rgba(56, 189, 248, 0.34)', stroke: '#7f1d1d', 'stroke-width': 1.1, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('text', { x: coreX, y: coreZ + 2.2, 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 800, fill: '#0e7490' }, 'CORE'));
+      return;
+    }
+
+    if (sIdx === 1) {
+      // SHEET 1: B3F WARM WOODEN SHELTER (3.2×12.5m) + SHOWER + TOILET + BEDROOM + 2×6m FOOD VAULT!
       box(0.08, 3.85, 0.62, 0.58, 'HEPA', '#cfd7df');
       box(2.26, 4.15, 0.76, 0.58, '暖炉', '#f8d7be');
       box(0.14, 5.15, 0.88, 1.55, '木製卓', '#f3e5cf');
       box(2.14, 5.45, 0.82, 1.90, 'ソファ', '#d8e0e8');
       box(0.06, 8.70, 0.36, 1.85, '木製本棚', '#efe3d1');
-      // B302 Shower Room (X=1.75..3.20, Z=8.60..10.40)
       box(2.58, 8.70, 0.50, 0.90, 'シャワー', '#d0e9f7');
       box(2.68, 9.76, 0.42, 0.54, 'ベンチ', '#f3e5cf');
-      // B303 Toilet Room (X=1.75..3.20, Z=10.50..12.10)
       box(2.64, 10.95, 0.48, 0.52, 'WC', '#fff');
       box(2.50, 11.62, 0.62, 0.38, '手洗', '#eef7fc');
-      // B304 Wooden Bedroom (X=0.00..3.20, Z=12.20..16.10)
       box(1.52, 13.08, 1.58, 2.02, '木造クイーンベッド', '#f4ece3');
       box(0.08, 12.45, 0.56, 1.10, '書斎机', '#f3e5cf');
       box(0.06, 13.68, 0.54, 1.24, '衣類棚', '#efe3d1');
-      // B305 2.0m×6.0m Food Storage Warehouse (X=0.60..2.60, Z=16.25..22.25)
       [16.85, 18.25, 19.65, 20.95].forEach((rz, idx) => {
         box(0.62, rz - 0.52, 0.46, 1.04, idx % 2 === 0 ? '水20L' : '食料棚', idx % 2 === 0 ? '#cfe4f5' : '#e8dcc7');
         box(2.12, rz - 0.52, 0.46, 1.04, idx % 2 === 0 ? '非常食' : '米・缶詰', '#e4dfcf');
@@ -849,18 +949,15 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 1) {
-      // SHEET 1: B2F 10m×10m STUDIO + 4×6m B202 CONTROL ROOM + 6×4m B203 LOUNGE/GEAR ROOM!
-      // B201 Studio Perimeter Props (huge 8.5×8.5m oak center open!)
+    if (sIdx === 2) {
+      // SHEET 2: B2F 10m×10m STUDIO + 4×6m B202 CONTROL ROOM + 6×4m B203 LOUNGE/GEAR ROOM!
       box(9.40, 3.12, 0.50, 0.46, 'PA', '#cfd7df');
       box(9.40, 8.12, 0.50, 0.46, 'PA', '#cfd7df');
       box(1.22, 11.99, 1.85, 0.52, 'スタジオベンチ', '#d8e0e8');
       box(9.56, 10.15, 0.38, 1.40, '機材棚', '#cfd7df');
-      // B202 (4m×6m) Control & Recording Room
       box(10.61, 3.24, 0.88, 2.15, 'ミキシング卓', '#e6dcd0');
       box(13.51, 3.68, 0.58, 1.85, '音響ラック', '#cfd7df');
       box(13.42, 6.48, 0.65, 1.55, 'シンセ卓', '#efe3d1');
-      // B203 (6m×4m) Lounge & Training Room
       box(4.40, 15.79, 2.10, 0.82, 'ラウンジソファ', '#d8e0e8');
       box(4.82, 14.84, 1.25, 0.62, '卓', '#f3e5cf');
       box(9.26, 13.58, 0.52, 2.85, '機材ケース棚', '#cfd7df');
@@ -869,7 +966,7 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 14) {
+    if (sIdx === 15) {
       // ULTRA-DETAILED CAMPER 1F MECHANICAL & ARCHITECTURAL FIXTURES (ALL 14 ROOMS + W560 CORRIDOR!)
       box(0.11, 0.08, 2.48, 0.34, '計器盤 / GPSコンソール', '#e2e6eb');
       g.appendChild(el('circle', { cx: this.px(0.72), cy: this.pz(0.49), r: 16, fill: 'none', stroke: '#1c1e22', 'stroke-width': 2.0 }));
@@ -908,7 +1005,7 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 15) {
+    if (sIdx === 16) {
       box(1.06, 0.18, 1.52, 1.72, 'キングサイズ寝台マット', '#f7ede0');
       box(1.31, 0.20, 0.42, 0.26, '枕', '#fff');
       box(1.91, 0.20, 0.42, 0.26, '枕', '#fff');
@@ -920,7 +1017,7 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    if (sIdx === 2) {
+    if (sIdx === 3) {
       const zones = [[2.85, 5.10], [5.20, 7.45], [7.55, 9.85]];
       zones.forEach(([z1, z2]) => {
         const mid = (z1 + z2) / 2;
@@ -930,7 +1027,7 @@ export class ArchitecturalBlueprint2D {
         box(3.59, z1 + 0.03, 0.66, 0.34, '棚4', '#b8bec4');
         box(3.59, z2 - 0.37, 0.66, 0.34, '棚5', '#b8bec4');
       });
-    } else if (sIdx === 3) {
+    } else if (sIdx === 4) {
       box(0.17, 0.22, 0.34, 1.00, '下駄箱');
       // ELV-1 Ground Floor Landing right inside 1R03 (2 steps from D1-1 Front Door!)
       this._drawElevatorShaftPlanSymbol(g, 'ELV-1 地上乗場');
@@ -946,7 +1043,7 @@ export class ArchitecturalBlueprint2D {
       box(4.18, 5.48, 0.65, 2.72, 'I型キッチン', '#f5efe6');
       box(3.74, 8.78, 0.56, 0.56, '座布団', '#f2dcd6');
       g.appendChild(el('circle', { cx: this.px(4.52), cy: this.pz(8.80), r: 13, fill: '#fff2d2', stroke: '#c97f2b', 'stroke-width': 1 }));
-    } else if (sIdx === 4) {
+    } else if (sIdx === 5) {
       box(0.57, 0.18, 1.10, 0.36, 'ベンチ');
       box(4.19, 0.91, 0.62, 1.68, '書斎デスク');
       box(3.56, 1.52, 0.46, 0.46, '椅子');
@@ -957,7 +1054,7 @@ export class ArchitecturalBlueprint2D {
       box(2.07, 6.12, 1.62, 2.08, 'クイーンベッド', '#f4ece3');
       box(0.17, 6.48, 0.58, 1.95, 'W2050収納');
       box(4.38, 8.10, 0.44, 0.92, 'チェスト');
-    } else if (sIdx === 5) {
+    } else if (sIdx === 6) {
       box(0.57, 0.18, 1.10, 0.36, '展望ベンチ');
       box(3.11, 1.36, 0.88, 0.88, 'ちゃぶ台');
       box(4.04, 2.44, 0.76, 0.96, '客布団', '#f0dfe2');
@@ -967,7 +1064,7 @@ export class ArchitecturalBlueprint2D {
       box(3.47, 6.74, 0.62, 1.72, '黒大理石BAR', '#e2e0dd');
       box(0.53, 7.75, 1.90, 0.80, '展望ソファ', '#e5e2dc');
       box(0.19, 6.26, 0.66, 1.18, 'アトリエ机');
-    } else if (sIdx === 6) {
+    } else if (sIdx === 7) {
       box(0.20, 0.33, 0.36, 0.98, 'AV機器');
       box(1.41, 0.26, 0.62, 1.05, 'ソファ', '#dde1e6');
       box(3.57, 0.66, 1.22, 1.98, 'ローベッド', '#f4ece3');
@@ -980,7 +1077,7 @@ export class ArchitecturalBlueprint2D {
       box(3.18, 6.28, 1.48, 0.74, 'ラウンジソファ', '#e5e2dc');
       box(3.42, 7.41, 0.86, 0.54, '大理石卓');
       box(4.17, 10.32, 0.36, 0.36, '腰掛');
-    } else if (sIdx === 7) {
+    } else if (sIdx === 8) {
       box(3.94, 1.04, 0.62, 0.62, '木箱');
       box(3.89, 1.85, 0.66, 0.60, 'ロープ箱');
       box(3.95, 2.86, 0.55, 1.05, '麻袋');
@@ -989,7 +1086,7 @@ export class ArchitecturalBlueprint2D {
       box(0.25, 6.88, 0.54, 1.15, '軒下収納');
       box(4.20, 7.02, 0.52, 1.05, 'チェスト');
       g.appendChild(el('circle', { cx: this.px(2.50), cy: this.pz(7.45), r: 15, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.2 }));
-    } else if (sIdx === 8) {
+    } else if (sIdx === 9) {
       box(4.46, 0.42, 0.36, 1.05, '靴ベンチ');
       box(0.47, 0.20, 1.55, 0.68, '作業台');
       box(0.22, 1.56, 0.48, 0.48, '木箱');
@@ -1000,20 +1097,20 @@ export class ArchitecturalBlueprint2D {
       box(0.20, 5.90, 0.78, 1.56, 'デニムソファ', '#d8e0e8');
       box(1.24, 6.24, 0.48, 0.88, 'ロー卓');
       g.appendChild(el('circle', { cx: this.px(0.55), cy: this.pz(7.56), r: 14, fill: '#fff2d2', stroke: '#c97f2b', 'stroke-width': 1.1 }));
-    } else if (sIdx === 9) {
+    } else if (sIdx === 10) {
       box(4.43, 0.57, 0.38, 1.15, '書庫棚');
       box(1.67, 0.19, 1.65, 0.38, '読書ベンチ');
       box(3.27, 3.45, 0.82, 0.82, 'ちゃぶ台');
       box(2.17, 5.78, 1.56, 1.92, 'クイーンベッド', '#f4ece3');
       box(4.29, 6.00, 0.52, 1.60, 'ワードローブ');
-    } else if (sIdx === 10) {
+    } else if (sIdx === 11) {
       box(0.20, 0.22, 1.08, 0.48, '書斎机');
       box(2.48, 1.24, 1.85, 0.86, 'ゲストベッド', '#f4ece3');
       box(4.43, 2.34, 0.38, 1.12, '書庫棚');
       box(3.30, 3.96, 0.70, 0.68, '茶卓');
       box(1.08, 7.24, 1.15, 0.55, '作業台');
       box(3.28, 5.94, 1.35, 0.68, 'サロンソファ', '#d8e0e8');
-    } else if (sIdx === 11) {
+    } else if (sIdx === 12) {
       box(0.24, 0.24, 0.42, 0.42, '木箱');
       box(0.68, 0.38, 0.54, 0.54, '座布団', '#d8e0e8');
       box(4.06, 0.46, 0.58, 0.58, '木箱');
@@ -1023,7 +1120,7 @@ export class ArchitecturalBlueprint2D {
       box(1.07, 6.49, 0.76, 0.52, '座卓');
       box(3.28, 6.48, 0.74, 0.54, '畳卓');
       g.appendChild(el('circle', { cx: this.px(3.25), cy: this.pz(6.75), r: 12, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.1 }));
-    } else if (sIdx === 16) {
+    } else if (sIdx === 17) {
       box(0.07, 0.07, 1.34, 0.27, 'インストルメントパネル', '#dde2e8');
       box(0.90, 0.24, 0.36, 0.11, '計器盤', '#fef3c7');
       [0.94, 1.06, 1.18].forEach((ppx, pi) => {
@@ -1090,7 +1187,7 @@ export class ArchitecturalBlueprint2D {
       drawSeg(cur, end);
     }
 
-    if (isCamper || isKei || floor.isDeepB2 || floor.isDeepB3) return;
+    if (isCamper || isKei || floor.isDeepB2 || floor.isDeepB3 || floor.isDeepB4) return;
     const cols = isStorage ? STORAGE.columns : (isAnnex ? ANNEX.columns : COLUMNS);
     const colSz = isStorage ? 14 : 11;
     cols.forEach(([cx, cz]) => {
@@ -1229,6 +1326,18 @@ export class ArchitecturalBlueprint2D {
         continue;
       }
 
+      if (floor.isDeepB4) {
+        const bw = 128;
+        const bh = 27;
+        const isVault = r.code === 'B405';
+        const grp = el('g', { style: 'pointer-events:none' });
+        grp.appendChild(el('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: 3, fill: 'rgba(255,255,255,0.93)', stroke: isVault ? '#991b1b' : '#0f4c81', 'stroke-width': 0.85 }));
+        grp.appendChild(el('text', { x: cx, y: cy - 2.2, 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: isVault ? '#7f1d1d' : '#1c1e22' }, `${r.code} ${r.nameJp.replace(/^[①-⑤]\s*/, '').split(' (')[0]}`));
+        grp.appendChild(el('text', { x: cx, y: cy + 7.4, 'text-anchor': 'middle', 'font-size': 5.8, fill: '#0f4c81', 'font-family': 'monospace', 'font-weight': 700 }, `${Math.round(r.w * 1000)}×${Math.round(r.d * 1000)} (${r.area.toFixed(1)}m²) · CH3550`));
+        g.appendChild(grp);
+        continue;
+      }
+
       if (floor.isDeepB3) {
         const bw = r.code === 'B302' || r.code === 'B303' ? 70 : (r.code === 'B300' ? 92 : 124);
         const bh = 28;
@@ -1281,6 +1390,17 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: x - 6, y: (a + b) / 2, 'text-anchor': 'middle', 'font-size': 7.8, 'font-family': 'monospace', fill: '#1c1e22', transform: `rotate(-90 ${x - 6} ${(a + b) / 2})` }, label));
     };
 
+    if (floor.isDeepB4) {
+      dimH(0.55, 3.25, this.pz(-0.10), '極秘研 内法幅 2,700');
+      dimH(3.25, 4.85, this.pz(-0.10), 'ELV 1,600');
+      dimV(0.85, 16.35, this.px(-1.76), '極秘研究所 内法全長 15,500 mm（5縦貫区画・CH3,550）');
+      dimV(0.85, 3.25, this.px(-0.42), '2,400');
+      dimV(3.35, 6.85, this.px(-0.42), '3,500');
+      dimV(6.95, 10.25, this.px(-0.42), '3,300');
+      dimV(10.35, 13.45, this.px(-0.42), '3,100');
+      dimV(13.55, 16.35, this.px(-0.42), '2,800');
+      return;
+    }
     if (floor.isDeepB3) {
       dimH(0.00, 3.20, this.pz(-0.20), 'シェルター幅 3,200');
       dimH(0.60, 2.60, this.pz(22.65), '食料庫幅 2,000');
@@ -1486,159 +1606,357 @@ export class ArchitecturalBlueprint2D {
   }
 
   /**
-   * Dedicated Right-Column Mechanical Engineering Projection for Sheet 0 (B3F):
-   * 1) Ultra-Precision MRL Gearless Traction Elevator Full Vertical Hoistway Cross-Section (B3F -10.20m -> 1F Ground ±0.00m):
-   *    - Top MRL Traction Motor, Grooved Drive Sheave, Deflector Sheave, Overspeed Governor Wheel & Red Safety Brake
-   *    - 4 Parallel Steel Hoist Wire Ropes, Opposite-Phase Cast-Iron Counterweight, Bolted T-Guide Rails
-   *    - Panoramic-Rear-Glass Luxury Stainless Cab + 4 Synchronized Center-Opening Landing Doors (1F/B1F/B2F/B3F)
-   *    - Pit -11.40m Dual Helical Oil Spring Buffers + Pit Inspection Ladder
-   * 2) Complete Elevator Mechanical & Deep Basement Architectural Specification Schedule
+   * Dedicated Right-Column Master Architectural Engineering Suite for Sheet 0 (B4F Secret Gang Research Lab):
+   * 1) Longitudinal Structural Cross-Section A-A' (L 15,500 × CH 3,550 mm, B4FL -14,200 = 4.00m below B3FL -10,200)
+   * 2) Transverse Ribbed-Vault Cross-Section B-B' (W 2,700 × CH 3,550 mm, RC haunch ribs, HEPA, Monorail, W1260 Nave)
+   * 3) Complete Clandestine Lab Structural, MEP & Security Specification Schedule
    */
-  _drawElevatorEngineeringView(svg, VW, VH) {
+  _drawB4LabEngineeringView(svg, VW, VH) {
     const g = el('g');
-    const colX = 410;
-    const colW = VW - colX - 28; // ~476px
+    const colX = 416;
+    const colW = VW - colX - 28; // ~491px
 
-    // --- PANEL 1: FULL VERTICAL MRL TRACTION ELEVATOR HOISTWAY CROSS-SECTION (1/35) ---
+    // --- PANEL 1: LONGITUDINAL STRUCTURAL CROSS-SECTION A-A' (L 15,500 × H 4,000 mm) ---
     const p1Y = 82;
-    const p1H = 740;
+    const p1H = 264;
     g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: p1H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
-    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 24, fill: '#e6eef5', stroke: '#0f4c81', 'stroke-width': 0.8 }));
-    g.appendChild(el('text', { x: colX + 10, y: p1Y + 15.5, 'font-size': 8.8, 'font-weight': 700, fill: '#0f4c81' },
-      '① ELV-1 MRL ギヤレス・トラクション式エレベーター 精密機構縦断面図（B3F -10.2m ⇄ 地上 1F ±0.0m 直通）'));
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 24, fill: '#f9e8e8', stroke: '#7f1d1d', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: colX + 10, y: p1Y + 15.5, 'font-size': 8.4, 'font-weight': 700, fill: '#7f1d1d' },
+      "① B4F 長手方向 構造縦断面図 A-A'（内法 L 15,500 × 高天井 CH 3,550 / B3F直下 4.00m）"));
 
-    // Elevation coordinate mapper: Y = -11.40m (pit) to +2.85m (hoistway top) -> span 14.25m in 655px -> scY = 45 px/m
-    const scY = 45.0;
-    const topRefY = p1Y + 46; // maps +2.85m
-    const ey = (m) => topRefY + (2.85 - m) * scY;
-    const shaftX = colX + 168;
-    const shaftW = 136; // 1.60m hoistway width (exaggerated slightly for razor-sharp mechanical readability!)
+    const scL = 27.6; // 15.50m -> 427.8px
+    const scV = 41.0; // 4.00m -> 164px
+    const lx0 = colX + 26;
+    const b4Y = p1Y + 226;
+    const vx = (zM) => lx0 + (zM - 0.85) * scL;
+    const vy = (hM) => b4Y - hM * scV;
 
-    // Concrete Retaining Hoistway Shell (Pit -11.40m -> Top +2.70m)
-    g.appendChild(el('rect', { x: shaftX - 10, y: ey(2.75), width: shaftW + 20, height: ey(-11.40) - ey(2.75) + 12, fill: 'url(#hatch-ext)', stroke: '#1c1e22', 'stroke-width': 1.3 }));
-    g.appendChild(el('rect', { x: shaftX, y: ey(2.70), width: shaftW, height: ey(-11.40) - ey(2.70), fill: '#f4f7fa', stroke: '#1c1e22', 'stroke-width': 1.1 }));
+    // Surrounding Deep Bedrock + B3F Upper Floor Slab (450mm Seismic Isolation Slab at H = 3.55..4.00m)
+    g.appendChild(el('rect', { x: lx0 - 8, y: vy(4.00), width: 15.50 * scL + 16, height: 0.45 * scV, fill: 'url(#hatch-ext)', stroke: '#1c1e22', 'stroke-width': 1.1 }));
+    g.appendChild(el('rect', { x: lx0 + 15.50 * scL * 0.5 - 146, y: vy(3.94), width: 292, height: 13.5, rx: 3, fill: 'rgba(255,255,255,0.92)', stroke: '#1c1e22', 'stroke-width': 0.6 }));
+    g.appendChild(el('text', { x: lx0 + 15.50 * scL * 0.5, y: vy(3.94) + 9.8, 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#1c1e22' }, 'B3F直下 450mm 免震RC厚スラブ（B3FL -10,200 ⇄ B4FL -14,200 = 正確に4,000mm）'));
+    // Clear Interior 15.50m × 3.55m Vault Cavity
+    g.appendChild(el('rect', { x: lx0, y: vy(3.55), width: 15.50 * scL, height: 3.55 * scV, fill: '#f5f8fb', stroke: '#1c1e22', 'stroke-width': 1.4 }));
+    // Base Mat Foundation Slab below B4FL
+    g.appendChild(el('rect', { x: lx0 - 8, y: b4Y, width: 15.50 * scL + 16, height: 10, fill: 'url(#hatch-ext)', stroke: '#1c1e22', 'stroke-width': 1.0 }));
 
-    // Horizontal Floor Slabs & Synchronized Landing Doors on Left (-X West side!)
-    const stops = [
-      { y: 0.00, code: '1F 地上直通', desc: '玄関1R03・森直結', col: '#059669' },
-      { y: -2.40, code: 'B1F 倉庫', desc: 'セメント3×7m＋棚15基', col: '#475569' },
-      { y: -6.60, code: 'B2F スタジオ', desc: '10×10m (CH3.8m)', col: '#b45309' },
-      { y: -10.20, code: 'B3F シェルター', desc: 'W520通路→木造3.2×12.5m', col: '#9c4722' },
-    ];
-    stops.forEach((st) => {
-      const sy = ey(st.y);
-      // Floor slab line extending West
-      g.appendChild(el('line', { x1: colX + 14, y1: sy, x2: shaftX, y2: sy, stroke: '#1c1e22', 'stroke-width': 2.0 }));
-      // Landing Door Opening on West Shaft Wall (H = 2.10m)
-      g.appendChild(el('rect', { x: shaftX - 10, y: ey(st.y + 2.10), width: 10, height: 2.10 * scY, fill: '#d1fae5', stroke: st.col, 'stroke-width': 1.2 }));
-      // Landing Transom Digital Floor Display + Oversized Call Button icon
-      g.appendChild(el('rect', { x: shaftX - 42, y: ey(st.y + 2.25), width: 28, height: 11, rx: 2, fill: '#111827' }));
-      g.appendChild(el('text', { x: shaftX - 28, y: ey(st.y + 2.25) + 8, 'text-anchor': 'middle', 'font-size': 6.5, 'font-family': 'monospace', 'font-weight': 700, fill: '#f5b041' }, st.code.split(' ')[0]));
-      g.appendChild(el('circle', { cx: shaftX - 19, cy: ey(st.y + 1.15), r: 4.5, fill: '#38e89e', stroke: '#065f46', 'stroke-width': 1.0 }));
-      // Floor Elevation & Label on Left
-      g.appendChild(el('text', { x: colX + 16, y: sy - 5, 'font-size': 8.2, 'font-weight': 700, fill: st.col }, st.code));
-      g.appendChild(el('text', { x: colX + 16, y: sy + 10, 'font-size': 6.6, fill: '#5b5852' }, `${st.desc} (${st.y === 0 ? '±0.00' : st.y.toFixed(2)}m)`));
+    // 8 RC Structural Portal Ribs along Ceiling (H = 3.18..3.55m)
+    [1.55, 3.55, 5.55, 7.55, 9.55, 11.55, 13.55, 15.55].forEach((rz) => {
+      g.appendChild(el('rect', { x: vx(rz) - 3, y: vy(3.55), width: 6, height: 0.36 * scV, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 0.7 }));
+    });
+    // Full-Length 15m Overhead HEPA Exhaust Duct (H = 3.06..3.32m) + Yellow Steel I-Beam Monorail (H = 2.94m)
+    g.appendChild(el('rect', { x: vx(1.05), y: vy(3.32), width: 14.95 * scL, height: 0.24 * scV, fill: '#cbd5e1', stroke: '#475569', 'stroke-width': 0.8 }));
+    g.appendChild(el('rect', { x: vx(1.15), y: vy(2.96), width: 14.55 * scL, height: 0.14 * scV, fill: '#f59e0b', stroke: '#92400e', 'stroke-width': 0.8 }));
+    // Hoist Trolley & Chain Hook in B404
+    g.appendChild(el('rect', { x: vx(11.65), y: vy(2.92), width: 16, height: 8, fill: '#1e293b' }));
+    g.appendChild(el('line', { x1: vx(11.95), y1: vy(2.74), x2: vx(11.95), y2: vy(1.78), stroke: '#475569', 'stroke-width': 1.2, 'stroke-dasharray': '2 1.5' }));
+
+    // 4 Transverse Bulkhead Partitions (Z = 3.30, 6.90, 10.30, 13.50) with H2,250 Doors & Upper Transoms
+    [3.30, 6.90, 10.30, 13.50].forEach((dz, i) => {
+      g.appendChild(el('rect', { x: vx(dz) - 2, y: vy(3.55), width: 4, height: 3.55 * scV, fill: i === 3 ? '#334155' : '#64748b' }));
+      g.appendChild(el('rect', { x: vx(dz) - 3, y: vy(2.26), width: 6, height: 2.26 * scV, fill: i === 3 ? '#fca5a5' : '#bae6fd', stroke: i === 3 ? '#991b1b' : '#0284c7', 'stroke-width': 0.8 }));
     });
 
-    // T-Section Steel Car & Counterweight Guide Rails running full height!
-    const railCabX = shaftX + 44;
-    const railCwtX = shaftX + shaftW - 22;
-    g.appendChild(el('line', { x1: railCabX, y1: ey(2.65), x2: railCabX, y2: ey(-11.35), stroke: '#475569', 'stroke-width': 2.2 }));
-    g.appendChild(el('line', { x1: railCwtX, y1: ey(2.65), x2: railCwtX, y2: ey(-11.35), stroke: '#64748b', 'stroke-width': 2.0 }));
+    // Schematic Equipment Elevations across the 5 Zones!
+    // B401: ELV-1 Door Profile + Deluge Shower
+    g.appendChild(el('rect', { x: vx(1.30), y: vy(2.10), width: 0.90 * scL, height: 2.10 * scV, fill: '#d1fae5', stroke: '#059669', 'stroke-width': 1.2 }));
+    g.appendChild(el('text', { x: vx(1.75), y: vy(1.05), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 800, fill: '#065f46' }, 'ELV-1'));
+    // B402: Fume Hood + Duct Riser + Lab Bench
+    g.appendChild(el('rect', { x: vx(3.65), y: vy(2.25), width: 1.80 * scL, height: 2.25 * scV, fill: '#e0f2fe', stroke: '#0369a1', 'stroke-width': 0.9 }));
+    g.appendChild(el('rect', { x: vx(4.40), y: vy(3.10), width: 0.35 * scL, height: 0.85 * scV, fill: '#94a3b8' }));
+    g.appendChild(el('text', { x: vx(4.55), y: vy(1.15), 'text-anchor': 'middle', 'font-size': 5.5, 'font-weight': 700, fill: '#0369a1' }, 'ドラフト'));
+    // B403: 5-Monitor Ops Desk + 42U Server Rack
+    g.appendChild(el('rect', { x: vx(7.15), y: vy(1.52), width: 1.80 * scL, height: 1.52 * scV, fill: '#dbeafe', stroke: '#1d4ed8', 'stroke-width': 0.9 }));
+    g.appendChild(el('rect', { x: vx(9.05), y: vy(2.18), width: 1.05 * scL, height: 2.18 * scV, fill: '#1e293b', stroke: '#0f172a', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: vx(9.58), y: vy(1.15), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: '#38bdf8' }, '42U'));
+    // B404: 5-Axis CNC Mill + 3D Printer
+    g.appendChild(el('rect', { x: vx(10.55), y: vy(1.88), width: 1.18 * scL, height: 1.88 * scV, fill: '#e2e8f0', stroke: '#475569', 'stroke-width': 0.9 }));
+    g.appendChild(el('rect', { x: vx(11.88), y: vy(1.42), width: 0.68 * scL, height: 1.42 * scV, fill: '#ede9fe', stroke: '#7c3aed', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: vx(11.14), y: vy(1.00), 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': 700, fill: '#334155' }, 'CNC'));
+    // B405: Rotating Luminous Containment Pod + Vault Safe
+    g.appendChild(el('rect', { x: vx(14.70), y: vy(2.35), width: 0.96 * scL, height: 2.35 * scV, fill: 'rgba(6,182,212,0.18)', stroke: '#0891b2', 'stroke-width': 1.2 }));
+    g.appendChild(el('polygon', { points: `${vx(15.18)},${vy(1.62)} ${vx(15.38)},${vy(1.25)} ${vx(15.18)},${vy(0.88)} ${vx(14.98)},${vy(1.25)}`, fill: '#22d3ee', stroke: '#0e7490', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: vx(15.18), y: vy(2.44), 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': 800, fill: '#0e7490' }, 'CORE'));
 
-    // Top MRL Gearless Traction Drive Machine (Y = +2.38m inside 1F headroom — 2F untouched!)
-    const sheaveCy = ey(2.34);
-    const sheaveCx = shaftX + 74;
-    g.appendChild(el('rect', { x: shaftX + 4, y: ey(2.66), width: shaftW - 8, height: 14, fill: '#334155' })); // Overhead I-beam bedplate
-    g.appendChild(el('circle', { cx: sheaveCx, cy: sheaveCy, r: 15, fill: '#cbd5e1', stroke: '#0f4c81', 'stroke-width': 2.0 })); // Main Drive Sheave
-    g.appendChild(el('circle', { cx: sheaveCx, cy: sheaveCy, r: 6, fill: '#1e293b' }));
-    g.appendChild(el('rect', { x: sheaveCx - 16, y: sheaveCy - 18, width: 10, height: 8, fill: '#dc2626', rx: 1 })); // Electromagnetic Brake Caliper
-    g.appendChild(el('circle', { cx: shaftX + 108, cy: ey(2.12), r: 10, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 1.4 })); // Deflector Sheave
-    g.appendChild(el('circle', { cx: shaftX + 26, cy: ey(2.26), r: 9, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.3 })); // Overspeed Governor
-
-    // 4 Parallel Steel Hoist Wire Ropes (Sheave -> Cab Top & Sheave -> Counterweight Top)
-    const cabTopY = ey(-10.20 + 2.48);
-    const cwtTopY = ey(0.40);
-    [-4, -1.5, 1.5, 4].forEach((dx) => {
-      g.appendChild(el('line', { x1: shaftX + 54 + dx, y1: sheaveCy, x2: shaftX + 54 + dx, y2: cabTopY, stroke: '#1e293b', 'stroke-width': 0.9 }));
-      g.appendChild(el('line', { x1: shaftX + 112 + dx * 0.7, y1: ey(2.12), x2: shaftX + 112 + dx * 0.7, y2: cwtTopY, stroke: '#334155', 'stroke-width': 0.9 }));
+    // Zone labels below floor slab
+    [
+      [2.05, 'B401 除染'],
+      [5.10, 'B402 化学'],
+      [8.60, 'B403 電脳'],
+      [11.90, 'B404 工作'],
+      [14.95, 'B405 封じ込'],
+    ].forEach(([zm, lbl]) => {
+      g.appendChild(el('text', { x: vx(zm), y: b4Y + 22, 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#334155' }, lbl));
     });
+    // Right Elevation Ticks
+    const exR = lx0 + 15.50 * scL + 12;
+    g.appendChild(el('text', { x: exR, y: vy(4.00) + 3, 'font-size': 5.6, 'font-family': 'monospace', fill: '#475569' }, '-10.2'));
+    g.appendChild(el('text', { x: exR, y: vy(3.55) + 3, 'font-size': 5.6, 'font-family': 'monospace', fill: '#0f4c81', 'font-weight': 700 }, '+3550'));
+    g.appendChild(el('text', { x: exR, y: b4Y + 3, 'font-size': 5.6, 'font-family': 'monospace', fill: '#7f1d1d', 'font-weight': 700 }, '-14.2'));
 
-    // Opposite-Phase Cast-Iron Counterweight (parked high near 1F when Cab is at B3F!)
-    g.appendChild(el('rect', { x: shaftX + 102, y: cwtTopY, width: 22, height: 1.80 * scY, fill: '#475569', stroke: '#111827', 'stroke-width': 1.4 }));
-    for (let i = 1; i < 6; i++) {
-      const cyw = cwtTopY + (i * 1.80 * scY) / 6;
-      g.appendChild(el('line', { x1: shaftX + 103, y1: cyw, x2: shaftX + 123, y2: cyw, stroke: '#94a3b8', 'stroke-width': 0.8 }));
-    }
-
-    // Luxury Elevator Cab Assembly parked at B3F (-10.20m): Car Sling, Glass Rear Wall, COP & Warm Ceiling!
-    const cabBotY = ey(-10.20);
-    const cabHpx = 2.24 * scY;
-    g.appendChild(el('rect', { x: shaftX + 12, y: cabBotY - cabHpx, width: 84, height: cabHpx, fill: '#fef3c7', stroke: '#0f4c81', 'stroke-width': 2.0 }));
-    g.appendChild(el('rect', { x: shaftX + 86, y: cabBotY - cabHpx + 12, width: 8, height: cabHpx - 24, fill: '#bae6fd', stroke: '#0284c7', 'stroke-width': 1.0 })); // Rear Panoramic Glass!
-    g.appendChild(el('rect', { x: shaftX + 12, y: cabBotY - cabHpx - 10, width: 84, height: 10, fill: '#334155' })); // Top Crosshead Beam
-    g.appendChild(el('rect', { x: shaftX + 12, y: cabBotY, width: 84, height: 8, fill: '#334155' })); // Safety Plank
-    g.appendChild(el('text', { x: shaftX + 50, y: cabBotY - cabHpx * 0.56, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#0f4c81' }, 'ELV-1 かご'));
-    g.appendChild(el('text', { x: shaftX + 50, y: cabBotY - cabHpx * 0.40, 'text-anchor': 'middle', 'font-size': 6.2, fill: '#7c4a1d' }, '1220×1460×H2240'));
-
-    // Pit (-11.40m): Dual Helical Oil Spring Buffers + Yellow/Black Safety Hazard Stripe!
-    g.appendChild(el('rect', { x: shaftX + 26, y: ey(-10.65), width: 14, height: 0.75 * scY, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.0 }));
-    g.appendChild(el('rect', { x: shaftX + 66, y: ey(-10.65), width: 14, height: 0.75 * scY, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.0 }));
-    g.appendChild(el('rect', { x: shaftX + 106, y: ey(-10.72), width: 14, height: 0.68 * scY, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.0 }));
-
-    // Right-Side Mechanical Engineering Callout Leaders (cleanly aligned!)
-    const callX = shaftX + shaftW + 18;
-    const callouts = [
-      [ey(2.42), 'MRL 巻上機＋溝付綱車 (駆動)', '#0f4c81'],
-      [ey(2.08), 'そらせ車＋電磁ブレーキ (赤)', '#dc2626'],
-      [ey(1.40), '4本主鋼ワイヤーロープ', '#1e293b'],
-      [ey(-0.50), '逆位相 釣合重り (鋳鉄ウェイト)', '#475569'],
-      [ey(-3.90), 'T形鋼ガイドレール (かご/重り)', '#334155'],
-      [ey(-5.60), '直通昇降行程 10,200 mm', '#059669'],
-      [ey(-6.35), 'S字加減速 2.25 m/s (約5.6秒)', '#059669'],
-      [ey(-8.65), '背面パノラマガラス (重り視認)', '#0284c7'],
-      [ey(-9.35), '大型発光COP操作盤＋連動両開扉', '#9c4722'],
-      [ey(-11.00), 'ピット(-11.4m) 油圧ばね緩衝器×3', '#b45309'],
-    ];
-    callouts.forEach(([cy, txt, col]) => {
-      g.appendChild(el('line', { x1: shaftX + shaftW + 4, y1: cy, x2: callX - 4, y2: cy, stroke: col, 'stroke-width': 0.85, 'stroke-dasharray': '2 2' }));
-      g.appendChild(el('text', { x: callX, y: cy + 3, 'font-size': 7.0, 'font-weight': 700, fill: col }, txt));
-    });
-
-    // --- PANEL 2: DEEP BASEMENT & ELEVATOR ENGINEERING SPEC TABLE ---
+    // --- PANEL 2: TRANSVERSE VAULT CROSS-SECTION B-B' (W 2,700 × CH 3,550 mm, 1/20 DETAIL!) ---
     const p2Y = p1Y + p1H + 14;
-    const p2H = Math.max(200, VH - 236 - p2Y);
+    const p2H = 292;
     g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
-    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
-    g.appendChild(el('text', { x: colX + 10, y: p2Y + 14.5, 'font-size': 8.4, 'font-weight': 700, fill: '#1c1e22' },
-      '② リアルエレベーター ELV-1 ＆ B3Fシェルター・食料庫 精密設計諸元'));
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 24, fill: '#e6eef5', stroke: '#0f4c81', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: colX + 10, y: p2Y + 15.5, 'font-size': 8.4, 'font-weight': 700, fill: '#0f4c81' },
+      "② B4F 横断面詳細図 B-B'（内法幅 W 2,700 × 高天井 CH 3,550 mm — 縦長リブ構造検証）"));
 
-    const specs = [
-      ['昇降機方式', 'マシンルームレス(MRL) ギヤレス・トラクション式 / 4本鋼ワイヤー'],
-      ['昇降行程・停止階', '10,200 mm（B3F -10.2m / B2F -6.6m / B1F -2.4m / 1F 地上 ±0.0m）'],
-      ['走行制御・安全装置', 'S字インバータ制御 (最高 2.25m/s)・連動両開扉インターロック・油圧緩衝器'],
-      ['かご内法・視認機構', 'W 1,220 × D 1,460 × H 2,240 mm・背面強化ガラス(釣合重り＆ガイド視認)'],
-      ['操作系・音声演出', '3D大型発光COP盤＋大型HUDボタン＋日本語2音チャイム＆インバータ音'],
-      ['B3F 主人公1.3倍通路', '有効幅 W 520 mm (主人公Ø400 × 1.30倍厳密設計)・足元アンバー誘導灯'],
-      ['B3F 木造シェルター室', '内法 3,200 × 12,500 mm (40.00 m²)・杉羽目板＆ヒノキ床・シャワー/WC/寝室'],
-      ['B3F 奥扉 食料備蓄庫', '内法 2,000 × 6,000 mm (12.00 m²)・気密扉DB3-FD・両側4段棚＆冷凍冷蔵庫'],
+    const scBX = 56; // 2.70m -> 151.2px
+    const scBY = 54; // 4.00m -> 216px
+    const bx0 = colX + 54;
+    const bFlY = p2Y + 258;
+    const bvx = (xm) => bx0 + xm * scBX;
+    const bvy = (ym) => bFlY - ym * scBY;
+
+    // Thick 200mm RC Blast Shell + 450mm Top Isolation Slab + Floor Mat
+    g.appendChild(el('rect', { x: bvx(-0.20), y: bvy(4.00), width: 3.10 * scBX, height: 4.18 * scBY, fill: 'url(#hatch-ext)', stroke: '#1c1e22', 'stroke-width': 1.3 }));
+    g.appendChild(el('rect', { x: bvx(0), y: bvy(3.55), width: 2.70 * scBX, height: 3.55 * scBY, fill: '#f8fafc', stroke: '#1c1e22', 'stroke-width': 1.3 }));
+    // RC Haunched Portal Frame Rib Profile
+    g.appendChild(el('path', {
+      d: `M ${bvx(0)} ${bvy(3.55)} L ${bvx(2.70)} ${bvy(3.55)} L ${bvx(2.70)} ${bvy(2.90)} L ${bvx(2.42)} ${bvy(3.26)} L ${bvx(0.28)} ${bvy(3.26)} L ${bvx(0)} ${bvy(2.90)} Z`,
+      fill: '#cbd5e1', stroke: '#475569', 'stroke-width': 0.9,
+    }));
+    // Overhead MEP Corridor: HEPA Duct (Left) + Yellow I-Beam Monorail Hoist (Center) + Cable Tray (Right)
+    g.appendChild(el('rect', { x: bvx(0.18), y: bvy(3.24), width: 0.34 * scBX, height: 0.28 * scBY, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: bvx(0.35), y: bvy(3.06), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: '#fff' }, 'HEPA'));
+    g.appendChild(el('rect', { x: bvx(1.24), y: bvy(3.08), width: 0.22 * scBX, height: 0.18 * scBY, fill: '#f59e0b', stroke: '#92400e', 'stroke-width': 0.9 }));
+    g.appendChild(el('rect', { x: bvx(2.14), y: bvy(3.16), width: 0.42 * scBX, height: 0.12 * scBY, fill: '#334155' }));
+    // Recessed Illuminated Floor Trench (Center W440)
+    g.appendChild(el('rect', { x: bvx(1.13), y: bvy(0.00), width: 0.44 * scBX, height: 0.12 * scBY, fill: '#bae6fd', stroke: '#0284c7', 'stroke-width': 0.9 }));
+    // Left Bench (Fume Hood / CNC W720) & Right Lab Bench (W650)
+    g.appendChild(el('rect', { x: bvx(0.02), y: bvy(2.22), width: 0.72 * scBX, height: 2.22 * scBY, fill: '#e0f2fe', stroke: '#0369a1', 'stroke-width': 1.0 }));
+    g.appendChild(el('text', { x: bvx(0.38), y: bvy(1.20), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#0369a1' }, '西側機器'));
+    g.appendChild(el('rect', { x: bvx(2.03), y: bvy(0.92), width: 0.65 * scBX, height: 0.92 * scBY, fill: '#efe3d1', stroke: '#7c5a38', 'stroke-width': 1.0 }));
+    g.appendChild(el('text', { x: bvx(2.35), y: bvy(0.45), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#7c5a38' }, '東側卓'));
+    // Unobstructed Central 1,260mm Nave + Standing Protagonist Silhouette (H 1,660 mm -> 1,890mm headroom above!)
+    g.appendChild(el('rect', { x: bvx(0.74), y: bvy(3.00), width: 1.29 * scBX, height: 3.00 * scBY, fill: 'rgba(2,132,199,0.05)', stroke: '#0284c7', 'stroke-width': 0.75, 'stroke-dasharray': '3 2' }));
+    g.appendChild(el('circle', { cx: bvx(1.38), cy: bvy(1.56), r: 6.5, fill: 'rgba(156,71,34,0.18)', stroke: '#9c4722', 'stroke-width': 1.0 }));
+    g.appendChild(el('rect', { x: bvx(1.20), y: bvy(1.44), width: 0.36 * scBX, height: 0.62 * scBY, rx: 5, fill: 'rgba(156,71,34,0.14)', stroke: '#9c4722', 'stroke-width': 0.9 }));
+    g.appendChild(el('line', { x1: bvx(1.30), y1: bvy(0.82), x2: bvx(1.28), y2: bvy(0.00), stroke: '#9c4722', 'stroke-width': 1.4 }));
+    g.appendChild(el('line', { x1: bvx(1.46), y1: bvy(0.82), x2: bvx(1.48), y2: bvy(0.00), stroke: '#9c4722', 'stroke-width': 1.4 }));
+    g.appendChild(el('text', { x: bvx(1.38), y: bvy(1.86), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#9c4722' }, '主人公 H1,660'));
+    g.appendChild(el('text', { x: bvx(1.38), y: bvy(2.45), 'text-anchor': 'middle', 'font-size': 6.0, 'font-family': 'monospace', 'font-weight': 700, fill: '#0369a1' }, '中央通路 W1,260'));
+    // Width & Height Dimensions
+    g.appendChild(el('line', { x1: bvx(0), y1: bFlY + 14, x2: bvx(2.70), y2: bFlY + 14, stroke: '#1c1e22', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: bvx(1.35), y: bFlY + 25, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', 'font-weight': 700, fill: '#1c1e22' }, '内法幅 W = 2,700 mm'));
+
+    // Right-Side Cross-Section Engineering Callouts inside Panel 2
+    const c2X = bvx(3.15);
+    [
+      [bvy(3.78), '450mm 免震RC厚スラブ (B3F下)', '#334155'],
+      [bvy(3.32), 'RC門型ラーメンリブ (2.0mピッチ)', '#0f4c81'],
+      [bvy(2.96), '天井I形鋼モノレール＋HEPA排気幹線', '#b45309'],
+      [bvy(2.50), '高天井 CH 3,550 mm (縦横比 1:1.31)', '#0369a1'],
+      [bvy(1.90), '頭上空間 +1,890mm の圧倒的縦開放感', '#7f1d1d'],
+      [bvy(1.25), '両壁700mm機器帯＋中央1,260mm貫通動線', '#475569'],
+      [bvy(0.55), '帯電防止ラボ床＋光ファイバー床ピット', '#0284c7'],
+      [bvy(0.05), '基準床 B4FL -14,200 (ELV専用到達)', '#991b1b'],
+    ].forEach(([cy, txt, col]) => {
+      g.appendChild(el('line', { x1: bvx(2.94), y1: cy, x2: c2X - 4, y2: cy, stroke: col, 'stroke-width': 0.8, 'stroke-dasharray': '2 2' }));
+      g.appendChild(el('text', { x: c2X, y: cy + 2.8, 'font-size': 6.8, 'font-weight': 700, fill: col }, txt));
+    });
+
+    // --- PANEL 3: B4F CLANDESTINE GANG LAB SPECIFICATION SCHEDULE ---
+    const p3Y = p2Y + p2H + 14;
+    const p3H = Math.max(240, VH - 234 - p3Y);
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: p3H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p3Y + 14.5, 'font-size': 8.3, 'font-weight': 700, fill: '#1c1e22' },
+      '③ B4F ギャング極秘研究所 建築構造・設備・セキュリティ精密仕様表'));
+
+    const labSpecs = [
+      ['階高・深度設定', 'B4FL -14,200 mm（B3F -10.20mより正確に 4.00m下・階段一切なし）'],
+      ['唯一到達動線', 'ELV-1 リアルエレベーター専用（5停止目・直接生体認証エアロック接続）'],
+      ['空間内法・面積', 'W 2,700 × L 15,500 mm（41.85 m²）・高天井 CH 3,550 mm（RC門型リブ8本）'],
+      ['頭上設備インフラ', '全長15m HEPA陰圧排気ダクト・黄色I形鋼モノレールホイスト・二重ケーブルラック'],
+      ['① B401 除染前室', '2.70×2.40m・組織紋章・緊急洗眼シャワー・防護服棚・虹彩スキャナー・CCTV'],
+      ['② B402 化学合成室', '2.70×3.50m・ガラスドラフト・N2/Ar/O2ボンベ・顕微鏡・遠心分離機・分子合成板'],
+      ['③ B403 電脳司令室', '2.70×3.30m・5画面解析卓・42Uサーバー3連・赤糸作戦相関ボード・UV警戒切替SW'],
+      ['④ B404 試作工作室', '2.70×3.10m・5軸CNC・UV3Dプリンタ・偵察ドローン試作台・戦術装備ペグボード'],
+      ['⑤ B405 極秘保管庫', '2.70×2.80m・回転発光コア封じ込めポッド(稼働SW)・-80℃冷凍庫・金庫・48kWh電源'],
     ];
-    const rowH = Math.min(28, (p2H - 26) / specs.length);
-    specs.forEach(([k, v], i) => {
-      const ry = p2Y + 22 + i * rowH;
+    const rowH = Math.min(34, (p3H - 26) / labSpecs.length);
+    labSpecs.forEach(([k, v], i) => {
+      const ry = p3Y + 22 + i * rowH;
       if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
       g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
-      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.68, 'font-size': 7.2, 'font-weight': 700, fill: '#4a4640' }, k));
-      g.appendChild(el('text', { x: colX + 136, y: ry + rowH * 0.68, 'font-size': 7.2, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.66, 'font-size': 7.0, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 124, y: ry + rowH * 0.66, 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, v));
     });
 
     svg.appendChild(g);
   }
 
   /**
-   * Bottom Engineering Section + JIS Title Block (All 17 Sheets):
-   * - On Camper Sheets (14 & 15): Draws 1/65 Longitudinal Section (L7,500 × H3,400mm)
-   * - On Building Sheets (0..13) & Kei Sheet (16): Draws 5-Unit + 8-Level Main Tower (B3F..RF) + ELV-1 Elevation!
+   * Dedicated Right-Column Mechanical Engineering Projection for Sheet 1 (B3F):
+   * 1) Ultra-Precision Mark II 5-Stop MRL Gearless Traction Elevator Full Vertical Hoistway Cross-Section (B4F -14.20m -> 1F ±0.00m):
+   *    - Top MRL Traction Motor, 6-Spoke Drive Sheave, Moving Dual-Shoe Electromagnetic Brake Calipers, Deflector & Overspeed Governor
+   *    - 4 Parallel Steel Hoist Ropes, Opposite-Phase 9-Slab Counterweight, Catenary Flat Traveling Control Cable (テールコード)
+   *    - Cab Sling Safety Gear, 4 Roller Guide Shoes, Overhead Door Operator Crank Arm, Infrared Light-Curtain Safety Edge
+   *    - 5 Synchronized Center-Opening Landing Doors (1F / B1F / B2F / B3F / B4F [Secret Lab]) + 1.0m Depth Scale Ticks
+   *    - Pit -15.60m Dual Helical Oil Buffers + Governor Tension Sheave Loop
+   * 2) Complete Mark II Elevator & Deep Basement Engineering Specification Schedule
+   */
+  _drawElevatorEngineeringView(svg, VW, VH) {
+    const g = el('g');
+    const colX = 410;
+    const colW = VW - colX - 28; // ~476px
+
+    // --- PANEL 1: FULL VERTICAL 5-STOP MRL TRACTION ELEVATOR HOISTWAY CROSS-SECTION (1/42) ---
+    const p1Y = 82;
+    const p1H = 740;
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: p1H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 24, fill: '#e6eef5', stroke: '#0f4c81', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: colX + 10, y: p1Y + 15.5, 'font-size': 8.5, 'font-weight': 700, fill: '#0f4c81' },
+      '① ELV-1 Mk2 MRLギヤレス・トラクション昇降機 精密機構縦断面図（5停止 B4F -14.2m ⇄ 1F ±0.0m）'));
+
+    // Elevation coordinate mapper: Y = -15.60m (pit) to +2.85m (hoistway top) -> span 18.45m in 652px -> scY = 35.0 px/m
+    const scY = 35.0;
+    const topRefY = p1Y + 42; // maps +2.85m
+    const ey = (m) => topRefY + (2.85 - m) * scY;
+    const shaftX = colX + 166;
+    const shaftW = 138;
+
+    // Concrete Retaining Hoistway Shell (Pit -15.60m -> Top +2.72m, Total Height 18.32 m!)
+    g.appendChild(el('rect', { x: shaftX - 10, y: ey(2.76), width: shaftW + 20, height: ey(-15.60) - ey(2.76) + 12, fill: 'url(#hatch-ext)', stroke: '#1c1e22', 'stroke-width': 1.3 }));
+    g.appendChild(el('rect', { x: shaftX, y: ey(2.72), width: shaftW, height: ey(-15.60) - ey(2.72), fill: '#f4f7fa', stroke: '#1c1e22', 'stroke-width': 1.1 }));
+
+    // 1.0m Depth Scale Ticks along East Shaft Wall
+    for (let dm = -15; dm <= 2; dm++) {
+      g.appendChild(el('line', { x1: shaftX + shaftW - 6, y1: ey(dm), x2: shaftX + shaftW, y2: ey(dm), stroke: '#64748b', 'stroke-width': 0.7 }));
+    }
+
+    // Horizontal Floor Slabs & Synchronized Landing Doors on Left (-X West side) — ALL 5 STOPS!
+    const stops = [
+      { y: 0.00, code: '1F 地上直通', desc: '玄関1R03・森直結', col: '#059669' },
+      { y: -2.40, code: 'B1F 倉庫', desc: 'セメント3×7m＋棚15基', col: '#475569' },
+      { y: -6.60, code: 'B2F スタジオ', desc: '10×10m (CH3.8m)', col: '#b45309' },
+      { y: -10.20, code: 'B3F シェルター', desc: 'W520通路→木造3.2×12.5m', col: '#9c4722' },
+      { y: -14.20, code: 'B4F 極秘研', desc: 'ELV専用・2.7×15.5m CH3.55', col: '#991b1b' },
+    ];
+    stops.forEach((st) => {
+      const sy = ey(st.y);
+      g.appendChild(el('line', { x1: colX + 14, y1: sy, x2: shaftX, y2: sy, stroke: '#1c1e22', 'stroke-width': 2.0 }));
+      g.appendChild(el('rect', { x: shaftX - 10, y: ey(st.y + 2.10), width: 10, height: 2.10 * scY, fill: st.y < -12 ? '#fee2e2' : '#d1fae5', stroke: st.col, 'stroke-width': 1.2 }));
+      g.appendChild(el('rect', { x: shaftX - 42, y: ey(st.y + 2.24), width: 28, height: 10, rx: 2, fill: '#111827' }));
+      g.appendChild(el('text', { x: shaftX - 28, y: ey(st.y + 2.24) + 7.4, 'text-anchor': 'middle', 'font-size': 6.0, 'font-family': 'monospace', 'font-weight': 700, fill: st.y < -12 ? '#f87171' : '#f5b041' }, st.code.split(' ')[0]));
+      g.appendChild(el('circle', { cx: shaftX - 19, cy: ey(st.y + 1.15), r: 4.0, fill: st.y < -12 ? '#ef4444' : '#38e89e', stroke: '#065f46', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: colX + 16, y: sy - 5, 'font-size': 8.0, 'font-weight': 700, fill: st.col }, st.code));
+      g.appendChild(el('text', { x: colX + 16, y: sy + 9.5, 'font-size': 6.4, fill: '#5b5852' }, `${st.desc} (${st.y === 0 ? '±0.00' : st.y.toFixed(2)}m)`));
+    });
+
+    // T-Section Steel Car & Counterweight Guide Rails + Closed Overspeed Governor Loop Cable!
+    const railCabX = shaftX + 44;
+    const railCwtX = shaftX + shaftW - 22;
+    g.appendChild(el('line', { x1: railCabX, y1: ey(2.65), x2: railCabX, y2: ey(-15.55), stroke: '#475569', 'stroke-width': 2.2 }));
+    g.appendChild(el('line', { x1: railCwtX, y1: ey(2.65), x2: railCwtX, y2: ey(-15.55), stroke: '#64748b', 'stroke-width': 2.0 }));
+    g.appendChild(el('line', { x1: shaftX + 22, y1: ey(2.26), x2: shaftX + 22, y2: ey(-15.10), stroke: '#d97706', 'stroke-width': 0.9, 'stroke-dasharray': '3 2' }));
+
+    // Top MRL Gearless Traction Drive Machine (Y = +2.38m) + Moving Dual-Shoe Brake Calipers + Governor!
+    const sheaveCy = ey(2.34);
+    const sheaveCx = shaftX + 74;
+    g.appendChild(el('rect', { x: shaftX + 4, y: ey(2.68), width: shaftW - 8, height: 12, fill: '#334155' }));
+    g.appendChild(el('circle', { cx: sheaveCx, cy: sheaveCy, r: 14, fill: '#cbd5e1', stroke: '#0f4c81', 'stroke-width': 2.0 }));
+    g.appendChild(el('circle', { cx: sheaveCx, cy: sheaveCy, r: 5.5, fill: '#1e293b' }));
+    // Dual Moving Electromagnetic Brake Shoes (Red)
+    g.appendChild(el('rect', { x: sheaveCx - 17, y: sheaveCy - 16, width: 9, height: 8, fill: '#dc2626', rx: 1 }));
+    g.appendChild(el('rect', { x: sheaveCx + 8, y: sheaveCy - 16, width: 9, height: 8, fill: '#dc2626', rx: 1 }));
+    g.appendChild(el('circle', { cx: shaftX + 109, cy: ey(2.12), r: 9, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 1.3 }));
+    g.appendChild(el('circle', { cx: shaftX + 24, cy: ey(2.26), r: 8.5, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.2 }));
+
+    // 4 Parallel Steel Hoist Wire Ropes (Sheave -> Cab parked at B4F & Sheave -> Counterweight at Top!)
+    const cabTopY = ey(-14.20 + 2.48);
+    const cwtTopY = ey(0.45);
+    [-4, -1.5, 1.5, 4].forEach((dx) => {
+      g.appendChild(el('line', { x1: shaftX + 54 + dx, y1: sheaveCy, x2: shaftX + 54 + dx, y2: cabTopY, stroke: '#1e293b', 'stroke-width': 0.85 }));
+      g.appendChild(el('line', { x1: shaftX + 112 + dx * 0.7, y1: ey(2.12), x2: shaftX + 112 + dx * 0.7, y2: cwtTopY, stroke: '#334155', 'stroke-width': 0.85 }));
+    });
+
+    // Mid-Shaft Junction Box (-7.0m) + Dynamic Catenary Flat Traveling Control Cable (テールコード)!
+    g.appendChild(el('rect', { x: shaftX + shaftW - 10, y: ey(-6.85), width: 10, height: 14, fill: '#334155' }));
+    g.appendChild(el('path', {
+      d: `M ${shaftX + shaftW - 6} ${ey(-7.00)} L ${shaftX + shaftW - 6} ${ey(-14.70)} Q ${shaftX + shaftW - 22} ${ey(-15.10)} ${shaftX + 86} ${ey(-14.20)}`,
+      fill: 'none', stroke: '#0f172a', 'stroke-width': 2.2,
+    }));
+
+    // Opposite-Phase 9-Slab Cast-Iron Counterweight (High near 1F when Cab is at B4F!)
+    g.appendChild(el('rect', { x: shaftX + 102, y: cwtTopY, width: 22, height: 1.95 * scY, fill: '#475569', stroke: '#111827', 'stroke-width': 1.4 }));
+    for (let i = 1; i < 9; i++) {
+      const cyw = cwtTopY + (i * 1.95 * scY) / 9;
+      g.appendChild(el('line', { x1: shaftX + 103, y1: cyw, x2: shaftX + 123, y2: cyw, stroke: '#94a3b8', 'stroke-width': 0.7 }));
+    }
+
+    // Luxury Mark II Elevator Cab parked at B4F (-14.20m): Car Sling, 4 Roller Shoes, Door Operator, Glass & COP!
+    const cabBotY = ey(-14.20);
+    const cabHpx = 2.24 * scY;
+    g.appendChild(el('rect', { x: shaftX + 12, y: cabBotY - cabHpx, width: 82, height: cabHpx, fill: '#fef3c7', stroke: '#0f4c81', 'stroke-width': 1.8 }));
+    g.appendChild(el('rect', { x: shaftX + 84, y: cabBotY - cabHpx + 10, width: 8, height: cabHpx - 20, fill: '#bae6fd', stroke: '#0284c7', 'stroke-width': 1.0 }));
+    g.appendChild(el('rect', { x: shaftX + 12, y: cabBotY - cabHpx - 9, width: 82, height: 9, fill: '#334155' })); // Crosshead + Door Operator
+    g.appendChild(el('circle', { cx: shaftX + 20, cy: cabBotY - cabHpx - 4.5, r: 4, fill: '#f59e0b' })); // Door Operator Crank
+    g.appendChild(el('rect', { x: shaftX + 12, y: cabBotY, width: 82, height: 7, fill: '#334155' })); // Safety Plank + Wedge Gear
+    g.appendChild(el('line', { x1: shaftX + 12, y1: cabBotY - cabHpx + 2, x2: shaftX + 12, y2: cabBotY, stroke: '#ef4444', 'stroke-width': 1.8, 'stroke-dasharray': '2 2' })); // Infrared Light Curtain
+    g.appendChild(el('text', { x: shaftX + 49, y: cabBotY - cabHpx * 0.56, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#0f4c81' }, 'ELV-1 Mk2'));
+    g.appendChild(el('text', { x: shaftX + 49, y: cabBotY - cabHpx * 0.36, 'text-anchor': 'middle', 'font-size': 5.8, fill: '#7c4a1d' }, '1220×1460×2240'));
+
+    // Pit (-15.60m): Dual Helical Oil Buffers + Pit Governor Tension Sheave!
+    g.appendChild(el('circle', { cx: shaftX + 22, cy: ey(-15.12), r: 7.5, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.1 })); // Pit Tension Sheave
+    g.appendChild(el('rect', { x: shaftX + 40, y: ey(-14.75), width: 13, height: 0.85 * scY, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.0 }));
+    g.appendChild(el('rect', { x: shaftX + 68, y: ey(-14.75), width: 13, height: 0.85 * scY, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.0 }));
+    g.appendChild(el('rect', { x: shaftX + 106, y: ey(-14.80), width: 14, height: 0.80 * scY, fill: '#f59e0b', stroke: '#78350f', 'stroke-width': 1.0 }));
+
+    // Right-Side Mechanical Engineering Callout Leaders
+    const callX = shaftX + shaftW + 16;
+    const callouts = [
+      [ey(2.44), 'MRL 巻上機＋6本スポーク駆動綱車', '#0f4c81'],
+      [ey(1.80), '可動式両側電磁ブレーキ＋調速機', '#dc2626'],
+      [ey(0.80), '4本主鋼ワイヤー＋逆位相9段釣合重り', '#475569'],
+      [ey(-2.60), 'T形鋼ガイドレール＋1.0m深度目盛', '#334155'],
+      [ey(-5.20), '5停止直通行程 14,200mm (全長18.3m)', '#059669'],
+      [ey(-7.00), '中央ジャンクション＋テールコード垂下', '#0f172a'],
+      [ey(-9.20), '7相S字ジャーク制御 2.40m/s＋微速着床', '#059669'],
+      [ey(-11.75), '頭上ドア開閉クランク＋赤外線安全光電', '#9c4722'],
+      [ey(-13.25), '背面ガラス(重り視認)＋5階3D発光COP', '#0284c7'],
+      [ey(-15.20), 'ピット(-15.6m) 調速機張車＋油圧緩衝器', '#b45309'],
+    ];
+    callouts.forEach(([cy, txt, col]) => {
+      g.appendChild(el('line', { x1: shaftX + shaftW + 4, y1: cy, x2: callX - 4, y2: cy, stroke: col, 'stroke-width': 0.85, 'stroke-dasharray': '2 2' }));
+      g.appendChild(el('text', { x: callX, y: cy + 2.8, 'font-size': 6.7, 'font-weight': 700, fill: col }, txt));
+    });
+
+    // --- PANEL 2: MARK II ELEVATOR & DEEP BASEMENT SPECIFICATION TABLE ---
+    const p2Y = p1Y + p1H + 14;
+    const p2H = Math.max(200, VH - 236 - p2Y);
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p2Y + 14.5, 'font-size': 8.3, 'font-weight': 700, fill: '#1c1e22' },
+      '② 超精密エレベーター ELV-1 Mk2 ＆ 深地下B3F/B4F 統合機構諸元'));
+
+    const specs = [
+      ['昇降機方式・駆動', 'MRL ギヤレスPM巻上機・可動電磁ブレーキ・6本スポーク綱車・4本鋼ワイヤー'],
+      ['5停止・昇降行程', '14,200mm（1F ±0.0 / B1 -2.4 / B2 -6.6 / B3 -10.2 / B4 極秘研 -14.2m）'],
+      ['7相ジャーク制御', 'ジャーク制限2.6m/s³・最高2.40m/s・微速0.18m/s精密着床・減衰着床バウンス'],
+      ['安全・ドア機構', '赤外線光電安全カーテン自動反転・扉クランク連動・調速機ループ・複数階予約キュー'],
+      ['リアル音響演出', '電磁ブレーキ開閉打音・VVVFインバータPWM音・上下別チャイム・光電警告音'],
+      ['B3F 主人公1.3倍通路', '有効幅 W 520 mm (主人公Ø400 × 1.30倍)・3.2×12.5m木造シェルター＆2×6m食料庫'],
+      ['B4F 極秘研究所', 'B3F直下4.0m (-14.2m)・ELV専用(階段一切なし)・2.7×15.5m 高天井CH3,550 5区画'],
+    ];
+    const rowH = Math.min(31, (p2H - 26) / specs.length);
+    specs.forEach(([k, v], i) => {
+      const ry = p2Y + 22 + i * rowH;
+      if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
+      g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.68, 'font-size': 7.1, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 128, y: ry + rowH * 0.68, 'font-size': 7.1, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+    });
+
+    svg.appendChild(g);
+  }
+
+  /**
+   * Bottom Engineering Section + JIS Title Block (All 18 Sheets):
+   * - On Camper Sheets (15 & 16): Draws 1/65 Longitudinal Section (L7,500 × H3,400mm)
+   * - On Building Sheets (0..14) & Kei Sheet (17): Draws 5-Unit + 9-Level Main Tower (B4F..RF) + 5-Stop ELV-1 Elevation!
    */
   _drawTitleBlockAndSection(svg, floor, VW, VH, isCamper, isKei = false) {
     const baseTop = VH - 218;
@@ -1688,81 +2006,85 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: dxR + 5, y: vy(0.30), 'font-size': 6.2, 'font-family': 'monospace', fill: '#444' }, '+300'));
       g.appendChild(el('text', { x: vx(3.75), y: glY + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, '全長 L = 7,500 ｜ 全幅 W = 2,700 ｜ 拡幅廊下 W = 560 mm'));
     } else {
-      g.appendChild(el('text', { x: secX + 10, y: secY + 14, 'font-size': 7.8, 'font-weight': 700, fill: '#1c1e22' },
-        '全5拠点 断面比較（隣棟｜母屋8層 B3F〜RF＋ELV-1｜軽バン｜RC倉庫｜巨大RV）'));
+      g.appendChild(el('text', { x: secX + 10, y: secY + 14, 'font-size': 7.6, 'font-weight': 700, fill: '#1c1e22' },
+        '全5拠点 断面比較（隣棟｜母屋9層 B4F極秘研〜RF＋ELV-1｜軽バン｜RC倉庫｜巨大RV）'));
 
       const sx = (m) => secX + 102 + m * 9.5;
-      const sy = (m) => secY + 106 - m * 5.9; // Cleanly fits +13.3m RF down to -11.4m ELV Pit!
+      const sy = (m) => secY + 96 - m * 5.0; // Cleanly fits +13.33m RF down to -15.60m ELV Pit!
 
       g.appendChild(el('line', { x1: secX + 10, y1: sy(0), x2: secX + secW - 10, y2: sy(0), stroke: '#5a6354', 'stroke-width': 1.4 }));
-      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.2, fill: '#5a6354' }, 'GL'));
+      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.0, fill: '#5a6354' }, 'GL'));
 
-      // 1. Neighbor Annex (-7.6 .. -2.6)
+      // 1. Neighbor Annex (-7.6 .. -2.6) — Sheet Indices 9..12
       [
-        { sIdx: 8, y0: 0.00, y1: 2.75, txt: '隣1F' },
-        { sIdx: 9, y0: 2.75, y1: 5.50, txt: '隣2F' },
-        { sIdx: 10, y0: 5.50, y1: 8.15, txt: '隣3F' },
+        { sIdx: 9, y0: 0.00, y1: 2.75, txt: '隣1F' },
+        { sIdx: 10, y0: 2.75, y1: 5.50, txt: '隣2F' },
+        { sIdx: 11, y0: 5.50, y1: 8.15, txt: '隣3F' },
       ].forEach((b) => {
         const act = floor.sheetIndex === b.sIdx;
         g.appendChild(el('rect', {
           x: sx(-7.6), y: sy(b.y1), width: 5.0 * 9.5, height: sy(b.y0) - sy(b.y1),
           fill: act ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
         }));
-        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.2, 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
+        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.0, 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
       });
-      const arAct = floor.sheetIndex === 11;
+      const arAct = floor.sheetIndex === 12;
       g.appendChild(el('polygon', {
         points: `${sx(-7.6)},${sy(8.15)} ${sx(-7.6)},${sy(9.55)} ${sx(-5.1)},${sy(10.95)} ${sx(-2.6)},${sy(9.55)} ${sx(-2.6)},${sy(8.15)}`,
         fill: arAct ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': arAct ? 1.5 : 0.85,
       }));
-      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏'));
 
-      // 2. Main Tower — ALL 8 LEVELS (B3F -10.2m -> B2F -6.6m -> B1F -2.4m -> 1F..4F..RF +13.3m)!
+      // 2. Main Tower — ALL 9 LEVELS (B4F -14.2m -> B3F -10.2m -> B2F -6.6m -> B1F -2.4m -> 1F..4F..RF +13.3m)!
       [
-        { sIdx: 0, x0: 0.0, w: 5.0, y0: -10.20, y1: -6.60, txt: 'B3F 避難庫' },
-        { sIdx: 1, x0: 0.0, w: 8.6, y0: -6.60, y1: -2.40, txt: 'B2F 10×10スタジオ' },
-        { sIdx: 2, x0: 0.0, w: 5.0, y0: -2.40, y1: 0.00, txt: 'B1F' },
-        { sIdx: 3, x0: 0.0, w: 5.0, y0: 0.00, y1: 2.75, txt: '1F' },
-        { sIdx: 4, x0: 0.0, w: 5.0, y0: 2.75, y1: 5.50, txt: '2F' },
-        { sIdx: 5, x0: 0.0, w: 5.0, y0: 5.50, y1: 8.15, txt: '3F' },
-        { sIdx: 6, x0: 0.0, w: 5.0, y0: 8.15, y1: 10.50, txt: '4F' },
+        { sIdx: 0, x0: 0.4, w: 3.1, y0: -14.20, y1: -10.65, txt: 'B4 極秘研' },
+        { sIdx: 1, x0: 0.0, w: 5.0, y0: -10.20, y1: -6.60, txt: 'B3F 避難庫' },
+        { sIdx: 2, x0: 0.0, w: 8.6, y0: -6.60, y1: -2.40, txt: 'B2F 10×10スタジオ' },
+        { sIdx: 3, x0: 0.0, w: 5.0, y0: -2.40, y1: 0.00, txt: 'B1F' },
+        { sIdx: 4, x0: 0.0, w: 5.0, y0: 0.00, y1: 2.75, txt: '1F' },
+        { sIdx: 5, x0: 0.0, w: 5.0, y0: 2.75, y1: 5.50, txt: '2F' },
+        { sIdx: 6, x0: 0.0, w: 5.0, y0: 5.50, y1: 8.15, txt: '3F' },
+        { sIdx: 7, x0: 0.0, w: 5.0, y0: 8.15, y1: 10.50, txt: '4F' },
       ].forEach((b) => {
         const act = b.sIdx === floor.sheetIndex;
+        const fill = act
+          ? (b.sIdx === 0 ? 'rgba(185, 28, 28, 0.30)' : 'rgba(217, 70, 38, 0.28)')
+          : (b.sIdx === 0 ? '#f4d9dc' : (b.sIdx <= 3 ? (b.sIdx === 1 ? '#eadbc5' : '#dcdde0') : '#f8f5ef'));
         g.appendChild(el('rect', {
           x: sx(b.x0), y: sy(b.y1), width: b.w * 9.5, height: sy(b.y0) - sy(b.y1),
-          fill: act ? 'rgba(217, 70, 38, 0.28)' : (b.sIdx <= 2 ? (b.sIdx === 0 ? '#eadbc5' : '#dcdde0') : '#f8f5ef'),
-          stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
+          fill,
+          stroke: b.sIdx === 0 ? '#991b1b' : '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
         }));
-        g.appendChild(el('text', { x: sx(b.x0 + b.w * 0.46), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.2, 'text-anchor': 'middle', 'font-size': 5.3, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732' }, b.txt));
+        g.appendChild(el('text', { x: sx(b.x0 + b.w * 0.45), y: (sy(b.y0) + sy(b.y1)) / 2 + 1.8, 'text-anchor': 'middle', 'font-size': b.sIdx === 0 ? 4.8 : 5.1, 'font-weight': (act || b.sIdx === 0) ? 700 : 500, fill: (act || b.sIdx === 0) ? '#991b1b' : '#3a3732' }, b.txt));
       });
-      // Vertical ELV-1 Direct-to-Ground Shaft (B3F -11.4m -> 1F +2.70m)!
+      // Vertical 5-Stop ELV-1 Direct-to-Ground Shaft (B4F Pit -15.6m -> 1F +2.72m)!
       g.appendChild(el('rect', {
-        x: sx(3.4), y: sy(2.70), width: 1.45 * 9.5, height: sy(-11.40) - sy(2.70),
+        x: sx(3.5), y: sy(2.72), width: 1.40 * 9.5, height: sy(-15.60) - sy(2.72),
         fill: 'rgba(16, 185, 129, 0.28)', stroke: '#059669', 'stroke-width': 1.2,
       }));
-      g.appendChild(el('text', { x: sx(4.12), y: sy(-4.2), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: '#065f46', transform: `rotate(-90 ${sx(4.12)} ${sy(-4.2)})` }, 'ELV-1 直通'));
+      g.appendChild(el('text', { x: sx(4.20), y: sy(-6.2), 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 700, fill: '#065f46', transform: `rotate(-90 ${sx(4.20)} ${sy(-6.2)})` }, 'ELV-1 Mk2 (5停止)'));
 
-      const mAttAct = floor.sheetIndex === 7;
+      const mAttAct = floor.sheetIndex === 8;
       g.appendChild(el('polygon', {
         points: `${sx(0)},${sy(10.50)} ${sx(0)},${sy(11.92)} ${sx(2.5)},${sy(13.33)} ${sx(5)},${sy(11.92)} ${sx(5)},${sy(10.50)}`,
         fill: mAttAct ? 'rgba(217, 70, 38, 0.25)' : '#f8f5ef', stroke: '#2c2f36', 'stroke-width': mAttAct ? 1.5 : 0.85,
       }));
-      g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, 'RF'));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, 'RF'));
 
       // 3. Daily Kei-Van (5.6..7.15)
       g.appendChild(el('rect', { x: sx(5.6), y: sy(1.80), width: 1.55 * 9.5, height: sy(0.30) - sy(1.80), fill: isKei ? 'rgba(217,70,38,0.32)' : '#e6ece8', stroke: isKei ? '#b9381c' : '#1d7a8c', 'stroke-width': isKei ? 1.5 : 1.0 }));
-      g.appendChild(el('text', { x: sx(6.38), y: sy(2.8), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: isKei ? '#b9381c' : '#1d7a8c' }, '軽'));
+      g.appendChild(el('text', { x: sx(6.38), y: sy(2.8), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: isKei ? '#b9381c' : '#1d7a8c' }, '軽'));
 
-      // 4. Concrete Warehouse (7.8..9.8)
-      const s1Act = floor.sheetIndex === 12;
-      const s2Act = floor.sheetIndex === 13;
+      // 4. Concrete Warehouse (7.8..9.8) — Sheet Indices 13, 14
+      const s1Act = floor.sheetIndex === 13;
+      const s2Act = floor.sheetIndex === 14;
       g.appendChild(el('rect', { x: sx(7.8), y: sy(2.12), width: 2.0 * 9.5, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.85 }));
       g.appendChild(el('rect', { x: sx(7.8), y: sy(4.28), width: 2.0 * 9.5, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.85 }));
-      g.appendChild(el('text', { x: sx(8.8), y: sy(2.0), 'text-anchor': 'middle', 'font-size': 5.0, fill: '#222' }, '倉庫'));
+      g.appendChild(el('text', { x: sx(8.8), y: sy(2.0), 'text-anchor': 'middle', 'font-size': 4.8, fill: '#222' }, '倉庫'));
 
       // 5. Movable Giant Camper (10.6..13.3)
       g.appendChild(el('rect', { x: sx(10.6), y: sy(3.40), width: 2.7 * 9.5, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.0 }));
-      g.appendChild(el('text', { x: sx(11.95), y: sy(1.6), 'text-anchor': 'middle', 'font-size': 5.2, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
+      g.appendChild(el('text', { x: sx(11.95), y: sy(1.6), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
 
       [
         [13.33, '+13.3m'],
@@ -1770,12 +2092,13 @@ export class ArchitecturalBlueprint2D {
         [0.00, '±0.0m'],
         [-6.60, '-6.6m B2'],
         [-10.20, '-10.2m B3'],
+        [-14.20, '-14.2m B4'],
       ].forEach(([m, txt]) => {
-        g.appendChild(el('text', { x: secX + 276, y: sy(m) + 2.2, 'font-size': 5.8, fill: '#5b5852', 'font-family': 'monospace' }, txt));
+        g.appendChild(el('text', { x: secX + 276, y: sy(m) + 2.0, 'font-size': 5.5, fill: m < -12 ? '#991b1b' : '#5b5852', 'font-weight': m < -12 ? 700 : 400, 'font-family': 'monospace' }, txt));
       });
     }
 
-    // --- JIS Title Block (All 17 Sheets!) ---
+    // --- JIS Title Block (All 18 Sheets!) ---
     const tbX = 394;
     const tbW = VW - tbX - 28;
     g.appendChild(el('rect', { x: tbX, y: baseTop, width: tbW, height: secH, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1 }));
@@ -1783,14 +2106,14 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.6, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 地下3層＋直通ELV ｜ 隣棟 ｜ RC倉庫 ｜ 巨大RV ｜ 軽バン'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.3, 'font-weight': 700, fill: '#9c4722' }, `図面名称 : ${floor.titleJp}`));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.4, fill: '#5b5852' }, '全17図面 : 母屋8層(B3〜RF) ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 巨大RV(W560拡幅) ｜ 軽バン(1/20)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.4, fill: '#0f4c81', 'font-weight': 700 }, '深地下設備 : B2F 10×10m CH3.8m木床&RC鏡スタジオ＋4×6m×2室 ｜ B3F W520通路→ELV-1地上直通'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.4, fill: '#9c4722' }, 'B3F避難施設 : 3.2×12.5m 木造シェルター(シャワー/WC/寝室)＋奥扉 2×6m 食料備蓄倉庫'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.4, fill: '#1d7a8c', 'font-weight': 700 }, '可動車両 : 巨大RV(拡幅W560廊下・14室+2F) ＆ 軽バン KEI-340(1席+進入荷室・相互SAT衝突)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.4, fill: '#1c1e22' }, floor.isDeepB3 ? '縮尺 : B3F平面 1/100 ｜ ELV-1機構縦断面 1/35 ｜ MRLトラクション昇降行程 10,200 mm' : (isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT 厳格衝突判定' : '縮尺 : S = 1/50〜1/100 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地')));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.2, fill: '#6c665d' }, '母屋B3F〜RF＋リアルエレベーター・隣棟・RC倉庫・巨大RV・軽バン 全17図面＆完全一人称探索'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.4, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 地下4層(極秘研)＋ELV Mk2 ｜ 隣棟 ｜ 倉庫 ｜ RV ｜ 軽バン'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.1, 'font-weight': 700, fill: floor.isDeepB4 ? '#991b1b' : '#9c4722' }, `図面名称 : ${floor.titleJp}`));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.3, fill: '#5b5852' }, '全18図面 : 母屋9層(B4極秘研〜RF) ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 巨大RV ｜ 軽バン(1/20)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.2, fill: '#991b1b', 'font-weight': 700 }, 'B4F 極秘研究所 : B3F直下4.0m (-14.2m)・ELV専用(階段なし)・2.7×15.5m CH3.55m 5区画'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.2, fill: '#0f4c81', 'font-weight': 700 }, 'ELV-1 Mk2 昇降機 : 5停止(1F〜B4)・行程14,200mm・7相ジャーク制御・可動ブレーキ・赤外線安全扉'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.2, fill: '#1d7a8c' }, 'B3F木造シェルター＆2×6m食料庫 ｜ B2F 10×10m鏡スタジオ ｜ 巨大RV(W560) ＆ 軽バン KEI-340'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.2, fill: '#1c1e22' }, floor.isDeepB4 ? '縮尺 : B4F平面 1/85 ｜ 縦断面A-A\' 1/55 ｜ 横断面B-B\' 1/20 ｜ 唯一到達 ELV-1' : (floor.isDeepB3 ? '縮尺 : B3F平面 1/100 ｜ ELV-1 Mk2機構縦断面 1/42 ｜ 5停止昇降行程 14,200 mm' : (isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT 厳格衝突判定' : '縮尺 : S = 1/50〜1/100 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.1, fill: '#6c665d' }, '母屋B4F極秘研〜RF＋超精密5停止エレベーター・隣棟・RC倉庫・巨大RV・軽バン 全18図面＆一人称探索'));
 
     svg.appendChild(g);
   }

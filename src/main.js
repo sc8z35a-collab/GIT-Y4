@@ -48,7 +48,7 @@ const tableAreas = document.getElementById('table-areas');
 let mapVisible = false;
 let perfVisible = false;
 let isDriving = false;
-let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 3, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
+let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -85,7 +85,7 @@ const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
 });
 
 function renderFloorAreaTable(sheetIdx) {
-  const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[3];
+  const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[4];
   const isAnnex = fl.building === 'annex';
   const isStorage = fl.building === 'storage';
   const isCamper = fl.building === 'camper';
@@ -93,8 +93,10 @@ function renderFloorAreaTable(sheetIdx) {
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
   let summaryLabel = `${fl.code} フロア計`;
-  if (fl.isDeepB3) {
-    summaryLabel = '地下3階計（W520通路＋ELV-1＋3.2×12.5m木造シェルター＋2×6m食料庫）';
+  if (fl.isDeepB4) {
+    summaryLabel = '地下4階計（ELV専用・階段なし・2.7×15.5m CH3.55m ギャング極秘研究所5区画）';
+  } else if (fl.isDeepB3) {
+    summaryLabel = '地下3階計（W520通路＋5停止ELV-1＋3.2×12.5m木造シェルター＋2×6m食料庫）';
   } else if (fl.isDeepB2) {
     summaryLabel = '地下2階計（10×10m CH3.8mスタジオ＋4×6m 2室＋ELV乗場）';
   } else if (isKei) {
@@ -116,28 +118,32 @@ function renderFloorAreaTable(sheetIdx) {
   } else if (fl.hasBalcony) {
     summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
   }
-  const footprintStr = fl.isDeepB3
-    ? '3200×12500 + 2000×6000'
-    : (fl.isDeepB2
-      ? '10000×10000 + 4000×6000×2'
-      : (isKei
-        ? '1480×3400×H1800'
-        : (isCamper
-          ? '2700×7500×H3400'
-          : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000')))));
-  const grossStr = fl.isDeepB3
-    ? '計 53.34m² (+ELV)'
-    : (fl.isDeepB2
-      ? '計 151.20m²'
-      : (isKei
-        ? '車体床 5.03m²'
-        : (isCamper
-          ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
-          : (isStorage
-            ? '4.00m² (2F延8.0m²)'
-            : (isAnnex
-              ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
-              : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²')))))));
+  const footprintStr = fl.isDeepB4
+    ? '2700×15500 (CH3550)'
+    : (fl.isDeepB3
+      ? '3200×12500 + 2000×6000'
+      : (fl.isDeepB2
+        ? '10000×10000 + 4000×6000×2'
+        : (isKei
+          ? '1480×3400×H1800'
+          : (isCamper
+            ? '2700×7500×H3400'
+            : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000'))))));
+  const grossStr = fl.isDeepB4
+    ? '41.85m² (ELV専用)'
+    : (fl.isDeepB3
+      ? '計 53.34m² (+ELV)'
+      : (fl.isDeepB2
+        ? '計 151.20m²'
+        : (isKei
+          ? '車体床 5.03m²'
+          : (isCamper
+            ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
+            : (isStorage
+              ? '4.00m² (2F延8.0m²)'
+              : (isAnnex
+                ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
+                : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²'))))))));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
@@ -173,13 +179,13 @@ document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
   btn.addEventListener('click', () => selectBlueprintFloor(Number(btn.dataset.floor)));
 });
 
-renderFloorAreaTable(3);
+renderFloorAreaTable(4);
 
 function toggleMap(force = null) {
   mapVisible = force !== null ? force : !mapVisible;
   mapModal.classList.toggle('hidden', !mapVisible);
   btnMap.classList.toggle('active', mapVisible);
-  if (mapVisible) selectBlueprintFloor(lastPose.sheetIndex !== undefined ? lastPose.sheetIndex : (lastPose.floor + 2));
+  if (mapVisible) selectBlueprintFloor(lastPose.sheetIndex !== undefined ? lastPose.sheetIndex : (lastPose.floor + 3));
   if (explorer) explorer.setMapOpen(mapVisible);
 }
 
@@ -231,20 +237,29 @@ function updateElevatorHUD(show, state = {}) {
   if (!show) return;
   elvHudFloorEl.textContent = state.floorCode || 'B3';
   elvHudArrowEl.textContent = state.dir > 0 ? '▲' : (state.dir < 0 ? '▼' : '●');
-  let stText = `${state.floorCode} 待機中`;
-  if (state.phase === 'MOVING') {
-    stText = `${state.dir > 0 ? '上昇中' : '下降中'} ${state.speedMs.toFixed(1)} m/s`;
-  } else if (state.phase === 'CLOSING') {
-    stText = '扉が閉まります…';
-  } else if (state.phase === 'OPENING' || state.phase === 'IDLE_OPEN') {
-    stText = `${state.floorCode} 到着 · 扉開`;
+  const depthStr = state.cabY !== undefined ? `${state.cabY >= 0 ? '±0.0' : state.cabY.toFixed(1)}m` : '';
+  const isMoving = state.phase === 'RUNNING' || state.phase === 'RELEVELING' || state.phase === 'BRAKE_RELEASE';
+  let stText = `${state.floorCode} 待機中 (${depthStr})`;
+  if (state.phase === 'BRAKE_RELEASE') {
+    stText = '電磁ブレーキ解除…';
+  } else if (state.phase === 'RUNNING') {
+    stText = `${state.dir > 0 ? 'S字上昇' : 'S字下降'} ${(state.speedMs || 0).toFixed(1)}m/s (${depthStr})`;
+  } else if (state.phase === 'RELEVELING') {
+    stText = `精密微速着床中 (${depthStr})`;
+  } else if (state.phase === 'DOOR_CLOSING') {
+    stText = '連動扉 閉鎖中…';
+  } else if (state.phase === 'DOOR_OPENING' || state.phase === 'IDLE_OPEN') {
+    stText = `${state.floorCode} 到着 · 扉開 (${depthStr})`;
   }
   elvHudStatusEl.textContent = stText;
 
+  const queuedSet = new Set(state.queuedFloors || []);
   elvFloorBtns.forEach((btn) => {
     const fl = Number(btn.dataset.elvFloor);
-    btn.classList.toggle('current', fl === state.currentStopFloor && state.phase !== 'MOVING');
-    btn.classList.toggle('target', fl === state.targetFloor && (state.phase === 'MOVING' || state.phase === 'CLOSING'));
+    const isTarget = fl === state.targetFloor && (isMoving || state.phase === 'DOOR_CLOSING');
+    btn.classList.toggle('current', fl === state.currentStopFloor && !isMoving);
+    btn.classList.toggle('target', isTarget);
+    btn.classList.toggle('queued', !isTarget && queuedSet.has(fl));
   });
 
   const needCall = !state.inCab && (state.currentStopFloor !== state.playerFloor || state.phase === 'IDLE_CLOSED');

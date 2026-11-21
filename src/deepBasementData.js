@@ -1,27 +1,30 @@
 /**
- * DEEP BASEMENT EXPANSION — B2F STUDIO COMPLEX + B3F WOODEN SHELTER, FOOD VAULT & REAL TRACTION ELEVATOR (ELV-1)
+ * DEEP BASEMENT EXPANSION — B2F STUDIO + B3F WOODEN SHELTER & FOOD VAULT + B4F CLANDESTINE SYNDICATE LAB + HYPER-REALISTIC MRL ELEVATOR (ELV-1)
  *
  * Vertical Stratigraphy (Exact Non-Overlapping Elevations):
  *   - 1F  (floor =  1): baseY =   0.00 m (CH 2.50 m) — Ground Level + ELV-1 Top MRL Traction Hoist & Landing
  *   - B1F (floor =  0): baseY =  -2.40 m (CH 2.02 m) — Grey Cement 3×7m + 3 Storage Rooms + ST_B2 Down + ELV-1 Stop
  *   - B2F (floor = -1): baseY =  -6.60 m (CH 3.80 m!) — Stair Door DB2-0 -> 10m×10m Wood/Concrete/Mirror Studio
  *                                                       + 2 Direct-Connected 4m×6m Rooms (B202, B203) + ST_B3 + ELV-1 Stop
- *   - B3F (floor = -2): baseY = -10.20 m (CH 2.80 m) — W 520mm (1.3× protagonist Ø400mm) Corridor -> ELV-1 Direct to Ground
+ *   - B3F (floor = -2): baseY = -10.20 m (CH 2.80 m) — W 520mm (1.3× protagonist Ø400mm) Corridor -> ELV-1 Stop
  *                                                       + 3.2m×12.5m Warm Wooden Shelter (Lounge, Shower, Toilet, Bedroom)
  *                                                       + Rear Vault Door DB3-FD -> 2.0m×6.0m Food Storage Warehouse
+ *   - B4F (floor = -3): baseY = -14.20 m (CH 3.55 m!) — ELEVATOR-ONLY ACCESS (4.00m below B3F, zero stairs!)
+ *                                                       2.70m×15.50m High-Ceiling Clandestine Gang Research Laboratory
+ *                                                       (5 Longitudinal Vault Zones: Airlock -> Chem Lab -> Cyber Ops -> Fab Lab -> Containment Vault)
  */
 
 export const ELEVATOR = {
   id: 'ELV-1',
-  name: 'MRL ギヤレス・トラクション式エレベーター（地下3階〜地上1階 直通）',
-  // Exact Vertical Hoistway Shaft Footprint penetrating 1F / B1F / B2F / B3F cleanly
+  name: 'MRL ギヤレス・トラクション式 超精密エレベーター（地下4階極秘研〜地上1階 直通・5停止）',
+  // Exact Vertical Hoistway Shaft Footprint penetrating 1F / B1F / B2F / B3F / B4F cleanly (Total shaft H = 18.32 m!)
   shaft: {
     minX: 3.25,
     maxX: 4.85, // W = 1,600 mm
     minZ: 0.85,
     maxZ: 2.65, // D = 1,800 mm
-    pitY: -11.40, // 1,200 mm deep concrete pit with dual helical oil spring buffers
-    topY: 2.70,   // Machine-Room-Less (MRL) gearless traction sheave housing inside 1F headroom (2F untouched!)
+    pitY: -15.60, // 1,400 mm deep reinforced concrete pit below B4F (-14.20m) with dual hydraulic oil buffers + governor tension sheave
+    topY: 2.72,   // Machine-Room-Less (MRL) gearless PM traction machine deck inside 1F headroom (2F untouched!)
   },
   // Cab clear interior box (Walkable inside moving cabGroup!)
   cab: {
@@ -31,7 +34,7 @@ export const ELEVATOR = {
     maxZ: 2.48, // Inner D = 1,460 mm
     height: 2.24,
   },
-  // West-facing Synchronized Center-Opening Sliding Doors (Car Door + Hall Door on all 4 floors)
+  // West-facing Synchronized Center-Opening Sliding Doors (Car Door + Interlocked Hall Door on all 5 floors)
   door: {
     x: 3.25,
     minZ: 1.30,
@@ -39,17 +42,21 @@ export const ELEVATOR = {
     width: 0.90,
     height: 2.10,
   },
-  // 4 Exact Stop Levels (sorted top-to-bottom for COP / HUD button display)
+  // 5 Exact Stop Levels (sorted top-to-bottom for COP / HUD button display)
   stops: [
-    { floor: 1,  code: '1F', short: '1F 地上直通', label: '地上 1階（玄関・森へ直結）', y: 0.00 },
-    { floor: 0,  code: 'B1', short: 'B1F 倉庫',    label: '地下1階（セメント倉庫）',   y: -2.40 },
-    { floor: -1, code: 'B2', short: 'B2F スタジオ', label: '地下2階（10×10m スタジオ）', y: -6.60 },
-    { floor: -2, code: 'B3', short: 'B3F シェルター', label: '地下3階（木造シェルター）', y: -10.20 },
+    { floor: 1,  code: '1F', short: '1F 地上直通',  label: '地上 1階（玄関・森へ直結）',           y: 0.00 },
+    { floor: 0,  code: 'B1', short: 'B1F 倉庫',     label: '地下1階（セメント倉庫）',             y: -2.40 },
+    { floor: -1, code: 'B2', short: 'B2F スタジオ',  label: '地下2階（10×10m スタジオ）',         y: -6.60 },
+    { floor: -2, code: 'B3', short: 'B3F シェルター', label: '地下3階（木造シェルター・食料庫）', y: -10.20 },
+    { floor: -3, code: 'B4', short: 'B4F 極秘研',   label: '地下4階（極秘研究所・ELV専用）',     y: -14.20, classified: true },
   ],
-  maxSpeed: 2.25,   // m/s smooth traction cruise (B3F -> 1F 10.2m in ~5.6s!)
-  accel: 1.45,      // m/s^2 S-curve acceleration/deceleration
-  doorDuration: 1.15,
-  holdDuration: 6.0,
+  maxSpeed: 2.40,    // m/s smooth gearless traction cruise (B4F -> 1F 14.2m smooth S-curve!)
+  accel: 1.35,       // m/s^2 peak S-curve acceleration/deceleration
+  jerk: 2.60,        // m/s^3 true jerk-limited S-curve ramp for authentic passenger ride feel!
+  relevelSpeed: 0.18,// m/s final micro-leveling creep into exact sill flushness (±0.0mm)
+  brakeReleaseDuration: 0.22,
+  doorDuration: 1.20,
+  holdDuration: 7.0,
 };
 
 // Enclosed Concrete Staircase ST_B2: B1F (-2.40m) <-> B2F (-6.60m)
@@ -88,7 +95,7 @@ export const STAIR_B2_B3 = {
 // ＋ 直結 4m×6m 接続2室（B202・B203）＋ リアルエレベーター乗場 ELV-1
 // =========================================================================
 export const FLOOR_B2F = {
-  index: 1, // Blueprint sheet index 1 (Sheet 0=B3F, 1=B2F, 2=B1F, 3=1F...)
+  index: 2, // Blueprint sheet index 2 (Sheet 0=B4F, 1=B3F, 2=B2F, 3=B1F, 4=1F...)
   physicalFloor: -1,
   building: 'main',
   code: 'B2F',
@@ -201,7 +208,7 @@ export const FLOOR_B2F = {
 // ③ 奥の扉 (DB3-FD) の先: 食料備蓄倉庫 (2.0m × 6.0m)
 // =========================================================================
 export const FLOOR_B3F = {
-  index: 0, // Blueprint sheet index 0 (Deepest underground floor!)
+  index: 1, // Blueprint sheet index 1 (Sheet 0=B4F, 1=B3F, 2=B2F...)
   physicalFloor: -2,
   building: 'main',
   code: 'B3F',
@@ -343,3 +350,129 @@ export const FLOOR_B3F = {
     { kind: 'entry', pts: [[3.75, 1.75], [1.60, 1.75], [1.60, 5.80], [0.85, 10.50], [1.60, 14.15], [1.60, 19.25]] },
   ],
 };
+
+// =========================================================================
+// FLOOR -3 — B4F / 地下4階 (B4FL-14,200 = B3Fより正確に4.00m下, CH 3,550 高天井):
+// ★ エレベーター ELV-1 専用到達フロア（階段一切なし・完全独立極秘研究区画）
+// ★ 内法 2.70m × 15.50m (41.85 m²) 細長高天井 ギャング極秘研究所（5段階縦貫ゾーニング）
+//    Zone 1 (B401): ELV-1直結 生体認証エアロック＆除染前室 (2.70 × 2.40m)
+//    Zone 2 (B402): 精密化学・薬理合成ラボ＆ドラフトチャンバー (2.70 × 3.50m)
+//    Zone 3 (B403): 電脳・暗号解析＆サイバー戦術司令区画 (2.70 × 3.30m)
+//    Zone 4 (B404): 精密CNC機械工作＆ガジェット・ドローン試作室 (2.70 × 3.10m)
+//    Zone 5 (B405): 極秘コアサンプル低温封じ込め＆金庫保管室 (2.70 × 2.80m)
+// =========================================================================
+export const FLOOR_B4F = {
+  index: 0, // Blueprint sheet index 0 (Deepest classified floor!)
+  physicalFloor: -3,
+  building: 'main',
+  code: 'B4F',
+  titleJp: '地下4階 平面詳細図・縦断面図（ELV専用・2.7m×15.5m ギャング極秘研究所）',
+  subtitle: 'B4FL-14,200 (B3Fより4.0m下)・階段なしELV-1専用・高天井CH3,550mm・2.7×15.5m細長5区画極秘R&D施設',
+  baseY: -14.20,     // EXACT 4.00 m below B3F (-10.20 m)!
+  ceilingH: 3.55,    // Soaring high-ceiling RC ribbed research vault (450 mm seismic isolation slab beneath B3F!)
+  slabTopY: -10.20,
+  floorLabel: 'B4FL-14200',
+  originX: 0.55,
+  originZ: 0.85,
+  width: 2.70,       // EXACT 2,700 mm clear interior width (X = 0.55 .. 3.25)!
+  depth: 15.50,      // EXACT 15,500 mm clear interior length (Z = 0.85 .. 16.35)!
+  isBasement: true,
+  isDeepB4: true,
+  elevatorOnly: true,
+  rooms: [
+    {
+      id: 'b4_airlock', code: 'B401', floor: -3, nameJp: '① 生体認証エアロック＆除染前室 (ELV専用口)', nameEn: 'Biometric Airlock & Decon Entry',
+      x: 0.55, z: 0.85, w: 2.70, d: 2.40, area: 6.48, jo: 4.00, fl: 'B4FL±0', ch: 'CH3550',
+      floorTex: 'rubber_black_stud', floorName: '帯電防止黒エポキシ＆除染グレーチング',
+      wallName: '耐爆RC打放し＋生体認証スキャナー・防護服ロッカー・緊急洗眼シャワー・CCTV', tint: '#d5dde8', labelPos: [1.90, 2.05],
+      notes: 'エレベーターELV-1のみから直接到達するB4F専用入口。階段一切なし。頭上エアシャワーノズル・虹彩＆掌紋認証端末・組織極秘紋章プレートを装備',
+    },
+    {
+      id: 'b4_chem_lab', code: 'B402', floor: -3, nameJp: '② 精密化学・薬理合成ラボ', nameEn: 'Chemical & Synthesis Lab',
+      x: 0.55, z: 3.35, w: 2.70, d: 3.50, area: 9.45, jo: 5.83, fl: 'B4FL±0', ch: 'CH3550',
+      floorTex: 'tile_grey_stone', floorName: '耐薬品防滑グレーラボ床＋中央ピット溝',
+      wallName: 'SUSドラフトチャンバー・高圧ガスボンベ(N2/Ar/O2)・顕微鏡・遠心分離機・合成式ボード', tint: '#d3e6e4', labelPos: [1.90, 5.10],
+      notes: '西壁に排気ダクト直結ガラスドラフトチャンバー＆蒸留フラスコ群、東壁に耐振石天板ベンチ・光学顕微鏡・遠心分離機・試薬瓶棚・分子合成ホワイトボード',
+    },
+    {
+      id: 'b4_cyber_ops', code: 'B403', floor: -3, nameJp: '③ 電脳解析・暗号＆戦術司令区画', nameEn: 'Cyber Cryptanalysis & Tactical Ops',
+      x: 0.55, z: 6.95, w: 2.70, d: 3.30, area: 8.91, jo: 5.50, fl: 'B4FL±0', ch: 'CH3550',
+      floorTex: 'tile_grey_stone', floorName: '静電対策ラボフロア＋光ファイバー床ピット',
+      wallName: '5画面解析コンソール・42Uサーバーラック3連・オシロスコープ・組織作戦相関ボード', tint: '#d8def0', labelPos: [1.90, 8.60],
+      notes: '主人公の主解析デスク。5画面戦術モニター・暗号解読サーバー群・電子工作はんだステーション・東壁に赤糸と地図のギャング作戦相関ボード＆暗号無線機',
+    },
+    {
+      id: 'b4_fab_lab', code: 'B404', floor: -3, nameJp: '④ 精密CNC工作＆ガジェット試作室', nameEn: 'CNC Fabrication & Gadget Prototyping',
+      x: 0.55, z: 10.35, w: 2.70, d: 3.10, area: 8.37, jo: 5.17, fl: 'B4FL±0', ch: 'CH3550',
+      floorTex: 'concrete_clean', floorName: '重荷重防振コンクリート＋モノレールクレーン下',
+      wallName: '5軸CNCフライス盤・UV光造形3Dプリンタ・ドローン試作台・赤ツールチェスト・戦術装備有孔壁', tint: '#e6dfd4', labelPos: [1.90, 11.90],
+      notes: '天井I形鋼モノレールホイスト直下の重工作区画。CNC加工機・3Dプリンタ・偵察ドローン試作ベンチ・光学機器/ジャマー/セラミック防弾板の壁面試作ラック',
+    },
+    {
+      id: 'b4_vault', code: 'B405', floor: -3, nameJp: '⑤ 極秘コア封じ込め＆低温金庫室', nameEn: 'Classified Core Containment & Cryo Vault',
+      x: 0.55, z: 13.55, w: 2.70, d: 2.80, area: 7.56, jo: 4.67, fl: 'B4FL±0', ch: 'CH3550',
+      floorTex: 'rubber_black_stud', floorName: '耐爆装甲床＋発光インジケータグレーチング',
+      wallName: '回転発光コア封じ込めポッド(-196℃)・超低温冷凍庫(-80℃)・大型ダイヤル金庫・48kWh独立電源', tint: '#e3d5dc', labelPos: [1.90, 14.95],
+      notes: '15.5m細長空間の最奥。装甲扉DB4-4の先に鎮座する極秘研究コア封じ込め装置（稼働切替可能）・超低温保管庫・組織機密金庫・完全オフグリッド48kWh非常電源',
+    },
+  ],
+  walls: [
+    // Reinforced 200mm Subterranean Concrete Blast Shell (Clear Interior: X = 0.55..3.25 [2.70m], Z = 0.85..16.35 [15.50m]!)
+    { id: 'WB4_N', axis: 'h', x1: 0.35, z1: 0.65, x2: 3.45, z2: 0.85, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    { id: 'WB4_S', axis: 'h', x1: 0.35, z1: 16.35, x2: 3.45, z2: 16.55, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    { id: 'WB4_W', axis: 'v', x1: 0.35, z1: 0.85, x2: 0.55, z2: 16.35, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    // East Wall starts at Z = 2.65 because Z = 0.85..2.65 is flush with ELV-1 Shaft Front Wall & Door (X=3.25, Z=1.30..2.20)!
+    { id: 'WB4_E', axis: 'v', x1: 3.25, z1: 2.65, x2: 3.45, z2: 16.35, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+
+    // 4 High-Ceiling Acoustic Glass & Steel Transverse Bulkheads (Z=3.25, 6.85, 10.25, 13.45) with Aligned 960mm Doors along X=1.50..2.46!
+    {
+      id: 'WB4_DIV1', axis: 'h', x1: 0.55, z1: 3.25, x2: 3.25, z2: 3.35, kind: 'int', texA: 'concrete_clean', texB: 'concrete_clean',
+      openings: [
+        { id: 'WB4-G1', type: 'window', pos: 0.65, width: 0.74, height: 1.38, sill: 0.88, label: 'WB4-G1 エアロック観察窓' },
+        { id: 'DB4-1', type: 'door_pocket', pos: 1.50, width: 0.96, height: 2.25, sill: 0, tex: 'door_glass_white', slideDir: -1, label: 'DB4-1 生体認証エアロック気密扉' },
+      ],
+    },
+    {
+      id: 'WB4_DIV2', axis: 'h', x1: 0.55, z1: 6.85, x2: 3.25, z2: 6.95, kind: 'int', texA: 'concrete_clean', texB: 'concrete_clean',
+      openings: [
+        { id: 'WB4-G2', type: 'window', pos: 0.65, width: 0.74, height: 1.38, sill: 0.88, label: 'WB4-G2 化学ラボ防音ガラス窓' },
+        { id: 'DB4-2', type: 'door_pocket', pos: 1.50, width: 0.96, height: 2.25, sill: 0, tex: 'door_glass_white', slideDir: -1, label: 'DB4-2 電脳司令室 防音クリーン扉' },
+      ],
+    },
+    {
+      id: 'WB4_DIV3', axis: 'h', x1: 0.55, z1: 10.25, x2: 3.25, z2: 10.35, kind: 'int', texA: 'concrete_clean', texB: 'concrete_clean',
+      openings: [
+        { id: 'WB4-G3', type: 'window', pos: 0.65, width: 0.74, height: 1.38, sill: 0.88, label: 'WB4-G3 精密工作区画 観察窓' },
+        { id: 'DB4-3', type: 'door_pocket', pos: 1.50, width: 0.96, height: 2.25, sill: 0, tex: 'exterior_siding_grey', slideDir: -1, label: 'DB4-3 試作工作室 鋼製スライディング扉' },
+      ],
+    },
+    {
+      id: 'WB4_DIV4', axis: 'h', x1: 0.55, z1: 13.45, x2: 3.25, z2: 13.55, kind: 'int', texA: 'concrete_pcon', texB: 'concrete_pcon',
+      openings: [
+        { id: 'WB4-G4', type: 'window', pos: 0.68, width: 0.68, height: 1.18, sill: 1.04, label: 'WB4-G4 耐爆強化ガラス覗窓' },
+        { id: 'DB4-4', type: 'door_swing', pos: 1.48, width: 0.98, height: 2.28, sill: 0, tex: 'door_navy', hinge: 'left', swingDir: 1, label: 'DB4-4 極秘コア保管庫 装甲扉' },
+      ],
+    },
+  ],
+  lighting: [
+    { type: 'CL', x: 1.90, z: 2.05, label: 'B401 除染エアロック灯' },
+    { type: 'CL', x: 1.90, z: 5.10, label: 'B402 化学ラボ高演色バー灯' },
+    { type: 'DL', x: 1.90, z: 8.60, label: 'B403 電脳戦術司令スポット' },
+    { type: 'CL', x: 1.90, z: 11.90, label: 'B404 CNC工作高天井リニア灯' },
+    { type: 'PD', x: 1.90, z: 15.00, label: 'B405 コア封じ込め室 警戒・解析灯' },
+  ],
+  outlets: [
+    { x: 0.65, z: 5.10, label: '三相200Vドラフト電源' },
+    { x: 0.65, z: 8.60, label: 'UPS無停電サーバー電源' },
+    { x: 0.65, z: 11.90, label: 'CNC動力200V' },
+    { x: 3.10, z: 15.20, label: '48kWh独立バッテリー幹線' },
+  ],
+  plumbing: [
+    { kind: 'vent', x: 0.78, z: 4.95, label: 'HEPA陰圧排気縦ダクト (15m幹線)' },
+    { kind: 'drain', pts: [[1.96, 1.40], [1.96, 15.60]] },
+  ],
+  flowPaths: [
+    { kind: 'entry', pts: [[3.75, 1.75], [1.96, 1.75], [1.96, 5.10], [1.96, 8.60], [1.96, 11.90], [1.96, 14.55]] },
+  ],
+};
+

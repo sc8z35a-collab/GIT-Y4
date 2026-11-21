@@ -60,7 +60,7 @@ export const KEI = {
 };
 
 export const KEI_PLAN = {
-  index: 16,
+  index: 17,
   physicalFloor: 1,
   building: 'kei',
   code: '軽バン',
