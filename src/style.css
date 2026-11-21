@@ -106,36 +106,58 @@ html, body {
 
 .joy-base {
   position: absolute;
-  width: 118px;
-  height: 118px;
-  margin-left: -59px;
-  margin-top: -59px;
+  width: 152px;
+  height: 152px;
+  margin-left: -76px;
+  margin-top: -76px;
   border-radius: 50%;
-  background: rgba(12, 18, 26, 0.42);
-  border: 1.5px solid rgba(235, 231, 223, 0.25);
-  backdrop-filter: blur(4px);
+  background: rgba(12, 18, 26, 0.50);
+  border: 2px solid rgba(235, 231, 223, 0.34);
+  backdrop-filter: blur(6px);
   pointer-events: none;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.48);
 }
+
+.joy-base-idle {
+  left: max(100px, calc(env(safe-area-inset-left) + 92px)) !important;
+  top: auto !important;
+  bottom: max(32px, calc(env(safe-area-inset-bottom) + 24px));
+  margin-top: 0;
+  opacity: 0.72;
+}
+
+.joy-dir {
+  position: absolute;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(235, 231, 223, 0.45);
+  pointer-events: none;
+  line-height: 1;
+}
+.joy-dir-n { top: 10px; left: 50%; transform: translateX(-50%); }
+.joy-dir-s { bottom: 10px; left: 50%; transform: translateX(-50%); }
+.joy-dir-w { left: 11px; top: 50%; transform: translateY(-50%); }
+.joy-dir-e { right: 11px; top: 50%; transform: translateY(-50%); }
 
 .joy-sprint-ring {
   position: absolute;
-  inset: 8px;
+  inset: 10px;
   border-radius: 50%;
-  border: 1px dashed rgba(240, 173, 94, 0.32);
+  border: 1.5px dashed rgba(240, 173, 94, 0.40);
 }
 
 .joy-knob {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 46px;
-  height: 46px;
-  margin-left: -23px;
-  margin-top: -23px;
+  width: 64px;
+  height: 64px;
+  margin-left: -32px;
+  margin-top: -32px;
   border-radius: 50%;
-  background: rgba(235, 231, 223, 0.32);
-  border: 1.5px solid rgba(240, 173, 94, 0.72);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  background: rgba(235, 231, 223, 0.38);
+  border: 2px solid rgba(240, 173, 94, 0.85);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
   transition: transform 0.04s linear;
 }
 
@@ -162,10 +184,10 @@ html, body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 22px;
-  height: 22px;
-  margin-left: -11px;
-  margin-top: -11px;
+  width: 24px;
+  height: 24px;
+  margin-left: -12px;
+  margin-top: -12px;
   border-radius: 50%;
   border: 1.5px solid var(--amber);
   opacity: 0;
@@ -183,26 +205,27 @@ html, body {
   transform: scale(1);
 }
 
-/* Interaction Prompt */
+/* Enlarged Tactile Interaction Prompt */
 .interact-prompt {
   position: absolute;
   left: 50%;
-  top: calc(50% + 28px);
+  top: calc(50% + 32px);
   transform: translateX(-50%);
   z-index: 12;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 13px;
+  gap: 10px;
+  padding: 11px 22px;
   border-radius: 999px;
   background: var(--glass-strong);
-  border: 1px solid var(--border-warm);
+  border: 1.5px solid var(--border-warm);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
   letter-spacing: 0.03em;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.52);
   cursor: pointer;
 }
 
@@ -210,14 +233,14 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 6px;
   background: var(--amber);
   color: #14100a;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -239,8 +262,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 11px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
   background: var(--glass);
   border: 1px solid var(--border);
   backdrop-filter: blur(10px);
@@ -251,27 +274,27 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
   background: rgba(240, 173, 94, 0.24);
   border: 1px solid var(--border-warm);
   color: #ffe3b8;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
 
 .room-code {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--amber);
   letter-spacing: 0.06em;
 }
 
 .room-name {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.03em;
@@ -282,7 +305,7 @@ html, body {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 7px;
   pointer-events: auto;
 }
 
@@ -291,10 +314,10 @@ html, body {
   background: var(--glass);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 7px;
   backdrop-filter: blur(10px);
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
@@ -325,7 +348,7 @@ html, body {
 /* Optional POCO F7 Telemetry Pill */
 .perf-panel {
   position: absolute;
-  top: calc(max(14px, env(safe-area-inset-top)) + 44px);
+  top: calc(max(14px, env(safe-area-inset-top)) + 50px);
   right: max(16px, env(safe-area-inset-right));
   width: 248px;
   padding: 10px 12px;
@@ -360,14 +383,165 @@ html, body {
   font-weight: 600;
 }
 
-/* Mobile Right-Thumb Ergonomic Action Cluster */
+/* Ultra-Precision Real Elevator ELV-1 Large-Button Operating Panel HUD */
+.elevator-hud {
+  position: absolute;
+  left: 50%;
+  bottom: max(54px, calc(env(safe-area-inset-bottom) + 42px));
+  transform: translateX(-50%);
+  width: min(468px, calc(100vw - 28px));
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(8, 13, 20, 0.90);
+  border: 1.5px solid rgba(240, 173, 94, 0.58);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.68);
+  z-index: 17;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.elv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.elv-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #0b1410;
+  background: #38e89e;
+  padding: 3px 9px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+}
+
+.elv-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  border-radius: 7px;
+  background: #06090e;
+  border: 1px solid rgba(245, 176, 65, 0.45);
+  font-family: var(--font-mono);
+}
+
+.elv-arrow {
+  font-size: 14px;
+  color: #38e89e;
+}
+
+.elv-display strong {
+  font-size: 20px;
+  line-height: 1;
+  color: #f5b041;
+  letter-spacing: 0.06em;
+}
+
+.elv-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: #dce4ee;
+}
+
+.elv-floor-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.elv-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 58px;
+  padding: 6px 4px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(235, 231, 223, 0.28);
+  background: rgba(24, 34, 48, 0.85);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: transform 0.1s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.elv-btn:active {
+  transform: scale(0.96);
+}
+
+.elv-btn-code {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.elv-btn-sub {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(235, 231, 223, 0.78);
+}
+
+.elv-btn-ground {
+  border-color: rgba(56, 232, 158, 0.65);
+  background: rgba(16, 78, 56, 0.68);
+}
+
+.elv-btn-ground .elv-btn-code {
+  color: #6ef7be;
+}
+
+.elv-btn.target {
+  border-color: #f5b041;
+  background: rgba(245, 176, 65, 0.28);
+  box-shadow: 0 0 16px rgba(245, 176, 65, 0.45);
+}
+
+.elv-btn.current {
+  border-color: #38e89e;
+  box-shadow: 0 0 12px rgba(56, 232, 158, 0.35);
+}
+
+.elv-door-row {
+  display: flex;
+  gap: 8px;
+}
+
+.elv-door-btn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 9px;
+  border: 1.5px solid rgba(235, 231, 223, 0.26);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.elv-door-call {
+  background: rgba(56, 232, 158, 0.24);
+  border-color: rgba(56, 232, 158, 0.75);
+  color: #c8ffe6;
+}
+
+/* Enlarged Mobile Right-Thumb Ergonomic Action Cluster (POCO F7) */
 .mobile-actions {
   display: none;
   position: absolute;
   right: max(18px, env(safe-area-inset-right));
-  bottom: max(22px, env(safe-area-inset-bottom));
+  bottom: max(26px, env(safe-area-inset-bottom));
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 14px;
   z-index: 14;
 }
 
@@ -381,27 +555,31 @@ html, body {
 }
 
 .mob-btn {
-  width: 58px;
-  height: 58px;
+  width: 78px;
+  height: 78px;
   border-radius: 50%;
-  border: 1px solid rgba(235, 231, 223, 0.25);
-  background: rgba(10, 16, 24, 0.66);
+  border: 2px solid rgba(235, 231, 223, 0.32);
+  background: rgba(10, 16, 24, 0.76);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   cursor: pointer;
 }
 
 .mob-btn.active,
 .mob-btn-primary {
-  background: rgba(240, 173, 94, 0.28);
+  width: 86px;
+  height: 86px;
+  font-size: 15px;
+  background: rgba(240, 173, 94, 0.34);
   border-color: var(--amber);
   color: #fff2db;
 }
 
-/* Minimal Whisper Camper Driving HUD */
+/* Minimal Whisper Camper & Kei Driving HUD (Enlarged Tactile Buttons) */
 .drive-hud {
   position: absolute;
   left: 50%;
@@ -412,10 +590,10 @@ html, body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
-  padding: 7px 13px;
+  padding: 9px 16px;
   border-radius: 999px;
   background: var(--glass-strong);
-  border: 1px solid var(--border-warm);
+  border: 1.5px solid var(--border-warm);
   backdrop-filter: blur(10px);
   z-index: 16;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
@@ -428,12 +606,12 @@ html, body {
 
 .drive-badge {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: #14100a;
   background: var(--amber);
-  padding: 2px 7px;
+  padding: 3px 9px;
   border-radius: 999px;
 }
 
@@ -452,25 +630,25 @@ html, body {
 }
 
 .drive-speed strong {
-  font-size: 17px;
+  font-size: 19px;
   line-height: 1;
   color: #fff3da;
-  min-width: 24px;
+  min-width: 26px;
   text-align: right;
 }
 
 .drive-speed span {
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--ink-muted);
 }
 
 .drive-collision-tag {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   color: #ffdad8;
   background: rgba(220, 53, 69, 0.42);
   border: 1px solid rgba(255, 118, 117, 0.65);
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: 999px;
 }
 
@@ -478,30 +656,30 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--ink-muted);
 }
 
 .drive-keys kbd {
   display: inline-block;
-  padding: 0 5px;
+  padding: 1px 6px;
   border-radius: 3px;
   background: rgba(235, 231, 223, 0.14);
   border: 1px solid rgba(235, 231, 223, 0.24);
   color: var(--ink);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 10.5px;
   margin-right: 2px;
 }
 
 .drive-btn {
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   background: rgba(255, 255, 255, 0.08);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  padding: 4px 10px;
+  padding: 8px 16px;
   border-radius: 999px;
   cursor: pointer;
 }
@@ -666,6 +844,18 @@ html, body {
 .floor-tab.active {
   background: #9c4722;
   border-color: #9c4722;
+  color: #fff;
+}
+
+.floor-tab-deep {
+  border-color: rgba(15, 76, 129, 0.50);
+  background: #edf4fb;
+  color: #0f3d68;
+}
+
+.floor-tab-deep.active {
+  background: #0f4c81;
+  border-color: #0b3a63;
   color: #fff;
 }
 

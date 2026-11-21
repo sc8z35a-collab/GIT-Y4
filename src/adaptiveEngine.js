@@ -40,9 +40,22 @@ export class AdaptiveMobileEngine {
     this.shadowUpdatesThisSec++;
   }
 
-  snapFloorLights(floorIdx, activeBuilding = 'main') {
+  snapFloorLights(floorIdx, activeBuilding = 'main', inElevator = false) {
+    const elvStop = this.house.elevator ? this.house.elevator.currentStopFloor : -2;
     for (const entry of this.house.interiorLights) {
       const b = entry.light.userData.building || 'main';
+      if (b === 'elevator') {
+        const activeElv = inElevator || (activeBuilding === 'main' && floorIdx <= 1 && (floorIdx === elvStop));
+        entry.light.intensity = activeElv ? entry.baseInt : 0;
+        entry.light.visible = activeElv;
+        continue;
+      }
+      if (inElevator) {
+        const activeNear = b === 'main' && entry.floor === floorIdx && (entry.zone === 'north' || entry.zone === 'elv' || entry.zone === 'studio' || entry.zone === 'living');
+        entry.light.intensity = activeNear ? entry.baseInt * 0.9 : 0;
+        entry.light.visible = activeNear;
+        continue;
+      }
       const sameBuilding = b === 'both'
         || b === activeBuilding
         || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard'));
@@ -96,10 +109,14 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * 5-Unit Spatial Portal Light Culler (Main 8-Level 6-Story Tower + Annex 4-Level + Concrete Storage 2-Level + Vehicles):
+   * 5-Unit + 10-Level Main Tower (B3F..6F+RF) Spatial Portal Light Culler:
    * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant on POCO F7!
    */
-  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', doorOpenMap = {}, propStates }) {
+  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', inElevator = false, doorOpenMap = {}, propStates }) {
+    const elv = this.house.elevator;
+    const elvStop = elv ? elv.currentStopFloor : -2;
+    const elvOpenHere = Boolean(elv && elv.currentStopFloor === currentFloor && elv.doorProgress > 0.15);
+
     for (const entry of this.house.interiorLights) {
       if (entry.name === 'Tatami_Lantern' && !propStates.lantern_1f) {
         entry.light.intensity = 0;
@@ -140,7 +157,16 @@ export class AdaptiveMobileEngine {
       const b = entry.light.userData.building || 'main';
       let weight = 0.0;
 
-      if (b === 'both') {
+      if (b === 'elevator') {
+        // Elevator cab interior LED ceiling light: glows whenever player is inside cab OR doors are open on player's floor!
+        if (inElevator) weight = 1.0;
+        else if (activeBuilding === 'main' && currentFloor <= 1 && (elvOpenHere || currentFloor === elvStop)) weight = 0.85;
+      } else if (inElevator) {
+        // Enclosed steel cab optimization (strictly <= 5 active GPU lights on POCO F7 at all stops!)
+        if (b === 'main' && entry.floor === currentFloor && (entry.zone === 'north' || entry.zone === 'elv' || entry.zone === 'studio' || entry.zone === 'living')) {
+          weight = elvOpenHere ? 0.95 : 0.35;
+        }
+      } else if (b === 'both') {
         weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
       } else if (activeBuilding === 'courtyard') {
         // Outdoors in the compound courtyard: keep strictly <= 7 GPU lights active on POCO F7!
@@ -159,7 +185,11 @@ export class AdaptiveMobileEngine {
           weight = 0.72; // Soaring 3.02m central skylight atrium illuminates both 1F & 2F Loft bridge!
         } else if (b === 'camper' && currentFloor === 1 && entry.floor === 2) {
           weight = 0.30;
-        } else if (activeFlight !== null && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
+        } else if (activeFlight === 'st_b2' && (entry.floor === 0 || entry.floor === -1)) {
+          weight = entry.zone === 'studio' || entry.zone === 'north' || entry.zone === 'south' ? 0.72 : 0.25;
+        } else if (activeFlight === 'st_b3' && (entry.floor === -1 || entry.floor === -2)) {
+          weight = entry.zone === 'studio' || entry.zone === 'bedroom' || entry.zone === 'living' ? 0.72 : 0.25;
+        } else if (typeof activeFlight === 'number' && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
           weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' || entry.zone === 'south' || entry.zone === 'exterior' ? 0.65 : 0.12;
         } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
           weight = 0.20;

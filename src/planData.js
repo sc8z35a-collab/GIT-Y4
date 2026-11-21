@@ -137,9 +137,19 @@ const FLOOR_B1F = {
   walls: [
     // Subterranean Grey Cement Retaining Envelope (Z=2.85..10.00 + Stair shaft Z=2.30..2.85)
     { id: 'WB_N_ST', axis: 'h', x1: 0, z1: 2.30, x2: 1.25, z2: 2.45, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_pcon', openings: [] },
-    { id: 'WB_N_MAIN', axis: 'h', x1: 1.15, z1: 2.70, x2: 5.00, z2: 2.85, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_pcon', openings: [] },
+    {
+      id: 'WB_N_MAIN', axis: 'h', x1: 1.15, z1: 2.70, x2: 5.00, z2: 2.85, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_pcon',
+      openings: [
+        { id: 'OPB-ELV', type: 'opening', pos: 2.05, width: 1.00, height: 1.94, sill: 0, label: 'B1F ELV-1前室開口' },
+      ],
+    },
     { id: 'WB_S', axis: 'h', x1: 0, z1: 9.85, x2: 5.00, z2: 10.00, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_pcon', openings: [] },
-    { id: 'WB_W', axis: 'v', x1: 0, z1: 2.45, x2: 0.15, z2: 9.85, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_pcon', openings: [] },
+    {
+      id: 'WB_W', axis: 'v', x1: 0, z1: 2.45, x2: 0.15, z2: 9.85, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_pcon',
+      openings: [
+        { id: 'OPB-ST2', type: 'opening', pos: 5.55, width: 0.90, height: 1.94, sill: 0, label: 'B2F下り階段室開口 (ST_B2)' },
+      ],
+    },
     { id: 'WB_E', axis: 'v', x1: 4.85, z1: 2.85, x2: 5.00, z2: 9.85, kind: 'ext', extTex: 'concrete_clean', intTex: 'concrete_clean', openings: [] },
     // Concrete Stair Core Wall
     { id: 'WB_ST_E', axis: 'v', x1: 1.15, z1: 2.45, x2: 1.25, z2: 5.15, kind: 'int', texA: 'concrete_cedar_form', texB: 'concrete_pcon', openings: [] },
@@ -157,7 +167,7 @@ const FLOOR_B1F = {
     { id: 'WB_DIV2', axis: 'h', x1: 3.25, z1: 7.45, x2: 4.85, z2: 7.55, kind: 'int', texA: 'concrete_clean', texB: 'concrete_clean', openings: [] },
   ],
   stairUp: { id: 'ST0', label: 'UP 1Fへ (13段)', dir: 'north' },
-  stairDown: null,
+  stairDown: { id: 'ST_B2', label: 'DN B2Fスタジオへ (18段)', dir: 'south' },
   lighting: [
     { type: 'BL', x: 1.75, z: 5.65, label: 'BL-B01 地下薄明バルクヘッド' },
     { type: 'BL', x: 1.75, z: 8.55, label: 'BL-B02 地下奥薄明作業灯' },
@@ -1938,49 +1948,70 @@ const STORAGE_2F = {
 
 import { CAMPER, CAMPER_SHEETS } from './camperData.js';
 import { KEI, KEI_PLAN } from './keiData.js';
-export { CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN };
+import { ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F } from './deepBasementData.js';
+export { CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F };
 
 export const FLOORS = [FLOOR_B1F, FLOOR_1F, FLOOR_2F, FLOOR_3F, FLOOR_4F, FLOOR_5F, FLOOR_6F, FLOOR_RF];
 export const ANNEX_FLOORS = [ANNEX_1F, ANNEX_2F, ANNEX_3F, ANNEX_ATTIC];
 export const STORAGE_FLOORS = [STORAGE_1F, STORAGE_2F];
 export const SHEET_OFFSETS = {
-  main: 0,
-  annex: FLOORS.length,
-  storage: FLOORS.length + ANNEX_FLOORS.length,
-  camper: FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length,
-  kei: FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length,
+  deepBase: 0,
+  main: 2,
+  annex: 2 + FLOORS.length,
+  storage: 2 + FLOORS.length + ANNEX_FLOORS.length,
+  camper: 2 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length,
+  kei: 2 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length,
 };
-export const BLUEPRINT_SHEETS = [...FLOORS, ...ANNEX_FLOORS, ...STORAGE_FLOORS, ...CAMPER_SHEETS, KEI_PLAN];
+
+export function getFloorByPhysicalIndex(f) {
+  if (f === -2) return FLOOR_B3F;
+  if (f === -1) return FLOOR_B2F;
+  return FLOORS[f] || FLOORS[HOUSE.spawnFloor];
+}
+
+// 19 Comprehensive JIS CAD Blueprint Sheets (0=B3F, 1=B2F, 2=B1F, 3=1F..8=6F, 9=RF, 10..13=Annex, 14..15=Storage, 16..17=Camper, 18=Kei)
+export const BLUEPRINT_SHEETS = [
+  FLOOR_B3F,
+  FLOOR_B2F,
+  ...FLOORS,
+  ...ANNEX_FLOORS,
+  ...STORAGE_FLOORS,
+  ...CAMPER_SHEETS,
+  KEI_PLAN,
+];
+BLUEPRINT_SHEETS.forEach((s, i) => {
+  s.sheetIndex = i;
+});
+
 export const ALL_ROOMS = BLUEPRINT_SHEETS.flatMap((f) => f.rooms);
 export const ROOMS = FLOOR_1F.rooms;
 export const WALLS = FLOOR_1F.walls;
 
 export const FINISH_SCHEDULE = [
   { floor: '外部', room: '基礎・SRC外壁・制振ブレース・森道', floorTex: 'paver_moss_stones', floorName: '苔石アプローチ・中庭小径・コンクリート歩道', wallTex: 'yakisugi_deep', wallName: '深焼杉板・漆喰・SRC鉄骨帯・制振ブレース・RC打放(倉庫)', accentTex: 'stone_moss_wall', accentName: '苔石基礎・避雷針マスト・木鉄パーゴラ' },
-  { floor: '母屋B1F', room: '地下3×7m主空間＋倉庫3室', floorTex: 'concrete_clean', floorName: '金鏝押え灰色セメント土間', wallTex: 'concrete_pcon', wallName: '灰色RC打放擁壁 (CH2,020)', accentTex: 'metal_grate', accentName: '排水溝・倉庫棚15基' },
-  { floor: '母屋1〜3F', room: '玄関・LDK・書斎・茶室・バー', floorTex: 'wood_floor', floorName: '白テラゾー / オーク / 琉球畳', wallTex: 'wood_slats', wallName: '杉板RC・赤煉瓦・セージ漆喰', accentTex: 'marble_black', accentName: '黒大理石バー・和紙障子' },
+  { floor: '母屋B3F', room: '木造シェルター(3.2×12.5m)＋食料倉庫(2×6m)＋W520通路', floorTex: 'wood_floor', floorName: '無垢ヒノキ＆オーク温もり床 / 防滑鋼板 / 保冷コンクリート', wallTex: 'wood_slats', wallName: '天然杉羽目板・シャワー浴室タイル・RC保冷壁', accentTex: 'crate_wood', accentName: '地上直通ELV-1・シャワー/WC/寝室・備蓄棚＆冷凍庫' },
+  { floor: '母屋B2F', room: '大空間スタジオ(10×10m CH3.8m)＋4×6m接続2室', floorTex: 'wood_floor', floorName: '無垢オークダンス床 / ウォールナット / 寄木', wallTex: 'concrete_pcon', wallName: 'Pコン打放RC擁壁＋大型全面スタジオミラー＆木製バー', accentTex: 'wood_slats', accentName: '防音録音コントロール室・音響バッフル・ELV乗場' },
+  { floor: '母屋B1F', room: '地下3×7m主空間＋倉庫3室＋B2F下り階段', floorTex: 'concrete_clean', floorName: '金鏝押え灰色セメント土間', wallTex: 'concrete_pcon', wallName: '灰色RC打放擁壁 (CH2,020)', accentTex: 'metal_grate', accentName: '排水溝・倉庫棚15基・ELV前室' },
+  { floor: '母屋1〜3F', room: '玄関・ELV地上乗場・LDK・書斎・茶室・バー', floorTex: 'wood_floor', floorName: '白テラゾー / オーク / 琉球畳', wallTex: 'wood_slats', wallName: '杉板RC・赤煉瓦・セージ漆喰・ELVステンレス枠', accentTex: 'marble_black', accentName: 'ELV-1地上直通口・黒大理石バー・和紙障子' },
   { floor: '母屋4F', room: 'プロ監修5室＋1×2m南東バルコニー', floorTex: 'parquet_oak', floorName: 'オーク / ウォールナット / ウッドデッキ', wallTex: 'travertine', wallName: 'トラバーチン・縦木格子 (CH2,150)', accentTex: 'wood_deck', accentName: '1×2m樹冠バルコニー・全引戸' },
   { floor: '母屋5F', room: '建築模型工房・檜サウナ展望風呂・ボタニカル温室', floorTex: 'terrazzo_emerald', floorName: '白テラゾー / オーク寄木 / 檜スノコ / 緑テラゾー', wallTex: 'green_wall', wallName: 'PコンRC・檜羽目板・濡御影石・緑化壁 (CH2,550)', accentTex: 'wood_deck', accentName: '1.0×2.6m西外気浴デッキ・1/50模型' },
   { floor: '母屋6F', room: '天空ペントハウス・赤道儀天文サロン・珈琲バー', floorTex: 'wood_walnut_floor', floorName: 'ウォールナット / 琉球畳 / 黒大理石 / 市松石', wallTex: 'marble_black', wallName: '白漆喰・スレートブルー・古暗煉瓦・SRC梁現し (CH2,650)', accentTex: 'metal_bronze', accentName: '4.6×1.1m全幅スカイテラス・望遠鏡・吊暖炉' },
   { floor: '母屋RF', room: '6寸勾配屋根裏部屋 (地上16.1〜18.9m)', floorTex: 'tatami_aged', floorName: '防滑ゴム / 古杉板 / 古畳', wallTex: 'plywood_attic', wallName: '構造合板6寸勾配天井・レトロ花柄妻壁', accentTex: 'crate_wood', accentName: '現し棟木・吊りランタン・避雷針' },
-  { floor: '隣棟1〜2F', room: '離れ(5×8m) カフェLDK・書庫・畳・寝室', floorTex: 'wood_walnut_floor', floorName: '御影石 / 白テラゾー / ウォールナット / 畳', wallTex: 'brick_red_classic', wallName: 'PコンRC・赤煉瓦・セージ漆喰・花柄', accentTex: 'fabric_denim', accentName: 'デニムソファ・カフェキッチン' },
-  { floor: '隣棟3F', room: '離れ3F 6室＋1×1.6mバルコニー×3', floorTex: 'parquet_oak', floorName: 'オーク寄木 / カーペット / 琉球畳 / デッキ', wallTex: 'brick_cream', wallName: 'トラバーチン・クリーム煉瓦・セージ漆喰', accentTex: 'wood_deck', accentName: '北・西・南 3方向バルコニー' },
-  { floor: '隣棟屋根裏', room: '離れ屋根裏 全5部屋（6寸勾配）', floorTex: 'wood_scratched_cedar', floorName: '古杉板 / 寄木 / 古畳 / スタッドゴム', wallTex: 'plywood_attic', wallName: '構造合板切妻勾配天井・有孔ボード', accentTex: 'crate_wood', accentName: '現し垂木・木箱・和紙ランタン' },
+  { floor: '隣棟1〜RF', room: '離れ(5×8m) 3F 6室+3バルコニー+5室屋根裏', floorTex: 'parquet_oak', floorName: '御影石 / ウォールナット / 寄木 / 古畳', wallTex: 'brick_red_classic', wallName: 'PコンRC・赤煉瓦・トラバーチン・合板6寸勾配', accentTex: 'wood_deck', accentName: '北・西・南3方向バルコニー・和紙ランタン' },
   { floor: '倉庫棟1〜2F', room: '別棟2×2m 灰色RC倉庫（計4室）', floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート', wallTex: 'concrete_pcon', wallName: '低天井コンクリート固め (CH1,920)', accentTex: 'metal_grate', accentName: '外鉄骨階段・スチール棚・鋼製扉' },
-  { floor: 'RV 1F', room: '巨大キャンピングカー1F 全14室＋極狭廊下', floorTex: 'wood_walnut_floor', floorName: 'ウォールナット / 防滑ゴム / 浴室タイル', wallTex: 'exterior_siding_grey', wallName: '断熱装甲FRP外装・木縦格子・装甲シェルター', accentTex: 'tile_emerald_gloss', accentName: '高天井CH3,020天窓・W460廊下' },
-  { floor: 'RV 2F', room: '巨大キャンピングカー2F ロフト2室＋ブリッジ', floorTex: 'carpet_beige', floorName: '防音ベージュカーペット / 琉球半帖畳', wallTex: 'plywood_attic', wallName: '構造合板ロフト内装・上部パノラマ窓', accentTex: 'wood_walnut_floor', accentName: '強化ガラス手摺吹抜・STC1梯子' },
+  { floor: 'RV 1F〜2F', room: '巨大キャンピングカー(2.7×7.5×3.4m・W560拡幅廊下)', floorTex: 'wood_walnut_floor', floorName: 'ウォールナット / カーペット / 琉球半帖畳', wallTex: 'exterior_siding_grey', wallName: '断熱装甲FRP外装・1F全14室＋2Fロフト2室', accentTex: 'tile_emerald_gloss', accentName: '高天井CH3,020天窓・拡幅W560廊下' },
   { floor: '軽バン', room: '日常使い軽自動車(3.40×1.48×1.80m・1席+荷室)', floorTex: 'rubber_black_stud', floorName: '荷室防滑リブゴム＋コンパネ合板下地', wallTex: 'panel_white_vert', wallName: '商用アイボリー鋼板外装・合板DIY内張', accentTex: 'crate_wood', accentName: 'RHD1席のみ・DIY2段棚・オリコン' },
 ];
 
 export const OPENING_SCHEDULE = [
-  { code: 'DB-1〜3 / ST0〜6', kind: '母屋 地下鉄扉・7層積層階段コア', size: 'W750〜1000', spec: '母屋 B1F↔1F↔2F↔3F↔4F↔5F↔6F↔屋根裏(8層) 連続積層直階段＆RC耐震コア' },
+  { code: 'ELV-1 (B3↔1F)', kind: 'MRL ギヤレス・トラクション式エレベーター', size: 'W900×H2100 (昇降10.2m)', spec: '両開き連動ステンレス扉・4本ワイヤー・釣合重り・油圧緩衝器・大型発光盤' },
+  { code: 'ST_B2 / ST_B3 / DB2-0', kind: '深地下階段室＆スタジオ・シェルター扉群', size: 'W900〜1150×H2100〜2300', spec: 'ST_B2(18段)→DB2-0(10×10スタジオ)・DB2-1/2(4×6室)・DB3-FD(食料庫気密扉)' },
+  { code: 'DB-1〜3 / ST0〜6', kind: '母屋 地下鉄扉・7層積層階段コア', size: 'W750〜1000', spec: '母屋 B1F↔1F↔2F↔3F↔4F↔5F↔6F↔屋根裏(10層塔屋) 連続積層直階段＆SRC耐震コア' },
   { code: 'D5-1〜5 / W5-1〜9', kind: '母屋 5F全引戸＋西外気浴デッキ戸', size: 'W740〜1050×H2100', spec: '設計工房・檜サウナ・展望風呂・温室全引戸＋西1.0×2.6mスパデッキ掃出ガラス引戸' },
   { code: 'D6-1〜5 / W6-1〜8', kind: '母屋 6F全引戸＋全幅スカイテラス戸', size: 'W760〜1100×H2200', spec: '星見畳障子・天空パウダー・ワインセラー・天文サロン全引戸＋南4.6×1.1m全幅テラス戸' },
-  { code: 'DA-1〜4 / STA1〜3', kind: '隣棟 1〜2F建具・3層積層階段', size: 'W780〜1000', spec: 'オーク玄関扉(DA-1)・STA1〜STA3(1F↔2F↔3F↔屋根裏)' },
-  { code: 'DA3-1〜6 / B1〜3', kind: '隣棟 3F全引戸＋3バルコニー戸', size: 'W720〜960×H2020', spec: '6部屋全引戸＋北/西/南 1×1.6mバルコニー掃出ガラス引戸×3' },
-  { code: 'DAR-1〜5', kind: '隣棟 屋根裏 5部屋引戸', size: 'W720〜740×H1740', spec: '6寸勾配小屋裏対応 ローハイト引戸×5（全5室独立アクセス）' },
+  { code: 'DA-1〜4 / STA1〜3 / DAR', kind: '隣棟 全建具・3層積層階段・3バルコニー戸', size: 'W720〜1000', spec: '3F全6室引戸＋3方向1×1.6mバルコニー掃出＋屋根裏5室引戸' },
   { code: 'DS-1〜22 / STS1', kind: 'コンクリート倉庫棟 鋼製扉・外階段', size: 'W700〜720×H1760', spec: '低天井RC倉庫 1F/2F外開鋼製扉・間仕切鉄引戸・外鉄骨階段(11段)' },
-  { code: 'DC-1〜14 / STC1', kind: '巨大キャンピングカー全15扉・ロフト梯子', size: 'W460〜580×H1880', spec: '外開RV扉(DC-1)・14室全引戸(装甲扉DC-10含む)・STC1ロフト階段(9段)' },
+  { code: 'DC-1〜14 / STC1', kind: '巨大キャンピングカー全15扉・ロフト梯子', size: 'W520〜580×H1880', spec: '外開RV扉(DC-1)・14室全引戸(拡幅W560廊下対応)・STC1ロフト階段(9段)' },
   { code: 'DK-D / DK-L / DK-R', kind: '日常使い軽バン 運転席扉・スライド・跳上ハッチ', size: 'W800〜1180×H1300', spec: '右運転席外開(DK-D)・左外スライド荷室扉(DK-L)・リア跳上ハッチ(DK-R)' },
 ];
 

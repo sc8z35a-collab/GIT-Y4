@@ -30,6 +30,15 @@ const driveCollisionTagEl = document.getElementById('drive-collision-tag');
 const btnDriveLights = document.getElementById('btn-drive-lights');
 const btnDriveExit = document.getElementById('btn-drive-exit');
 
+const elvHudEl = document.getElementById('elevator-hud');
+const elvHudFloorEl = document.getElementById('elv-hud-floor');
+const elvHudArrowEl = document.getElementById('elv-hud-arrow');
+const elvHudStatusEl = document.getElementById('elv-hud-status');
+const elvFloorBtns = Array.from(document.querySelectorAll('.elv-btn[data-elv-floor]'));
+const elvBtnCall = document.getElementById('elv-btn-call');
+const elvBtnOpen = document.getElementById('elv-btn-open');
+const elvBtnClose = document.getElementById('elv-btn-close');
+
 const mapModal = document.getElementById('map-modal');
 const blueprintMount = document.getElementById('blueprint-mount');
 const roomDetailBar = document.getElementById('room-detail-bar');
@@ -39,7 +48,7 @@ const tableAreas = document.getElementById('table-areas');
 let mapVisible = false;
 let perfVisible = false;
 let isDriving = false;
-let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: HOUSE.spawnFloor, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
+let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 3, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -76,7 +85,7 @@ const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
 });
 
 function renderFloorAreaTable(sheetIdx) {
-  const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[HOUSE.spawnFloor];
+  const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[3];
   const isAnnex = fl.building === 'annex';
   const isStorage = fl.building === 'storage';
   const isCamper = fl.building === 'camper';
@@ -84,12 +93,16 @@ function renderFloorAreaTable(sheetIdx) {
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
   let summaryLabel = `${fl.code} フロア計`;
-  if (isKei) {
+  if (fl.isDeepB3) {
+    summaryLabel = '地下3階計（W520通路＋ELV-1＋3.2×12.5m木造シェルター＋2×6m食料庫）';
+  } else if (fl.isDeepB2) {
+    summaryLabel = '地下2階計（10×10m CH3.8mスタジオ＋4×6m 2室＋ELV乗場）';
+  } else if (isKei) {
     summaryLabel = '軽バン計（1席＋進入可能フル荷室 3.52m³）';
   } else if (isCamper) {
     summaryLabel = fl.camperLevel === 2
       ? 'RV 2Fロフト計（2室＋連絡ブリッジ・吹抜CH3.02m）'
-      : 'RV 1F計（全14室＋極狭W460廊下＋高天井CH3.02m）';
+      : 'RV 1F計（全14室＋拡幅W560廊下＋高天井CH3.02m）';
   } else if (isStorage) {
     summaryLabel = `${fl.code}計（RC倉庫 2×2m・低天井2階建 計4室）`;
   } else if (isAnnex) {
@@ -97,7 +110,7 @@ function renderFloorAreaTable(sheetIdx) {
     else if (fl.isAttic) summaryLabel = '隣棟屋根裏計（全5室・6寸勾配小屋裏）';
     else summaryLabel = `${fl.code}計（隣棟 5×8m 3階建＋屋根裏）`;
   } else if (fl.isBasement) {
-    summaryLabel = '地下1階計 (3×7m主空間 + 倉庫3室・棚15基)';
+    summaryLabel = '地下1階計 (3×7m主空間 + 倉庫3室・棚15基 + ST_B2 + ELV-1)';
   } else if (fl.isAttic) {
     summaryLabel = '母屋屋根裏計 (地上16.1m〜18.9m / 有効 28.5m²)';
   } else if (fl.hasBalcony6F) {
@@ -107,28 +120,36 @@ function renderFloorAreaTable(sheetIdx) {
   } else if (fl.hasBalcony) {
     summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
   }
-  const footprintStr = isKei
-    ? '1480×3400×H1800'
-    : (isCamper
-      ? '2700×7500×H3400'
-      : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000')));
-  const grossStr = isKei
-    ? '車体床 5.03m²'
-    : (isCamper
-      ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
-      : (isStorage
-        ? '4.00m² (2F延8.0m²)'
-        : (isAnnex
-          ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
-          : (fl.isBasement
-            ? '31.88m²'
-            : (fl.isAttic
-              ? '有効 28.50m²'
-              : (fl.hasBalcony6F
-                ? '50.00m² + T5.06m²'
-                : (fl.hasBalcony5F
-                  ? '50.00m² + B2.60m²'
-                  : (fl.hasBalcony ? '50.00m² + B2.00m²' : '50.00m²'))))))));
+  const footprintStr = fl.isDeepB3
+    ? '3200×12500 + 2000×6000'
+    : (fl.isDeepB2
+      ? '10000×10000 + 4000×6000×2'
+      : (isKei
+        ? '1480×3400×H1800'
+        : (isCamper
+          ? '2700×7500×H3400'
+          : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000')))));
+  const grossStr = fl.isDeepB3
+    ? '計 53.34m² (+ELV)'
+    : (fl.isDeepB2
+      ? '計 151.20m²'
+      : (isKei
+        ? '車体床 5.03m²'
+        : (isCamper
+          ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
+          : (isStorage
+            ? '4.00m² (2F延8.0m²)'
+            : (isAnnex
+              ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
+              : (fl.isBasement
+                ? '31.88m²'
+                : (fl.isAttic
+                  ? '有効 28.50m²'
+                  : (fl.hasBalcony6F
+                    ? '50.00m² + T5.06m²'
+                    : (fl.hasBalcony5F
+                      ? '50.00m² + B2.60m²'
+                      : (fl.hasBalcony ? '50.00m² + B2.00m²' : '50.00m²'))))))))));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
@@ -164,13 +185,13 @@ document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
   btn.addEventListener('click', () => selectBlueprintFloor(Number(btn.dataset.floor)));
 });
 
-renderFloorAreaTable(HOUSE.spawnFloor);
+renderFloorAreaTable(3);
 
 function toggleMap(force = null) {
   mapVisible = force !== null ? force : !mapVisible;
   mapModal.classList.toggle('hidden', !mapVisible);
   btnMap.classList.toggle('active', mapVisible);
-  if (mapVisible) selectBlueprintFloor(lastPose.sheetIndex !== undefined ? lastPose.sheetIndex : lastPose.floor);
+  if (mapVisible) selectBlueprintFloor(lastPose.sheetIndex !== undefined ? lastPose.sheetIndex : (lastPose.floor + 2));
   if (explorer) explorer.setMapOpen(mapVisible);
 }
 
@@ -217,6 +238,31 @@ function updateDriveHUD(driving, state = {}) {
   }
 }
 
+function updateElevatorHUD(show, state = {}) {
+  elvHudEl.classList.toggle('hidden', !show);
+  if (!show) return;
+  elvHudFloorEl.textContent = state.floorCode || 'B3';
+  elvHudArrowEl.textContent = state.dir > 0 ? '▲' : (state.dir < 0 ? '▼' : '●');
+  let stText = `${state.floorCode} 待機中`;
+  if (state.phase === 'MOVING') {
+    stText = `${state.dir > 0 ? '上昇中' : '下降中'} ${state.speedMs.toFixed(1)} m/s`;
+  } else if (state.phase === 'CLOSING') {
+    stText = '扉が閉まります…';
+  } else if (state.phase === 'OPENING' || state.phase === 'IDLE_OPEN') {
+    stText = `${state.floorCode} 到着 · 扉開`;
+  }
+  elvHudStatusEl.textContent = stText;
+
+  elvFloorBtns.forEach((btn) => {
+    const fl = Number(btn.dataset.elvFloor);
+    btn.classList.toggle('current', fl === state.currentStopFloor && state.phase !== 'MOVING');
+    btn.classList.toggle('target', fl === state.targetFloor && (state.phase === 'MOVING' || state.phase === 'CLOSING'));
+  });
+
+  const needCall = !state.inCab && (state.currentStopFloor !== state.playerFloor || state.phase === 'IDLE_CLOSED');
+  elvBtnCall.classList.toggle('hidden', !needCall);
+}
+
 let explorer = null;
 try {
   explorer = new FirstPersonHouseExplorer(canvas3dEl, {
@@ -242,6 +288,7 @@ try {
       if (aim) interactLabelEl.textContent = aim.prompt;
     },
     onDriveChange: (driving, state) => updateDriveHUD(driving, state),
+    onElevatorChange: (show, state) => updateElevatorHUD(show, state),
     onFlashlightChange: (on) => {
       btnFlash.classList.toggle('active', on);
       mobFlash.classList.toggle('active', on);
@@ -284,6 +331,13 @@ mobInteract.addEventListener('click', () => explorer && explorer.interact());
 btnDriveLights.addEventListener('click', () => explorer && explorer.toggleVehicleHeadlights());
 btnDriveExit.addEventListener('click', () => explorer && explorer.interact());
 
+elvFloorBtns.forEach((btn) => {
+  btn.addEventListener('click', () => explorer && explorer.selectElevatorFloor(Number(btn.dataset.elvFloor)));
+});
+elvBtnCall.addEventListener('click', () => explorer && explorer.callElevator(explorer.currentFloor));
+elvBtnOpen.addEventListener('click', () => explorer && explorer.openElevatorDoors());
+elvBtnClose.addEventListener('click', () => explorer && explorer.closeElevatorDoors());
+
 const joyZone = document.getElementById('joy-zone');
 const joyBase = document.getElementById('joy-base');
 const joyKnob = document.getElementById('joy-knob');
@@ -291,7 +345,7 @@ const lookZone = document.getElementById('look-zone');
 
 let joyTouchId = null;
 let joyOrigin = { x: 0, y: 0 };
-const JOY_MAX_R = 46;
+const JOY_MAX_R = 60;
 
 joyZone.addEventListener('pointerdown', (e) => {
   if (mapVisible || joyTouchId !== null || !explorer) return;
@@ -299,9 +353,9 @@ joyZone.addEventListener('pointerdown', (e) => {
   joyZone.setPointerCapture(e.pointerId);
   const rect = joyZone.getBoundingClientRect();
   joyOrigin = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  joyBase.classList.remove('joy-base-idle');
   joyBase.style.left = `${joyOrigin.x}px`;
   joyBase.style.top = `${joyOrigin.y}px`;
-  joyBase.classList.remove('hidden');
   joyKnob.style.transform = 'translate(0px, 0px)';
 });
 
@@ -323,7 +377,8 @@ joyZone.addEventListener('pointermove', (e) => {
 function releaseJoy(e) {
   if (e.pointerId !== joyTouchId) return;
   joyTouchId = null;
-  joyBase.classList.add('hidden');
+  joyKnob.style.transform = 'translate(0px, 0px)';
+  joyBase.classList.add('joy-base-idle');
   if (explorer) explorer.setVirtualMove(0, 0, false);
 }
 joyZone.addEventListener('pointerup', releaseJoy);
@@ -407,6 +462,11 @@ document.getElementById('table-openings').innerHTML = `
 
 const params = new URLSearchParams(window.location.search);
 if (explorer) {
+  if (params.has('elvFloor')) {
+    const ef = Number(params.get('elvFloor'));
+    const eOpen = params.get('elvDoors') !== 'closed';
+    if (!Number.isNaN(ef)) explorer.snapElevator(ef, eOpen);
+  }
   if (params.get('camperPose')) {
     const [cx, cz, cyaw] = params.get('camperPose').split(',').map(Number);
     if (!Number.isNaN(cx) && !Number.isNaN(cz)) {
@@ -443,6 +503,10 @@ if (explorer) {
     if (!Number.isNaN(x) && !Number.isNaN(z)) explorer.setPose(x, z, yaw, pitch, floorParam);
   } else if (floorParam !== null && !Number.isNaN(floorParam)) {
     explorer.setPose(1.62, 6.25, Math.PI - 0.24, -0.04, floorParam);
+  }
+  if (params.has('elvMidY')) {
+    const my = Number(params.get('elvMidY'));
+    if (!Number.isNaN(my)) explorer.snapElevatorMidShaft(my, 1);
   }
   if (params.get('doors') === 'open') explorer.openDoors();
   if (params.get('drive') === '1') explorer.toggleCamperDrive(true);

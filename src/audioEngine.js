@@ -227,4 +227,95 @@ export class SpatialForestAudio {
     osc.start(t);
     osc.stop(t + 0.17);
   }
+
+  playElevatorButton() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1180, t);
+    g.gain.setValueAtTime(0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.09);
+  }
+
+  playElevatorDoor(isOpening = true) {
+    if (!this.ctx || this.muted || !this.noiseBuf) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    const filt = this.ctx.createBiquadFilter();
+    const g = this.ctx.createGain();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(isOpening ? 340 : 480, t);
+    filt.frequency.linearRampToValueAtTime(isOpening ? 520 : 260, t + 0.95);
+    filt.Q.value = 3.6;
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.055, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.05);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.ctx.destination);
+    src.start(t, Math.random() * 1.2, 1.08);
+  }
+
+  playElevatorChime() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    // Authentic Japanese two-tone elevator arrival chime ("ピンポーン♪": C6 -> G5)
+    [[1046.5, 0.0, 0.45], [784.0, 0.28, 0.72]].forEach(([freq, delay, dur]) => {
+      const osc = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc2.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + delay);
+      osc2.frequency.setValueAtTime(freq * 2.0, t + delay);
+      g.gain.setValueAtTime(0.001, t + delay);
+      g.gain.linearRampToValueAtTime(0.085, t + delay + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + delay + dur);
+      const g2 = this.ctx.createGain();
+      g2.gain.value = 0.22;
+      osc.connect(g);
+      osc2.connect(g2);
+      g2.connect(g);
+      g.connect(this.ctx.destination);
+      osc.start(t + delay);
+      osc2.start(t + delay);
+      osc.stop(t + delay + dur + 0.02);
+      osc2.stop(t + delay + dur + 0.02);
+    });
+  }
+
+  updateElevatorMotor(moving, speedNorm = 0) {
+    if (!this.ctx || this.muted) {
+      if (this.elvGain && this.ctx) {
+        this.elvGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.12);
+      }
+      return;
+    }
+    if (!this.elvOsc) {
+      this.elvOsc = this.ctx.createOscillator();
+      this.elvOsc.type = 'triangle';
+      this.elvOsc.frequency.value = 110;
+      this.elvFilt = this.ctx.createBiquadFilter();
+      this.elvFilt.type = 'lowpass';
+      this.elvFilt.frequency.value = 280;
+      this.elvGain = this.ctx.createGain();
+      this.elvGain.gain.value = 0.0;
+      this.elvOsc.connect(this.elvFilt);
+      this.elvFilt.connect(this.elvGain);
+      this.elvGain.connect(this.ctx.destination);
+      this.elvOsc.start();
+    }
+    const t = this.ctx.currentTime;
+    const s = Math.max(0, Math.min(1, speedNorm));
+    this.elvGain.gain.setTargetAtTime(moving ? (0.018 + s * 0.036) : 0.0, t, 0.12);
+    this.elvOsc.frequency.setTargetAtTime(86 + s * 138, t, 0.10);
+    this.elvFilt.frequency.setTargetAtTime(220 + s * 360, t, 0.10);
+  }
 }
