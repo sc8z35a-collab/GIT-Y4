@@ -234,13 +234,59 @@ export class SpatialForestAudio {
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(1180, t);
-    g.gain.setValueAtTime(0.06, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc.frequency.setValueAtTime(1240, t);
+    g.gain.setValueAtTime(0.055, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
     osc.connect(g);
     g.connect(this.ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.09);
+    osc.stop(t + 0.085);
+  }
+
+  playElevatorBrake(engaging = false) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    // Heavy metallic electromagnetic disc brake solenoid CLUNK + steel housing resonance
+    const body = this.ctx.createOscillator();
+    const bg = this.ctx.createGain();
+    body.type = 'triangle';
+    body.frequency.setValueAtTime(engaging ? 92 : 114, t);
+    body.frequency.exponentialRampToValueAtTime(34, t + 0.14);
+    bg.gain.setValueAtTime(0.11, t);
+    bg.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    body.connect(bg);
+    bg.connect(this.ctx.destination);
+    body.start(t);
+    body.stop(t + 0.17);
+
+    const clack = this.ctx.createOscillator();
+    const cg = this.ctx.createGain();
+    clack.type = 'square';
+    clack.frequency.setValueAtTime(engaging ? 440 : 620, t);
+    clack.frequency.exponentialRampToValueAtTime(140, t + 0.035);
+    cg.gain.setValueAtTime(0.035, t);
+    cg.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+    clack.connect(cg);
+    cg.connect(this.ctx.destination);
+    clack.start(t);
+    clack.stop(t + 0.045);
+  }
+
+  playElevatorSafetyBeep() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    [0, 0.12].forEach((delay) => {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1560, t + delay);
+      g.gain.setValueAtTime(0.06, t + delay);
+      g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.08);
+      osc.connect(g);
+      g.connect(this.ctx.destination);
+      osc.start(t + delay);
+      osc.stop(t + delay + 0.09);
+    });
   }
 
   playElevatorDoor(isOpening = true) {
@@ -251,23 +297,26 @@ export class SpatialForestAudio {
     const filt = this.ctx.createBiquadFilter();
     const g = this.ctx.createGain();
     filt.type = 'bandpass';
-    filt.frequency.setValueAtTime(isOpening ? 340 : 480, t);
-    filt.frequency.linearRampToValueAtTime(isOpening ? 520 : 260, t + 0.95);
-    filt.Q.value = 3.6;
+    filt.frequency.setValueAtTime(isOpening ? 320 : 510, t);
+    filt.frequency.linearRampToValueAtTime(isOpening ? 540 : 250, t + 1.05);
+    filt.Q.value = 3.8;
     g.gain.setValueAtTime(0.001, t);
-    g.gain.linearRampToValueAtTime(0.055, t + 0.12);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 1.05);
+    g.gain.linearRampToValueAtTime(0.052, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.12);
     src.connect(filt);
     filt.connect(g);
     g.connect(this.ctx.destination);
-    src.start(t, Math.random() * 1.2, 1.08);
+    src.start(t, Math.random() * 1.2, 1.15);
   }
 
-  playElevatorChime() {
+  playElevatorChime(dir = 1) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
-    // Authentic Japanese two-tone elevator arrival chime ("ピンポーン♪": C6 -> G5)
-    [[1046.5, 0.0, 0.45], [784.0, 0.28, 0.72]].forEach(([freq, delay, dur]) => {
+    // Direction-specific authentic Japanese arrival chime (UP: bright G5->C6, DOWN: deep A5->E5)
+    const notes = dir >= 0
+      ? [[784.0, 0.0, 0.36], [1046.5, 0.24, 0.72]]
+      : [[880.0, 0.0, 0.38], [659.25, 0.26, 0.76]];
+    notes.forEach(([freq, delay, dur]) => {
       const osc = this.ctx.createOscillator();
       const osc2 = this.ctx.createOscillator();
       const g = this.ctx.createGain();
@@ -279,7 +328,7 @@ export class SpatialForestAudio {
       g.gain.linearRampToValueAtTime(0.085, t + delay + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0008, t + delay + dur);
       const g2 = this.ctx.createGain();
-      g2.gain.value = 0.22;
+      g2.gain.value = 0.20;
       osc.connect(g);
       osc2.connect(g2);
       g2.connect(g);
@@ -296,26 +345,42 @@ export class SpatialForestAudio {
       if (this.elvGain && this.ctx) {
         this.elvGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.12);
       }
+      if (this.elvPwmGain && this.ctx) {
+        this.elvPwmGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.12);
+      }
       return;
     }
     if (!this.elvOsc) {
+      // Layer 1: Low gearless permanent-magnet traction torque hum
       this.elvOsc = this.ctx.createOscillator();
       this.elvOsc.type = 'triangle';
-      this.elvOsc.frequency.value = 110;
+      this.elvOsc.frequency.value = 76;
       this.elvFilt = this.ctx.createBiquadFilter();
       this.elvFilt.type = 'lowpass';
-      this.elvFilt.frequency.value = 280;
+      this.elvFilt.frequency.value = 260;
       this.elvGain = this.ctx.createGain();
       this.elvGain.gain.value = 0.0;
       this.elvOsc.connect(this.elvFilt);
       this.elvFilt.connect(this.elvGain);
       this.elvGain.connect(this.ctx.destination);
       this.elvOsc.start();
+
+      // Layer 2: Authentic VVVF Inverter PWM Carrier Harmonic Sweep!
+      this.elvPwmOsc = this.ctx.createOscillator();
+      this.elvPwmOsc.type = 'sine';
+      this.elvPwmOsc.frequency.value = 340;
+      this.elvPwmGain = this.ctx.createGain();
+      this.elvPwmGain.gain.value = 0.0;
+      this.elvPwmOsc.connect(this.elvPwmGain);
+      this.elvPwmGain.connect(this.ctx.destination);
+      this.elvPwmOsc.start();
     }
     const t = this.ctx.currentTime;
     const s = Math.max(0, Math.min(1, speedNorm));
-    this.elvGain.gain.setTargetAtTime(moving ? (0.018 + s * 0.036) : 0.0, t, 0.12);
-    this.elvOsc.frequency.setTargetAtTime(86 + s * 138, t, 0.10);
-    this.elvFilt.frequency.setTargetAtTime(220 + s * 360, t, 0.10);
+    this.elvGain.gain.setTargetAtTime(moving ? (0.016 + s * 0.036) : 0.0, t, 0.10);
+    this.elvOsc.frequency.setTargetAtTime(68 + s * 118, t, 0.08);
+    this.elvFilt.frequency.setTargetAtTime(190 + s * 360, t, 0.08);
+    this.elvPwmGain.gain.setTargetAtTime(moving ? (0.004 + s * 0.012) : 0.0, t, 0.10);
+    this.elvPwmOsc.frequency.setTargetAtTime(340 + s * 740, t, 0.08);
   }
 }

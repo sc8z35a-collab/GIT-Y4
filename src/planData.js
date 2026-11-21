@@ -1948,29 +1948,31 @@ const STORAGE_2F = {
 
 import { CAMPER, CAMPER_SHEETS } from './camperData.js';
 import { KEI, KEI_PLAN } from './keiData.js';
-import { ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F } from './deepBasementData.js';
-export { CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F };
+import { ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F } from './deepBasementData.js';
+export { CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F };
 
 export const FLOORS = [FLOOR_B1F, FLOOR_1F, FLOOR_2F, FLOOR_3F, FLOOR_4F, FLOOR_5F, FLOOR_6F, FLOOR_RF];
 export const ANNEX_FLOORS = [ANNEX_1F, ANNEX_2F, ANNEX_3F, ANNEX_ATTIC];
 export const STORAGE_FLOORS = [STORAGE_1F, STORAGE_2F];
 export const SHEET_OFFSETS = {
   deepBase: 0,
-  main: 2,
-  annex: 2 + FLOORS.length,
-  storage: 2 + FLOORS.length + ANNEX_FLOORS.length,
-  camper: 2 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length,
-  kei: 2 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length,
+  main: 3,
+  annex: 3 + FLOORS.length,
+  storage: 3 + FLOORS.length + ANNEX_FLOORS.length,
+  camper: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length,
+  kei: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length,
 };
 
 export function getFloorByPhysicalIndex(f) {
+  if (f === -3) return FLOOR_B4F;
   if (f === -2) return FLOOR_B3F;
   if (f === -1) return FLOOR_B2F;
   return FLOORS[f] || FLOORS[HOUSE.spawnFloor];
 }
 
-// 19 Comprehensive JIS CAD Blueprint Sheets (0=B3F, 1=B2F, 2=B1F, 3=1F..8=6F, 9=RF, 10..13=Annex, 14..15=Storage, 16..17=Camper, 18=Kei)
+// 20 Comprehensive JIS CAD Blueprint Sheets (0=B4F, 1=B3F, 2=B2F, 3=B1F, 4=1F..9=6F, 10=RF, 11..14=Annex, 15..16=Storage, 17..18=Camper, 19=Kei)
 export const BLUEPRINT_SHEETS = [
+  FLOOR_B4F,
   FLOOR_B3F,
   FLOOR_B2F,
   ...FLOORS,
@@ -1989,7 +1991,8 @@ export const WALLS = FLOOR_1F.walls;
 
 export const FINISH_SCHEDULE = [
   { floor: '外部', room: '基礎・SRC外壁・制振ブレース・森道', floorTex: 'paver_moss_stones', floorName: '苔石アプローチ・中庭小径・コンクリート歩道', wallTex: 'yakisugi_deep', wallName: '深焼杉板・漆喰・SRC鉄骨帯・制振ブレース・RC打放(倉庫)', accentTex: 'stone_moss_wall', accentName: '苔石基礎・避雷針マスト・木鉄パーゴラ' },
-  { floor: '母屋B3F', room: '木造シェルター(3.2×12.5m)＋食料倉庫(2×6m)＋W520通路', floorTex: 'wood_floor', floorName: '無垢ヒノキ＆オーク温もり床 / 防滑鋼板 / 保冷コンクリート', wallTex: 'wood_slats', wallName: '天然杉羽目板・シャワー浴室タイル・RC保冷壁', accentTex: 'crate_wood', accentName: '地上直通ELV-1・シャワー/WC/寝室・備蓄棚＆冷凍庫' },
+  { floor: '母屋B4F', room: 'ELV専用 ギャング極秘研究所 (2.7×15.5m・CH3.55m 5区画)', floorTex: 'rubber_black_stud', floorName: '帯電防止黒エポキシ / 耐薬品ラボ床 / 防振RC＆中央ピット溝', wallTex: 'concrete_pcon', wallName: '耐爆RCリブ構造・SUS腰壁・防音ガラス隔壁・HEPAダクト＆天井クレーン', accentTex: 'metal_grate', accentName: 'ドラフト・5画面司令卓・42Uサーバー・CNC・回転コア封じ込めポッド' },
+  { floor: '母屋B3F', room: '木造シェルター(3.2×12.5m)＋食料倉庫(2×6m)＋W520通路', floorTex: 'wood_floor', floorName: '無垢ヒノキ＆オーク温もり床 / 防滑鋼板 / 保冷コンクリート', wallTex: 'wood_slats', wallName: '天然杉羽目板・シャワー浴室タイル・RC保冷壁', accentTex: 'crate_wood', accentName: '5停止直通ELV-1・シャワー/WC/寝室・備蓄棚＆冷凍庫' },
   { floor: '母屋B2F', room: '大空間スタジオ(10×10m CH3.8m)＋4×6m接続2室', floorTex: 'wood_floor', floorName: '無垢オークダンス床 / ウォールナット / 寄木', wallTex: 'concrete_pcon', wallName: 'Pコン打放RC擁壁＋大型全面スタジオミラー＆木製バー', accentTex: 'wood_slats', accentName: '防音録音コントロール室・音響バッフル・ELV乗場' },
   { floor: '母屋B1F', room: '地下3×7m主空間＋倉庫3室＋B2F下り階段', floorTex: 'concrete_clean', floorName: '金鏝押え灰色セメント土間', wallTex: 'concrete_pcon', wallName: '灰色RC打放擁壁 (CH2,020)', accentTex: 'metal_grate', accentName: '排水溝・倉庫棚15基・ELV前室' },
   { floor: '母屋1〜3F', room: '玄関・ELV地上乗場・LDK・書斎・茶室・バー', floorTex: 'wood_floor', floorName: '白テラゾー / オーク / 琉球畳', wallTex: 'wood_slats', wallName: '杉板RC・赤煉瓦・セージ漆喰・ELVステンレス枠', accentTex: 'marble_black', accentName: 'ELV-1地上直通口・黒大理石バー・和紙障子' },
@@ -2004,9 +2007,10 @@ export const FINISH_SCHEDULE = [
 ];
 
 export const OPENING_SCHEDULE = [
-  { code: 'ELV-1 (B3↔1F)', kind: 'MRL ギヤレス・トラクション式エレベーター', size: 'W900×H2100 (昇降10.2m)', spec: '両開き連動ステンレス扉・4本ワイヤー・釣合重り・油圧緩衝器・大型発光盤' },
-  { code: 'ST_B2 / ST_B3 / DB2-0', kind: '深地下階段室＆スタジオ・シェルター扉群', size: 'W900〜1150×H2100〜2300', spec: 'ST_B2(18段)→DB2-0(10×10スタジオ)・DB2-1/2(4×6室)・DB3-FD(食料庫気密扉)' },
-  { code: 'DB-1〜3 / ST0〜6', kind: '母屋 地下鉄扉・7層積層階段コア', size: 'W750〜1000', spec: '母屋 B1F↔1F↔2F↔3F↔4F↔5F↔6F↔屋根裏(10層塔屋) 連続積層直階段＆SRC耐震コア' },
+  { code: 'ELV-1 (B4↔1F)', kind: '超精密 MRL ギヤレス・トラクション式エレベーター', size: 'W900×H2100 (昇降14.2m)', spec: '5停止(B4F極秘研専用直結)・ジャーク制限S字制御・微速着床・電磁ブレーキ可動・テールコード・光電安全幕' },
+  { code: 'DB4-1〜4 / WB4-G1〜4', kind: 'B4F 極秘研究所 気密・防音・耐爆装甲隔壁建具', size: 'W960〜980×H2250〜2280', spec: '生体認証エアロック扉・クリーン引戸・鋼製工作扉・装甲金庫室扉＋観察強化ガラス' },
+  { code: 'ST_B2 / ST_B3 / DB2-0', kind: '深地下階段室＆スタジオ・シェルター扉群', size: 'W900〜1150×H2100〜2300', spec: 'ST_B2(18段)→DB2-0(10×10スタジオ)・DB2-1/2(4×6室)・DB3-FD(食料庫気密扉)※B4Fへは階段なし' },
+  { code: 'DB-1〜3 / ST0〜6', kind: '母屋 地下鉄扉・7層積層階段コア', size: 'W750〜1000', spec: '母屋 B1F↔1F↔2F↔3F↔4F↔5F↔6F↔屋根裏(11層塔屋) 連続積層直階段＆SRC耐震コア' },
   { code: 'D5-1〜5 / W5-1〜9', kind: '母屋 5F全引戸＋西外気浴デッキ戸', size: 'W740〜1050×H2100', spec: '設計工房・檜サウナ・展望風呂・温室全引戸＋西1.0×2.6mスパデッキ掃出ガラス引戸' },
   { code: 'D6-1〜5 / W6-1〜8', kind: '母屋 6F全引戸＋全幅スカイテラス戸', size: 'W760〜1100×H2200', spec: '星見畳障子・天空パウダー・ワインセラー・天文サロン全引戸＋南4.6×1.1m全幅テラス戸' },
   { code: 'DA-1〜4 / STA1〜3 / DAR', kind: '隣棟 全建具・3層積層階段・3バルコニー戸', size: 'W720〜1000', spec: '3F全6室引戸＋3方向1×1.6mバルコニー掃出＋屋根裏5室引戸' },
@@ -2014,6 +2018,7 @@ export const OPENING_SCHEDULE = [
   { code: 'DC-1〜14 / STC1', kind: '巨大キャンピングカー全15扉・ロフト梯子', size: 'W520〜580×H1880', spec: '外開RV扉(DC-1)・14室全引戸(拡幅W560廊下対応)・STC1ロフト階段(9段)' },
   { code: 'DK-D / DK-L / DK-R', kind: '日常使い軽バン 運転席扉・スライド・跳上ハッチ', size: 'W800〜1180×H1300', spec: '右運転席外開(DK-D)・左外スライド荷室扉(DK-L)・リア跳上ハッチ(DK-R)' },
 ];
+
 
 
 

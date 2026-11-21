@@ -33,8 +33,8 @@ export function buildHouse3D(scene) {
   exteriorGroup.name = 'DeepForestExterior';
   root.add(exteriorGroup);
 
-  // 10 Main Tower levels: -2=B3F, -1=B2F, 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=5F, 6=6F, 7=RF/Attic
-  const collidersByFloor = { '-2': [], '-1': [], 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
+  // 11 Main Tower levels: -3=B4F, -2=B3F, -1=B2F, 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=5F, 6=6F, 7=RF/Attic
+  const collidersByFloor = { '-3': [], '-2': [], '-1': [], 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
   const treeColliders = [];
   const boulderColliders = [];
   const interactiveDoors = [];
@@ -2304,18 +2304,19 @@ export function buildHouse3D(scene) {
   });
 
   // =========================================================================
-  // 10c. DEEP BASEMENT EXPANSION (B2F 10×10m STUDIO + B3F WOODEN SHELTER + FOOD VAULT)
+  // 10c. DEEP BASEMENT EXPANSION (B2F 10×10m STUDIO + B3F WOODEN SHELTER + B4F SECRET GANG LAB)
   // =========================================================================
   const deepBasement = buildDeepBasement3D({
     scene,
     mat,
     addCollider,
     addInteractiveDoor,
+    interactiveProps,
     interiorLights,
   });
 
   // =========================================================================
-  // 10d. ULTRA-REALISTIC MECHANICAL MRL TRACTION ELEVATOR (ELV-1: B3F <-> 1F GROUND)
+  // 10d. HYPER-REALISTIC MECHANICAL MRL TRACTION ELEVATOR (ELV-1 Mk2: B4F <-> 1F GROUND)
   // =========================================================================
   const elevator = buildElevator3D({
     scene,
@@ -2324,9 +2325,9 @@ export function buildHouse3D(scene) {
     interiorLights,
   });
 
-  // Strict Elevator Hoistway & Cab Inner Perimeter Colliders across all 4 stop floors (-2=B3F, -1=B2F, 0=B1F, 1=1F)
+  // Strict Elevator Hoistway & Cab Inner Perimeter Colliders across all 5 stop floors (-3=B4F, -2=B3F, -1=B2F, 0=B1F, 1=1F)
   // Leaves Z = 1.30..2.20 at X = 3.16..3.34 dynamically gated by live elevator door synchronization in scene3d.js!
-  [-2, -1, 0, 1].forEach((fl) => {
+  [-3, -2, -1, 0, 1].forEach((fl) => {
     addCollider(fl, 3.14, 0.72, 4.98, 1.00); // North shaft/cab wall
     addCollider(fl, 3.14, 2.50, 4.98, 2.78); // South shaft/cab wall
     addCollider(fl, 4.58, 0.72, 4.98, 2.78); // East cab rear wall (protects CWT track!)
@@ -2379,6 +2380,7 @@ export function buildHouse3D(scene) {
     camper,
     kei,
     elevator,
+    b4Lab: deepBasement.b4Lab,
     batchStats: combinedBatchStats,
   };
 }

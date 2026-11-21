@@ -389,10 +389,10 @@ html, body {
   left: 50%;
   bottom: max(54px, calc(env(safe-area-inset-bottom) + 42px));
   transform: translateX(-50%);
-  width: min(468px, calc(100vw - 28px));
+  width: min(516px, calc(100vw - 24px));
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(8, 13, 20, 0.90);
+  background: rgba(8, 13, 20, 0.92);
   border: 1.5px solid rgba(240, 173, 94, 0.58);
   backdrop-filter: blur(12px);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.68);
@@ -444,15 +444,16 @@ html, body {
 }
 
 .elv-status {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: #dce4ee;
+  white-space: nowrap;
 }
 
 .elv-floor-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
 }
 
 .elv-btn {
@@ -462,7 +463,7 @@ html, body {
   justify-content: center;
   gap: 2px;
   min-height: 58px;
-  padding: 6px 4px;
+  padding: 6px 3px;
   border-radius: 10px;
   border: 1.5px solid rgba(235, 231, 223, 0.28);
   background: rgba(24, 34, 48, 0.85);
@@ -478,13 +479,13 @@ html, body {
 
 .elv-btn-code {
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   line-height: 1.1;
 }
 
 .elv-btn-sub {
-  font-size: 10.5px;
+  font-size: 9.8px;
   font-weight: 600;
   color: rgba(235, 231, 223, 0.78);
 }
@@ -498,10 +499,25 @@ html, body {
   color: #6ef7be;
 }
 
+.elv-btn-classified {
+  border-color: rgba(248, 113, 113, 0.70);
+  background: rgba(88, 16, 28, 0.76);
+}
+
+.elv-btn-classified .elv-btn-code {
+  color: #fca5a5;
+}
+
+.elv-btn.queued {
+  border-color: #38bdf8;
+  background: rgba(14, 116, 144, 0.42);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.42);
+}
+
 .elv-btn.target {
   border-color: #f5b041;
   background: rgba(245, 176, 65, 0.28);
-  box-shadow: 0 0 16px rgba(245, 176, 65, 0.45);
+  box-shadow: 0 0 16px rgba(245, 176, 65, 0.48);
 }
 
 .elv-btn.current {
@@ -844,6 +860,18 @@ html, body {
 .floor-tab.active {
   background: #9c4722;
   border-color: #9c4722;
+  color: #fff;
+}
+
+.floor-tab-classified {
+  border-color: rgba(153, 27, 27, 0.58);
+  background: #fdf0f0;
+  color: #7f1d1d;
+}
+
+.floor-tab-classified.active {
+  background: #991b1b;
+  border-color: #7f1d1d;
   color: #fff;
 }
 

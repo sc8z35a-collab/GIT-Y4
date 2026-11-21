@@ -8,7 +8,7 @@ import { SpatialForestAudio } from './audioEngine.js';
 import {
   FLOORS, HOUSE, ANNEX, ANNEX_FLOORS, getAnnexAtticCeilingY,
   STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, SHEET_OFFSETS, getAtticCeilingY,
-  ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, getFloorByPhysicalIndex,
+  ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F, getFloorByPhysicalIndex,
 } from './planData.js';
 
 const _forward = new THREE.Vector3();
@@ -662,7 +662,7 @@ export class FirstPersonHouseExplorer {
   }
 
   setPose(x, z, yaw, pitch = -0.04, floorIdx = null) {
-    if (floorIdx !== null && floorIdx >= -2 && floorIdx < FLOORS.length) {
+    if (floorIdx !== null && floorIdx >= -3 && floorIdx < FLOORS.length) {
       this.currentFloor = floorIdx;
       this.activeFlight = null;
     }
@@ -758,6 +758,7 @@ export class FirstPersonHouseExplorer {
         if (k === '2') { this.selectElevatorFloor(0); return; }
         if (k === '3') { this.selectElevatorFloor(-1); return; }
         if (k === '4') { this.selectElevatorFloor(-2); return; }
+        if (k === '5') { this.selectElevatorFloor(-3); return; }
       }
       if (k === 'h') { this.toggleVehicleHeadlights(); return; }
       if (k === 'f') {
@@ -963,6 +964,9 @@ export class FirstPersonHouseExplorer {
       return y0 + (y1 - y0) * t;
     }
 
+    if (this.currentFloor === -3) {
+      return FLOOR_B4F.baseY;
+    }
     if (this.currentFloor === -2) {
       if (x > 1.75 && z > 8.60 && z < 10.40) return FLOOR_B3F.baseY - 0.02;
       return FLOOR_B3F.baseY;
@@ -1052,6 +1056,7 @@ export class FirstPersonHouseExplorer {
       if (this.activeStairBuilding === 'storage') return 'tile';
       return this.activeStairBuilding === 'main' && this.activeFlight === 0 ? 'tile' : 'wood';
     }
+    if (this.currentFloor === -3) return 'tile';
     if (this.currentFloor === -1) {
       return z < 2.85 ? 'tile' : 'wood';
     }
@@ -1207,15 +1212,22 @@ export class FirstPersonHouseExplorer {
       return false;
     }
 
-    // Dynamic Mechanical Safety Door Interlock for Real Traction Elevator ELV-1 (floors B3F..1F)
+    // Dynamic Mechanical Safety Door Interlock & Infrared Light-Curtain Re-Open for ELV-1 Mk2 (floors B4F..1F)
     if (this.currentFloor <= 1 && this.house.elevator) {
       const elv = this.house.elevator;
-      const doorPassable = elv.currentStopFloor === this.currentFloor && elv.phase !== 'MOVING' && elv.doorProgress > 0.65;
+      const elvMoving = elv.phase === 'RUNNING' || elv.phase === 'RELEVELING' || elv.phase === 'BRAKE_RELEASE';
+      const doorPassable = elv.currentStopFloor === this.currentFloor && !elvMoving && elv.doorProgress > 0.62;
       if (!doorPassable) {
         const bx1 = 3.16; const bx2 = 3.36; const bz1 = 1.24; const bz2 = 2.26;
         const cx = x < bx1 ? bx1 : (x > bx2 ? bx2 : x);
         const cz = z < bz1 ? bz1 : (z > bz2 ? bz2 : z);
-        if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) return true;
+        if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) {
+          // Real Infrared Light-Curtain Safety Re-Open if player approaches closing door!
+          if (elv.currentStopFloor === this.currentFloor && elv.phase === 'DOOR_CLOSING' && elv.doorProgress > 0.15) {
+            elv.triggerSafetyReopen();
+          }
+          return true;
+        }
       }
       if (this.inElevator) {
         const C = ELEVATOR.cab;
@@ -1225,7 +1237,10 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    if (this.currentFloor === -2) {
+    if (this.currentFloor === -3) {
+      // Strictly enclosed 2.70m×15.50m B4F Secret Lab (plus ELV-1 cab when inside!)
+      if (x < 0.55 + r * 0.5 || x > 4.75 || z < 0.85 + r * 0.5 || z > 16.35 - r * 0.5) return true;
+    } else if (this.currentFloor === -2) {
       if (x < -1.25 || x > 4.75 || z < 0.85 || z > 22.35) return true;
     } else if (this.currentFloor === -1) {
       if (x < -1.25 || x > 14.25 || z < 0.70 || z > 17.10) return true;
@@ -1582,13 +1597,16 @@ export class FirstPersonHouseExplorer {
     const bobY = Math.sin(this.bobPhase) * 0.023 * this.bobAmount;
     const bobSide = Math.cos(this.bobPhase * 0.5) * 0.010 * this.bobAmount;
     const idleBreath = Math.sin(elapsed * 1.35) * 0.004;
+    const elvRideMotion = (this.inElevator && this.house.elevator)
+      ? (this.house.elevator.cabSettleOffset + this.house.elevator.railVibration)
+      : 0;
 
     const rightX = Math.cos(this.yaw);
     const rightZ = -Math.sin(this.yaw);
 
     this.camera.position.set(
       this.playerPos.x + rightX * bobSide,
-      this.floorY + this.eyeHeight + bobY + idleBreath,
+      this.floorY + this.eyeHeight + bobY + idleBreath + elvRideMotion,
       this.playerPos.z + rightZ * bobSide,
     );
     _euler.set(this.pitch, this.yaw, 0, 'YXZ');
@@ -1620,33 +1638,42 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // Real-Time MRL Traction Elevator Physics, Audio Cues & Rider Floor Sync!
+    // Real-Time Mark II MRL Traction Elevator 7-Phase Physics, Mechanical Audio Cues & Rider Sync!
     const elv = this.house.elevator;
     if (elv) {
       elv.update(dt);
-      if (elv.phase === 'MOVING' || elv.phase === 'OPENING' || elv.phase === 'CLOSING') {
-        anyDoorAnimating = true;
-      }
+      const isElvActive = elv.phase !== 'IDLE_OPEN' && elv.phase !== 'IDLE_CLOSED';
+      const isElvMoving = elv.phase === 'RUNNING' || elv.phase === 'RELEVELING' || elv.phase === 'BRAKE_RELEASE';
+      if (isElvActive) anyDoorAnimating = true;
+
       if (elv.buttonBeepPending) {
         this.audio.playElevatorButton();
         elv.buttonBeepPending = false;
+      }
+      if (elv.brakeSoundPending) {
+        this.audio.playElevatorBrake(elv.brakeSoundPending === 'engage');
+        elv.brakeSoundPending = null;
+      }
+      if (elv.safetyBeepPending) {
+        this.audio.playElevatorSafetyBeep();
+        elv.safetyBeepPending = false;
       }
       if (elv.doorSoundPending) {
         this.audio.playElevatorDoor(elv.doorSoundPending === 'open');
         elv.doorSoundPending = null;
       }
       if (elv.chimePending) {
-        this.audio.playElevatorChime();
+        this.audio.playElevatorChime(elv.chimeDir);
         elv.chimePending = false;
       }
-      const hearMotor = (this.inElevator || this.nearElevator) && elv.phase === 'MOVING';
+      const hearMotor = (this.inElevator || this.nearElevator) && (elv.phase === 'RUNNING' || elv.phase === 'RELEVELING');
       this.audio.updateElevatorMotor(hearMotor, Math.abs(elv.velocity) / ELEVATOR.maxSpeed);
 
       if (this.inElevator) {
         this.floorY = elv.cabY;
-        if (elv.phase === 'OPENING' || elv.phase === 'IDLE_OPEN') {
+        if (elv.phase === 'DOOR_OPENING' || elv.phase === 'IDLE_OPEN') {
           this.currentFloor = elv.currentStopFloor;
-        } else if (elv.phase === 'MOVING') {
+        } else if (isElvMoving) {
           let nearFl = this.currentFloor;
           let bestD = Infinity;
           for (const st of ELEVATOR.stops) {
@@ -1660,7 +1687,7 @@ export class FirstPersonHouseExplorer {
       if (this.callbacks.onElevatorChange) {
         const showHud = !this.drivingVehicle && !this.mapOpen && (this.inElevator || this.nearElevator);
         const st = elv.getState();
-        const sig = `${showHud}|${this.inElevator}|${st.floorCode}|${st.currentStopFloor}|${st.targetFloor}|${st.phase}|${Math.round(st.speedMs * 10)}|${this.currentFloor}`;
+        const sig = `${showHud}|${this.inElevator}|${st.floorCode}|${st.currentStopFloor}|${st.targetFloor}|${st.queuedFloors.join(',')}|${st.phase}|${Math.round(st.speedMs * 10)}|${Math.round(st.cabY * 10)}|${this.currentFloor}`;
         if (sig !== this.lastElvHudSig) {
           this.lastElvHudSig = sig;
           this.callbacks.onElevatorChange(showHud, {
@@ -1670,6 +1697,11 @@ export class FirstPersonHouseExplorer {
           });
         }
       }
+    }
+
+    // Animate B4F Clandestine Research Core Containment Pod when player is on B4F!
+    if (this.house.b4Lab && this.currentFloor === -3) {
+      this.house.b4Lab.update(dt, elapsed);
     }
 
     this.house.windTimeUniform.value = elapsed;
@@ -1705,9 +1737,9 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all 5 units + 10-Level Main Tower (B3F..6F+RF)
+    // Acoustic occlusion across all 5 units + 11-Level Main Tower (B4F..6F+RF)
     if (this.currentFloor <= 0) {
-      this.audio.updateOcclusion(0.02);
+      this.audio.updateOcclusion(0.015);
     } else if (this.activeBuilding === 'kei') {
       const keiOpen = doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D'];
       this.audio.updateOcclusion(keiOpen ? 0.72 : 0.22);
@@ -1761,9 +1793,10 @@ export class FirstPersonHouseExplorer {
     if (this.inElevator && this.house.elevator) {
       const st = this.house.elevator.getState();
       const targetCode = ELEVATOR.stops.find((s) => s.floor === st.targetFloor)?.code || '1F';
-      const msg = st.phase === 'MOVING'
-        ? `リアルELV 昇降中 (${st.speedMs.toFixed(1)}m/s → ${targetCode})`
-        : `地上直通リアルエレベーター (${st.floorCode} 停止中)`;
+      let msg = `MRL-900 リアルELV (${st.floorCode} 停止中 / ${st.cabY.toFixed(1)}m)`;
+      if (st.phase === 'BRAKE_RELEASE') msg = `電磁ブレーキ解除 → ${targetCode} 発進`;
+      else if (st.phase === 'RUNNING') msg = `リアルELV 昇降中 (${st.speedMs.toFixed(1)}m/s → ${targetCode} / ${st.cabY.toFixed(1)}m)`;
+      else if (st.phase === 'RELEVELING') msg = `精密微速着床中 (${targetCode} レベリング)`;
       return { id: 'elevator_cab', code: 'ELV-1', floor: this.currentFloor, building: 'main', nameJp: msg };
     }
     if (this.drivingVehicle === 'kei') {
@@ -1919,13 +1952,14 @@ export class FirstPersonHouseExplorer {
 
       // Keep deep underground spaces crystal clear (no exterior forest fog bleed!)
       if (this.scene.fog) {
-        const targetFog = this.currentFloor < 0 || this.inElevator ? 0.004 : 0.030;
+        const targetFog = this.currentFloor < 0 || this.inElevator ? 0.0035 : 0.030;
         this.scene.fog.density += (targetFog - this.scene.fog.density) * Math.min(1, dt * 8);
       }
 
       let targetExposure = 1.15;
       if (this.flashlightOn) targetExposure = 1.06;
       else if (this.inElevator) targetExposure = 1.18;
+      else if (this.currentFloor === -3) targetExposure = 1.18;
       else if (this.currentFloor === -1) targetExposure = 1.14;
       else if (this.currentFloor === -2) targetExposure = 1.16;
       else if (this.currentFloor === 0) targetExposure = 1.02;
@@ -1945,7 +1979,7 @@ export class FirstPersonHouseExplorer {
         const inCamper = this.activeBuilding === 'camper';
         const inAnnex = this.activeBuilding === 'annex';
         const inStorage = this.activeBuilding === 'storage';
-        let sheetIndex = this.currentFloor + 2; // 0=B3F, 1=B2F, 2=B1F, 3=1F..8=6F, 9=RF!
+        let sheetIndex = this.currentFloor + 3; // 0=B4F, 1=B3F, 2=B2F, 3=B1F, 4=1F..9=6F, 10=RF!
         let floorCode = this.activeBuilding === 'courtyard'
           ? '中庭'
           : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code);
