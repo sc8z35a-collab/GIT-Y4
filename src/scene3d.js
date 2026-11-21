@@ -5,7 +5,7 @@ import { createVolumetricAtmosphere } from './volumetricAtmosphere.js';
 import { SinglePassPostFX } from './postfx.js';
 import { AdaptiveMobileEngine } from './adaptiveEngine.js';
 import { SpatialForestAudio } from './audioEngine.js';
-import { FLOORS, HOUSE, getAtticCeilingY } from './planData.js';
+import { FLOORS, HOUSE, ANNEX, ANNEX_FLOORS, getAtticCeilingY } from './planData.js';
 
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -19,9 +19,11 @@ export class FirstPersonHouseExplorer {
     this.container = container;
     this.callbacks = callbacks;
 
-    // 6-level stack: 0=B1F, 1=1F (Spawn!), 2=2F, 3=3F, 4=4F, 5=RF (屋根裏部屋)
+    // 6-level Main Tower (0=B1F..5=RF) + Neighboring 2-story 5m×8m Annex (Floors 1 & 2 at X=-7.6..-2.6)
     this.currentFloor = HOUSE.spawnFloor; // 1 (1F LDK)
-    this.activeFlight = null; // null or 0(ST0), 1(ST1), 2(ST2), 3(ST3), 4(ST4)
+    this.activeFlight = null; // null or 0(ST0)..4(ST4) on main, or 1(STA1) on annex
+    this.activeBuilding = 'main'; // 'main' | 'annex' | 'courtyard'
+    this.activeStairBuilding = 'main'; // 'main' | 'annex'
     this.playerPos = new THREE.Vector3(1.62, 0.0, 6.25);
     this.playerVel = new THREE.Vector3();
     this.floorY = 0.0;
@@ -105,14 +107,14 @@ export class FirstPersonHouseExplorer {
     this.scene.add(this.hemiLight);
 
     this.moonLight = new THREE.DirectionalLight(0x7ea8d8, 1.38);
-    this.moonLight.position.set(-8.0, 24.0, 26.0);
-    this.moonLight.target.position.set(2.5, 5.5, 6.0);
+    this.moonLight.position.set(-10.0, 24.0, 26.0);
+    this.moonLight.target.position.set(-1.0, 5.0, 5.5);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.mapSize.set(1024, 1024);
     this.moonLight.shadow.camera.near = 2;
-    this.moonLight.shadow.camera.far = 58;
-    this.moonLight.shadow.camera.left = -16;
-    this.moonLight.shadow.camera.right = 16;
+    this.moonLight.shadow.camera.far = 62;
+    this.moonLight.shadow.camera.left = -22;
+    this.moonLight.shadow.camera.right = 18;
     this.moonLight.shadow.camera.top = 20;
     this.moonLight.shadow.camera.bottom = -16;
     this.moonLight.shadow.bias = -0.0007;
@@ -191,9 +193,10 @@ export class FirstPersonHouseExplorer {
     if (floorIdx !== null && floorIdx >= 0 && floorIdx < FLOORS.length) {
       this.currentFloor = floorIdx;
       this.activeFlight = null;
-      if (this.adaptive) this.adaptive.snapFloorLights(floorIdx);
     }
     this.playerPos.set(x, 0, z);
+    this.activeBuilding = this._getBuildingAt(x, z);
+    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding);
     this.floorY = this._computeFloorY(x, z);
     this.yaw = yaw;
     this.pitch = pitch;
@@ -344,9 +347,29 @@ export class FirstPersonHouseExplorer {
     return true;
   }
 
+  _getBuildingAt(x, z) {
+    if (this.activeFlight !== null) return this.activeStairBuilding;
+    if (this.currentFloor === 1) {
+      if (x >= 0.0 && x <= 5.0 && z >= 0.0 && z <= 10.0) return 'main';
+      if (x >= ANNEX.originX && x <= ANNEX.originX + ANNEX.width && z >= ANNEX.originZ && z <= ANNEX.originZ + ANNEX.depth) {
+        return 'annex';
+      }
+      return 'courtyard';
+    }
+    if (this.currentFloor === 2) {
+      return x < -1.2 ? 'annex' : 'main';
+    }
+    return 'main';
+  }
+
   _computeFloorY(x, z) {
-    const sb = HOUSE.stairBox;
     if (this.activeFlight !== null) {
+      if (this.activeStairBuilding === 'annex') {
+        const asb = ANNEX.stairWorld;
+        const t = Math.max(0, Math.min(1, (asb.bottomZ - z) / (asb.bottomZ - asb.topZ)));
+        return 0.0 + 2.75 * t;
+      }
+      const sb = HOUSE.stairBox;
       const t = Math.max(0, Math.min(1, (sb.bottomZ - z) / (sb.bottomZ - sb.topZ)));
       const y0 = FLOORS[this.activeFlight].baseY;
       const y1 = FLOORS[this.activeFlight + 1].baseY;
@@ -354,13 +377,25 @@ export class FirstPersonHouseExplorer {
     }
 
     const baseY = FLOORS[this.currentFloor].baseY;
-    if (this.currentFloor === 1) { // 1F
-      if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) return -0.18;
-      if (x < 2.15 && z < 1.35) return -0.12;
-      if (x > 3.44 && z > 8.44) return 0.32;
-      return 0.0;
+    if (this.currentFloor === 1) { // 1F (Main + Courtyard + Annex 1F)
+      // Inside Main House
+      if (x >= 0.0 && x <= 5.0 && z >= 0.0 && z <= 10.0) {
+        if (x < 2.15 && z < 1.35) return -0.12;
+        if (x > 3.44 && z > 8.44) return 0.32;
+        return 0.0;
+      }
+      // Inside Neighboring 5m×8m Annex 1F
+      const lx = x - ANNEX.originX;
+      const lz = z - ANNEX.originZ;
+      if (lx >= 0.0 && lx <= ANNEX.width && lz >= 0.0 && lz <= ANNEX.depth) {
+        if (lx >= 2.85 && lz <= 1.65) return -0.10; // Annex Genkan Doma
+        return 0.0;
+      }
+      // Outdoors (porches, mossy garden path, courtyard, forest)
+      return -0.18;
     }
-    if (this.currentFloor === 2) { // 2F
+    if (this.currentFloor === 2) { // 2F (Main 2F or Annex 2F)
+      if (x < -1.2) return baseY; // Annex 2F
       if (x > 3.55 && z > 3.50 && z < 5.95) return baseY - 0.02;
       return baseY;
     }
@@ -372,15 +407,31 @@ export class FirstPersonHouseExplorer {
   }
 
   _getSurfaceMaterial(x, z) {
-    if (this.activeFlight !== null) return this.activeFlight === 0 ? 'tile' : 'wood';
+    if (this.activeFlight !== null) {
+      return this.activeStairBuilding === 'main' && this.activeFlight === 0 ? 'tile' : 'wood';
+    }
     if (this.currentFloor === 0) return 'tile'; // B1F hard grey cement footsteps!
     if (this.currentFloor === 1) {
-      if (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0) return 'earth';
-      if (x > 3.44 && z > 8.44) return 'tatami';
-      if ((x < 2.15 && z < 1.35) || (x > 2.20 && z < 5.25)) return 'tile';
-      return 'wood';
+      if (x >= 0.0 && x <= 5.0 && z >= 0.0 && z <= 10.0) {
+        if (x > 3.44 && z > 8.44) return 'tatami';
+        if ((x < 2.15 && z < 1.35) || (x > 2.20 && z < 5.25)) return 'tile';
+        return 'wood';
+      }
+      const lx = x - ANNEX.originX;
+      const lz = z - ANNEX.originZ;
+      if (lx >= 0.0 && lx <= ANNEX.width && lz >= 0.0 && lz <= ANNEX.depth) {
+        if (lz < 2.15 || (lx > 2.80 && lz < 4.00)) return 'tile';
+        return 'wood';
+      }
+      return 'earth';
     }
     if (this.currentFloor === 2) {
+      if (x < -1.2) {
+        const lx = x - ANNEX.originX;
+        const lz = z - ANNEX.originZ;
+        if (lx > 2.50 && lz > 2.30 && lz < 5.10) return 'tatami';
+        return 'wood';
+      }
       if (x > 2.20 && z > 3.50 && z < 5.95) return 'tile';
       if (x > 2.20 && z < 3.50) return 'tatami';
       return 'wood';
@@ -401,9 +452,9 @@ export class FirstPersonHouseExplorer {
   _collidesAt(x, z) {
     const r = this.playerRadius;
     const r2 = r * r;
-    const sb = HOUSE.stairBox;
 
     if (this.activeFlight !== null) {
+      const sb = this.activeStairBuilding === 'annex' ? ANNEX.stairWorld : HOUSE.stairBox;
       if (x < sb.minX + r || x > sb.maxX - r) return true;
       return false;
     }
@@ -412,8 +463,20 @@ export class FirstPersonHouseExplorer {
       // B1F subterranean bounds: Z=2.45..9.85, X=0.15..4.85
       if (x < 0.15 + r || x > 4.85 - r || z < 2.45 + r || z > 9.85 - r) return true;
     } else if (this.currentFloor === 1) {
-      // 1F permits walking out into deep forest via Front Door D1-1
-      if (x < -3.5 || x > 8.5 || z < -6.5 || z > 12.6) return true;
+      // 1F permits walking out into deep forest, across the mossy courtyard, and into the Neighboring 5m×8m Annex!
+      if (x < -10.8 || x > 8.5 || z < -6.5 || z > 12.6) return true;
+    } else if (this.currentFloor === 2) {
+      // 2F supports BOTH Main Tower 2F (X=0.15..4.85) AND Neighboring Annex 2F (X=-7.45..-2.75)
+      if (x < -1.2) {
+        if (
+          x < ANNEX.originX + 0.15 + r ||
+          x > ANNEX.originX + ANNEX.width - 0.15 - r ||
+          z < ANNEX.originZ + 0.15 + r ||
+          z > ANNEX.originZ + ANNEX.depth - 0.15 - r
+        ) return true;
+      } else if (x < 0.15 + r || x > 4.85 - r || z < 0.15 + r || z > 9.85 - r) {
+        return true;
+      }
     } else if (this.currentFloor === 4) {
       // 4F permits walking directly out onto the 1m×2m South-East Canopy Balcony (X=2.65..4.65, Z=10.0..11.0)!
       const bal = HOUSE.balcony4F;
@@ -456,27 +519,38 @@ export class FirstPersonHouseExplorer {
 
   _updateStairTransitions(prevZ) {
     const sb = HOUSE.stairBox;
+    const asb = ANNEX.stairWorld;
     const x = this.playerPos.x;
     const z = this.playerPos.z;
-    const inStairX = x >= sb.minX && x <= sb.maxX;
     const maxFloor = FLOORS.length - 1; // 5 (Attic)
 
     if (this.activeFlight === null) {
-      if (inStairX) {
-        // Stepping North onto bottom of upward flight (B1F->1F, 1F->2F, 2F->3F, 3F->4F, 4F->Attic)
+      // Main Tower Stairwell (ST0..ST4)
+      if (x >= sb.minX && x <= sb.maxX) {
         if (prevZ >= sb.bottomZ - 0.04 && z < sb.bottomZ && this.currentFloor < maxFloor) {
           this.activeFlight = this.currentFloor;
-        }
-        // Stepping South onto top of downward flight (1F->B1F, 2F->1F, 3F->2F, 4F->3F, Attic->4F)
-        else if (prevZ <= sb.topZ + 0.04 && z > sb.topZ && this.currentFloor > 0) {
+          this.activeStairBuilding = 'main';
+        } else if (prevZ <= sb.topZ + 0.04 && z > sb.topZ && this.currentFloor > 0) {
           this.activeFlight = this.currentFloor - 1;
+          this.activeStairBuilding = 'main';
+        }
+      }
+      // Neighboring Annex Stairwell (STA1: Annex 1F <-> Annex 2F)
+      else if (x >= asb.minX && x <= asb.maxX) {
+        if (this.currentFloor === 1 && prevZ >= asb.bottomZ - 0.04 && z < asb.bottomZ) {
+          this.activeFlight = 1;
+          this.activeStairBuilding = 'annex';
+        } else if (this.currentFloor === 2 && prevZ <= asb.topZ + 0.04 && z > asb.topZ) {
+          this.activeFlight = 1;
+          this.activeStairBuilding = 'annex';
         }
       }
     } else {
-      if (z <= sb.topZ) {
+      const activeBox = this.activeStairBuilding === 'annex' ? asb : sb;
+      if (z <= activeBox.topZ) {
         this.currentFloor = this.activeFlight + 1;
         this.activeFlight = null;
-      } else if (z >= sb.bottomZ) {
+      } else if (z >= activeBox.bottomZ) {
         this.currentFloor = this.activeFlight;
         this.activeFlight = null;
       }
@@ -518,6 +592,7 @@ export class FirstPersonHouseExplorer {
     if (!this._collidesAt(this.playerPos.x, nextZ)) this.playerPos.z = nextZ;
 
     this._updateStairTransitions(prevZ);
+    this.activeBuilding = this._getBuildingAt(this.playerPos.x, this.playerPos.z);
 
     const targetFloorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
     const lerpRate = this.activeFlight !== null ? 18 : 11;
@@ -595,9 +670,11 @@ export class FirstPersonHouseExplorer {
     const propStates = {};
     for (const p of this.house.interactiveProps) propStates[p.id] = p.isOn;
 
-    for (const lname of ['Tatami_Lantern', 'Attic_Lantern']) {
+    for (const lname of ['Tatami_Lantern', 'Attic_Lantern', 'Annex_Cafe_Lamp']) {
       const entry = this.house.interiorLights.find((l) => l.name === lname);
-      const isOn = lname === 'Tatami_Lantern' ? propStates.lantern_1f : propStates.lantern_attic;
+      const isOn = lname === 'Tatami_Lantern'
+        ? propStates.lantern_1f
+        : (lname === 'Attic_Lantern' ? propStates.lantern_attic : propStates.lamp_annex_cafe);
       if (entry && isOn && entry.light.visible) {
         entry.light.intensity += (Math.sin(elapsed * 3.1) * 0.05 + Math.sin(elapsed * 7.3) * 0.025) * dt * 9;
       }
@@ -616,18 +693,20 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion: eerie subterranean silence in B1F, rushing mountain wind on 4F Balcony & exterior!
+    // Acoustic occlusion: eerie subterranean silence in B1F, open forest wind in Courtyard & 4F Balcony!
     if (this.currentFloor === 0) {
       this.audio.updateOcclusion(0.02);
     } else {
-      const outside1F = this.currentFloor === 1 && (this.playerPos.z < 0.0 || this.playerPos.z > 10.0);
+      const outside1F = this.currentFloor === 1 && this.activeBuilding === 'courtyard';
       const onBalcony4F = this.currentFloor === 4 && this.playerPos.z > 9.90;
       const d1Boost = this.currentFloor === 1 && doorOpenMap['D1-1']
         ? Math.max(0, 1 - Math.hypot(this.playerPos.x - 1.10, this.playerPos.z) / 4.0) * 0.85 : 0;
+      const da1Boost = this.currentFloor === 1 && doorOpenMap['DA-1']
+        ? Math.max(0, 1 - Math.hypot(this.playerPos.x - (ANNEX.originX + 3.90), this.playerPos.z - ANNEX.originZ) / 4.0) * 0.85 : 0;
       const balDoorBoost = this.currentFloor === 4 && doorOpenMap['D4-6'] ? 0.65 : 0;
       const atticWindBoost = this.currentFloor === 5 ? 0.48 : 0;
       const windowBoost = Math.max(0, 1 - Math.abs(this.playerPos.z - 9.85) / 4.5) * 0.35;
-      this.audio.updateOcclusion((outside1F || onBalcony4F) ? 1.0 : Math.min(1.0, Math.max(d1Boost, balDoorBoost, windowBoost, atticWindBoost)));
+      this.audio.updateOcclusion((outside1F || onBalcony4F) ? 1.0 : Math.min(1.0, Math.max(d1Boost, da1Boost, balDoorBoost, windowBoost, atticWindBoost)));
     }
 
     return { anyDoorAnimating, doorOpenMap, propStates };
@@ -637,12 +716,31 @@ export class FirstPersonHouseExplorer {
     const x = this.playerPos.x;
     const z = this.playerPos.z;
     if (this.activeFlight !== null) {
+      if (this.activeStairBuilding === 'annex') {
+        return { id: 'annex_stair', code: 'STA1', floor: this.currentFloor, building: 'annex', nameJp: '隣棟 1F↔2F 階段' };
+      }
       const fNames = ['B1F↔1F 地下コンクリート階段', '1F↔2F 階段', '2F↔3F 階段', '3F↔4F 階段', '4F↔屋根裏 階段'];
-      return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, nameJp: fNames[this.activeFlight] };
+      return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, building: 'main', nameJp: fNames[this.activeFlight] };
     }
-    if (this.currentFloor === 1 && (z < 0.0 || z > 10.0 || x < 0.0 || x > 5.0)) {
-      return { id: 'exterior', code: 'EXT', floor: 1, nameJp: '深い森・苔石アプローチ' };
+
+    if (this.activeBuilding === 'annex') {
+      const lx = x - ANNEX.originX;
+      const lz = z - ANNEX.originZ;
+      const aFloor = ANNEX_FLOORS[this.currentFloor === 2 ? 1 : 0];
+      for (let i = aFloor.rooms.length - 1; i >= 0; i--) {
+        const r = aFloor.rooms[i];
+        if (lx >= r.x && lx <= r.x + r.w && lz >= r.z && lz <= r.z + r.d) return r;
+      }
+      return aFloor.rooms[0] || null;
     }
+
+    if (this.currentFloor === 1 && this.activeBuilding === 'courtyard') {
+      if (x > -3.1 && x < 0.25 && z > -2.0 && z < 10.2) {
+        return { id: 'exterior', code: '中庭', floor: 1, building: 'courtyard', nameJp: '石灯籠の苔中庭（母屋↔隣棟）' };
+      }
+      return { id: 'exterior', code: 'EXT', floor: 1, building: 'courtyard', nameJp: '深い森・苔石アプローチ' };
+    }
+
     const floorRooms = FLOORS[this.currentFloor].rooms;
     for (let i = floorRooms.length - 1; i >= 0; i--) {
       const r = floorRooms[i];
@@ -681,15 +779,16 @@ export class FirstPersonHouseExplorer {
         cameraMoved,
         currentFloor: this.currentFloor,
         activeFlight: this.activeFlight,
+        activeBuilding: this.activeBuilding,
         doorOpenMap,
         propStates,
       });
 
-      // Keep B1F dimly lit & atmospheric; slightly boost hallway visibility; calm exposure with flashlight ON
+      // Keep B1F dimly lit & atmospheric; slightly boost hallway/courtyard visibility; calm exposure with flashlight ON
       let targetExposure = 1.15;
       if (this.flashlightOn) targetExposure = 1.06;
       else if (this.currentFloor === 0) targetExposure = 1.02;
-      else if (room && (room.id === 'exterior' || room.id.includes('passage') || room.id.includes('gallery') || room.id === 'stair')) {
+      else if (room && (room.id === 'exterior' || room.id.includes('passage') || room.id.includes('gallery') || room.id.includes('stair'))) {
         targetExposure = 1.24;
       }
       this.postfx.render(this.scene, this.camera, elapsed, targetExposure);
@@ -699,13 +798,22 @@ export class FirstPersonHouseExplorer {
 
       if (this.callbacks.onPoseUpdate) {
         this.camera.getWorldDirection(_lookDir);
+        const inAnnex = this.activeBuilding === 'annex';
+        const sheetIndex = inAnnex ? (this.currentFloor === 2 ? 7 : 6) : this.currentFloor;
+        const floorCode = inAnnex
+          ? (this.currentFloor === 2 ? '隣棟2F' : '隣棟1F')
+          : (this.activeBuilding === 'courtyard' ? '中庭' : FLOORS[this.currentFloor].code);
         this.callbacks.onPoseUpdate({
           x: this.playerPos.x,
           z: this.playerPos.z,
+          localX: inAnnex ? this.playerPos.x - ANNEX.originX : this.playerPos.x,
+          localZ: inAnnex ? this.playerPos.z - ANNEX.originZ : this.playerPos.z,
           dx: _lookDir.x,
           dz: _lookDir.z,
           floor: this.currentFloor,
-          floorCode: FLOORS[this.currentFloor].code,
+          sheetIndex,
+          building: this.activeBuilding,
+          floorCode,
           room,
         });
       }

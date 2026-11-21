@@ -3,6 +3,7 @@ import { FLOORS, HOUSE, getAtticCeilingY } from './planData.js';
 import { makeSurfaceMat, makeFrontMat, createSharedMaterials } from './textures.js';
 import { batchStaticGroups } from './mobileBatcher.js';
 import { injectForestWindShader } from './volumetricAtmosphere.js';
+import { buildAnnex3D } from './buildAnnex3d.js';
 
 export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
@@ -1166,14 +1167,14 @@ export function buildHouse3D(scene) {
   addBox(exteriorGroup, 0.14, 2.10, 1.30, makeSurfaceMat('wood_lattice_dark', 1.30, 2.10), 0.08, 0.95, 10.68, true);
   addBox(exteriorGroup, 0.34, 0.62, 0.78, makeFrontMat('prop_ac_outdoor'), 5.20, 0.02, 2.65, true);
 
-  // Mossy Cliff Boulders
+  // Mossy Cliff Boulders (positioned safely outside BOTH Main Tower & Neighboring 5m×8m Annex!)
   const rockGeo = new THREE.DodecahedronGeometry(1.0, 1);
   const rockMossMat = makeSurfaceMat('rock_mossy_cliff', 2.5, 2.5, { roughness: 0.88 });
   const rockWetMat = makeSurfaceMat('rock_wet_black', 2.0, 2.0, { roughness: 0.34 });
   [
-    [-2.4, -2.6, 0.95, 0.55], [6.8, -1.8, 1.15, 0.65], [-3.2, 4.5, 1.25, 0.72],
+    [-5.8, -2.5, 0.95, 0.55], [6.8, -1.8, 1.15, 0.65], [-9.8, 4.8, 1.25, 0.72],
     [7.4, 6.2, 1.10, 0.62], [-2.6, 12.6, 1.05, 0.58], [6.9, 12.8, 1.30, 0.78],
-    [2.8, 14.0, 0.88, 0.45], [-4.5, 10.2, 1.40, 0.82],
+    [2.8, 14.0, 0.88, 0.45], [-8.8, 10.8, 1.40, 0.82],
   ].forEach(([bx, bz, sx, sy], i) => {
     const rMesh = new THREE.Mesh(rockGeo, i % 2 === 0 ? rockMossMat : rockWetMat);
     rMesh.position.set(bx, -0.35 + sy * 0.45, bz);
@@ -1183,7 +1184,7 @@ export function buildHouse3D(scene) {
     exteriorGroup.add(rMesh);
   });
 
-  // GPU Wind-Animated Instanced Towering Ancient Cedars (20m - 31m tall enveloping 4F Balcony & Attic!)
+  // GPU Wind-Animated Instanced Towering Ancient Cedars (20m - 31m tall enveloping Main Tower + 5×8m Annex!)
   const windTimeUniform = { value: 0 };
   let seed = 42081;
   const rand = () => {
@@ -1192,13 +1193,13 @@ export function buildHouse3D(scene) {
   };
 
   const treeSpecs = [];
-  const attempts = 1150;
-  for (let i = 0; i < attempts && treeSpecs.length < 285; i++) {
-    const tx = -36 + rand() * 77;
+  const attempts = 1350;
+  for (let i = 0; i < attempts && treeSpecs.length < 305; i++) {
+    const tx = -42 + rand() * 84;
     const tz = -35 + rand() * 82;
-    // Extra South clearance (tz < 14.2) so ZERO branches ever clip 4F Balcony (Z=10..11)!
-    const inHouseClear = tx > -3.40 && tx < 8.40 && tz > -3.70 && tz < 14.20;
-    const inTrailClear = tx > -0.6 && tx < 2.9 && tz > -9.0 && tz <= 0.0;
+    // Clear BOTH Main Tower (X=0..5, Z=0..10), 4F Balcony (Z=10..11), Courtyard (X=-2.6..0), and Neighbor Annex (X=-7.6..-2.6, Z=1..9)!
+    const inHouseClear = tx > -10.80 && tx < 8.40 && tz > -3.70 && tz < 14.20;
+    const inTrailClear = tx > -4.8 && tx < 2.9 && tz > -9.0 && tz <= 0.0;
     if (inHouseClear || inTrailClear) continue;
 
     const isUnderstory = i % 5 === 0;
@@ -1206,7 +1207,7 @@ export function buildHouse3D(scene) {
     const rad = isUnderstory ? (0.12 + rand() * 0.08) : (0.22 + rand() * 0.18);
     const cw = isUnderstory ? (0.95 + rand() * 0.55) : (1.18 + rand() * 0.72);
     treeSpecs.push({ x: tx, z: tz, h, rad, cw, rot: rand() * Math.PI * 2 });
-    if (tx > -6 && tx < 11 && tz > -7 && tz < 15.5) {
+    if (tx > -13 && tx < 11 && tz > -7 && tz < 15.5) {
       treeColliders.push({ x: tx, z: tz, r: rad + 0.14 });
     }
   }
@@ -1261,14 +1262,14 @@ export function buildHouse3D(scene) {
     exteriorGroup.add(im);
   });
 
-  // Forest Underbrush Ferns
+  // Forest Underbrush Ferns (excluding BOTH houses & connecting mossy courtyard)
   const bushGeo = new THREE.DodecahedronGeometry(0.65, 0);
   const bushMat = new THREE.MeshStandardMaterial({ color: 0x1a301e, roughness: 0.92 });
   const bushSpecs = [];
-  for (let i = 0; i < 240 && bushSpecs.length < 95; i++) {
-    const bx = -16 + rand() * 37;
+  for (let i = 0; i < 280 && bushSpecs.length < 105; i++) {
+    const bx = -22 + rand() * 44;
     const bz = -16 + rand() * 42;
-    if (bx > -2.0 && bx < 7.0 && bz > -2.8 && bz < 12.8) continue;
+    if (bx > -9.6 && bx < 7.0 && bz > -2.8 && bz < 12.8) continue;
     bushSpecs.push({ x: bx, z: bz, s: 0.65 + rand() * 0.95 });
   }
   const bushInst = new THREE.InstancedMesh(bushGeo, bushMat, bushSpecs.length);
@@ -1282,28 +1283,33 @@ export function buildHouse3D(scene) {
   bushInst.instanceMatrix.needsUpdate = true;
   exteriorGroup.add(bushInst);
 
-  // Exterior Moonlit Canopy Fill Lights spanning 1F through 4F Balcony & Attic treetops
+  // Exterior Moonlit Canopy Fill Lights spanning Main Tower (1F–Attic) & Neighboring 5m×8m Annex
   [
     [2.5, 4.5, 16.5, 0x4a73a3, 1.85, 22],
     [2.5, 12.0, 17.5, 0x5886ba, 2.40, 26],
     [2.5, 5.5, -7.5, 0x446894, 1.45, 20],
     [2.5, 12.0, -8.0, 0x527cb0, 2.00, 24],
+    [-5.2, 5.8, 13.8, 0x4a73a3, 1.75, 22],
+    [-5.2, 5.6, -4.8, 0x446894, 1.55, 20],
   ].forEach(([lx, ly, lz, col, inten, dist]) => {
     const l = new THREE.PointLight(col, inten, dist, 1.4);
     l.position.set(lx, ly, lz);
     exteriorGroup.add(l);
   });
 
-  // Drifting Midnight Forest Fireflies spanning 1F ground up to Y=14.2m (above Attic ridge!)
-  const ffCount = 96;
+  // Drifting Midnight Forest Fireflies spanning 1F ground up to Y=14.2m across the twin-house clearing!
+  const ffCount = 110;
   const ffPositions = new Float32Array(ffCount * 3);
   const ffSeeds = [];
   for (let i = 0; i < ffCount; i++) {
     let fx, fz;
     do {
-      fx = -11 + rand() * 27;
+      fx = -16 + rand() * 32;
       fz = -11 + rand() * 34;
-    } while (fx > -0.6 && fx < 5.6 && fz > -0.6 && fz < 11.4);
+    } while (
+      (fx > -0.4 && fx < 5.4 && fz > -0.4 && fz < 11.2) ||
+      (fx > -8.0 && fx < -2.2 && fz > 0.6 && fz < 9.4)
+    );
     const fy = 0.65 + rand() * 13.6;
     ffPositions[i * 3] = fx;
     ffPositions[i * 3 + 1] = fy;
@@ -1324,7 +1330,27 @@ export function buildHouse3D(scene) {
   exteriorGroup.add(fireflies);
 
   // =========================================================================
-  // 8. POCO F7 (ADRENO 825) MATERIAL-BUCKETED STATIC GEOMETRY BATCHING
+  // 8. NEIGHBORING 5m × 8m 2-STORY HOUSE (ANNEX-40 / 森の離れ)
+  // =========================================================================
+  buildAnnex3D({
+    staticGroup,
+    furnitureGroup,
+    dynamicGroup,
+    exteriorGroup,
+    mat,
+    addCollider,
+    addBox,
+    addWallBox,
+    addLight,
+    addInteractiveDoor,
+    addWindowFrame,
+    addFramedArt,
+    excludeBatch,
+    interactiveProps,
+  });
+
+  // =========================================================================
+  // 9. POCO F7 (ADRENO 825) MATERIAL-BUCKETED STATIC GEOMETRY BATCHING
   // =========================================================================
   const { batchedGroup, stats: batchStats } = batchStaticGroups(
     [staticGroup, furnitureGroup],
