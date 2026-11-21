@@ -1,4 +1,4 @@
-import { HOUSE, FLOORS, FINISH_SCHEDULE, OPENING_SCHEDULE } from './planData.js';
+import { HOUSE, BLUEPRINT_SHEETS, FINISH_SCHEDULE, OPENING_SCHEDULE } from './planData.js';
 import { FirstPersonHouseExplorer } from './scene3d.js';
 import { ArchitecturalBlueprint2D } from './blueprint2d.js';
 
@@ -31,7 +31,7 @@ const tableAreas = document.getElementById('table-areas');
 
 let mapVisible = false;
 let perfVisible = false;
-let lastPose = { floor: HOUSE.spawnFloor, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
+let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: HOUSE.spawnFloor, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -67,13 +67,18 @@ const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
   },
 });
 
-function renderFloorAreaTable(floorIdx) {
-  const fl = FLOORS[floorIdx] || FLOORS[HOUSE.spawnFloor];
+function renderFloorAreaTable(sheetIdx) {
+  const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[HOUSE.spawnFloor];
+  const isAnnex = fl.building === 'annex';
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
-  const summaryLabel = fl.isBasement
-    ? '地下1階計 (3×7m主空間 + 倉庫3室・棚15基)'
-    : (fl.isAttic ? '屋根裏計 (有効 28.5m²)' : (fl.hasBalcony ? '4F計 (5室 + 1×2mバルコニー)' : `${fl.code} フロア計`));
+  const summaryLabel = isAnnex
+    ? `${fl.code}計（隣棟 5×8m 木造2階建）`
+    : (fl.isBasement
+      ? '地下1階計 (3×7m主空間 + 倉庫3室・棚15基)'
+      : (fl.isAttic ? '屋根裏計 (有効 28.5m²)' : (fl.hasBalcony ? '4F計 (5室 + 1×2mバルコニー)' : `${fl.code} フロア計`)));
+  const footprintStr = isAnnex ? '5000×8000' : '5000×10000';
+  const grossStr = isAnnex ? '40.00m²' : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²'));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
@@ -87,16 +92,16 @@ function renderFloorAreaTable(floorIdx) {
       `).join('')}
       <tr style="background:#f3efe6;font-weight:700;">
         <td>${summaryLabel}</td>
-        <td class="num">5000×10000</td>
-        <td class="num">${fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²')}</td>
+        <td class="num">${footprintStr}</td>
+        <td class="num">${grossStr}</td>
         <td>室計 ${netSum.toFixed(1)}m²</td>
       </tr>
     </tbody>
   `;
 }
 
-function selectBlueprintFloor(floorIdx) {
-  const idx = Math.max(0, Math.min(FLOORS.length - 1, Number(floorIdx) || 0));
+function selectBlueprintFloor(sheetIdx) {
+  const idx = Math.max(0, Math.min(BLUEPRINT_SHEETS.length - 1, Number(sheetIdx) || 0));
   blueprint.setFloor(idx);
   renderFloorAreaTable(idx);
   document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
@@ -115,7 +120,7 @@ function toggleMap(force = null) {
   mapVisible = force !== null ? force : !mapVisible;
   mapModal.classList.toggle('hidden', !mapVisible);
   btnMap.classList.toggle('active', mapVisible);
-  if (mapVisible) selectBlueprintFloor(lastPose.floor);
+  if (mapVisible) selectBlueprintFloor(lastPose.sheetIndex !== undefined ? lastPose.sheetIndex : lastPose.floor);
   if (explorer) explorer.setMapOpen(mapVisible);
 }
 
@@ -274,7 +279,7 @@ document.querySelectorAll('#bp-layers input[type="checkbox"]').forEach((cb) => {
 });
 
 document.getElementById('btn-export-svg').addEventListener('click', () => {
-  const fl = FLOORS[blueprint.activeFloor];
+  const fl = BLUEPRINT_SHEETS[blueprint.activeFloor];
   const blob = new Blob([blueprint.exportSVGString()], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

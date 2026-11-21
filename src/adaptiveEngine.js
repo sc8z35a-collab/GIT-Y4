@@ -40,9 +40,11 @@ export class AdaptiveMobileEngine {
     this.shadowUpdatesThisSec++;
   }
 
-  snapFloorLights(floorIdx) {
+  snapFloorLights(floorIdx, activeBuilding = 'main') {
     for (const entry of this.house.interiorLights) {
-      const active = entry.floor === floorIdx;
+      const b = entry.light.userData.building || 'main';
+      const sameBuilding = b === 'both' || b === activeBuilding || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard'));
+      const active = entry.floor === floorIdx && sameBuilding;
       entry.light.intensity = active ? entry.baseInt : 0;
       entry.light.visible = active;
     }
@@ -92,11 +94,11 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * 6-Level Vertical Spatial Portal Light Culler (B1F, 1F, 2F, 3F, 4F, RF):
-   * Strictly keeps <= 3–6 interior point lights active on the GPU at any instant,
-   * and keeps B1F authentically dim/isolated without warm 1F bleed!
+   * Dual-Building + 6-Level Vertical Spatial Portal Light Culler:
+   * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant across
+   * BOTH the 6-level Main Tower AND the 2-story Neighboring 5m×8m Annex!
    */
-  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, propStates }) {
+  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', propStates }) {
     for (const entry of this.house.interiorLights) {
       if (entry.name === 'Tatami_Lantern' && !propStates.lantern_1f) {
         entry.light.intensity = 0;
@@ -113,14 +115,34 @@ export class AdaptiveMobileEngine {
         entry.light.visible = false;
         continue;
       }
+      if (entry.name === 'Annex_Cafe_Lamp' && propStates.lamp_annex_cafe === false) {
+        entry.light.intensity = 0;
+        entry.light.visible = false;
+        continue;
+      }
 
+      const b = entry.light.userData.building || 'main';
       let weight = 0.0;
-      if (entry.floor === currentFloor) {
-        weight = 1.0;
-      } else if (activeFlight !== null && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
-        weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' ? 0.65 : 0.12;
-      } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
-        weight = 0.20;
+
+      if (b === 'both') {
+        // Courtyard / porch guide lantern stays softly visible on floor 1 across both houses & courtyard
+        weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
+      } else if (activeBuilding === 'courtyard') {
+        // Standing outdoors in the mossy courtyard between both houses: warm porch + window glow from both!
+        if (entry.floor === 1 && (entry.zone === 'exterior' || entry.zone === 'ldk' || entry.zone === 'south' || entry.zone === 'cafe')) {
+          weight = entry.zone === 'exterior' ? 1.0 : 0.45;
+        }
+      } else if (b === activeBuilding) {
+        if (entry.floor === currentFloor) {
+          weight = 1.0;
+        } else if (activeFlight !== null && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
+          weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' || entry.zone === 'south' ? 0.65 : 0.12;
+        } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
+          weight = 0.20;
+        }
+      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior') {
+        // Keep Main porch sconce glowing softly even when stepping near Annex porch
+        weight = 0.60;
       }
 
       const targetInt = entry.baseInt * weight;

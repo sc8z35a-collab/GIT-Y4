@@ -113,12 +113,19 @@ const MIST_FRAG = /* glsl */ `
   }
 
   void main() {
-    float dx = max(max(0.0 - vWorldPos.x, vWorldPos.x - 5.0), 0.0);
-    float dz = max(max(0.0 - vWorldPos.z, vWorldPos.z - 11.2), 0.0);
-    float outsideDist = length(vec2(dx, dz));
-    float houseMask = smoothstep(0.35, 2.2, outsideDist);
+    // Mask mist out of Main Tower (X=0..5, Z=0..11.2) AND Neighboring 5x8m Annex (X=-7.6..-2.6, Z=1.0..9.0)
+    float dx1 = max(max(0.0 - vWorldPos.x, vWorldPos.x - 5.0), 0.0);
+    float dz1 = max(max(0.0 - vWorldPos.z, vWorldPos.z - 11.2), 0.0);
+    float distMain = length(vec2(dx1, dz1));
 
-    float radialFade = 1.0 - smoothstep(14.0, 38.0, length(vWorldPos.xz - vec2(2.5, 5.0)));
+    float dx2 = max(max(-7.6 - vWorldPos.x, vWorldPos.x - (-2.6)), 0.0);
+    float dz2 = max(max(1.0 - vWorldPos.z, vWorldPos.z - 9.0), 0.0);
+    float distAnnex = length(vec2(dx2, dz2));
+
+    float outsideDist = min(distMain, distAnnex);
+    float houseMask = smoothstep(0.35, 2.0, outsideDist);
+
+    float radialFade = 1.0 - smoothstep(18.0, 42.0, length(vWorldPos.xz - vec2(-1.5, 5.0)));
 
     vec2 p1 = vWorldPos.xz * 0.15 + vec2(uTime * 0.045, uTime * 0.022);
     vec2 p2 = vWorldPos.xz * 0.30 + vec2(-uTime * 0.032, uTime * 0.038);
@@ -181,7 +188,11 @@ export function createVolumetricAtmosphere(scene) {
   addMoonShaft(2.50, 10.50 + 1.18, 8.92, 1.45, 2.45, 0.56, 0.04, 0.0, 0.105);
   addMoonShaft(2.50, 10.50 + 1.15, 1.05, 1.20, 2.15, -0.58, -0.05, 0.0, 0.078);
 
-  // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 4F Balcony!)
+  // Neighboring 5x8m Annex (ANNEX-40) Moonlight Shafts (1F Cafe South Terrace & 2F Master South)
+  addMoonShaft(-5.75, 1.10, 8.15, 1.55, 2.55, 0.56, 0.12, 0.0, 0.085);
+  addMoonShaft(-5.65, 2.75 + 1.15, 8.15, 1.50, 2.45, 0.54, 0.10, 0.0, 0.082);
+
+  // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 4F Balcony & Annex!)
   [
     { y: 0.26, col: 0x1b2b38 },
     { y: 1.05, col: 0x152330 },
@@ -198,9 +209,9 @@ export function createVolumetricAtmosphere(scene) {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(76, 76), mistMat);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(84, 84), mistMat);
     plane.rotation.x = -Math.PI / 2;
-    plane.position.set(2.5, layer.y, 5.0);
+    plane.position.set(-1.5, layer.y, 5.0);
     plane.renderOrder = 2;
     group.add(plane);
   });
