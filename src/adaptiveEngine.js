@@ -40,8 +40,25 @@ export class AdaptiveMobileEngine {
     this.shadowUpdatesThisSec++;
   }
 
-  snapFloorLights(floorIdx, activeBuilding = 'main', inElevator = false) {
+  _getNearestB3LightSet(px, pz, maxCount = 5) {
+    const b3Lights = [];
+    for (const entry of this.house.interiorLights) {
+      const b = entry.light.userData.building || 'main';
+      if (b === 'main' && entry.floor === -2) {
+        const dx = entry.light.position.x - px;
+        const dz = entry.light.position.z - pz;
+        b3Lights.push({ name: entry.name, d2: dx * dx + dz * dz });
+      }
+    }
+    b3Lights.sort((a, b) => a.d2 - b.d2);
+    return new Set(b3Lights.slice(0, maxCount).map((e) => e.name));
+  }
+
+  snapFloorLights(floorIdx, activeBuilding = 'main', inElevator = false, playerX = 1.6, playerZ = 5.8) {
     const elvStop = this.house.elevator ? this.house.elevator.currentStopFloor : -2;
+    const b3NearSet = (floorIdx === -2 && activeBuilding === 'main' && !inElevator)
+      ? this._getNearestB3LightSet(playerX, playerZ, 5)
+      : null;
     for (const entry of this.house.interiorLights) {
       const b = entry.light.userData.building || 'main';
       if (b === 'elevator') {
@@ -59,7 +76,10 @@ export class AdaptiveMobileEngine {
       const sameBuilding = b === 'both'
         || b === activeBuilding
         || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard'));
-      const active = entry.floor === floorIdx && sameBuilding;
+      let active = entry.floor === floorIdx && sameBuilding;
+      if (active && b3NearSet && b === 'main' && entry.floor === -2) {
+        active = b3NearSet.has(entry.name);
+      }
       entry.light.intensity = active ? entry.baseInt : 0;
       entry.light.visible = active;
     }
@@ -109,13 +129,25 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * 5-Unit + 10-Level Main Tower (B3F..6F+RF) Spatial Portal Light Culler:
-   * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant on POCO F7!
+   * 5-Unit + 11-Level Main Tower (B4F..6F+RF) Spatial Portal Light Culler:
+   * Strictly keeps <= 6–7 interior point lights active on the GPU at any instant on POCO F7!
    */
-  _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', inElevator = false, doorOpenMap = {}, propStates }) {
+  _updateFloorSpatialLightBudget(dtSec, {
+    currentFloor,
+    activeFlight,
+    activeBuilding = 'main',
+    inElevator = false,
+    doorOpenMap = {},
+    propStates,
+    playerX = 1.6,
+    playerZ = 5.8,
+  }) {
     const elv = this.house.elevator;
     const elvStop = elv ? elv.currentStopFloor : -2;
     const elvOpenHere = Boolean(elv && elv.currentStopFloor === currentFloor && elv.doorProgress > 0.15);
+    const b3NearSet = (currentFloor === -2 && activeBuilding === 'main' && !inElevator)
+      ? this._getNearestB3LightSet(playerX, playerZ, 5)
+      : null;
 
     for (const entry of this.house.interiorLights) {
       if (entry.name === 'Tatami_Lantern' && !propStates.lantern_1f) {
@@ -180,7 +212,11 @@ export class AdaptiveMobileEngine {
         }
       } else if (b === activeBuilding) {
         if (entry.floor === currentFloor) {
-          weight = 1.0;
+          if (b3NearSet && b === 'main' && entry.floor === -2) {
+            weight = b3NearSet.has(entry.name) ? 1.0 : 0.0;
+          } else {
+            weight = 1.0;
+          }
         } else if (b === 'camper' && entry.zone === 'mid') {
           weight = 0.72; // Soaring 3.02m central skylight atrium illuminates both 1F & 2F Loft bridge!
         } else if (b === 'camper' && currentFloor === 1 && entry.floor === 2) {

@@ -2380,6 +2380,7 @@ export function buildHouse3D(scene) {
     camper,
     kei,
     elevator,
+    b3Thermal: deepBasement.b3Thermal,
     b4Lab: deepBasement.b4Lab,
     batchStats: combinedBatchStats,
   };

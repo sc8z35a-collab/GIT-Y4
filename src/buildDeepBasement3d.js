@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FLOOR_B2F, FLOOR_B3F, FLOOR_B4F, STAIR_B1_B2, STAIR_B2_B3 } from './deepBasementData.js';
 import { makeSurfaceMat, makeFrontMat } from './textures.js';
 import { batchStaticGroups } from './mobileBatcher.js';
+import { buildB3fExpansion3D } from './buildB3fExpansion3d.js';
 
 /**
  * Builds the entire Deep Basement Expansion:
@@ -459,14 +460,14 @@ export function buildDeepBasement3D(ctx) {
   for (let jz = 4.20; jz <= 15.60; jz += 1.25) {
     addDBox(deepStatic, 3.20, 0.14, 0.12, mat.walnut, 1.60, yB3 + hB3 - 0.07, jz);
   }
-  // Warm Wooden Acoustic Slat Feature Wall along West Wall of Living Lounge
-  addDBox(deepStatic, 0.04, 2.65, 4.60, warmTimberMat, 0.03, yB3 + 1.34, 6.10);
+  // Warm Wooden Acoustic Slat Feature Wall strictly North of WB3-WK (keeps WB3-WK & DB3-WK 100% open!)
+  addDBox(deepStatic, 0.04, 2.65, 1.32, warmTimberMat, 0.03, yB3 + 1.34, 4.30);
 
   // --- B305: 2.00m × 6.00m FOOD STORAGE WAREHOUSE SLAB & CEILING (X=0.60..2.60, Z=16.25..22.25) ---
   addDBox(deepStatic, 2.30, 0.26, 6.30, concCleanMat, 1.60, yB3 - 0.13, 19.25);
   addDBox(deepStatic, 2.30, 0.24, 6.30, concPconMat, 1.60, yB3 + 2.72, 19.25);
 
-  // Build All B3F Walls & Doors (DB3-COR, DB3-ST, DB3-SH, DB3-WC, DB3-BD, DB3-FD!)
+  // Build All B3F Walls & Doors (Existing + NEW DB3-WK, WB3-WK, DB3-SP, DB3-S2, DB3-PS, DB3-BT, DB3-TG, DB3-BT2, DB3-S1, DB3-S3, DB3-FD2!)
   buildDeepWalls(FLOOR_B3F, hB3);
 
   // --- B301 WARM WOODEN SHELTER LIVING FURNITURE (X=0.00..3.20, Z=3.60..8.60) ---
@@ -483,21 +484,22 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 0.44, 0.26, 0.03, screenGlowMat, 2.86, yB3 + 1.24, 4.17);
   addCollider(-2, 2.54, 3.64, 3.18, 4.22);
 
-  // Warm Wooden Dining Table + Twin Hinoki Benches (East Side)
-  addDBox(deepStatic, 0.82, 0.05, 1.65, hinokiMat, 2.55, yB3 + 0.74, 6.20);
-  [[2.22, 5.52], [2.88, 5.52], [2.22, 6.88], [2.88, 6.88]].forEach(([lx, lz]) => {
+  // Warm Wooden Dining Table + Hinoki Bench (North-East, leaving Z=6.55..8.50 wide open before DB3-SP Sauna Prep Door!)
+  addDBox(deepStatic, 0.80, 0.05, 1.55, hinokiMat, 2.56, yB3 + 0.74, 5.55);
+  [[2.24, 4.92], [2.88, 4.92], [2.24, 6.18], [2.88, 6.18]].forEach(([lx, lz]) => {
     addDBox(deepStatic, 0.055, 0.72, 0.055, mat.walnut, lx, yB3 + 0.36, lz);
   });
-  addDBox(deepStatic, 0.36, 0.44, 1.45, hinokiMat, 1.92, yB3 + 0.22, 6.20);
-  addCollider(-2, 1.72, 5.32, 3.05, 7.08);
+  addDBox(deepStatic, 0.34, 0.44, 1.38, hinokiMat, 1.94, yB3 + 0.22, 5.55);
+  addCollider(-2, 1.74, 4.72, 3.06, 6.40);
 
-  // Cozy Plush Denim Shelter Sofa + Warm Rug + Bookshelf (West Side)
-  addDBox(deepStatic, 1.35, 0.015, 2.15, makeSurfaceMat('carpet_beige', 1.4, 2.2), 0.92, yB3 + 0.025, 6.15);
-  addDBox(deepStatic, 0.72, 0.40, 1.75, denimMat, 0.42, yB3 + 0.20, 6.10);
-  addDBox(deepStatic, 0.16, 0.68, 1.75, denimMat, 0.12, yB3 + 0.44, 6.10);
-  addCollider(-2, 0.04, 5.18, 0.82, 7.02);
-  addDBox(deepStatic, 0.36, 1.85, 1.05, makeFrontMat('furniture_bookshelf'), 0.22, yB3 + 0.925, 7.82);
-  addCollider(-2, 0.02, 7.26, 0.44, 8.38);
+  // Cozy Plush Denim Shelter Sofa + Rug beneath WB3-WK Observation Window (leaves Z=6.60..8.55 wide open before DB3-WK!)
+  addDBox(deepStatic, 1.30, 0.015, 1.75, makeSurfaceMat('carpet_beige', 1.3, 1.8), 0.90, yB3 + 0.025, 5.72);
+  addDBox(deepStatic, 0.68, 0.40, 1.48, denimMat, 0.40, yB3 + 0.20, 5.72);
+  addDBox(deepStatic, 0.16, 0.66, 1.48, denimMat, 0.11, yB3 + 0.43, 5.72);
+  addCollider(-2, 0.04, 4.94, 0.78, 6.50);
+  // Relocated Bookshelf cleanly along Middle Gallery West Wall (clear of DB3-WK & DB3-SH/DB3-WC!)
+  addDBox(deepStatic, 0.34, 1.85, 1.05, makeFrontMat('furniture_bookshelf'), 0.20, yB3 + 0.925, 9.75);
+  addCollider(-2, 0.02, 9.20, 0.42, 10.30);
 
   // Warm Hanging Wooden Lantern Pendant in Living Ceiling
   addDBox(deepStatic, 0.02, 0.48, 0.02, mat.darkIron, 1.60, yB3 + hB3 - 0.24, 5.80);
@@ -535,9 +537,9 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 0.52, 1.96, 0.88, makeFrontMat('furniture_chest'), 2.88, yB3 + 0.98, 15.56);
   addCollider(-2, 2.58, 15.08, 3.18, 16.04);
 
-  // --- B305 (2.0m×6.0m) FOOD STORAGE WAREHOUSE RACKS, WATER TANKS, RATIONS & FREEZER ---
+  // --- B305 (2.0m×6.0m) 1ST FOOD STORAGE WAREHOUSE RACKS (STRAIGHT-THROUGH TO DB3-FD2 -> B306!) ---
   // Heavy-Duty 4-Tier Storage Racks lining West (X=0.64..1.08) & East (X=2.12..2.56) Walls!
-  // Leaves X = 1.08..2.12 (1.04m wide!) completely unobstructed all the way to the deep freezer!
+  // Leaves X = 1.08..2.12 (1.04m wide!) completely unobstructed all the way through DB3-FD2 into B306!
   const buildFoodRackBay = (rx, rz) => {
     // 4 Vertical Steel Posts + 4 Cedar/Plywood Shelf Decks
     [[-0.20, -0.58], [0.20, -0.58], [-0.20, 0.58], [0.20, 0.58]].forEach(([dx, dz]) => {
@@ -562,18 +564,12 @@ export function buildDeepBasement3D(ctx) {
     addDBox(deepStatic, 0.34, 0.32, 0.46, redCanMat, rx, yB3 + 2.10, rz - 0.24);
     addDBox(deepStatic, 0.34, 0.30, 0.46, rationBoxMat, rx, yB3 + 2.09, rz + 0.28);
   };
-  [17.15, 18.55, 19.95].forEach((rzBay) => {
+  [17.15, 18.55, 19.95, 21.35].forEach((rzBay) => {
     buildFoodRackBay(0.84, rzBay);
     buildFoodRackBay(2.36, rzBay);
   });
-  addCollider(-2, 0.60, 16.50, 1.09, 20.65);
-  addCollider(-2, 2.11, 16.50, 2.60, 20.65);
-
-  // Far South Wall Commercial Stainless Upright Refrigerator + Chest Deep Freezer (Z = 21.45..22.20)
-  addDBox(deepStatic, 0.78, 1.98, 0.72, makeFrontMat('appliance_fridge', { roughness: 0.26, metalness: 0.38 }), 1.04, yB3 + 0.99, 21.84);
-  addDBox(deepStatic, 1.04, 0.92, 0.68, mat.stainless, 2.02, yB3 + 0.46, 21.86);
-  addDBox(deepStatic, 1.06, 0.05, 0.70, mat.whiteMatte, 2.02, yB3 + 0.94, 21.86); // Freezer lid
-  addCollider(-2, 0.62, 21.44, 2.58, 22.25);
+  addCollider(-2, 0.60, 16.50, 1.09, 22.02);
+  addCollider(-2, 2.11, 16.50, 2.60, 22.02);
 
   // Overhead Bright Food Pantry LED Light Bars
   [17.85, 20.65].forEach((lz) => {
@@ -1170,6 +1166,37 @@ export function buildDeepBasement3D(ctx) {
   });
 
   // =========================================================================
+  // 4b. B3F ULTRA-PRECISION EXPANSION (B306..B313 + PS-TH)
+  // =========================================================================
+  const { b3Thermal } = buildB3fExpansion3D({
+    deepStatic,
+    deepDynamic,
+    mat,
+    addDBox,
+    addDLight,
+    addCollider,
+    interactiveProps,
+    makeCanvasMat,
+    sharedMats: {
+      concPconMat,
+      concCleanMat,
+      studioMirrorMat,
+      studioTrackGlow,
+      warmGlowMat,
+      amberStripMat,
+      waterJugMat,
+      crateMat,
+      riceSackMat,
+      rationBoxMat,
+      greenCanMat,
+      redCanMat,
+      warmTimberMat,
+      hinokiMat,
+      darkSpeakerMat,
+    },
+  });
+
+  // =========================================================================
   // 5. UV-BAKED STATIC BATCHING FOR DEEP BASEMENT B2F + B3F + B4F!
   // =========================================================================
   const { batchedGroup: deepBatched, stats: deepBatchStats } = batchStaticGroups([deepStatic]);
@@ -1178,6 +1205,7 @@ export function buildDeepBasement3D(ctx) {
   return {
     root: deepRoot,
     batchStats: deepBatchStats,
+    b3Thermal,
     b4Lab,
   };
 }

@@ -1992,7 +1992,7 @@ export const WALLS = FLOOR_1F.walls;
 export const FINISH_SCHEDULE = [
   { floor: '外部', room: '基礎・SRC外壁・制振ブレース・森道', floorTex: 'paver_moss_stones', floorName: '苔石アプローチ・中庭小径・コンクリート歩道', wallTex: 'yakisugi_deep', wallName: '深焼杉板・漆喰・SRC鉄骨帯・制振ブレース・RC打放(倉庫)', accentTex: 'stone_moss_wall', accentName: '苔石基礎・避雷針マスト・木鉄パーゴラ' },
   { floor: '母屋B4F', room: 'ELV専用 ギャング極秘研究所 (2.7×15.5m・CH3.55m 5区画)', floorTex: 'rubber_black_stud', floorName: '帯電防止黒エポキシ / 耐薬品ラボ床 / 防振RC＆中央ピット溝', wallTex: 'concrete_pcon', wallName: '耐爆RCリブ構造・SUS腰壁・防音ガラス隔壁・HEPAダクト＆天井クレーン', accentTex: 'metal_grate', accentName: 'ドラフト・5画面司令卓・42Uサーバー・CNC・回転コア封じ込めポッド' },
-  { floor: '母屋B3F', room: '木造シェルター(3.2×12.5m)＋食料倉庫(2×6m)＋W520通路', floorTex: 'wood_floor', floorName: '無垢ヒノキ＆オーク温もり床 / 防滑鋼板 / 保冷コンクリート', wallTex: 'wood_slats', wallName: '天然杉羽目板・シャワー浴室タイル・RC保冷壁', accentTex: 'crate_wood', accentName: '5停止直通ELV-1・シャワー/WC/寝室・備蓄棚＆冷凍庫' },
+  { floor: '母屋B3F', room: '木造シェルター(3.2×12.5m)＋第1/第2食料備蓄庫(2×6m+2×7m)＋防音ワーク室(3×4m)＋3サウナ/準備室/檜＆水風呂', floorTex: 'wood_floor', floorName: '無垢ヒノキ＆ウォールナット / 防滑黒御影石＆玄武岩 / 保冷防塵RC', wallTex: 'wood_slats', wallName: 'ケロ杉羽目板・焼杉・STC52/58防音木壁・エメラルド防水タイル', accentTex: 'crate_wood', accentName: '30kWツイン炉・26℃冷却PC卓・41℃檜＆14℃深水風呂・-25℃冷凍＆5段耐震棚' },
   { floor: '母屋B2F', room: '大空間スタジオ(10×10m CH3.8m)＋4×6m接続2室', floorTex: 'wood_floor', floorName: '無垢オークダンス床 / ウォールナット / 寄木', wallTex: 'concrete_pcon', wallName: 'Pコン打放RC擁壁＋大型全面スタジオミラー＆木製バー', accentTex: 'wood_slats', accentName: '防音録音コントロール室・音響バッフル・ELV乗場' },
   { floor: '母屋B1F', room: '地下3×7m主空間＋倉庫3室＋B2F下り階段', floorTex: 'concrete_clean', floorName: '金鏝押え灰色セメント土間', wallTex: 'concrete_pcon', wallName: '灰色RC打放擁壁 (CH2,020)', accentTex: 'metal_grate', accentName: '排水溝・倉庫棚15基・ELV前室' },
   { floor: '母屋1〜3F', room: '玄関・ELV地上乗場・LDK・書斎・茶室・バー', floorTex: 'wood_floor', floorName: '白テラゾー / オーク / 琉球畳', wallTex: 'wood_slats', wallName: '杉板RC・赤煉瓦・セージ漆喰・ELVステンレス枠', accentTex: 'marble_black', accentName: 'ELV-1地上直通口・黒大理石バー・和紙障子' },
@@ -2009,7 +2009,8 @@ export const FINISH_SCHEDULE = [
 export const OPENING_SCHEDULE = [
   { code: 'ELV-1 (B4↔1F)', kind: '超精密 MRL ギヤレス・トラクション式エレベーター', size: 'W900×H2100 (昇降14.2m)', spec: '5停止(B4F極秘研専用直結)・ジャーク制限S字制御・微速着床・電磁ブレーキ可動・テールコード・光電安全幕' },
   { code: 'DB4-1〜4 / WB4-G1〜4', kind: 'B4F 極秘研究所 気密・防音・耐爆装甲隔壁建具', size: 'W960〜980×H2250〜2280', spec: '生体認証エアロック扉・クリーン引戸・鋼製工作扉・装甲金庫室扉＋観察強化ガラス' },
-  { code: 'ST_B2 / ST_B3 / DB2-0', kind: '深地下階段室＆スタジオ・シェルター扉群', size: 'W900〜1150×H2100〜2300', spec: 'ST_B2(18段)→DB2-0(10×10スタジオ)・DB2-1/2(4×6室)・DB3-FD(食料庫気密扉)※B4Fへは階段なし' },
+  { code: 'DB3-FD2 / WK / SP / S1〜S3 / BT', kind: 'B3F拡張 第二食料庫断熱扉・ワーク防音戸・3サウナ外開安全ガラス扉', size: 'W660〜900×H2000〜2150', spec: '第2食料庫気密扉(DB3-FD2)・STC52ワーク引戸＆内窓・サウナ準備室扉・外開耐熱ガラス扉(S1/S2/S3)・水風呂直結3歩扉(BT2)' },
+  { code: 'ST_B2 / ST_B3 / DB2-0', kind: '深地下階段室＆スタジオ・シェルター扉群', size: 'W900〜1150×H2100〜2300', spec: 'ST_B2(18段)→DB2-0(10×10スタジオ)・DB2-1/2(4×6室)・DB3-FD(第1食料庫気密扉)※B4Fへは階段なし' },
   { code: 'DB-1〜3 / ST0〜6', kind: '母屋 地下鉄扉・7層積層階段コア', size: 'W750〜1000', spec: '母屋 B1F↔1F↔2F↔3F↔4F↔5F↔6F↔屋根裏(11層塔屋) 連続積層直階段＆SRC耐震コア' },
   { code: 'D5-1〜5 / W5-1〜9', kind: '母屋 5F全引戸＋西外気浴デッキ戸', size: 'W740〜1050×H2100', spec: '設計工房・檜サウナ・展望風呂・温室全引戸＋西1.0×2.6mスパデッキ掃出ガラス引戸' },
   { code: 'D6-1〜5 / W6-1〜8', kind: '母屋 6F全引戸＋全幅スカイテラス戸', size: 'W760〜1100×H2200', spec: '星見畳障子・天空パウダー・ワインセラー・天文サロン全引戸＋南4.6×1.1m全幅テラス戸' },
