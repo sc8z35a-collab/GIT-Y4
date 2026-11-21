@@ -669,7 +669,7 @@ export class FirstPersonHouseExplorer {
     this.playerPos.set(x, 0, z);
     this.activeBuilding = this._getBuildingAt(x, z);
     this.inElevator = this._isPointInElevatorCab(x, z, this.currentFloor);
-    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding, this.inElevator);
+    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding, this.inElevator, x, z);
     this.floorY = this._computeFloorY(x, z);
     this.eyeHeight = this._computeDesiredEyeHeight(x, z);
     this.yaw = yaw;
@@ -968,7 +968,10 @@ export class FirstPersonHouseExplorer {
       return FLOOR_B4F.baseY;
     }
     if (this.currentFloor === -2) {
-      if (x > 1.75 && z > 8.60 && z < 10.40) return FLOOR_B3F.baseY - 0.02;
+      if (x > 1.75 && x <= 3.20 && z > 8.60 && z < 10.40) return FLOOR_B3F.baseY - 0.02;
+      if (x >= 3.35 && x <= 5.35 && z >= 8.65 && z <= 12.15) return FLOOR_B3F.baseY - 0.03;
+      if (x >= 7.60 && x <= 11.60 && z >= 3.85 && z <= 12.15) return FLOOR_B3F.baseY - 0.015;
+      if (x >= 5.55 && x <= 7.35 && z >= 6.00 && z <= 12.15) return FLOOR_B3F.baseY - 0.01;
       return FLOOR_B3F.baseY;
     }
     if (this.currentFloor === -1) {
@@ -1061,7 +1064,10 @@ export class FirstPersonHouseExplorer {
       return z < 2.85 ? 'tile' : 'wood';
     }
     if (this.currentFloor === -2) {
-      if (z < 3.60 || z > 16.15 || (x > 1.70 && z >= 8.55 && z <= 12.15)) return 'tile';
+      if (x < 0.0 && z >= 4.60 && z <= 8.60) return 'wood';
+      if (x >= 3.35 && x <= 5.05 && z >= 6.00 && z <= 8.50) return 'wood';
+      if (x >= 3.35 && x <= 6.35 && z >= 3.85 && z <= 5.85) return 'wood';
+      if (x > 3.25 || z < 3.60 || z > 16.15 || (x > 1.70 && z >= 8.55 && z <= 12.15)) return 'tile';
       return 'wood';
     }
     if (this.activeBuilding === 'kei') return 'tile';
@@ -1241,7 +1247,7 @@ export class FirstPersonHouseExplorer {
       // Strictly enclosed 2.70m×15.50m B4F Secret Lab (plus ELV-1 cab when inside!)
       if (x < 0.55 + r * 0.5 || x > 4.75 || z < 0.85 + r * 0.5 || z > 16.35 - r * 0.5) return true;
     } else if (this.currentFloor === -2) {
-      if (x < -1.25 || x > 4.75 || z < 0.85 || z > 22.35) return true;
+      if (x < -3.25 || x > 11.70 || z < 0.85 || z > 29.55) return true;
     } else if (this.currentFloor === -1) {
       if (x < -1.25 || x > 14.25 || z < 0.70 || z > 17.10) return true;
     } else if (this.currentFloor === 0) {
@@ -1703,6 +1709,10 @@ export class FirstPersonHouseExplorer {
     if (this.house.b4Lab && this.currentFloor === -3) {
       this.house.b4Lab.update(dt, elapsed);
     }
+    // Animate B3F Thermal Wing (Löyly steam, laminar forest-breeze fan, ember glow, bath water shimmer)!
+    if (this.house.b3Thermal && this.currentFloor === -2) {
+      this.house.b3Thermal.update(dt, elapsed);
+    }
 
     this.house.windTimeUniform.value = elapsed;
     this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
@@ -1902,7 +1912,7 @@ export class FirstPersonHouseExplorer {
     if (this.currentFloor === -1 && x < 0.0) {
       return { id: 'b2_stair_landing', code: 'ST_B2', floor: -1, building: 'main', nameJp: 'B2F 階段踊場（スタジオ正面扉前）' };
     }
-    if (this.currentFloor === -2 && x < 0.0) {
+    if (this.currentFloor === -2 && x < 0.0 && z > 12.20) {
       return { id: 'b3_stair_landing', code: 'ST_B3', floor: -2, building: 'main', nameJp: 'B3F 階段踊場（木造シェルター連絡口）' };
     }
 
@@ -1948,6 +1958,8 @@ export class FirstPersonHouseExplorer {
         inElevator: this.inElevator,
         doorOpenMap,
         propStates,
+        playerX: this.playerPos.x,
+        playerZ: this.playerPos.z,
       });
 
       // Keep deep underground spaces crystal clear (no exterior forest fog bleed!)

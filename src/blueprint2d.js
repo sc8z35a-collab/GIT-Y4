@@ -141,7 +141,7 @@ export class ArchitecturalBlueprint2D {
     const isDeepB4 = Boolean(floor.isDeepB4);
     const isDeepB3 = Boolean(floor.isDeepB3);
     const isDeepB2 = Boolean(floor.isDeepB2);
-    const bWidth = isDeepB4 ? 4.95 : (floor.width || HOUSE.width);
+    const bWidth = isDeepB4 ? 4.95 : (isDeepB3 ? 12.20 : (floor.width || HOUSE.width));
     const bDepth = isDeepB4 ? 16.65 : (floor.depth || HOUSE.depth);
 
     if (isDeepB4) {
@@ -153,13 +153,13 @@ export class ArchitecturalBlueprint2D {
       this.padT = 148;
       this.padB = 268;
     } else if (isDeepB3) {
-      // Sheet 1: B3F Left Plan (W520 Corridor + 3.2×12.5m Wooden Shelter + 2×6m Food Vault)
+      // Sheet 1: Expanded B3F Left Plan (B306 2×7m 2nd Food Vault + B307 3×4m Work Studio + East Thermal Sauna/Bath Wing)
       // + Right Column: Full Vertical 5-Stop MRL Traction Elevator Engineering Cross-Section (B4F -14.2m -> 1F Ground)!
-      this.scale = 46;
-      this.padL = 136;
-      this.padR = 548;
-      this.padT = 148;
-      this.padB = 268;
+      this.scale = 34;
+      this.padL = 215;
+      this.padR = 540;
+      this.padT = 135;
+      this.padB = 265;
     } else if (isDeepB2) {
       // Sheet 2: B2F High-Ceiling 10×10m Studio + 2× (4×6m) Connected Rooms + ST_B2/ST_B3/ELV-1
       this.scale = 48;
@@ -328,7 +328,7 @@ export class ArchitecturalBlueprint2D {
         : (floor.isDeepB4
           ? 'ELV-1専用・内法 2,700×15,500 (CH3,550 / B3F直下4m)'
           : (floor.isDeepB3
-            ? 'シェルター3.2×12.5m＋食料庫2×6m＋5停止ELV(14.2m)'
+            ? '総141.26m²・第二食料備蓄庫2×7m＋3サウナ＆檜水風呂＋防音ワーク室3×4m'
             : (floor.isDeepB2
               ? 'スタジオ 10,000×10,000 (CH3,800) ＋ 4,000×6,000×2室'
               : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`))));
@@ -336,7 +336,7 @@ export class ArchitecturalBlueprint2D {
       ? '1/20 三面精密設計'
       : (floor.isDeepB4
         ? '1/85 平面＋縦横断面'
-        : (floor.isDeepB3 ? '1/100 平面＋5停止ELV縦断面' : (floor.isDeepB2 ? '1/100 大空間スタジオ' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50')))));
+        : (floor.isDeepB3 ? '1/100 拡張平面＋5停止ELV縦断面' : (floor.isDeepB2 ? '1/100 大空間スタジオ' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50')))));
     g.appendChild(el('text', { x: 28, y: 42, 'font-size': (floor.isDeepB4 || floor.isDeepB3) ? 8.3 : ((isCamper || isKei || floor.isDeepB2) ? 9.6 : 11.2), 'font-weight': 700, fill: floor.isDeepB4 ? '#7f1d1d' : '#1c1e22', 'letter-spacing': 0.15 },
       `実施設計 ${floor.titleJp} (${scaleTag}) — ${sizeTxt}`));
     g.appendChild(el('text', { x: 28, y: 59, 'font-size': (isCamper || isKei || floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2) ? 8.0 : 8.5, fill: '#5b5852' },
@@ -392,8 +392,8 @@ export class ArchitecturalBlueprint2D {
     }
 
     if (floor.isDeepB3) {
-      // Subterranean bedrock hatch framing B3F (B3FL -10,200 mm!)
-      g.appendChild(el('rect', { x: this.px(-1.35), y: this.pz(0.45), width: 6.45 * sc, height: 22.30 * sc, fill: 'url(#hatch-earth)', stroke: '#7c766b', 'stroke-width': 0.9, opacity: 0.55 }));
+      // Subterranean bedrock hatch framing EXPANDED B3F (B3FL -10,200 mm!)
+      g.appendChild(el('rect', { x: this.px(-3.75), y: this.pz(0.45), width: 15.95 * sc, height: 29.55 * sc, fill: 'url(#hatch-earth)', stroke: '#7c766b', 'stroke-width': 0.9, opacity: 0.45 }));
       // ELV-1 Shaft Plan Symbol at X=3.25..4.85, Z=0.85..2.65
       this._drawElevatorShaftPlanSymbol(g, 'ELV-1 地上直通');
       // ST_B3 Arrival Stairwell Symbol at West of Bedroom (X=-1.15..-0.15, Z=12.45..16.05)
@@ -402,7 +402,7 @@ export class ArchitecturalBlueprint2D {
         const sy = this.pz(STAIR_B2_B3.topZ + i * ((STAIR_B2_B3.bottomZ - STAIR_B2_B3.topZ) / 12));
         g.appendChild(el('line', { x1: this.px(STAIR_B2_B3.minX), y1: sy, x2: this.px(STAIR_B2_B3.maxX), y2: sy, stroke: '#6c6256', 'stroke-width': 0.7 }));
       }
-      g.appendChild(el('text', { x: this.px(-0.65), y: this.pz(13.85), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#1c1e22', transform: `rotate(-90 ${this.px(-0.65)} ${this.pz(13.85)})` }, 'ST_B3 UP B2Fスタジオへ'));
+      g.appendChild(el('text', { x: this.px(-0.65), y: this.pz(13.85), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#1c1e22', transform: `rotate(-90 ${this.px(-0.65)} ${this.pz(13.85)})` }, 'ST_B3 UP B2Fへ'));
       return;
     }
 
@@ -709,11 +709,18 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: this.px(1.34), y: this.pz(1.49), width: 0.52 * sc, height: 2.11 * sc, fill: '#d6e3ee', stroke: '#0f4c81', 'stroke-width': 1.0 }));
       g.appendChild(el('rect', { x: this.px(1.86), y: this.pz(1.49), width: 0.79 * sc, height: 0.52 * sc, fill: '#d6e3ee', stroke: '#0f4c81', 'stroke-width': 1.0 }));
       g.appendChild(el('rect', { x: this.px(2.65), y: this.pz(1.20), width: 0.60 * sc, height: 1.10 * sc, fill: '#e0ecf5', stroke: '#0f4c81', 'stroke-width': 1.0 }));
-      // Protagonist Ø400mm scale indicator inside W520mm corridor!
-      g.appendChild(el('circle', { cx: this.px(1.60), cy: this.pz(2.62), r: 0.20 * sc, fill: 'rgba(156,71,34,0.22)', stroke: '#9c4722', 'stroke-width': 1.1 }));
-      g.appendChild(el('text', { x: this.px(0.65), y: this.pz(2.66), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W520 (1.3×Ø400)'));
-      // 3.20m × 12.50m Warm Wooden Shelter Outer Dimension Highlight
-      g.appendChild(el('rect', { x: this.px(0.00), y: this.pz(3.60), width: 3.20 * sc, height: 12.50 * sc, fill: 'none', stroke: '#9a5b25', 'stroke-width': 1.4, 'stroke-dasharray': '7 3' }));
+      g.appendChild(el('circle', { cx: this.px(1.60), cy: this.pz(2.62), r: 0.20 * sc, fill: 'rgba(156,71,34,0.22)', stroke: '#9c4722', 'stroke-width': 1.0 }));
+      g.appendChild(el('text', { x: this.px(0.32), y: this.pz(2.66), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W520'));
+      // 3.20m × 12.50m Existing Warm Wooden Shelter Outline + East Monolithic RC Thermal Wing (8.25×8.30m) + B4F Non-Overlap Proof!
+      g.appendChild(el('rect', { x: this.px(0.00), y: this.pz(3.60), width: 3.20 * sc, height: 12.50 * sc, fill: 'none', stroke: '#9a5b25', 'stroke-width': 1.1, 'stroke-dasharray': '6 3' }));
+      g.appendChild(el('rect', { x: this.px(3.35), y: this.pz(3.85), width: 8.25 * sc, height: 8.30 * sc, fill: 'none', stroke: '#b91c1c', 'stroke-width': 1.1, 'stroke-dasharray': '7 3' }));
+      // 300mm STC-58 Double-Stud Acoustic Wall Highlight between B309 & B311
+      g.appendChild(el('rect', { x: this.px(7.60), y: this.pz(8.85), width: 4.00 * sc, height: 0.30 * sc, fill: '#fef3c7', stroke: '#d97706', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: this.px(9.60), y: this.pz(9.05), 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 800, fill: '#92400e', 'font-family': 'monospace' }, 'STC-58 防音断熱300'));
+      // Shared Wet Pipe Shaft PS-B3W Highlight between B302/B303 & B312
+      g.appendChild(el('rect', { x: this.px(3.16), y: this.pz(8.80), width: 0.24 * sc, height: 3.10 * sc, fill: 'rgba(14,165,233,0.35)', stroke: '#0284c7', 'stroke-width': 0.8 }));
+      // Dashed B4F Secret Lab Footprint Proof (ZERO overlap with new rooms!)
+      g.appendChild(el('rect', { x: this.px(0.55), y: this.pz(0.85), width: 2.70 * sc, height: 15.50 * sc, fill: 'none', stroke: '#7e22ce', 'stroke-width': 0.9, 'stroke-dasharray': '5 3', opacity: 0.65 }));
       return;
     }
 
@@ -805,19 +812,22 @@ export class ArchitecturalBlueprint2D {
     if (floor.isDeepB3) {
       return {
         x: [
+          { id: 'BX0', pos: -3.15 },
           { id: 'BX1', pos: 0.00 },
-          { id: 'BX2', pos: 1.34 },
-          { id: 'BX3', pos: 1.86 },
-          { id: 'BX4', pos: 3.20 },
-          { id: 'BX5', pos: 4.85 },
+          { id: 'BX2', pos: 3.20 },
+          { id: 'BX3', pos: 5.35 },
+          { id: 'BX4', pos: 7.60 },
+          { id: 'BX5', pos: 11.60 },
         ],
         z: [
           { id: 'BY1', pos: 0.85 },
           { id: 'BY2', pos: 3.60 },
-          { id: 'BY3', pos: 8.60 },
-          { id: 'BY4', pos: 12.20 },
-          { id: 'BY5', pos: 16.10 },
-          { id: 'BY6', pos: 22.25 },
+          { id: 'BY3', pos: 5.85 },
+          { id: 'BY4', pos: 8.65 },
+          { id: 'BY5', pos: 12.15 },
+          { id: 'BY6', pos: 16.10 },
+          { id: 'BY7', pos: 22.25 },
+          { id: 'BY8', pos: 29.43 },
         ],
       };
     }
@@ -968,25 +978,99 @@ export class ArchitecturalBlueprint2D {
     }
 
     if (floor.isDeepB3) {
-      // SHEET 1: B3F WARM WOODEN SHELTER (3.2×12.5m) + SHOWER + TOILET + BEDROOM + 2×6m FOOD VAULT!
-      box(0.08, 3.85, 0.62, 0.58, 'HEPA', '#cfd7df');
-      box(2.26, 4.15, 0.76, 0.58, '暖炉', '#f8d7be');
-      box(0.14, 5.15, 0.88, 1.55, '木製卓', '#f3e5cf');
-      box(2.14, 5.45, 0.82, 1.90, 'ソファ', '#d8e0e8');
-      box(0.06, 8.70, 0.36, 1.85, '木製本棚', '#efe3d1');
-      box(2.58, 8.70, 0.50, 0.90, 'シャワー', '#d0e9f7');
-      box(2.68, 9.76, 0.42, 0.54, 'ベンチ', '#f3e5cf');
-      box(2.64, 10.95, 0.48, 0.52, 'WC', '#fff');
-      box(2.50, 11.62, 0.62, 0.38, '手洗', '#eef7fc');
-      box(1.52, 13.08, 1.58, 2.02, '木造クイーンベッド', '#f4ece3');
-      box(0.08, 12.45, 0.56, 1.10, '書斎机', '#f3e5cf');
-      box(0.06, 13.68, 0.54, 1.24, '衣類棚', '#efe3d1');
-      [16.85, 18.25, 19.65, 20.95].forEach((rz, idx) => {
-        box(0.62, rz - 0.52, 0.46, 1.04, idx % 2 === 0 ? '水20L' : '食料棚', idx % 2 === 0 ? '#cfe4f5' : '#e8dcc7');
-        box(2.12, rz - 0.52, 0.46, 1.04, idx % 2 === 0 ? '非常食' : '米・缶詰', '#e4dfcf');
+      // SHEET 1: B3F EXPANDED PLAN — SHELTER (3.2×12.5m) + B305 (2×6m) + B306 2ND FOOD VAULT (2×7m)
+      // + B307 WORK STUDIO (3×4m) + EAST THERMAL WING (B308 PREP, B309/B310/B311 SAUNAS, B312 BATH, B313 COOLING, PS-TH)
+      // --- Existing Shelter Core (B301–B304) ---
+      box(0.08, 3.98, 0.56, 0.52, '暖炉', '#f8d7be');
+      box(2.56, 3.68, 0.58, 0.50, 'HEPA', '#cfd7df');
+      box(2.14, 4.78, 0.84, 1.55, '木製卓', '#f3e5cf');
+      box(0.08, 4.98, 0.68, 1.48, 'ソファ', '#d8e0e8');
+      box(0.04, 9.22, 0.34, 1.05, '本棚', '#efe3d1');
+      box(2.68, 8.64, 0.44, 0.72, 'ベンチ', '#f3e5cf');
+      box(2.64, 9.48, 0.50, 0.78, 'シャワー', '#d0e9f7');
+      box(2.62, 10.78, 0.52, 0.62, 'WC', '#fff');
+      box(2.68, 11.50, 0.46, 0.54, '手洗', '#eef7fc');
+      box(1.50, 12.74, 1.64, 2.02, '木造クイーンベッド', '#f4ece3');
+      box(0.04, 13.28, 0.50, 1.14, '書斎机', '#f3e5cf');
+      box(2.62, 15.12, 0.52, 0.88, '衣類棚', '#efe3d1');
+
+      // --- B305 1st Food Storage Warehouse (2.0×6.0m, W1,040 straight cart aisle to DB3-FD2!) ---
+      [17.15, 18.55, 19.95, 21.35].forEach((rz, idx) => {
+        box(0.62, rz - 0.58, 0.44, 1.16, idx % 2 === 0 ? '水20L' : '食料棚', idx % 2 === 0 ? '#cfe4f5' : '#e8dcc7');
+        box(2.14, rz - 0.58, 0.44, 1.16, idx % 2 === 0 ? '非常食' : '米缶詰', '#e4dfcf');
       });
-      box(0.76, 21.56, 0.72, 0.60, '大型冷蔵', '#d8e2e8');
-      box(1.54, 21.62, 0.96, 0.54, '冷凍ストッカ', '#d0e2ee');
+
+      // --- ★ B306 2nd Food Storage Vault (2.0×7.0m — Zone A Weighing/Vacuum, Zone B 6×5-Tier Racks, Zone C Cold-Chain) ---
+      box(0.62, 22.58, 0.46, 1.78, '計量/真空台', '#dce6f2');
+      // Floor-flush 150kg stainless crate scale
+      g.appendChild(el('rect', { x: this.px(1.35), y: this.pz(23.22), width: 0.46 * sc, height: 0.46 * sc, fill: '#eef4fa', stroke: '#475569', 'stroke-width': 0.75, 'stroke-dasharray': '2 2' }));
+      g.appendChild(el('text', { x: this.px(1.58), y: this.pz(23.48), 'text-anchor': 'middle', 'font-size': 4.8, fill: '#334155', 'font-family': 'monospace' }, '150kg'));
+      [25.00, 26.04, 27.08].forEach((rz, idx) => {
+        box(0.62, rz - 0.48, 0.44, 0.96, idx % 2 === 0 ? '米30L' : '水20L', idx % 2 === 0 ? '#e5dec9' : '#cfe4f5');
+        box(2.14, rz - 0.48, 0.44, 0.96, idx % 2 === 0 ? '25年缶' : '電解水', idx % 2 === 0 ? '#e6d8cc' : '#cce4f4');
+      });
+      box(0.63, 27.84, 0.42, 0.48, '除湿', '#e2e8f0');
+      box(0.64, 28.66, 0.78, 0.72, '+2℃冷蔵', '#cde4f5');
+      box(1.50, 28.70, 1.04, 0.68, '-25℃冷凍', '#c4d8f2');
+
+      // --- ★ B307 Warm Timber Acoustic Work Studio (3.0×4.0m) ---
+      box(-3.12, 4.81, 0.72, 3.62, '無垢L字デスク', '#e8d7be');
+      box(-2.40, 4.62, 1.12, 0.68, 'A1製図面', '#d8eadb');
+      box(-1.16, 4.62, 0.96, 0.40, '書庫', '#efe3d1');
+      box(-2.18, 7.68, 0.76, 0.74, '思索椅', '#dfccb4');
+      box(-2.03, 7.15, 0.46, 0.42, '', '#e7d6c0');
+      g.appendChild(el('circle', { cx: this.px(-2.26), cy: this.pz(8.36), r: 0.16 * sc, fill: '#fef3c7', stroke: '#d97706', 'stroke-width': 0.9 }));
+
+      // --- ★ B308 Mandatory Sauna Preparation Room (1.7×2.5m) ---
+      box(3.37, 6.04, 0.42, 0.84, 'ロッカー', '#efe3d1');
+      box(4.62, 6.04, 0.42, 0.66, '給水/精油', '#d4e8ea');
+      box(4.70, 7.88, 0.34, 0.56, 'タオル/盤', '#e9decb');
+
+      // --- ★ B309 Finnish Main Löyly Sauna (4.0×5.0m — Twin 15kW Stoves + 3-Tier L-Bench!) ---
+      box(7.72, 4.34, 1.30, 2.04, '', '#e7e2da');
+      [4.90, 5.82].forEach((sz) => {
+        g.appendChild(el('circle', { cx: this.px(8.38), cy: this.pz(sz), r: 0.31 * sc, fill: '#fca5a5', stroke: '#b91c1c', 'stroke-width': 1.2 }));
+        g.appendChild(el('text', { x: this.px(8.38), y: this.pz(sz) + 2, 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 700, fill: '#7f1d1d' }, '15kW'));
+      });
+      // 3-Tier Floating L-Shaped Stadium Benches
+      box(9.31, 3.85, 2.28, 0.78, '3段Lベンチ(上段)', '#f4dec0');
+      box(10.81, 4.63, 0.78, 4.18, '上段', '#f4dec0');
+      box(9.31, 4.63, 1.50, 0.60, '中段', '#f7e7cf');
+      box(10.21, 5.23, 0.60, 3.58, '中段', '#f7e7cf');
+      box(9.71, 5.28, 0.50, 3.53, '下段', '#faf0de');
+
+      // --- ★ B310 Mild-Sauna Long-Session Work Room (3.0×2.0m — 46℃ + 26℃ Cooled Desk!) ---
+      box(3.45, 3.93, 0.46, 0.46, '3.5kW', '#f8cfb4');
+      box(4.67, 3.90, 1.62, 0.68, '26℃冷却PC卓', '#cfeaf6');
+      box(4.71, 4.96, 1.54, 0.56, '長時間ベンチ', '#f4dec0');
+
+      // --- ★ B311 Private Meditation Sauna (4.0×3.0m — 9kW Corner Stove + W950 Lie-Down Bench!) ---
+      g.appendChild(el('circle', { cx: this.px(8.06), cy: this.pz(9.60), r: 0.29 * sc, fill: '#f9a8a8', stroke: '#991b1b', 'stroke-width': 1.15 }));
+      g.appendChild(el('text', { x: this.px(8.06), y: this.pz(9.60) + 2, 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 700, fill: '#7f1d1d' }, '9kW'));
+      box(10.62, 9.18, 0.95, 2.94, 'W950寝ベンチ', '#dec8b0');
+      box(8.63, 11.17, 2.00, 0.95, 'W950寝台', '#dec8b0');
+      box(10.00, 9.32, 0.62, 1.85, '下段', '#e8d7c2');
+
+      // --- ★ B312 Hinoki Bath & 14°C Deep Cold Plunge (2.0×3.5m) ---
+      box(3.38, 8.98, 0.54, 1.38, '洗2栓', '#eef7fc');
+      box(4.98, 8.75, 0.34, 0.34, '掛湯', '#e0f2fe');
+      g.appendChild(el('rect', { x: this.px(3.38), y: this.pz(10.65), width: 0.92 * sc, height: 1.47 * sc, rx: 3, fill: '#f3dec1', stroke: '#92400e', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: this.px(3.84), y: this.pz(11.38), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 700, fill: '#78350f' }, '41℃檜'));
+      g.appendChild(el('rect', { x: this.px(4.34), y: this.pz(10.65), width: 0.98 * sc, height: 1.47 * sc, rx: 3, fill: '#bae6fd', stroke: '#0369a1', 'stroke-width': 1.2 }));
+      g.appendChild(el('text', { x: this.px(4.83), y: this.pz(11.30), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 700, fill: '#0c4a6e' }, '14℃水'));
+      g.appendChild(el('text', { x: this.px(4.83), y: this.pz(11.62), 'text-anchor': 'middle', 'font-size': 4.8, 'font-family': 'monospace', fill: '#0369a1' }, 'D950'));
+
+      // --- ★ B313 Totonoi Forest-Breeze Cooling Gallery (1.8×6.15m) ---
+      box(5.73, 10.80, 0.58, 1.24, '整椅1', '#efe2cd');
+      box(6.59, 10.80, 0.58, 1.24, '整椅2', '#efe2cd');
+      box(5.59, 6.10, 0.30, 0.32, '冷水', '#d0e9f7');
+      // Ceiling 19°C Laminar Forest-Breeze Fan Symbol
+      g.appendChild(el('circle', { cx: this.px(6.45), cy: this.pz(9.65), r: 0.42 * sc, fill: 'none', stroke: '#0d9488', 'stroke-width': 0.9, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('text', { x: this.px(6.45), y: this.pz(9.65) + 2, 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': 700, fill: '#0f766e' }, '19℃風'));
+
+      // --- ★ PS-TH Thermal MEP Plant Room (0.8×2.0m) ---
+      box(6.62, 3.94, 0.66, 0.72, 'ERV/チラー', '#cbd5e1');
+      box(7.14, 4.86, 0.20, 0.64, '60k', '#fde68a');
       return;
     }
 
@@ -1448,12 +1532,43 @@ export class ArchitecturalBlueprint2D {
       }
 
       if (floor.isDeepB3) {
-        const bw = r.code === 'B302' || r.code === 'B303' ? 70 : (r.code === 'B300' ? 92 : 124);
-        const bh = 28;
+        if (r.code === 'PS-TH') {
+          const grp = el('g', { style: 'pointer-events:none' });
+          grp.appendChild(el('rect', { x: cx - 10.5, y: cy - 28, width: 21, height: 56, rx: 2.5, fill: 'rgba(255,255,255,0.92)', stroke: '#475569', 'stroke-width': 0.7 }));
+          grp.appendChild(el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'font-size': 5.4, 'font-weight': 700, fill: '#334155', transform: `rotate(-90 ${cx} ${cy})` }, 'PS-TH 機械室'));
+          g.appendChild(grp);
+          continue;
+        }
+        const shortNames = {
+          B300: 'W520通路',
+          B301: '木造シェルター',
+          B302: 'シャワー',
+          B303: 'トイレ',
+          B304: '木造寝室',
+          B305: '第一食料庫',
+          B306: '第二食料備蓄庫',
+          B307: '防音ワーク室',
+          B308: 'サウナ準備室',
+          B309: 'フィンランド主サウナ',
+          B310: '微サウナ作業室',
+          B311: 'プライベートサウナ',
+          B312: '檜&水風呂',
+          B313: 'ととのい廊',
+        };
+        const widthMap = {
+          B300: 60, B301: 92, B302: 44, B303: 44, B304: 86,
+          B305: 64, B306: 66, B307: 90, B308: 55, B309: 112,
+          B310: 88, B311: 108, B312: 64, B313: 56,
+        };
+        const bw = widthMap[r.code] || 72;
+        const bh = r.code === 'B302' || r.code === 'B303' ? 21 : 24;
+        const lbl = `${r.code} ${shortNames[r.code] || r.nameJp.split('（')[0]}`;
+        const fs = bw <= 48 ? 5.1 : (bw <= 66 ? 5.6 : 6.4);
+        const accentStroke = (r.code === 'B309' || r.code === 'B311') ? '#b45309' : (r.code === 'B312' ? '#0284c7' : (r.code === 'B306' ? '#1d4ed8' : 'rgba(28,30,34,0.30)'));
         const grp = el('g', { style: 'pointer-events:none' });
-        grp.appendChild(el('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: 3, fill: 'rgba(255,255,255,0.92)', stroke: 'rgba(28,30,34,0.28)', 'stroke-width': 0.7 }));
-        grp.appendChild(el('text', { x: cx, y: cy - 2.5, 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp.split('（')[0]}`));
-        grp.appendChild(el('text', { x: cx, y: cy + 7.5, 'text-anchor': 'middle', 'font-size': 6.0, fill: '#7a4b25', 'font-family': 'monospace' }, `${r.area.toFixed(1)}m² · ${r.ch}`));
+        grp.appendChild(el('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: 2.8, fill: 'rgba(255,255,255,0.93)', stroke: accentStroke, 'stroke-width': 0.75 }));
+        grp.appendChild(el('text', { x: cx, y: cy - 1.8, 'text-anchor': 'middle', 'font-size': fs, 'font-weight': 700, fill: '#1c1e22' }, lbl));
+        grp.appendChild(el('text', { x: cx, y: cy + 6.8, 'text-anchor': 'middle', 'font-size': bw <= 48 ? 4.8 : 5.3, fill: '#7a4b25', 'font-family': 'monospace' }, `${r.area.toFixed(1)}m²`));
         g.appendChild(grp);
         continue;
       }
@@ -1517,10 +1632,16 @@ export class ArchitecturalBlueprint2D {
       return;
     }
     if (floor.isDeepB3) {
+      dimH(-3.15, -0.15, this.pz(3.88), 'B307 3,000');
       dimH(0.00, 3.20, this.pz(-0.20), 'シェルター幅 3,200');
-      dimH(0.60, 2.60, this.pz(22.65), '食料庫幅 2,000');
-      dimV(3.60, 16.10, this.px(-2.45), '木造シェルター 12,500');
-      dimV(16.25, 22.25, this.px(-2.45), '食料倉庫 6,000');
+      dimH(3.35, 11.60, this.pz(3.15), '東翼サーマルRC 8,250');
+      dimH(0.60, 2.60, this.pz(30.15), '第2食料庫幅 2,000');
+      dimV(4.60, 8.60, this.px(-3.92), 'ワーク室 4,000');
+      dimV(3.60, 16.10, this.px(-4.72), '木造シェルター 12,500');
+      dimV(16.25, 22.25, this.px(-1.15), '第1食料庫 6,000');
+      dimV(22.43, 29.43, this.px(-1.15), '第2食料備蓄庫 7,000');
+      dimV(3.85, 8.85, this.px(12.22), '主サウナ 5,000');
+      dimV(9.15, 12.15, this.px(12.22), '私サウナ 3,000');
       return;
     }
     if (floor.isDeepB2) {
@@ -1916,8 +2037,8 @@ export class ArchitecturalBlueprint2D {
    */
   _drawElevatorEngineeringView(svg, VW, VH) {
     const g = el('g');
-    const colX = 410;
-    const colW = VW - colX - 28; // ~476px
+    const colX = 656;
+    const colW = VW - colX - 28; // ~486px, cleanly clear of B3F East Thermal RC Wall (px=618)!
 
     // --- PANEL 1: FULL VERTICAL 5-STOP MRL TRACTION ELEVATOR HOISTWAY CROSS-SECTION (1/42) ---
     const p1Y = 82;
@@ -1948,7 +2069,7 @@ export class ArchitecturalBlueprint2D {
       { y: 0.00, code: '1F 地上直通', desc: '玄関1R03・森直結', col: '#059669' },
       { y: -2.40, code: 'B1F 倉庫', desc: 'セメント3×7m＋棚15基', col: '#475569' },
       { y: -6.60, code: 'B2F スタジオ', desc: '10×10m (CH3.8m)', col: '#b45309' },
-      { y: -10.20, code: 'B3F シェルター', desc: 'W520通路→木造3.2×12.5m', col: '#9c4722' },
+      { y: -10.20, code: 'B3F 拡張141m²', desc: 'シェルター＋2食料庫＋3サウナ', col: '#9c4722' },
       { y: -14.20, code: 'B4F 極秘研', desc: 'ELV専用・2.7×15.5m CH3.55', col: '#991b1b' },
     ];
     stops.forEach((st) => {
@@ -2040,30 +2161,31 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: callX, y: cy + 2.8, 'font-size': 6.7, 'font-weight': 700, fill: col }, txt));
     });
 
-    // --- PANEL 2: MARK II ELEVATOR & DEEP BASEMENT SPECIFICATION TABLE ---
+    // --- PANEL 2: MARK II ELEVATOR & B3F EXPANSION THERMAL/FOOD ENGINEERING SPECIFICATION TABLE ---
     const p2Y = p1Y + p1H + 14;
-    const p2H = Math.max(200, VH - 236 - p2Y);
+    const p2H = Math.max(210, VH - 236 - p2Y);
     g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
     g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
     g.appendChild(el('text', { x: colX + 10, y: p2Y + 14.5, 'font-size': 8.3, 'font-weight': 700, fill: '#1c1e22' },
-      '② 超精密エレベーター ELV-1 Mk2 ＆ 深地下B3F/B4F 統合機構諸元'));
+      '② ELV-1 Mk2 ＆ B3F拡張（第二食料備蓄庫・ワーク室・3サウナ＆檜/水風呂）諸元'));
 
     const specs = [
-      ['昇降機方式・駆動', 'MRL ギヤレスPM巻上機・可動電磁ブレーキ・6本スポーク綱車・4本鋼ワイヤー'],
-      ['5停止・昇降行程', '14,200mm（1F ±0.0 / B1 -2.4 / B2 -6.6 / B3 -10.2 / B4 極秘研 -14.2m）'],
-      ['7相ジャーク制御', 'ジャーク制限2.6m/s³・最高2.40m/s・微速0.18m/s精密着床・減衰着床バウンス'],
-      ['安全・ドア機構', '赤外線光電安全カーテン自動反転・扉クランク連動・調速機ループ・複数階予約キュー'],
-      ['リアル音響演出', '電磁ブレーキ開閉打音・VVVFインバータPWM音・上下別チャイム・光電警告音'],
-      ['B3F 主人公1.3倍通路', '有効幅 W 520 mm (主人公Ø400 × 1.30倍)・3.2×12.5m木造シェルター＆2×6m食料庫'],
-      ['B4F 極秘研究所', 'B3F直下4.0m (-14.2m)・ELV専用(階段一切なし)・2.7×15.5m 高天井CH3,550 5区画'],
+      ['昇降機 ELV-1 Mk2', '5停止(1F〜B4 -14.2m)・7相S字制御・可動電磁ブレーキ・テールコード・光電安全幕'],
+      ['B306 第二食料備蓄庫', '2.0×7.0m (14m²)・DB3-FD2直結・計量/真空台＋5段耐震棚×6＋+2℃冷蔵/-25℃冷凍'],
+      ['B307 防音ワーク室', '3.0×4.0m (12m²)・STC52・L字無垢卓・デュアル4K・A1製図面・思索椅＆和紙灯'],
+      ['B308 サウナ準備室', '1.7×2.5m (4.25m²)・全サウナ/風呂必須前室・ロッカー・電解質/精油6種・5系統盤'],
+      ['B309 主サウナ(95℃)', '4.0×5.0m (20m²)・30kWツイン柱炉(320kg石)・3段浮遊Lベンチ・対流曲面天井'],
+      ['B310 微サウナ作業', '2.0×3.0m (6m²)・42-52℃・26℃冷却プレナムPC卓・3.5kWビオ炉・長時間ベンチ'],
+      ['B311 プライベート', '3.0×4.0m (12m²)・80-90℃・STC58防音壁・9kW玄武岩角炉・W950寝サウナ上段'],
+      ['B312/313 浴＆ととのい', '41℃檜浴槽＋14℃水深950mm深水風呂(3歩2.2m直結)・19℃層流風＆無重力椅×2'],
     ];
     const rowH = Math.min(31, (p2H - 26) / specs.length);
     specs.forEach(([k, v], i) => {
       const ry = p2Y + 22 + i * rowH;
       if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
       g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
-      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.68, 'font-size': 7.1, 'font-weight': 700, fill: '#4a4640' }, k));
-      g.appendChild(el('text', { x: colX + 128, y: ry + rowH * 0.68, 'font-size': 7.1, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.68, 'font-size': 6.6, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 108, y: ry + rowH * 0.68, 'font-size': 6.1, 'font-family': 'monospace', fill: '#1c1e22' }, v));
     });
 
     svg.appendChild(g);
@@ -2154,7 +2276,7 @@ export class ArchitecturalBlueprint2D {
       // 2. Main Tower — ALL 11 LEVELS (B4F -14.2m -> B3F -10.2m -> B2F -6.6m -> B1F -2.4m -> 1F..6F -> RF +18.93m + Mast +20.42m)!
       [
         { sIdx: 0, x0: 0.4, w: 3.1, y0: -14.20, y1: -10.65, txt: 'B4 極秘研', tx: 1.90 },
-        { sIdx: 1, x0: 0.0, w: 5.0, y0: -10.20, y1: -6.60, txt: 'B3F 避難', tx: 1.70 },
+        { sIdx: 1, x0: -2.0, w: 11.2, y0: -10.20, y1: -6.60, txt: 'B3F 避難/ｻｳﾅ', tx: 6.40 },
         { sIdx: 2, x0: 0.0, w: 8.6, y0: -6.60, y1: -2.40, txt: 'B2F 10×10', tx: 6.75 },
         { sIdx: 3, x0: 0.0, w: 5.0, y0: -2.40, y1: 0.00, txt: 'B1F', tx: 1.70 },
         { sIdx: 4, x0: 0.0, w: 5.0, y0: 0.00, y1: 2.75, txt: '1F', tx: 1.70 },
@@ -2237,14 +2359,14 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 (地下4層極秘研+地上6階・全11層+ELV Mk2) ｜ 隣棟 ｜ RC倉庫 ｜ RV ｜ 軽'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 (地下4層極秘研+B3Fサーマル＆食料拡張+地上6階+ELV Mk2) ｜ 隣棟 ｜ 倉庫 ｜ RV ｜ 軽'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.1, 'font-weight': 700, fill: floor.isDeepB4 ? '#991b1b' : '#9c4722' }, `図面名称 : ${floor.titleJp}`));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.3, fill: '#5b5852' }, '全20図面 : 母屋11層(B4極秘研〜6F+RF) ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 巨大RV ｜ 軽バン(1/20)'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.2, fill: '#991b1b', 'font-weight': 700 }, 'B4F 極秘研究所 : B3F直下4.0m (-14.2m)・ELV専用(階段なし)・2.7×15.5m CH3.55m 5区画'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.2, fill: '#0f4c81', 'font-weight': 700 }, 'ELV-1 Mk2 & 地上6階 : 5停止(1F〜B4)・14.2m行程・7相S字・可動ブレーキ ｜ 5Fサウナ温室・6F天文サロン(H18.93m)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.2, fill: '#1d7a8c' }, 'B3F木造シェルター＆2×6m食料庫 ｜ B2F 10×10m鏡スタジオ ｜ 巨大RV(W560) ＆ 軽バン KEI-340'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.2, fill: '#1c1e22' }, floor.isDeepB4 ? '縮尺 : B4F平面 1/85 ｜ 縦断面A-A\' 1/55 ｜ 横断面B-B\' 1/20 ｜ 唯一到達 ELV-1' : (floor.isDeepB3 ? '縮尺 : B3F平面 1/100 ｜ ELV-1 Mk2機構縦断面 1/42 ｜ 5停止昇降行程 14,200 mm' : (isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT 厳格衝突判定' : '縮尺 : S = 1/50〜1/100 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.1, fill: '#6c665d' }, '母屋B4F極秘研〜6F+RF＋超精密5停止エレベーター・隣棟・RC倉庫・巨大RV・軽バン 全20図面＆一人称探索'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.2, fill: '#1d7a8c' }, 'B3F拡張141m² : 第1/第2食料備蓄庫(2×6m+2×7m)・防音ワーク室(3×4m)・準備室・3サウナ(4×5/2×3/3×4m)・檜＆14℃水風呂'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.2, fill: '#1c1e22' }, floor.isDeepB4 ? '縮尺 : B4F平面 1/85 ｜ 縦断面A-A\' 1/55 ｜ 横断面B-B\' 1/20 ｜ 唯一到達 ELV-1' : (floor.isDeepB3 ? '縮尺 : B3F拡張平面 1/125 ｜ ELV-1 Mk2機構縦断面 1/42 ｜ 5停止昇降行程 14,200 mm' : (isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT 厳格衝突判定' : '縮尺 : S = 1/50〜1/100 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.1, fill: '#6c665d' }, '母屋B4F極秘研〜6F+RF＋B3Fサーマル＆食料大拡張＋超精密5停止ELV・隣棟・RC倉庫・巨大RV・軽バン 全20図面＆一人称探索'));
 
     svg.appendChild(g);
   }

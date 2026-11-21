@@ -96,7 +96,7 @@ function renderFloorAreaTable(sheetIdx) {
   if (fl.isDeepB4) {
     summaryLabel = '地下4階計（ELV専用・階段なし・2.7×15.5m CH3.55m ギャング極秘研究所5区画）';
   } else if (fl.isDeepB3) {
-    summaryLabel = '地下3階計（W520通路＋5停止ELV-1＋3.2×12.5m木造シェルター＋2×6m食料庫）';
+    summaryLabel = '地下3階計（シェルター＋第1/第2食料備蓄庫＋防音ワーク室＋3サウナ/準備室/檜＆水風呂/ととのい）';
   } else if (fl.isDeepB2) {
     summaryLabel = '地下2階計（10×10m CH3.8mスタジオ＋4×6m 2室＋ELV乗場）';
   } else if (isKei) {
@@ -125,7 +125,7 @@ function renderFloorAreaTable(sheetIdx) {
   const footprintStr = fl.isDeepB4
     ? '2700×15500 (CH3550)'
     : (fl.isDeepB3
-      ? '3200×12500 + 2000×6000'
+      ? '最大 15250×29850 (全15室)'
       : (fl.isDeepB2
         ? '10000×10000 + 4000×6000×2'
         : (isKei
@@ -136,7 +136,7 @@ function renderFloorAreaTable(sheetIdx) {
   const grossStr = fl.isDeepB4
     ? '41.85m² (ELV専用)'
     : (fl.isDeepB3
-      ? '計 53.34m² (+ELV)'
+      ? '計 141.26m² (+ELV)'
       : (fl.isDeepB2
         ? '計 151.20m²'
         : (isKei
