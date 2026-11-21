@@ -1,10 +1,10 @@
 /* NARROW-50 3-Story + Attic Offline PWA Service Worker */
-const CACHE_NAME = 'narrow50-tower-dev-C2jbr8_Vjs-dev-CYdGXHDdc';
+const CACHE_NAME = 'narrow50-tower-dev-BHlPak14css-dev-D3nRNo-y';
 
 // Replaced automatically by scripts/postbuild.mjs during npm run build
 const BUILT_ASSETS = [
-  './assets/dev-C2jbr8_V.js',
-  './assets/dev-CYdGXHDd.css',
+  './assets/dev-BHlPak14.css',
+  './assets/dev-D3nRNo-y.js',
   './assets/three-vendor-BW48nmf8.js',
 ];
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FLOORS, HOUSE, getAtticCeilingY } from './planData.js';
+import { FLOORS, HOUSE, ELEVATOR, getAtticCeilingY } from './planData.js';
 import { makeSurfaceMat, makeFrontMat, createSharedMaterials } from './textures.js';
 import { batchStaticGroups } from './mobileBatcher.js';
 import { injectForestWindShader } from './volumetricAtmosphere.js';
@@ -7,12 +7,14 @@ import { buildAnnex3D } from './buildAnnex3d.js';
 import { buildStorage3D } from './buildStorage3d.js';
 import { buildCamper3D } from './buildCamper3d.js';
 import { buildKeiCar3D } from './buildKeiCar3d.js';
+import { buildElevator3D } from './buildElevator3d.js';
+import { buildDeepBasement3D } from './buildDeepBasement3d.js';
 
 export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
 
   const root = new THREE.Group();
-  root.name = 'Narrow50Tower6LevelRoot';
+  root.name = 'Narrow50Tower8LevelRoot';
   scene.add(root);
 
   const staticGroup = new THREE.Group();
@@ -31,8 +33,8 @@ export function buildHouse3D(scene) {
   exteriorGroup.name = 'DeepForestExterior';
   root.add(exteriorGroup);
 
-  // 6 floors: 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=RF/Attic
-  const collidersByFloor = [[], [], [], [], [], []];
+  // 8 Main Tower levels: -2=B3F, -1=B2F, 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=RF/Attic
+  const collidersByFloor = { '-2': [], '-1': [], 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
   const treeColliders = [];
   const boulderColliders = [];
   const interactiveDoors = [];
@@ -41,7 +43,7 @@ export function buildHouse3D(scene) {
   const excludeBatch = new Set();
 
   function addCollider(floorIdx, minX, minZ, maxX, maxZ) {
-    if (floorIdx < 0 || floorIdx >= collidersByFloor.length) return;
+    if (!collidersByFloor[floorIdx]) return;
     collidersByFloor[floorIdx].push({
       minX: Math.min(minX, maxX),
       maxX: Math.max(minX, maxX),
@@ -291,7 +293,7 @@ export function buildHouse3D(scene) {
 
         if (op.type.startsWith('door')) {
           addInteractiveDoor(fIdx, op, wall, baseY);
-        } else {
+        } else if (op.type.startsWith('window')) {
           addWindowFrame(op, wall, baseY);
         }
 
@@ -315,22 +317,35 @@ export function buildHouse3D(scene) {
   // =========================================================================
   // 1. STRUCTURAL SLABS WITH EXACT STAIRWELL CUTOUTS (B1F, 1F, 2F, 3F, 4F, RF)
   // =========================================================================
-  function addSlottedSlab(slabBottomY, slabTopY, ceilTex, addExteriorBand = true) {
+  function addSlottedSlab(slabBottomY, slabTopY, ceilTex, addExteriorBand = true, cutElevatorShaft = false) {
     const h = slabTopY - slabBottomY;
     const midY = slabBottomY + h / 2;
     const sb = HOUSE.stairBox;
+    const el = ELEVATOR.shaft;
     const subMat = mat.wallCutCap;
     const cMat = makeSurfaceMat(ceilTex, 4.7, 4.5, { roughness: 0.90 });
 
-    const rects = [
-      { x1: 0.0, x2: 5.0, z1: 0.0, z2: sb.topZ },
-      { x1: 0.0, x2: 5.0, z1: sb.bottomZ, z2: 10.0 },
-      { x1: sb.maxX, x2: 5.0, z1: sb.topZ, z2: sb.bottomZ },
-      { x1: 0.0, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
-    ];
+    const rects = cutElevatorShaft
+      ? [
+        // Cut BOTH ST0 Stairwell (0.15..1.15, 2.45..5.15) AND ELV-1 Shaft (3.25..4.85, 0.85..2.65)!
+        { x1: 0.0, x2: 5.0, z1: 0.0, z2: el.minZ },
+        { x1: 0.0, x2: el.minX, z1: el.minZ, z2: sb.topZ },
+        { x1: el.maxX, x2: 5.0, z1: el.minZ, z2: el.maxZ },
+        { x1: 0.0, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
+        { x1: sb.maxX, x2: el.minX, z1: sb.topZ, z2: el.maxZ },
+        { x1: sb.maxX, x2: 5.0, z1: el.maxZ, z2: sb.bottomZ },
+        { x1: 0.0, x2: 5.0, z1: sb.bottomZ, z2: 10.0 },
+      ]
+      : [
+        { x1: 0.0, x2: 5.0, z1: 0.0, z2: sb.topZ },
+        { x1: 0.0, x2: 5.0, z1: sb.bottomZ, z2: 10.0 },
+        { x1: sb.maxX, x2: 5.0, z1: sb.topZ, z2: sb.bottomZ },
+        { x1: 0.0, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
+      ];
     for (const r of rects) {
       const w = r.x2 - r.x1;
       const d = r.z2 - r.z1;
+      if (w < 0.01 || d < 0.01) continue;
       const mesh = new THREE.Mesh(
         new THREE.BoxGeometry(w, h, d),
         [subMat, subMat, subMat, cMat, subMat, subMat],
@@ -360,12 +375,12 @@ export function buildHouse3D(scene) {
   addBox(staticGroup, 0.14, 0.40, 10.20, mossPlinthMat, -0.05, -0.20, 5.00, false);
   addBox(staticGroup, 0.14, 0.40, 10.20, mossPlinthMat, 5.05, -0.20, 5.00, false);
 
-  // Slotted Structural Slabs leaving exact stairwell void X=0.15..1.15, Z=2.45..5.15
-  addSlottedSlab(-0.38, 0.00, 'concrete_clean', false); // B1F low cement ceiling (CH 2.02m) / 1F floor!
-  addSlottedSlab(2.50, 2.75, 'ceiling_acoustic', true); // 1F ceiling / 2F floor
-  addSlottedSlab(5.25, 5.50, 'wallpaper_white', true);  // 2F ceiling / 3F floor
-  addSlottedSlab(7.95, 8.15, 'wood_planks_dark', true); // 3F ceiling / 4F floor
-  addSlottedSlab(10.30, 10.50, 'ceiling_acoustic', true); // 4F slightly low ceiling (CH 2.15m) / Attic floor!
+  // Slotted Structural Slabs leaving exact stairwell void X=0.15..1.15, Z=2.45..5.15 (+ ELV-1 shaft on 1F floor!)
+  addSlottedSlab(-0.38, 0.00, 'concrete_clean', false, true); // B1F low cement ceiling (CH 2.02m) / 1F floor!
+  addSlottedSlab(2.50, 2.75, 'ceiling_acoustic', true, false); // 1F ceiling / 2F floor (solid above MRL machine!)
+  addSlottedSlab(5.25, 5.50, 'wallpaper_white', true, false);  // 2F ceiling / 3F floor
+  addSlottedSlab(7.95, 8.15, 'wood_planks_dark', true, false); // 3F ceiling / 4F floor
+  addSlottedSlab(10.30, 10.50, 'ceiling_acoustic', true, false); // 4F slightly low ceiling (CH 2.15m) / Attic floor!
 
   function addFloorPatch(x1, z1, x2, z2, y, texName, extra = {}) {
     const w = x2 - x1;
@@ -388,12 +403,14 @@ export function buildHouse3D(scene) {
     addBox(staticGroup, 4.70, 0.14, 0.22, beamMat, 2.50, -0.45, bz, false);
   });
 
-  // 1F Floors (Y = 0.00) — respecting stairwell cutout X=0.15..1.15, Z=2.45..5.15!
+  // 1F Floors (Y = 0.00) — respecting stairwell cutout X=0.15..1.15 AND ELV-1 shaft X=3.25..4.85, Z=0.85..2.65!
   addFloorPatch(0.15, 0.15, 2.15, 1.35, -0.12, 'terrazzo_white');
   addBox(staticGroup, 2.00, 0.13, 0.08, mat.oak, 1.15, -0.055, 1.35, false);
   addFloorPatch(0.15, 1.35, 2.15, 2.45, 0.0, 'wood_floor');
   addFloorPatch(1.25, 2.45, 2.15, 5.25, 0.0, 'wood_floor');
-  addFloorPatch(2.25, 0.15, 4.85, 3.45, 0.0, 'tile_grey_stone');
+  addFloorPatch(2.25, 0.15, 4.85, 0.85, 0.0, 'tile_grey_stone');
+  addFloorPatch(2.25, 0.85, 3.25, 2.65, 0.0, 'tile_grey_stone');
+  addFloorPatch(2.25, 2.65, 4.85, 3.45, 0.0, 'tile_grey_stone');
   addFloorPatch(2.25, 3.55, 3.35, 5.20, 0.0, 'tile_beige_grid');
   addFloorPatch(3.45, 3.55, 4.85, 5.20, 0.0, 'terrazzo_emerald');
   addFloorPatch(0.15, 5.15, 4.85, 9.85, 0.0, 'wood_floor');
@@ -772,12 +789,12 @@ export function buildHouse3D(scene) {
   addFramedArt(furnitureGroup, 'fixture_intercom', 0.18, 0.24, 2.13, 1.42, 1.55, -Math.PI / 2);
   addFramedArt(furnitureGroup, 'fixture_meter', 0.26, 0.34, 1.85, 1.72, 0.17, 0);
 
-  // 1F NE Forest Gear & Firewood Room
-  addBox(furnitureGroup, 0.42, 1.85, 1.35, makeSurfaceMat('timber_logs', 1.35, 1.85), 4.62, 0.925, 1.75, true);
-  addCollider(1, 4.38, 1.05, 4.85, 2.45);
-  addBox(furnitureGroup, 0.03, 1.15, 1.25, makeSurfaceMat('pegboard_wood', 1.25, 1.15), 4.83, 1.35, 2.90, false);
-  addBox(furnitureGroup, 0.48, 0.48, 0.48, crateMat, 4.55, 0.24, 3.05, true);
-  addBox(furnitureGroup, 0.44, 0.44, 0.44, crateMat, 4.52, 0.70, 3.02, true);
+  // 1F NE Forest Gear Room & Ground Elevator Landing (ELV-1 Shaft sits cleanly at X=3.25..4.85, Z=0.85..2.65!)
+  addBox(furnitureGroup, 0.36, 1.65, 0.65, makeSurfaceMat('timber_logs', 0.65, 1.65), 4.65, 0.825, 3.08, true);
+  addCollider(1, 4.44, 2.74, 4.85, 3.44);
+  addBox(furnitureGroup, 0.03, 0.95, 0.72, makeSurfaceMat('pegboard_wood', 0.72, 0.95), 4.83, 1.35, 3.08, false);
+  addBox(furnitureGroup, 0.44, 0.44, 0.44, crateMat, 3.85, 0.22, 3.12, true);
+  addCollider(1, 3.60, 2.86, 4.10, 3.38);
   addBox(furnitureGroup, 0.38, 1.75, 1.05, makeFrontMat('furniture_bookshelf'), 2.45, 0.875, 0.72, true);
   addCollider(1, 2.25, 0.18, 2.66, 1.26);
   addFramedArt(furnitureGroup, 'sign_recycle', 0.30, 0.22, 3.45, 1.32, 3.43, Math.PI);
@@ -1400,6 +1417,37 @@ export function buildHouse3D(scene) {
   });
 
   // =========================================================================
+  // 10c. DEEP BASEMENT EXPANSION (B2F 10×10m STUDIO + B3F WOODEN SHELTER + FOOD VAULT)
+  // =========================================================================
+  const deepBasement = buildDeepBasement3D({
+    scene,
+    mat,
+    addCollider,
+    addInteractiveDoor,
+    interiorLights,
+  });
+
+  // =========================================================================
+  // 10d. ULTRA-REALISTIC MECHANICAL MRL TRACTION ELEVATOR (ELV-1: B3F <-> 1F GROUND)
+  // =========================================================================
+  const elevator = buildElevator3D({
+    scene,
+    mat,
+    interactiveProps,
+    interiorLights,
+  });
+
+  // Strict Elevator Hoistway & Cab Inner Perimeter Colliders across all 4 stop floors (-2=B3F, -1=B2F, 0=B1F, 1=1F)
+  // Leaves Z = 1.30..2.20 at X = 3.16..3.34 dynamically gated by live elevator door synchronization in scene3d.js!
+  [-2, -1, 0, 1].forEach((fl) => {
+    addCollider(fl, 3.14, 0.72, 4.98, 1.00); // North shaft/cab wall
+    addCollider(fl, 3.14, 2.50, 4.98, 2.78); // South shaft/cab wall
+    addCollider(fl, 4.58, 0.72, 4.98, 2.78); // East cab rear wall (protects CWT track!)
+    addCollider(fl, 3.14, 0.72, 3.36, 1.30); // West front North door jamb pier
+    addCollider(fl, 3.14, 2.20, 3.36, 2.78); // West front South door jamb pier
+  });
+
+  // =========================================================================
   // 11. POCO F7 (ADRENO 825) UV-BAKED CANONICAL STATIC GEOMETRY BATCHING
   // =========================================================================
   const { batchedGroup, stats: batchStats } = batchStaticGroups(
@@ -1408,14 +1456,26 @@ export function buildHouse3D(scene) {
   );
   root.add(batchedGroup);
 
-  // Combine batching stats across static buildings + movable camper + movable kei-van
-  const combinedBefore = batchStats.beforeMeshes + camper.batchStats.beforeMeshes + kei.batchStats.beforeMeshes;
-  const combinedAfter = batchStats.afterDrawCalls + camper.batchStats.afterDrawCalls + kei.batchStats.afterDrawCalls;
+  // Combine batching stats across static buildings + deep basement + elevator + camper + kei-van
+  const combinedBefore = batchStats.beforeMeshes
+    + deepBasement.batchStats.beforeMeshes
+    + elevator.batchStats.beforeMeshes
+    + camper.batchStats.beforeMeshes
+    + kei.batchStats.beforeMeshes;
+  const combinedAfter = batchStats.afterDrawCalls
+    + deepBasement.batchStats.afterDrawCalls
+    + elevator.batchStats.afterDrawCalls
+    + camper.batchStats.afterDrawCalls
+    + kei.batchStats.afterDrawCalls;
   const combinedBatchStats = {
     beforeMeshes: combinedBefore,
     afterDrawCalls: combinedAfter,
     reductionPct: combinedBefore > 0 ? Math.round(((combinedBefore - combinedAfter) / combinedBefore) * 100) : 0,
-    totalTriangles: batchStats.totalTriangles + camper.batchStats.totalTriangles + kei.batchStats.totalTriangles,
+    totalTriangles: batchStats.totalTriangles
+      + deepBasement.batchStats.totalTriangles
+      + elevator.batchStats.totalTriangles
+      + camper.batchStats.totalTriangles
+      + kei.batchStats.totalTriangles,
   };
 
   return {
@@ -1431,6 +1491,7 @@ export function buildHouse3D(scene) {
     windTimeUniform,
     camper,
     kei,
+    elevator,
     batchStats: combinedBatchStats,
   };
 }
