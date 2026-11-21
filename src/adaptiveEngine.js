@@ -109,7 +109,7 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * 5-Unit + Deep Basement (B3F..RF) Spatial Portal Light Culler:
+   * 5-Unit + 10-Level Main Tower (B3F..6F+RF) Spatial Portal Light Culler:
    * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant on POCO F7!
    */
   _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', inElevator = false, doorOpenMap = {}, propStates }) {
@@ -124,6 +124,21 @@ export class AdaptiveMobileEngine {
         continue;
       }
       if (entry.name === 'Study_Desk' && !propStates.lamp_study) {
+        entry.light.intensity = 0;
+        entry.light.visible = false;
+        continue;
+      }
+      if (entry.name === '5F_Studio_Drafting' && propStates.lamp_5f_drafting === false) {
+        entry.light.intensity = 0;
+        entry.light.visible = false;
+        continue;
+      }
+      if (entry.name === '5F_Conservatory_Lamp' && propStates.lamp_5f_conservatory === false) {
+        entry.light.intensity = 0;
+        entry.light.visible = false;
+        continue;
+      }
+      if (entry.name === '6F_Hearth_Fire' && propStates.fireplace_6f === false) {
         entry.light.intensity = 0;
         entry.light.visible = false;
         continue;

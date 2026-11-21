@@ -114,7 +114,11 @@ function renderFloorAreaTable(sheetIdx) {
   } else if (fl.isBasement) {
     summaryLabel = '地下1階計 (3×7m主空間 + 倉庫3室・棚15基 + ST_B2 + ELV-1)';
   } else if (fl.isAttic) {
-    summaryLabel = '母屋屋根裏計 (有効 28.5m²)';
+    summaryLabel = '母屋屋根裏計 (地上16.1m〜18.9m / 有効 28.5m²)';
+  } else if (fl.hasBalcony6F) {
+    summaryLabel = '母屋6F計 (天空天文サロン・珈琲バー・星空畳 + 全幅南テラス)';
+  } else if (fl.hasBalcony5F) {
+    summaryLabel = '母屋5F計 (建築模型工房・サウナ＆桧展望浴・温室 + 西スパデッキ)';
   } else if (fl.hasBalcony) {
     summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
   }
@@ -143,7 +147,15 @@ function renderFloorAreaTable(sheetIdx) {
               ? '4.00m² (2F延8.0m²)'
               : (isAnnex
                 ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
-                : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²'))))))));
+                : (fl.isBasement
+                  ? '31.88m²'
+                  : (fl.isAttic
+                    ? '有効 28.50m²'
+                    : (fl.hasBalcony6F
+                      ? '50.00m² + T5.06m²'
+                      : (fl.hasBalcony5F
+                        ? '50.00m² + B2.60m²'
+                        : (fl.hasBalcony ? '50.00m² + B2.00m²' : '50.00m²')))))))))));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
