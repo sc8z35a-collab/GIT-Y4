@@ -12,7 +12,7 @@ export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
 
   const root = new THREE.Group();
-  root.name = 'Narrow50Tower6LevelRoot';
+  root.name = 'Narrow50Tower8LevelRoot';
   scene.add(root);
 
   const staticGroup = new THREE.Group();
@@ -31,8 +31,8 @@ export function buildHouse3D(scene) {
   exteriorGroup.name = 'DeepForestExterior';
   root.add(exteriorGroup);
 
-  // 6 floors: 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=RF/Attic
-  const collidersByFloor = [[], [], [], [], [], []];
+  // 8 levels: 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=5F, 6=6F, 7=RF/Attic
+  const collidersByFloor = [[], [], [], [], [], [], [], []];
   const treeColliders = [];
   const boulderColliders = [];
   const interactiveDoors = [];
@@ -365,7 +365,9 @@ export function buildHouse3D(scene) {
   addSlottedSlab(2.50, 2.75, 'ceiling_acoustic', true); // 1F ceiling / 2F floor
   addSlottedSlab(5.25, 5.50, 'wallpaper_white', true);  // 2F ceiling / 3F floor
   addSlottedSlab(7.95, 8.15, 'wood_planks_dark', true); // 3F ceiling / 4F floor
-  addSlottedSlab(10.30, 10.50, 'ceiling_acoustic', true); // 4F slightly low ceiling (CH 2.15m) / Attic floor!
+  addSlottedSlab(10.30, 10.50, 'ceiling_acoustic', true); // 4F slightly low ceiling (CH 2.15m) / 5F floor
+  addSlottedSlab(13.05, 13.25, 'wood_planks_dark', true); // 5F lofted wellness/studio ceiling (CH 2.55m) / 6F floor!
+  addSlottedSlab(15.90, 16.10, 'ceiling_acoustic', true); // 6F crown penthouse ceiling (CH 2.65m) / Attic floor!
 
   function addFloorPatch(x1, z1, x2, z2, y, texName, extra = {}) {
     const w = x2 - x1;
@@ -375,7 +377,7 @@ export function buildHouse3D(scene) {
   }
 
   // =========================================================================
-  // 2. FLOOR FINISHES & WALLS FOR B1F, 1F, 2F, 3F, 4F
+  // 2. FLOOR FINISHES & WALLS FOR B1F, 1F, 2F, 3F, 4F, 5F, 6F
   // =========================================================================
   // B1F Grey Cement Floors (Y = -2.40) + Exposed Low Concrete Ceiling Beams
   const yb = -2.40;
@@ -438,6 +440,13 @@ export function buildHouse3D(scene) {
   const balCX = (bal.minX + bal.maxX) / 2; // 3.65m
   const balCZ = (bal.minZ + bal.maxZ) / 2; // 10.50m
   addBox(staticGroup, balW + 0.08, 0.16, balD + 0.06, mat.darkIron, balCX, y4f - 0.10, balCZ, true);
+  // Structural steel diagonal cantilever struts beneath 4F balcony
+  [bal.minX + 0.14, bal.maxX - 0.14].forEach((bx) => {
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.10, 1.08), mat.darkIron);
+    strut.position.set(bx, y4f - 0.34, bal.minZ + 0.44);
+    strut.rotation.x = -0.34;
+    staticGroup.add(strut);
+  });
   addFloorPatch(bal.minX, bal.minZ, bal.maxX, bal.maxZ, y4f - 0.02, 'wood_deck');
   // Balcony sleek iron & tempered glass balustrade railing (H = 1.10m)
   const railH = 1.10;
@@ -459,23 +468,125 @@ export function buildHouse3D(scene) {
   addCollider(4, bal.maxX - 0.04, bal.minZ, bal.maxX + 0.06, bal.maxZ + 0.06);
   addCollider(4, bal.minX - 0.06, bal.maxZ - 0.04, bal.maxX + 0.06, bal.maxZ + 0.08);
 
-  // Attic Floors (Y = 10.50)
-  const attY = HOUSE.atticBaseY; // 10.50
+  // 5F Floors (Y = 10.50, CH 2.55m) — Architect's Studio, Hinoki Sauna & Sky Bath, Botanical Conservatory + West Spa Deck!
+  const y5f = 10.50;
+  addFloorPatch(0.15, 0.15, 2.15, 2.45, y5f, 'terrazzo_white');         // 5R01 Botanical Landing
+  addFloorPatch(1.25, 2.45, 2.15, 5.95, y5f, 'terrazzo_white');         // 5R06 Gallery Spine
+  addFloorPatch(0.15, 5.15, 1.25, 5.95, y5f, 'terrazzo_white');         // South Stair Vestibule
+  addFloorPatch(2.25, 0.15, 4.85, 3.45, y5f, 'parquet_oak');            // 5R02 Architect's Model Studio
+  addFloorPatch(2.25, 3.55, 3.50, 5.95, y5f, 'wood_deck');              // 5R03 Hinoki Finnish Sauna
+  addFloorPatch(3.60, 3.55, 4.85, 5.95, y5f - 0.02, 'stone_wet_granite'); // 5R04 Canopy Hinoki Sky Bath
+  addFloorPatch(0.15, 6.05, 2.55, 9.85, y5f, 'wood_floor');             // 5R05 Conservatory West Tea Lounge
+  addFloorPatch(2.55, 6.05, 4.85, 9.85, y5f, 'terrazzo_emerald');       // 5R05 Conservatory East Botanical Zone
+  // Flush brass inlay threshold dividing oak tea deck & emerald terrazzo botanical zone
+  addBox(staticGroup, 0.025, 0.018, 3.80, mat.bronze, 2.55, y5f + 0.009, 7.95, false);
+
+  // 5F Cantilevered 1.00m × 2.60m West Canopy Spa Cool-Down Deck (X=-1.00..0.00, Z=6.20..8.80)
+  const bal5 = HOUSE.balcony5F;
+  const b5W = bal5.maxX - bal5.minX; // 1.00m
+  const b5D = bal5.maxZ - bal5.minZ; // 2.60m
+  const b5CX = (bal5.minX + bal5.maxX) / 2; // -0.50m
+  const b5CZ = (bal5.minZ + bal5.maxZ) / 2; // 7.50m
+  addBox(staticGroup, b5W + 0.06, 0.16, b5D + 0.08, mat.darkIron, b5CX, y5f - 0.10, b5CZ, true);
+  // Exposed diagonal steel cantilever brackets supporting 5F West Deck
+  [bal5.minZ + 0.18, b5CZ, bal5.maxZ - 0.18].forEach((bz) => {
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.10, 0.08), mat.darkIron);
+    strut.position.set(-0.46, y5f - 0.34, bz);
+    strut.rotation.z = -0.34;
+    staticGroup.add(strut);
+  });
+  addFloorPatch(bal5.minX, bal5.minZ, bal5.maxX, bal5.maxZ, y5f - 0.02, 'wood_deck');
+  // 5F West Deck sleek iron + tempered glass balustrade (H = 1.10m)
+  addBox(staticGroup, 0.045, 0.045, b5D + 0.04, mat.darkIron, bal5.minX + 0.02, y5f + railH, b5CZ, false);
+  addBox(staticGroup, b5W + 0.04, 0.045, 0.045, mat.darkIron, b5CX, y5f + railH, bal5.minZ + 0.02, false);
+  addBox(staticGroup, b5W + 0.04, 0.045, 0.045, mat.darkIron, b5CX, y5f + railH, bal5.maxZ - 0.02, false);
+  [[bal5.maxX - 0.02, bal5.minZ + 0.02], [bal5.minX + 0.02, bal5.minZ + 0.02], [bal5.minX + 0.02, b5CZ], [bal5.minX + 0.02, bal5.maxZ - 0.02], [bal5.maxX - 0.02, bal5.maxZ - 0.02]].forEach(([px, pz]) => {
+    addBox(staticGroup, 0.04, railH, 0.04, mat.darkIron, px, y5f + railH / 2, pz, false);
+  });
+  const gBal5W = addBox(dynamicGroup, 0.018, railH - 0.12, b5D - 0.08, mat.glassClear, bal5.minX + 0.02, y5f + railH / 2, b5CZ, false);
+  const gBal5N = addBox(dynamicGroup, b5W - 0.08, railH - 0.12, 0.018, mat.glassClear, b5CX, y5f + railH / 2, bal5.minZ + 0.02, false);
+  const gBal5S = addBox(dynamicGroup, b5W - 0.08, railH - 0.12, 0.018, mat.glassClear, b5CX, y5f + railH / 2, bal5.maxZ - 0.02, false);
+  [gBal5W, gBal5N, gBal5S].forEach((g) => { g.userData.noBatch = true; });
+  // 5F West Deck safety colliders
+  addCollider(5, bal5.minX - 0.08, bal5.minZ - 0.06, bal5.minX + 0.04, bal5.maxZ + 0.06);
+  addCollider(5, bal5.minX - 0.06, bal5.minZ - 0.06, bal5.maxX, bal5.minZ + 0.04);
+  addCollider(5, bal5.minX - 0.06, bal5.maxZ - 0.04, bal5.maxX, bal5.maxZ + 0.06);
+
+  // 6F Floors (Y = 13.25, CH 2.65m) — Crown Sky Penthouse, Starlight Tatami, Sky Powder, Wine/Coffee Cellar, Observatory Salon + Full-Width Sky Terrace!
+  const y6f = 13.25;
+  addFloorPatch(0.15, 0.15, 2.15, 2.45, y6f, 'wood_walnut_floor');      // 6R01 Star-Chart Landing
+  addFloorPatch(1.25, 2.45, 2.15, 5.95, y6f, 'wood_walnut_floor');      // 6R06 Crown Gallery Spine
+  addFloorPatch(0.15, 5.15, 1.25, 5.95, y6f, 'wood_walnut_floor');      // South Stair Vestibule
+  // 6R02 Authentic Japanese Ita-no-ma walnut border framing central Ryukyu tatami mat field
+  addFloorPatch(2.25, 0.15, 4.85, 3.45, y6f, 'wood_walnut_floor');
+  addFloorPatch(2.55, 0.45, 4.55, 3.15, y6f + 0.006, 'tatami_ryukyu');
+  addFloorPatch(2.25, 3.55, 3.45, 5.95, y6f, 'marble_black');           // 6R03 Sky Powder WC
+  addFloorPatch(3.55, 3.55, 4.85, 5.95, y6f, 'tile_checker_stone');     // 6R04 Wine & Coffee Cellar
+  addFloorPatch(0.15, 6.05, 4.85, 9.85, y6f, 'wood_walnut_floor');      // 6R05 Observatory Salon & Espresso Bar
+
+  // 6F Full-Width Cantilevered South Sky Observatory Terrace (X=0.20..4.80, Z=10.00..11.10 -> 4.60m × 1.10m!)
+  const bal6 = HOUSE.balcony6F;
+  const b6W = bal6.maxX - bal6.minX; // 4.60m
+  const b6D = bal6.maxZ - bal6.minZ; // 1.10m
+  const b6CX = (bal6.minX + bal6.maxX) / 2; // 2.50m
+  const b6CZ = (bal6.minZ + bal6.maxZ) / 2; // 10.55m
+  addBox(staticGroup, b6W + 0.10, 0.18, b6D + 0.08, mat.darkIron, b6CX, y6f - 0.11, b6CZ, true);
+  // 4 Structural tapered steel outrigger brackets under 6F Crown Sky Terrace
+  [0.42, 1.80, 3.20, 4.58].forEach((bx) => {
+    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.11, 1.18), mat.darkIron);
+    strut.position.set(bx, y6f - 0.38, bal6.minZ + 0.48);
+    strut.rotation.x = -0.36;
+    staticGroup.add(strut);
+  });
+  addFloorPatch(bal6.minX, bal6.minZ, bal6.maxX, bal6.maxZ, y6f - 0.02, 'wood_deck');
+  // 6F Sky Terrace frameless-style dark iron + tempered glass balustrade (H = 1.10m)
+  addBox(staticGroup, b6W + 0.04, 0.045, 0.045, mat.darkIron, b6CX, y6f + railH, bal6.maxZ - 0.02, false);
+  addBox(staticGroup, 0.045, 0.045, b6D + 0.04, mat.darkIron, bal6.minX + 0.02, y6f + railH, b6CZ, false);
+  addBox(staticGroup, 0.045, 0.045, b6D + 0.04, mat.darkIron, bal6.maxX - 0.02, y6f + railH, b6CZ, false);
+  [
+    [bal6.minX + 0.02, bal6.minZ + 0.02], [bal6.minX + 0.02, bal6.maxZ - 0.02],
+    [1.35, bal6.maxZ - 0.02], [2.50, bal6.maxZ - 0.02], [3.65, bal6.maxZ - 0.02],
+    [bal6.maxX - 0.02, bal6.maxZ - 0.02], [bal6.maxX - 0.02, bal6.minZ + 0.02],
+  ].forEach(([px, pz]) => {
+    addBox(staticGroup, 0.042, railH, 0.042, mat.darkIron, px, y6f + railH / 2, pz, false);
+  });
+  const gBal6S = addBox(dynamicGroup, b6W - 0.08, railH - 0.12, 0.018, mat.glassClear, b6CX, y6f + railH / 2, bal6.maxZ - 0.02, false);
+  const gBal6W = addBox(dynamicGroup, 0.018, railH - 0.12, b6D - 0.08, mat.glassClear, bal6.minX + 0.02, y6f + railH / 2, b6CZ, false);
+  const gBal6E = addBox(dynamicGroup, 0.018, railH - 0.12, b6D - 0.08, mat.glassClear, bal6.maxX - 0.02, y6f + railH / 2, b6CZ, false);
+  [gBal6S, gBal6W, gBal6E].forEach((g) => { g.userData.noBatch = true; });
+  // 6F Overhead Architectural Steel & Cedar Louver Sky Pergola (Y = 15.85m, shadows moonlight across terrace!)
+  const pergY = y6f + 2.60;
+  addBox(staticGroup, b6W + 0.10, 0.09, 0.08, mat.darkIron, b6CX, pergY, bal6.maxZ - 0.04, true);
+  addBox(staticGroup, 0.08, 0.09, b6D + 0.06, mat.darkIron, bal6.minX + 0.04, pergY, b6CZ, true);
+  addBox(staticGroup, 0.08, 0.09, b6D + 0.06, mat.darkIron, bal6.maxX - 0.04, pergY, b6CZ, true);
+  // Corner pergola tie posts rising cleanly from outer railing corners to pergola beam
+  [bal6.minX + 0.04, bal6.maxX - 0.04].forEach((px) => {
+    addBox(staticGroup, 0.055, 2.60, 0.055, mat.darkIron, px, y6f + 1.30, bal6.maxZ - 0.04, false);
+  });
+  for (let lx = bal6.minX + 0.36; lx <= bal6.maxX - 0.32; lx += 0.39) {
+    addBox(staticGroup, 0.045, 0.075, b6D - 0.08, mat.walnut, lx, pergY, b6CZ, true);
+  }
+  // 6F Sky Terrace safety colliders
+  addCollider(6, bal6.minX - 0.06, bal6.minZ, bal6.minX + 0.04, bal6.maxZ + 0.06);
+  addCollider(6, bal6.maxX - 0.04, bal6.minZ, bal6.maxX + 0.06, bal6.maxZ + 0.06);
+  addCollider(6, bal6.minX - 0.06, bal6.maxZ - 0.04, bal6.maxX + 0.06, bal6.maxZ + 0.08);
+
+  // Attic Floors (Y = 16.10, Floor Index 7 = HOUSE.atticFloor)
+  const attY = HOUSE.atticBaseY; // 16.10
+  const attFloorIdx = HOUSE.atticFloor; // 7
   addFloorPatch(0.15, 0.15, 2.15, 2.45, attY, 'rubber_black_stud');
   addFloorPatch(1.20, 2.45, 2.15, 5.20, attY, 'rubber_black_stud');
   addFloorPatch(2.15, 0.15, 4.85, 5.25, attY, 'wood_scratched_cedar');
   addFloorPatch(0.15, 5.20, 4.85, 9.85, attY, 'wood_scratched_cedar');
   addFloorPatch(1.30, 6.15, 3.70, 8.75, attY + 0.015, 'tatami_aged');
 
-  // Build Walls for Floors 0 (B1F), 1 (1F), 2 (2F), 3 (3F), 4 (4F)
-  buildStandardFloorWalls(FLOORS[0]);
-  buildStandardFloorWalls(FLOORS[1]);
-  buildStandardFloorWalls(FLOORS[2]);
-  buildStandardFloorWalls(FLOORS[3]);
-  buildStandardFloorWalls(FLOORS[4]);
+  // Build Walls for Floors 0 (B1F), 1 (1F), 2 (2F), 3 (3F), 4 (4F), 5 (5F), 6 (6F)
+  for (let fi = 0; fi < attFloorIdx; fi++) {
+    buildStandardFloorWalls(FLOORS[fi]);
+  }
 
   // =========================================================================
-  // 3. STACKED 5-FLIGHT ARCHITECTURAL STAIRCASES (ST0, ST1, ST2, ST3, ST4)
+  // 3. STACKED 7-FLIGHT ARCHITECTURAL STAIRCASES (ST0, ST1, ST2, ST3, ST4, ST5, ST6)
   // =========================================================================
   function buildStairFlight(flightIdx, yStart, yEnd, treadTex, isConcrete = false) {
     const sb = HOUSE.stairBox;
@@ -536,26 +647,43 @@ export function buildHouse3D(scene) {
     staticGroup.add(ledStrip);
   }
 
-  buildStairFlight(0, -2.40, 0.00, 'concrete_clean', true);   // ST0: B1F <-> 1F (Grey Cement!)
-  buildStairFlight(1, 0.00, 2.75, 'wood_floor', false);       // ST1: 1F <-> 2F
-  buildStairFlight(2, 2.75, 5.50, 'wood_walnut_floor', false);// ST2: 2F <-> 3F
-  buildStairFlight(3, 5.50, 8.15, 'parquet_oak', false);      // ST3: 3F <-> 4F
-  buildStairFlight(4, 8.15, 10.50, 'wood_scratched_cedar', false); // ST4: 4F <-> Attic
+  buildStairFlight(0, -2.40, 0.00, 'concrete_clean', true);        // ST0: B1F <-> 1F (Grey Cement!)
+  buildStairFlight(1, 0.00, 2.75, 'wood_floor', false);            // ST1: 1F <-> 2F
+  buildStairFlight(2, 2.75, 5.50, 'wood_walnut_floor', false);     // ST2: 2F <-> 3F
+  buildStairFlight(3, 5.50, 8.15, 'parquet_oak', false);           // ST3: 3F <-> 4F
+  buildStairFlight(4, 8.15, 10.50, 'wood_floor', false);           // ST4: 4F <-> 5F
+  buildStairFlight(5, 10.50, 13.25, 'wood_walnut_floor', false);   // ST5: 5F <-> 6F
+  buildStairFlight(6, 13.25, 16.10, 'wood_scratched_cedar', false);// ST6: 6F <-> Attic RF!
 
   // Sleek dark-iron portal header on 1F Entry Hall marking entrance down ST0 into B1F
   addBox(staticGroup, 1.02, 0.08, 0.08, mat.darkIron, 0.65, 2.15, 2.45, false);
 
+  // Architectural Brass Floor-Level Identification Plaques & Ceiling Smoke Detectors across all 8 levels!
+  const plaqueFloorYs = [-2.40, 0.00, 2.75, 5.50, 8.15, 10.50, 13.25];
+  plaqueFloorYs.forEach((fy, idx) => {
+    // Sleek brushed-bronze floor plaque on RC core wall facing North landing / corridor
+    addBox(staticGroup, 0.015, 0.16, 0.12, mat.bronze, 1.26, fy + 1.56, 2.72, false);
+    addBox(staticGroup, 0.018, 0.025, 0.08, mat.darkIron, 1.263, fy + 1.56, 2.72, false);
+    // Low-profile ceiling smoke/heat sensor puck in central gallery spine (Japanese 6-story fire code!)
+    if (idx >= 1) {
+      const ch = FLOORS[idx].ceilingH;
+      const detector = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.024, 12), mat.whiteMatte);
+      detector.position.set(1.70, fy + ch - 0.015, 3.85);
+      staticGroup.add(detector);
+    }
+  });
+
   // =========================================================================
-  // 4. FLOOR 5 — 6寸勾配 GABLE ATTIC ROOF (Y = 10.50 .. 13.33 m)
+  // 4. FLOOR 7 — 6寸勾配 GABLE ATTIC ROOF (Y = 16.10 .. 18.93 m + LIGHTNING MAST)
   // =========================================================================
   const kneeH = HOUSE.atticKneewallH; // 1.42
-  const eaveY = HOUSE.atticEaveY;     // 11.92
-  const ridgeY = HOUSE.atticRidgeY;   // 13.33
+  const eaveY = HOUSE.atticEaveY;     // 17.52
+  const ridgeY = HOUSE.atticRidgeY;   // 18.93
 
   addWallBox(staticGroup, 0.15, kneeH, 9.70, 0.075, attY + kneeH / 2, 5.0, 'yakisugi_deep', 'wainscot_rustic', 'v');
   addWallBox(staticGroup, 0.15, kneeH, 9.70, 4.925, attY + kneeH / 2, 5.0, 'wainscot_rustic', 'yakisugi_deep', 'v');
-  addCollider(5, 0.0, 0.0, 0.16, 10.0);
-  addCollider(5, 4.84, 0.0, 5.0, 10.0);
+  addCollider(attFloorIdx, 0.0, 0.0, 0.16, 10.0);
+  addCollider(attFloorIdx, 4.84, 0.0, 5.0, 10.0);
 
   function buildGableEndWall(z1, z2, isNorth, winOp, intTex) {
     const thick = z2 - z1;
@@ -573,7 +701,7 @@ export function buildHouse3D(scene) {
     addWallBox(staticGroup, 5.0 - wx2, kneeH, thick, (wx2 + 5.0) / 2, attY + kneeH / 2, cz, frontTex, backTex, 'h');
     addWallBox(staticGroup, winOp.width, winOp.sill, thick, (wx1 + wx2) / 2, attY + winOp.sill / 2, cz, frontTex, backTex, 'h');
     addWindowFrame(winOp, { axis: 'h', z1, z2 }, attY);
-    addCollider(5, 0.0, z1, 5.0, z2);
+    addCollider(attFloorIdx, 0.0, z1, 5.0, z2);
 
     const cutTop = Math.min(winTopY, getAtticCeilingY(wx1) - 0.04, getAtticCeilingY(wx2) - 0.04);
     const shape = new THREE.Shape();
@@ -610,8 +738,8 @@ export function buildHouse3D(scene) {
     makeGableFace(z1, isNorth ? extMatGable : intMatGable, true);
   }
 
-  buildGableEndWall(0.0, 0.15, true, FLOORS[5].walls[0].openings[0], 'wood_scratched_cedar');
-  buildGableEndWall(9.85, 10.0, false, FLOORS[5].walls[1].openings[0], 'wallpaper_vintage_floral');
+  buildGableEndWall(0.0, 0.15, true, FLOORS[attFloorIdx].walls[0].openings[0], 'wood_scratched_cedar');
+  buildGableEndWall(9.85, 10.0, false, FLOORS[attFloorIdx].walls[1].openings[0], 'wallpaper_vintage_floral');
 
   const roofAngle = Math.atan(HOUSE.atticSlope);
   const extRun = 2.50 + 0.50;
@@ -637,6 +765,22 @@ export function buildHouse3D(scene) {
     staticGroup.add(cMesh);
   });
 
+  // Rooftop Architectural Ridge Cap, Ventilation Louvers, & 6-Story Lightning Protection / Anemometer Mast (Y=18.93..20.42m)
+  addBox(staticGroup, 0.24, 0.10, roofDepth + 0.04, mat.darkIron, 2.50, ridgeY + 0.18, 5.0, false);
+  [1.80, 8.20].forEach((vz) => {
+    addBox(staticGroup, 0.34, 0.18, 1.30, mat.darkIron, 2.50, ridgeY + 0.28, vz, false);
+    addBox(staticGroup, 0.36, 0.04, 1.36, mat.bronze, 2.50, ridgeY + 0.38, vz, false);
+  });
+  // Lightning Rod + Weather Anemometer Mast on South Ridge Crown (code-compliant for ~20m tower!)
+  const lightningMast = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.032, 1.48, 8), mat.chrome);
+  lightningMast.position.set(2.50, ridgeY + 0.92, 9.25);
+  staticGroup.add(lightningMast);
+  const lightningTip = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.16, 8), mat.bronze);
+  lightningTip.position.set(2.50, ridgeY + 1.72, 9.25);
+  staticGroup.add(lightningTip);
+  addBox(staticGroup, 0.42, 0.02, 0.02, mat.chrome, 2.50, ridgeY + 1.32, 9.25, false);
+  addBox(staticGroup, 0.02, 0.02, 0.42, mat.chrome, 2.50, ridgeY + 1.32, 9.25, false);
+
   // Exposed Walnut Structural Ridge Beam, Rafters & Collar Ties in Attic
   addBox(staticGroup, 0.14, 0.22, 9.75, mat.walnut, 2.50, ridgeY - 0.14, 5.0, true);
   for (let rz = 0.65; rz <= 9.55; rz += 1.25) {
@@ -661,17 +805,50 @@ export function buildHouse3D(scene) {
   for (let bx = 0.22; bx <= 1.18; bx += 0.22) {
     addBox(staticGroup, 0.022, 0.96, 0.022, mat.darkIron, bx, attY + 0.48, 5.18, false);
   }
-  addCollider(5, 1.14, 2.45, 1.24, 5.24);
-  addCollider(5, 0.15, 5.14, 1.24, 5.24);
+  addCollider(attFloorIdx, 1.14, 2.45, 1.24, 5.24);
+  addCollider(attFloorIdx, 0.15, 5.14, 1.24, 5.24);
 
   addBox(staticGroup, 1.72, 1.38, 0.08, makeSurfaceMat('wood_lattice_dark', 1.72, 1.38), 3.98, attY + 0.69, 5.25, true);
   addBox(staticGroup, 1.72, 1.38, 0.02, makeSurfaceMat('pegboard_wood', 1.72, 1.38), 3.98, attY + 0.69, 5.30, false);
-  addCollider(5, 3.10, 5.18, 4.85, 5.33);
+  addCollider(attFloorIdx, 3.10, 5.18, 4.85, 5.33);
 
-  // Continuous Exterior Corner Pilasters (0 -> 11.95m, full 4-story height!)
+  // Continuous 6-Story SRC Exterior Corner Steel Pilasters (0 -> 17.56m, full 6-story height!)
   [[0.02, 0.02], [4.98, 0.02], [0.02, 9.98], [4.98, 9.98]].forEach(([cx, cz]) => {
-    addBox(staticGroup, 0.10, 11.96, 0.10, mat.darkIron, cx, 5.98, cz, false);
+    addBox(staticGroup, 0.12, 17.56, 0.12, mat.darkIron, cx, 8.78, cz, false);
   });
+  // Intermediate Structural Facade Steel Mullion Columns aligned to Grid Axes (Y3=2.45, Y5=5.25, X3=2.20)
+  [[0.00, 2.45], [0.00, 5.25], [5.00, 2.45], [5.00, 5.25]].forEach(([cx, cz]) => {
+    addBox(staticGroup, 0.07, 16.10, 0.08, mat.darkIron, cx, 8.05, cz, false);
+  });
+  // Architectural Exterior Seismic Tension X-Bracing across Stair-Core Structural Bay (Z=2.45..5.25 on 4F, 5F, 6F!)
+  [[8.15, 10.50], [10.50, 13.25], [13.25, 16.10]].forEach(([yLo, yHi]) => {
+    const dy = yHi - yLo;
+    const dz = 2.80;
+    const diagLen = Math.hypot(dy, dz);
+    const diagAng = Math.atan2(dy, dz);
+    const midY = (yLo + yHi) / 2;
+    [-0.035, 5.035].forEach((fx) => {
+      [1, -1].forEach((sgn) => {
+        const brace = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.045, diagLen), mat.darkIron);
+        brace.position.set(fx, midY, 3.85);
+        brace.rotation.x = sgn * diagAng;
+        staticGroup.add(brace);
+      });
+      // Center gusset node plate
+      addBox(staticGroup, 0.042, 0.16, 0.16, mat.bronze, fx, midY, 3.85, false);
+    });
+  });
+  // Exterior Vertical Cedar/Bronze Architectural Sun-Shading Louvers framing 5F & 6F North/South Facades
+  for (let lz = 0; lz < 4; lz++) {
+    addBox(staticGroup, 0.045, 5.50, 0.14, mat.bronze, 2.18 + lz * 0.12, 13.25, -0.05, false);
+  }
+  // Vertical MEP Plumbing Stack Vent Cap exiting roof over East wet zone (X=3.52, Z=4.80)
+  const ventStack = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.55, 10), mat.darkIron);
+  ventStack.position.set(3.52, getAtticCeilingY(3.52) + 0.30, 4.80);
+  staticGroup.add(ventStack);
+  const ventCap = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.08, 10), mat.darkIron);
+  ventCap.position.set(3.52, getAtticCeilingY(3.52) + 0.60, 4.80);
+  staticGroup.add(ventCap);
 
   // =========================================================================
   // 5. DETAILED INTERIOR FURNISHINGS & PROPS ACROSS ALL 6 LEVELS
@@ -1056,7 +1233,704 @@ export function buildHouse3D(scene) {
   balSconceBulb.position.set(2.92, y4f + 1.55, 10.04);
   furnitureGroup.add(balSconceBulb);
 
-  // ---------- RF / ATTIC FURNISHING (Y = 10.50, Floor Index 5) ----------
+  // =========================================================================
+  // MICRO-PROP ARTISAN HELPERS FOR ULTRA-PRECISION 5F & 6F INTERIORS
+  // =========================================================================
+  const soilMat = new THREE.MeshStandardMaterial({ color: 0x3b2c20, roughness: 0.95 });
+  const emberMat = new THREE.MeshStandardMaterial({ color: 0xff5a1f, emissive: new THREE.Color(0xff3c00), emissiveIntensity: 1.9, roughness: 0.45 });
+  const growLedMat = new THREE.MeshStandardMaterial({ color: 0xffd6ec, emissive: new THREE.Color(0xff9ad0), emissiveIntensity: 1.45, roughness: 0.3 });
+  const amberGlassMat = new THREE.MeshStandardMaterial({ color: 0xb86d28, roughness: 0.16, metalness: 0.12 });
+  const wineGreenMat = new THREE.MeshStandardMaterial({ color: 0x1e4a2b, roughness: 0.14, metalness: 0.10 });
+  const wineRedMat = new THREE.MeshStandardMaterial({ color: 0x4a1621, roughness: 0.14, metalness: 0.10 });
+  const copperMat = new THREE.MeshStandardMaterial({ color: 0xc26e44, roughness: 0.24, metalness: 0.86 });
+  const fireRedMat = new THREE.MeshStandardMaterial({ color: 0xb82820, roughness: 0.32, metalness: 0.35 });
+  const blueprintPaperMat = new THREE.MeshStandardMaterial({ color: 0xdbe9f6, roughness: 0.86, metalness: 0.0 });
+  const bookNavyMat = new THREE.MeshStandardMaterial({ color: 0x243447, roughness: 0.78 });
+  const bookOchreMat = new THREE.MeshStandardMaterial({ color: 0x9c6b3b, roughness: 0.78 });
+  const lensCoatMat = new THREE.MeshStandardMaterial({ color: 0x3b76a8, roughness: 0.08, metalness: 0.72 });
+
+  function addPottedPlant(px, py, pz, scale = 1.0, potMat = mat.terracotta) {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * scale, 0.08 * scale, 0.16 * scale, 10), potMat);
+    pot.position.set(px, py + 0.08 * scale, pz);
+    furnitureGroup.add(pot);
+    const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.10 * scale, 0.10 * scale, 0.02 * scale, 10), soilMat);
+    soil.position.set(px, py + 0.155 * scale, pz);
+    furnitureGroup.add(soil);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012 * scale, 0.018 * scale, 0.18 * scale, 6), mat.walnut);
+    stem.position.set(px, py + 0.24 * scale, pz);
+    furnitureGroup.add(stem);
+    [[0, 0.34, 0, 0.13], [-0.08, 0.28, 0.06, 0.095], [0.08, 0.29, -0.05, 0.09]].forEach(([ox, oy, oz, r], idx) => {
+      const leaf = new THREE.Mesh(new THREE.DodecahedronGeometry(r * scale, 0), idx % 2 === 0 ? mat.foliage : mat.foliageLight);
+      leaf.position.set(px + ox * scale, py + oy * scale, pz + oz * scale);
+      leaf.scale.set(1.15, 0.72, 1.15);
+      furnitureGroup.add(leaf);
+    });
+  }
+
+  function addFireExtinguisherNiche(x, y, z) {
+    addBox(furnitureGroup, 0.06, 0.62, 0.26, mat.darkIron, x, y + 0.36, z, false);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.36, 10), fireRedMat);
+    body.position.set(x + 0.02, y + 0.24, z);
+    furnitureGroup.add(body);
+    const valve = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.025, 0.08, 8), mat.darkIron);
+    valve.position.set(x + 0.02, y + 0.46, z);
+    furnitureGroup.add(valve);
+  }
+
+  // ---------- 5F FURNISHING (Y = 10.50, CH = 2.55m, Floor Index 5 — STUDIO, SAUNA, SKY BATH, CONSERVATORY & WEST DECK!) ----------
+  // 5R01: North Botanical Landing — Slatted Oak Planter Bench & Bonsai Collection
+  addBox(furnitureGroup, 1.35, 0.38, 0.36, mat.oak, 1.08, y5f + 0.19, 0.36, true);
+  addBox(furnitureGroup, 1.35, 0.04, 0.38, mat.walnut, 1.08, y5f + 0.39, 0.36, false);
+  addPottedPlant(0.62, y5f + 0.41, 0.36, 1.05, mat.terracotta);
+  addPottedPlant(1.10, y5f + 0.41, 0.36, 0.82, mat.ceramic);
+  addPottedPlant(1.54, y5f + 0.41, 0.36, 0.95, mat.terracotta);
+  addCollider(5, 0.38, 0.16, 1.78, 0.56);
+  addFramedArt(furnitureGroup, 'art_poster_3', 0.48, 0.64, 2.13, y5f + 1.48, 0.72, -Math.PI / 2);
+  addFireExtinguisherNiche(1.27, y5f, 4.65);
+
+  // 5R02: NE Architect's Model & Drafting Studio (X=2.25..4.85, Z=0.15..3.45)
+  // Tilted Architectural Drafting Table beneath North Panorama Window W5-2
+  const draftTop = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.04, 0.74), mat.oak);
+  draftTop.position.set(3.65, y5f + 0.80, 0.58);
+  draftTop.rotation.x = 0.14;
+  draftTop.castShadow = true;
+  draftTop.receiveShadow = true;
+  furnitureGroup.add(draftTop);
+  // Crisp Blueprint Drawing Sheet & Brass T-Square Ruler resting right on angled drafting board!
+  const bpSheet = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.008, 0.56), blueprintPaperMat);
+  bpSheet.position.set(3.58, y5f + 0.826, 0.58);
+  bpSheet.rotation.x = 0.14;
+  furnitureGroup.add(bpSheet);
+  const tSqHead = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.018, 0.28), mat.walnut);
+  tSqHead.position.set(2.90, y5f + 0.832, 0.58);
+  tSqHead.rotation.x = 0.14;
+  furnitureGroup.add(tSqHead);
+  const tSqBlade = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.01, 0.045), mat.bronze);
+  tSqBlade.position.set(3.35, y5f + 0.834, 0.58);
+  tSqBlade.rotation.x = 0.14;
+  furnitureGroup.add(tSqBlade);
+  // Pencil cup & colored scale ruler on corner of drafting desk
+  const penCup = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.032, 0.09, 10), mat.walnut);
+  penCup.position.set(4.28, y5f + 0.84, 0.36);
+  furnitureGroup.add(penCup);
+  // Steel trestle legs for drafting table
+  [2.96, 4.34].forEach((lx) => {
+    addBox(furnitureGroup, 0.045, 0.76, 0.62, mat.darkIron, lx, y5f + 0.38, 0.58, false);
+  });
+  addBox(furnitureGroup, 1.36, 0.04, 0.04, mat.darkIron, 3.65, y5f + 0.22, 0.58, false);
+  addCollider(5, 2.82, 0.18, 4.48, 0.96);
+  // Architect's Swivel Drafting Stool
+  const stSeat = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.17, 0.05, 14), denimMat);
+  stSeat.position.set(3.65, y5f + 0.56, 1.24);
+  furnitureGroup.add(stSeat);
+  const stPost = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.54, 8), mat.darkIron);
+  stPost.position.set(3.65, y5f + 0.28, 1.24);
+  furnitureGroup.add(stPost);
+  const stRing = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.012, 8, 16), mat.chrome);
+  stRing.rotation.x = Math.PI / 2;
+  stRing.position.set(3.65, y5f + 0.22, 1.24);
+  furnitureGroup.add(stRing);
+  addCollider(5, 3.46, 1.06, 3.84, 1.42);
+
+  // Interactive [E] Brass Articulating Architect's Desk Lamp on 5F Drafting Table!
+  const draftBulbMat = mat.warmBulb.clone();
+  addBox(furnitureGroup, 0.026, 0.38, 0.026, mat.bronze, 4.30, y5f + 0.96, 0.72, false);
+  addBox(furnitureGroup, 0.26, 0.024, 0.024, mat.bronze, 4.18, y5f + 1.15, 0.72, false);
+  const draftLampMesh = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.14, 14), mat.bronze);
+  draftLampMesh.position.set(4.06, y5f + 1.10, 0.72);
+  draftLampMesh.userData.propId = 'lamp_5f_drafting';
+  draftLampMesh.userData.noBatch = true;
+  dynamicGroup.add(draftLampMesh);
+  excludeBatch.add(draftLampMesh);
+  const draftLampBulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 10), draftBulbMat);
+  draftLampBulb.position.set(4.06, y5f + 1.04, 0.72);
+  dynamicGroup.add(draftLampBulb);
+  excludeBatch.add(draftLampBulb);
+  const studioDraftLight = addLight('5F_Studio_Drafting', 5, 'north', 0xffe0aa, 2.05, 6.8, 3.65, y5f + 1.55, 1.15);
+  interactiveProps.push({
+    id: 'lamp_5f_drafting', floor: 5, mesh: draftLampMesh, isOn: true,
+    getLabel() { return this.isOn ? '製図デスク灯を消す' : '製図デスク灯を点ける'; },
+    toggle() { this.isOn = !this.isOn; draftBulbMat.emissiveIntensity = this.isOn ? 2.6 : 0.08; if (!this.isOn) studioDraftLight.intensity = 0; },
+  });
+
+  // HERO SHOWPIECE: 1/50 Miniature Architectural Scale Model of the 6-Story NARROW-50 Tower on Walnut Museum Plinth!
+  addBox(furnitureGroup, 0.64, 0.84, 0.82, mat.walnut, 4.46, y5f + 0.42, 2.12, true);
+  addBox(furnitureGroup, 0.60, 0.03, 0.78, mat.foliage, 4.46, y5f + 0.855, 2.12, false); // Tiny site topography base
+  // Tiny 6-story NARROW-50 Tower (5m×10m×18.9m @ 1/50 = 0.10m × 0.20m × 0.38m!)
+  addBox(furnitureGroup, 0.10, 0.34, 0.20, mat.whiteMatte, 4.48, y5f + 1.04, 2.12, false);
+  // Tiny horizontal floor bands + 4F/5F/6F miniature balconies
+  for (let mf = 0; mf < 6; mf++) {
+    addBox(furnitureGroup, 0.106, 0.008, 0.206, mat.darkIron, 4.48, y5f + 0.88 + mf * 0.055, 2.12, false);
+  }
+  addBox(furnitureGroup, 0.04, 0.012, 0.025, mat.oak, 4.50, y5f + 1.04, 2.23, false); // Mini 4F balcony
+  addBox(furnitureGroup, 0.025, 0.012, 0.055, mat.oak, 4.41, y5f + 1.10, 2.16, false); // Mini 5F West deck
+  addBox(furnitureGroup, 0.095, 0.012, 0.025, mat.oak, 4.48, y5f + 1.15, 2.23, false); // Mini 6F Sky terrace
+  // Mini pitched gable roof on 1/50 model
+  const miniRoof = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.06, 4), mat.darkIron);
+  miniRoof.rotation.y = Math.PI / 4;
+  miniRoof.scale.set(0.95, 1.0, 1.85);
+  miniRoof.position.set(4.48, y5f + 1.24, 2.12);
+  furnitureGroup.add(miniRoof);
+  // Tiny neighboring Annex model & miniature forest cones on the site plinth!
+  addBox(furnitureGroup, 0.095, 0.20, 0.16, mat.oakLight, 4.30, y5f + 0.97, 2.12, false);
+  [[4.25, 1.84], [4.62, 1.86], [4.64, 2.38], [4.26, 2.38]].forEach(([tx, tz]) => {
+    const miniTree = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.18, 6), mat.foliageLight);
+    miniTree.position.set(tx, y5f + 0.96, tz);
+    furnitureGroup.add(miniTree);
+  });
+  addCollider(5, 4.10, 1.68, 4.84, 2.56);
+
+  // Flat-File 5-Drawer Blueprint Cabinet along South Studio Wall + Rolled Blueprint Tube Rack + Material Sample Board
+  addBox(furnitureGroup, 1.38, 0.78, 0.54, mat.oak, 3.24, y5f + 0.39, 3.16, true);
+  for (let di = 0; di < 5; di++) {
+    addBox(furnitureGroup, 1.28, 0.12, 0.02, mat.oakLight, 3.24, y5f + 0.11 + di * 0.145, 2.885, false);
+    addBox(furnitureGroup, 0.18, 0.018, 0.026, mat.bronze, 3.24, y5f + 0.11 + di * 0.145, 2.87, false);
+  }
+  addBox(furnitureGroup, 1.42, 0.03, 0.56, makeSurfaceMat('marble_white', 1.42, 0.56), 3.24, y5f + 0.795, 3.16, false);
+  addBox(furnitureGroup, 0.28, 0.04, 0.22, bookNavyMat, 2.85, y5f + 0.83, 3.14, false);
+  addBox(furnitureGroup, 0.26, 0.035, 0.20, bookOchreMat, 2.88, y5f + 0.865, 3.16, false);
+  // Pegboard + Architectural Material Swatch Board mounted above Flat-File Cabinet
+  addBox(furnitureGroup, 1.32, 0.86, 0.025, makeSurfaceMat('pegboard_wood', 1.32, 0.86), 3.24, y5f + 1.50, 3.43, false);
+  [mat.oak, mat.walnut, mat.bronze, mat.terracotta, mat.ceramic, mat.darkIron].forEach((swMat, si) => {
+    addBox(furnitureGroup, 0.14, 0.14, 0.03, swMat, 2.74 + si * 0.20, y5f + 1.56, 3.41, false);
+  });
+  addCollider(5, 2.52, 2.86, 3.98, 3.45);
+  // Rolled Blueprint Tube Stand in SE corner of Studio
+  addBox(furnitureGroup, 0.42, 0.48, 0.38, mat.walnut, 4.54, y5f + 0.24, 3.20, true);
+  [[4.42, 3.14], [4.54, 3.12], [4.66, 3.16], [4.48, 3.26], [4.61, 3.25]].forEach(([rx, rz], ri) => {
+    const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.72 + (ri % 2) * 0.12, 10), blueprintPaperMat);
+    roll.position.set(rx, y5f + 0.52, rz);
+    roll.rotation.z = (ri - 2) * 0.05;
+    furnitureGroup.add(roll);
+  });
+  addCollider(5, 4.30, 2.98, 4.80, 3.44);
+
+  // 5R03: Hinoki Finnish Dry Sauna (X=2.25..3.50, Z=3.55..5.95)
+  addBox(staticGroup, 0.03, 2.28, 2.36, makeSurfaceMat('wood_slats', 2.36, 2.28), 2.28, y5f + 1.14, 4.75, false);
+  addBox(staticGroup, 1.22, 2.28, 0.03, makeSurfaceMat('wood_slats', 1.22, 2.28), 2.88, y5f + 1.14, 5.92, false);
+  // Two-Tier Cantilevered Hinoki Sauna Benches along South Wall + Warm Under-Bench Strip
+  addBox(furnitureGroup, 1.18, 0.055, 0.40, mat.oakLight, 2.88, y5f + 0.44, 5.18, true);
+  addBox(furnitureGroup, 1.18, 0.055, 0.52, mat.oakLight, 2.88, y5f + 0.86, 5.64, true);
+  addBox(furnitureGroup, 1.18, 0.24, 0.04, mat.oak, 2.88, y5f + 1.24, 5.88, false); // Backrest slat
+  addBox(furnitureGroup, 1.10, 0.02, 0.02, mat.washiGlow, 2.88, y5f + 0.81, 5.39, false); // Under-bench warm cove
+  addCollider(5, 2.26, 4.98, 3.49, 5.94);
+  // Electric Finnish Sauna Stove + Glowing Volcanic Sauna Stones + Löyly Bucket & Ladle
+  addBox(furnitureGroup, 0.42, 0.68, 0.36, mat.darkIron, 3.20, y5f + 0.34, 3.78, true);
+  addBox(furnitureGroup, 0.34, 0.06, 0.28, emberMat, 3.20, y5f + 0.67, 3.78, false);
+  for (let si = 0; si < 8; si++) {
+    const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.055, 0), mat.wallCutCap);
+    stone.position.set(3.08 + (si % 4) * 0.08, y5f + 0.72 + (si >= 4 ? 0.04 : 0), 3.71 + Math.floor(si / 4) * 0.13);
+    furnitureGroup.add(stone);
+  }
+  const loylyBucket = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.09, 0.20, 12), mat.oak);
+  loylyBucket.position.set(2.58, y5f + 0.10, 3.76);
+  furnitureGroup.add(loylyBucket);
+  const loylyLadle = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.34, 6), mat.oakLight);
+  loylyLadle.position.set(2.62, y5f + 0.22, 3.76);
+  loylyLadle.rotation.z = -0.45;
+  furnitureGroup.add(loylyLadle);
+  // Wall Sandglass Timer (oak frame + glass bulbs) & Brass Thermo-Hygrometer (brass bezel + white dial + needle)
+  addBox(furnitureGroup, 0.06, 0.22, 0.025, mat.oak, 2.68, y5f + 1.48, 3.57, false);
+  const sgTop = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.065, 8), mat.washiGlow);
+  sgTop.rotation.x = Math.PI;
+  sgTop.position.set(2.68, y5f + 1.515, 3.588);
+  furnitureGroup.add(sgTop);
+  const sgBot = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.065, 8), mat.washiGlow);
+  sgBot.position.set(2.68, y5f + 1.445, 3.588);
+  furnitureGroup.add(sgBot);
+  const thermoDial = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.072, 0.022, 16), mat.bronze);
+  thermoDial.rotation.x = Math.PI / 2;
+  thermoDial.position.set(2.96, y5f + 1.54, 3.57);
+  furnitureGroup.add(thermoDial);
+  const thermoFace = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.025, 16), mat.ceramic);
+  thermoFace.rotation.x = Math.PI / 2;
+  thermoFace.position.set(2.96, y5f + 1.54, 3.574);
+  furnitureGroup.add(thermoFace);
+  addBox(furnitureGroup, 0.045, 0.008, 0.008, mat.darkIron, 2.978, y5f + 1.552, 3.59, false);
+  addCollider(5, 2.38, 3.56, 3.46, 4.02);
+
+  // 5R04: Canopy Hinoki & Black Granite Sky Bath (X=3.60..4.85, Z=3.55..5.95)
+  addBox(staticGroup, 0.03, 2.32, 2.36, makeSurfaceMat('stone_wet_granite', 2.36, 2.32), 4.83, y5f + 1.15, 4.75, false);
+  // Deep Hinoki-Rimmed Black Granite Soaking Tub beneath East Canopy Window W5-5 (hollow 4-rail Hinoki rim revealing open water!)
+  addBox(furnitureGroup, 1.18, 0.52, 0.90, makeSurfaceMat('stone_wet_granite', 1.18, 0.90), 4.22, y5f + 0.24, 5.46, true);
+  // 4-sided hollow Hinoki timber coping rim framing the open shimmering bath water
+  addBox(furnitureGroup, 1.22, 0.075, 0.085, mat.oakLight, 4.22, y5f + 0.54, 5.04, false); // North rim
+  addBox(furnitureGroup, 1.22, 0.075, 0.085, mat.oakLight, 4.22, y5f + 0.54, 5.88, false); // South rim
+  addBox(furnitureGroup, 0.085, 0.075, 0.78, mat.oakLight, 3.65, y5f + 0.54, 5.46, false); // West rim
+  addBox(furnitureGroup, 0.085, 0.075, 0.78, mat.oakLight, 4.79, y5f + 0.54, 5.46, false); // East rim
+  // Open shimmering turquoise hot-spring water surface clearly visible inside the Hinoki frame!
+  addBox(furnitureGroup, 1.05, 0.04, 0.75, mat.water, 4.22, y5f + 0.515, 5.46, false);
+  // Floating Hinoki Bath Tray + Ceramic Sake Cup + Brass Waterfall Spout
+  addBox(furnitureGroup, 0.20, 0.025, 0.80, mat.oakLight, 3.94, y5f + 0.59, 5.46, false);
+  const bathCup = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.028, 0.06, 10), mat.ceramic);
+  bathCup.position.set(3.94, y5f + 0.63, 5.36);
+  furnitureGroup.add(bathCup);
+  addBox(furnitureGroup, 0.18, 0.038, 0.055, mat.bronze, 4.74, y5f + 0.74, 5.46, false);
+  addCollider(5, 3.62, 5.00, 4.84, 5.94);
+  // Overhead Rain Shower Column + Hinoki Bath Stool & Wooden Washbasin + Amenity Niche Bottles
+  addBox(furnitureGroup, 0.03, 1.65, 0.03, mat.chrome, 4.76, y5f + 1.32, 3.88, false);
+  const rainHead = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.02, 14), mat.chrome);
+  rainHead.position.set(4.58, y5f + 2.12, 3.88);
+  furnitureGroup.add(rainHead);
+  addBox(furnitureGroup, 0.30, 0.24, 0.22, mat.oakLight, 4.54, y5f + 0.10, 3.78, true); // Hinoki stool
+  const bathWashTub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.095, 0.10, 12), mat.oakLight);
+  bathWashTub.position.set(4.54, y5f + 0.27, 3.78);
+  furnitureGroup.add(bathWashTub);
+  // Recessed Amenity Shelf with 3 Botanical Soap/Oil Bottles
+  addBox(furnitureGroup, 0.12, 0.025, 0.52, mat.oakLight, 4.76, y5f + 1.06, 4.65, false);
+  [amberGlassMat, wineGreenMat, mat.ceramic].forEach((bm, bi) => {
+    const btl = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.14, 10), bm);
+    btl.position.set(4.75, y5f + 1.14, 4.48 + bi * 0.15);
+    furnitureGroup.add(btl);
+  });
+
+  // 5R05: South Botanical Conservatory & Herbal Tea Lab (X=0.15..4.85, Z=6.05..9.85)
+  // Exposed Architectural Walnut Ceiling Pergola Beams aligned to structural bays
+  [6.95, 8.15, 9.35].forEach((bz) => {
+    addBox(staticGroup, 4.70, 0.14, 0.10, mat.walnut, 2.50, y5f + 2.48, bz, false);
+  });
+  // Living Vertical Moss/Fern Green Wall on East Wall
+  addBox(staticGroup, 0.04, 2.45, 2.35, makeSurfaceMat('green_wall', 2.35, 2.45), 4.82, y5f + 1.24, 8.15, false);
+  // 3-Tier Steel & Oak Botanical Grow Rack along North-East Conservatory Wall with Full-Spectrum Grow LEDs!
+  [2.92, 4.64].forEach((gx) => {
+    [6.14, 6.56].forEach((gz) => {
+      addBox(furnitureGroup, 0.032, 1.92, 0.032, mat.darkIron, gx, y5f + 0.96, gz, false);
+    });
+  });
+  [0.24, 0.88, 1.52].forEach((sy, lvl) => {
+    addBox(furnitureGroup, 1.78, 0.035, 0.46, mat.oak, 3.78, y5f + sy, 6.35, true);
+    addBox(furnitureGroup, 1.62, 0.018, 0.04, growLedMat, 3.78, y5f + sy + 0.56, 6.35, false);
+    addPottedPlant(3.22, y5f + sy + 0.02, 6.35, 0.88, lvl % 2 === 0 ? mat.terracotta : mat.ceramic);
+    addPottedPlant(3.78, y5f + sy + 0.02, 6.35, 0.96, mat.terracotta);
+    addPottedPlant(4.32, y5f + sy + 0.02, 6.35, 0.84, mat.ceramic);
+  });
+  addCollider(5, 2.82, 6.06, 4.72, 6.65);
+
+  // Botanical Apothecary & Herbal Tea Marble Counter along East Wall
+  addBox(furnitureGroup, 0.62, 0.84, 1.92, mat.walnut, 4.50, y5f + 0.42, 8.18, true);
+  addBox(furnitureGroup, 0.65, 0.04, 1.96, makeSurfaceMat('marble_white', 1.96, 0.65), 4.50, y5f + 0.86, 8.18, false);
+  // 6 Miniature Apothecary Glass Herb Jars + Mortar & Pestle + Copper Watering Can + Brass Gooseneck Kettle!
+  for (let ji = 0; ji < 6; ji++) {
+    const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.11 + (ji % 2) * 0.03, 10), ji % 2 === 0 ? amberGlassMat : wineGreenMat);
+    jar.position.set(4.64, y5f + 0.94, 7.38 + ji * 0.14);
+    furnitureGroup.add(jar);
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.024, 0.025, 8), mat.oak);
+    cork.position.set(4.64, y5f + 1.01 + (ji % 2) * 0.015, 7.38 + ji * 0.14);
+    furnitureGroup.add(cork);
+  }
+  const mortar = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.048, 0.075, 12), mat.ceramic);
+  mortar.position.set(4.38, y5f + 0.92, 8.35);
+  furnitureGroup.add(mortar);
+  const copperCan = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.088, 0.18, 12), copperMat);
+  copperCan.position.set(4.42, y5f + 0.97, 8.85);
+  furnitureGroup.add(copperCan);
+  const canSpout = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.22, 8), copperMat);
+  canSpout.position.set(4.30, y5f + 1.01, 8.76);
+  canSpout.rotation.z = 0.72;
+  furnitureGroup.add(canSpout);
+  addCollider(5, 4.14, 7.16, 4.84, 9.18);
+
+  // Botanical Tea Table & Cast-Iron Teapot (Tetsubin) + 2 Oak Stools
+  addBox(furnitureGroup, 0.88, 0.04, 0.64, mat.oak, 3.10, y5f + 0.70, 8.40, true);
+  [[-0.36, -0.24], [0.36, -0.24], [-0.36, 0.24], [0.36, 0.24]].forEach(([dx, dz]) => {
+    addBox(furnitureGroup, 0.036, 0.68, 0.036, mat.darkIron, 3.10 + dx, y5f + 0.34, 8.40 + dz, false);
+  });
+  const tetsubin = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), mat.darkIron);
+  tetsubin.scale.set(1.0, 0.72, 1.0);
+  tetsubin.position.set(3.10, y5f + 0.78, 8.40);
+  furnitureGroup.add(tetsubin);
+  [2.92, 3.28].forEach((cx) => {
+    const tc = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.024, 0.055, 10), mat.ceramic);
+    tc.position.set(cx, y5f + 0.75, 8.46);
+    furnitureGroup.add(tc);
+  });
+  addCollider(5, 2.62, 8.02, 3.58, 8.78);
+
+  // SW Cool-Down Lounger, Woven Rug, Teak Side Table & Interactive [E] Tall Washi Floor Lantern!
+  addBox(furnitureGroup, 1.65, 0.015, 1.85, makeSurfaceMat('carpet_beige', 1.65, 1.85), 1.32, y5f + 0.016, 8.95, false);
+  addBox(furnitureGroup, 0.86, 0.32, 0.74, mat.oak, 1.10, y5f + 0.16, 9.04, true);
+  addBox(furnitureGroup, 0.82, 0.14, 0.70, denimMat, 1.10, y5f + 0.36, 9.04, true);
+  addBox(furnitureGroup, 0.82, 0.56, 0.16, denimMat, 1.10, y5f + 0.62, 9.36, true);
+  addCollider(5, 0.62, 8.62, 1.58, 9.48);
+  const teakSide = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.16, 0.44, 14), mat.walnut);
+  teakSide.position.set(2.02, y5f + 0.22, 9.12);
+  furnitureGroup.add(teakSide);
+  const carafe = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.052, 0.20, 10), mat.glassClear);
+  carafe.position.set(2.02, y5f + 0.54, 9.12);
+  carafe.userData.noBatch = true;
+  dynamicGroup.add(carafe);
+
+  const consLanternMat = mat.washiGlow.clone();
+  const consLanternMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 1.08, 12), consLanternMat);
+  consLanternMesh.position.set(0.46, y5f + 0.62, 9.52);
+  consLanternMesh.userData.propId = 'lamp_5f_conservatory';
+  consLanternMesh.userData.noBatch = true;
+  dynamicGroup.add(consLanternMesh);
+  excludeBatch.add(consLanternMesh);
+  addBox(furnitureGroup, 0.24, 0.06, 0.24, mat.walnut, 0.46, y5f + 0.04, 9.52, false);
+  const consLight = addLight('5F_Conservatory_Lamp', 5, 'south', 0xffaa50, 2.05, 7.6, 1.35, y5f + 1.45, 8.65);
+  interactiveProps.push({
+    id: 'lamp_5f_conservatory', floor: 5, mesh: consLanternMesh, isOn: true,
+    getLabel() { return this.isOn ? '温室和紙フロア灯を消す' : '温室和紙フロア灯を点ける'; },
+    toggle() { this.isOn = !this.isOn; consLanternMat.emissiveIntensity = this.isOn ? 1.85 : 0.08; if (!this.isOn) consLight.intensity = 0; },
+  });
+
+  // 5R07: 5F West Canopy Spa Cool-Down Deck Outdoor Furniture & Sconce
+  addBox(furnitureGroup, 0.56, 0.42, 0.46, mat.oak, -0.56, y5f + 0.19, 6.52, true);
+  addCollider(5, -0.92, 6.22, -0.20, 6.80);
+  addBox(furnitureGroup, 0.36, 0.44, 0.36, mat.walnut, -0.58, y5f + 0.20, 8.50, true);
+  const deck5Lantern = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.20, 10), mat.washiGlow);
+  deck5Lantern.position.set(-0.58, y5f + 0.52, 8.50);
+  furnitureGroup.add(deck5Lantern);
+  const deck5Sconce = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.14), mat.washiGlow);
+  deck5Sconce.position.set(-0.04, y5f + 1.65, 6.62);
+  furnitureGroup.add(deck5Sconce);
+
+  // ---------- 6F FURNISHING (Y = 13.25, CH = 2.65m, Floor Index 6 — CROWN SKY PENTHOUSE & OBSERVATORY!) ----------
+  // 6R01: North Star-Chart Gallery Console + Brass Binoculars + Stacked Atlases
+  addBox(furnitureGroup, 1.24, 0.78, 0.34, mat.walnut, 1.10, y6f + 0.39, 0.35, true);
+  addBox(furnitureGroup, 1.28, 0.03, 0.36, makeSurfaceMat('marble_black', 1.28, 0.36), 1.10, y6f + 0.795, 0.35, false);
+  // Brass Field Binoculars + Stacked Star Atlases + Brass Compass on Console
+  [-0.045, 0.045].forEach((bx) => {
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.022, 0.16, 10), mat.bronze);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0.84 + bx, y6f + 0.84, 0.35);
+    furnitureGroup.add(barrel);
+  });
+  addBox(furnitureGroup, 0.26, 0.04, 0.20, bookNavyMat, 1.32, y6f + 0.83, 0.35, false);
+  addBox(furnitureGroup, 0.24, 0.035, 0.18, bookOchreMat, 1.34, y6f + 0.865, 0.36, false);
+  const compass = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 12), mat.bronze);
+  compass.position.set(1.10, y6f + 0.82, 0.35);
+  furnitureGroup.add(compass);
+  addCollider(6, 0.45, 0.16, 1.75, 0.55);
+  addFramedArt(furnitureGroup, 'art_poster_1', 0.46, 0.62, 2.13, y6f + 1.52, 0.72, -Math.PI / 2);
+  addFireExtinguisherNiche(1.27, y6f, 4.65);
+
+  // 6R02: NE Starlight Tatami Alcove & Meditative Sky-Bedroom (X=2.25..4.85, Z=0.15..3.45)
+  // Built-in Corner Window Daybed Platform tucked into NE Panorama Windows
+  addBox(furnitureGroup, 1.34, 0.28, 1.96, mat.walnut, 4.14, y6f + 0.14, 1.20, true);
+  addBox(furnitureGroup, 1.26, 0.20, 1.88, makeSurfaceMat('fabric_floral_quilt', 1.26, 1.88), 4.14, y6f + 0.37, 1.20, true);
+  addBox(furnitureGroup, 0.52, 0.14, 0.32, makeFrontMat('fabric_sakura'), 3.88, y6f + 0.52, 0.48, false);
+  addBox(furnitureGroup, 0.52, 0.14, 0.32, denimMat, 4.42, y6f + 0.52, 0.48, false);
+  addCollider(6, 3.42, 0.18, 4.84, 2.20);
+  // Low Walnut Writing Table (Fuzukue) with Open Book, Matcha Bowl, Brass Incense Burner & Red Zabuton!
+  addBox(furnitureGroup, 1.06, 0.04, 0.56, mat.walnut, 3.40, y6f + 0.36, 3.08, true);
+  [2.94, 3.86].forEach((lx) => {
+    addBox(furnitureGroup, 0.05, 0.34, 0.48, mat.walnut, lx, y6f + 0.17, 3.08, false);
+  });
+  addBox(furnitureGroup, 0.28, 0.025, 0.22, blueprintPaperMat, 3.24, y6f + 0.395, 3.08, false); // Open journal
+  const matchaBowl = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.036, 0.065, 12), mat.darkIron);
+  matchaBowl.position.set(3.64, y6f + 0.415, 3.02);
+  furnitureGroup.add(matchaBowl);
+  const koro = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.044, 0.05, 10), mat.bronze);
+  koro.position.set(3.74, y6f + 0.405, 3.20);
+  furnitureGroup.add(koro);
+  const koroEmber = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), emberMat);
+  koroEmber.position.set(3.74, y6f + 0.435, 3.20);
+  furnitureGroup.add(koroEmber);
+  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 3.40, y6f + 0.045, 2.48, false);
+  addCollider(6, 2.82, 2.75, 3.98, 3.42);
+  // Recessed Tokonoma Display Plinth with Ceramic Ikebana Vase & Cedar Sprig + Hanging Scroll
+  addBox(furnitureGroup, 0.40, 0.12, 0.68, mat.walnut, 4.62, y6f + 0.06, 3.02, true);
+  const ikebanaVase = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.24, 12), mat.ceramic);
+  ikebanaVase.position.set(4.62, y6f + 0.24, 3.02);
+  furnitureGroup.add(ikebanaVase);
+  const sprig = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.32, 7), mat.foliage);
+  sprig.position.set(4.60, y6f + 0.46, 3.02);
+  sprig.rotation.z = 0.24;
+  furnitureGroup.add(sprig);
+  addFramedArt(furnitureGroup, 'art_poster_2', 0.44, 0.88, 4.82, y6f + 1.48, 3.02, -Math.PI / 2);
+
+  // 6R03: 6F Sky Powder Room & WC (X=2.25..3.45, Z=3.55..5.95)
+  addBox(furnitureGroup, 0.50, 0.18, 1.06, makeSurfaceMat('marble_black', 1.06, 0.50), 3.18, y6f + 0.74, 4.24, true);
+  const vessel6 = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.14, 0.14, 16), mat.ceramic);
+  vessel6.position.set(3.16, y6f + 0.90, 4.24);
+  furnitureGroup.add(vessel6);
+  addBox(furnitureGroup, 0.03, 0.24, 0.03, mat.bronze, 3.36, y6f + 0.95, 4.24, false); // Tall brass faucet
+  addBox(furnitureGroup, 0.11, 0.025, 0.025, mat.bronze, 3.31, y6f + 1.06, 4.24, false);
+  // Backlit Oval Vanity Mirror + Amber Soap Bottle + Reed Diffuser
+  const ovalHalo = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.02, 20), mat.washiGlow);
+  ovalHalo.rotation.z = Math.PI / 2;
+  ovalHalo.scale.set(1.25, 1.0, 0.88);
+  ovalHalo.position.set(3.43, y6f + 1.50, 4.24);
+  furnitureGroup.add(ovalHalo);
+  const ovalMir = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.03, 20), mat.mirror);
+  ovalMir.rotation.z = Math.PI / 2;
+  ovalMir.scale.set(1.25, 1.0, 0.88);
+  ovalMir.position.set(3.42, y6f + 1.50, 4.24);
+  furnitureGroup.add(ovalMir);
+  const soap6 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 10), amberGlassMat);
+  soap6.position.set(3.20, y6f + 0.89, 3.84);
+  furnitureGroup.add(soap6);
+  const diff6 = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.10, 10), mat.ceramic);
+  diff6.position.set(3.20, y6f + 0.88, 4.62);
+  furnitureGroup.add(diff6);
+  addBox(furnitureGroup, 0.42, 0.42, 0.62, mat.ceramic, 2.82, y6f + 0.21, 5.52, true);
+  addCollider(6, 2.90, 3.65, 3.45, 4.80);
+  addCollider(6, 2.58, 5.18, 3.08, 5.92);
+
+  // 6R04: Wine & Home-Roasted Coffee Cellar (X=3.55..4.85, Z=3.55..5.95)
+  // Full-Height Walnut Wine Bottle Lattice Rack stocked with 12 Miniature 3D Wine Bottles!
+  addBox(furnitureGroup, 0.36, 2.15, 1.92, mat.walnut, 4.64, y6f + 1.075, 4.58, true);
+  for (let row = 0; row < 4; row++) {
+    addBox(furnitureGroup, 0.38, 0.03, 1.90, mat.oak, 4.63, y6f + 0.38 + row * 0.42, 4.58, false);
+    for (let col = 0; col < 3; col++) {
+      const bz = 3.92 + col * 0.62 + (row % 2) * 0.14;
+      const by = y6f + 0.46 + row * 0.42;
+      const bMat = (row + col) % 2 === 0 ? wineGreenMat : wineRedMat;
+      const wBody = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.22, 10), bMat);
+      wBody.rotation.z = Math.PI / 2;
+      wBody.position.set(4.56, by, bz);
+      furnitureGroup.add(wBody);
+      const wNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.022, 0.09, 8), mat.bronze);
+      wNeck.rotation.z = Math.PI / 2;
+      wNeck.position.set(4.42, by, bz);
+      furnitureGroup.add(wNeck);
+    }
+  }
+  addCollider(6, 4.42, 3.60, 4.84, 5.58);
+  // Climate-Controlled Glass-Front Wine Cooler + Coffee Roasting Tins along North Wall
+  addBox(furnitureGroup, 0.62, 1.32, 0.54, mat.darkIron, 3.94, y6f + 0.66, 3.86, true);
+  const coolerGlow = new THREE.Mesh(
+    new THREE.BoxGeometry(0.50, 1.12, 0.02),
+    new THREE.MeshStandardMaterial({ color: 0x1b3348, emissive: 0x3b76a8, emissiveIntensity: 0.48, roughness: 0.15 }),
+  );
+  coolerGlow.position.set(3.94, y6f + 0.66, 4.135);
+  furnitureGroup.add(coolerGlow);
+  [3.74, 3.94, 4.14].forEach((tx, ti) => {
+    const tin = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.14, 10), ti === 1 ? copperMat : mat.bronze);
+    tin.position.set(tx, y6f + 1.39, 3.86);
+    furnitureGroup.add(tin);
+  });
+  addCollider(6, 3.60, 3.56, 4.28, 4.16);
+
+  // 6R05: HERO CROWN ROOM — Sky Panorama Observatory Salon & Espresso Bar (X=0.15..4.85, Z=6.05..9.85, CH 2.65m!)
+  // Exposed SRC Hybrid Steel-and-Walnut Roof-Transfer Beams across full 4.70m width
+  [6.90, 8.10, 9.30].forEach((bz) => {
+    addBox(staticGroup, 4.70, 0.16, 0.12, mat.walnut, 2.50, y6f + 2.55, bz, false);
+    addBox(staticGroup, 4.70, 0.03, 0.15, mat.darkIron, 2.50, y6f + 2.46, bz, false);
+  });
+
+  // HERO SHOWPIECE 1: Authentic Brass & Walnut Equatorial Astronomical Telescope on Hardwood Tripod!
+  const telX = 1.48;
+  const telZ = 9.32;
+  // 3 Angled Hardwood Tripod Legs meeting at Mounting Hub (Y = +1.08m)
+  [0, (Math.PI * 2) / 3, (Math.PI * 4) / 3].forEach((ang) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.020, 0.014, 1.18, 8), mat.walnut);
+    leg.position.set(telX + Math.cos(ang) * 0.22, y6f + 0.54, telZ + Math.sin(ang) * 0.22);
+    leg.rotation.z = Math.cos(ang) * 0.34;
+    leg.rotation.x = -Math.sin(ang) * 0.34;
+    leg.castShadow = true;
+    furnitureGroup.add(leg);
+  });
+  // Equatorial Mount Head + Counterweight Rod & Iron Disc
+  const eqHead = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.085, 0.18, 12), mat.darkIron);
+  eqHead.position.set(telX, y6f + 1.14, telZ);
+  furnitureGroup.add(eqHead);
+  const cwBar = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.34, 8), mat.chrome);
+  cwBar.position.set(telX - 0.16, y6f + 1.10, telZ);
+  cwBar.rotation.z = 1.15;
+  furnitureGroup.add(cwBar);
+  const cwWeight = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.05, 12), mat.darkIron);
+  cwWeight.position.set(telX - 0.26, y6f + 1.04, telZ);
+  cwWeight.rotation.z = 1.15;
+  furnitureGroup.add(cwWeight);
+  // Main Brushed-Brass Optical Refractor Tube angled gracefully UP toward the South moonlit sky!
+  const telGroup = new THREE.Group();
+  telGroup.position.set(telX, y6f + 1.28, telZ);
+  telGroup.rotation.set(-0.46, 0.12, 0);
+  const mainTube = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.056, 1.06, 16), mat.bronze);
+  mainTube.rotation.x = Math.PI / 2;
+  mainTube.castShadow = true;
+  telGroup.add(mainTube);
+  const dewShield = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.068, 0.24, 16), mat.bronze);
+  dewShield.rotation.x = Math.PI / 2;
+  dewShield.position.z = 0.56;
+  telGroup.add(dewShield);
+  const objLens = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.02, 16), lensCoatMat);
+  objLens.rotation.x = Math.PI / 2;
+  objLens.position.z = 0.65;
+  telGroup.add(objLens);
+  const finder = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.34, 10), mat.bronze);
+  finder.rotation.x = Math.PI / 2;
+  finder.position.set(0.065, 0.065, -0.10);
+  telGroup.add(finder);
+  const eyepiece = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.024, 0.16, 10), mat.darkIron);
+  eyepiece.position.set(0, 0.06, -0.56);
+  telGroup.add(eyepiece);
+  furnitureGroup.add(telGroup);
+  addCollider(6, 1.20, 9.04, 1.76, 9.60);
+  // Star-Atlas Lectern beside Telescope
+  addBox(furnitureGroup, 0.05, 0.96, 0.05, mat.walnut, 0.50, y6f + 0.48, 9.38, false);
+  addBox(furnitureGroup, 0.32, 0.04, 0.32, mat.walnut, 0.50, y6f + 0.02, 9.38, false);
+  const lecternDesk = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.03, 0.34), mat.walnut);
+  lecternDesk.position.set(0.50, y6f + 0.98, 9.38);
+  lecternDesk.rotation.x = -0.35;
+  furnitureGroup.add(lecternDesk);
+  const starMap = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.01, 0.28), blueprintPaperMat);
+  starMap.position.set(0.50, y6f + 1.00, 9.37);
+  starMap.rotation.x = -0.35;
+  furnitureGroup.add(starMap);
+  addCollider(6, 0.26, 9.14, 0.74, 9.62);
+
+  // HERO SHOWPIECE 2: Suspended Modern Sculptural Steel Hearth Fireplace (Interactive [E] Toggle!)
+  const hearthX = 0.52;
+  const hearthZ = 8.20;
+  const hearthPad = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.04, 18), makeSurfaceMat('slate_charcoal', 0.8, 0.8));
+  hearthPad.position.set(hearthX, y6f + 0.02, hearthZ);
+  furnitureGroup.add(hearthPad);
+  const fluePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.56, 14), mat.darkIron);
+  fluePipe.position.set(hearthX, y6f + 1.88, hearthZ);
+  furnitureGroup.add(fluePipe);
+  const fireHood = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.48, 16), mat.darkIron);
+  fireHood.position.set(hearthX, y6f + 0.96, hearthZ);
+  furnitureGroup.add(fireHood);
+  const fireBowl = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.18, 0.18, 16), mat.darkIron);
+  fireBowl.position.set(hearthX, y6f + 0.46, hearthZ);
+  fireBowl.userData.propId = 'fireplace_6f';
+  fireBowl.userData.noBatch = true;
+  dynamicGroup.add(fireBowl);
+  excludeBatch.add(fireBowl);
+  const hearthFlameMat = emberMat.clone();
+  const hearthFlameMesh = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.24, 10), hearthFlameMat);
+  hearthFlameMesh.position.set(hearthX, y6f + 0.64, hearthZ);
+  hearthFlameMesh.userData.noBatch = true;
+  dynamicGroup.add(hearthFlameMesh);
+  excludeBatch.add(hearthFlameMesh);
+  const hearthLight = addLight('6F_Hearth_Fire', 6, 'south', 0xff7b2e, 2.25, 7.2, hearthX + 0.22, y6f + 0.78, hearthZ);
+  interactiveProps.push({
+    id: 'fireplace_6f', floor: 6, mesh: fireBowl, isOn: true,
+    getLabel() { return this.isOn ? '吊り暖炉の火を消す' : '吊り暖炉に火を灯す'; },
+    toggle() {
+      this.isOn = !this.isOn;
+      hearthFlameMat.emissiveIntensity = this.isOn ? 2.1 : 0.04;
+      hearthFlameMesh.visible = this.isOn;
+      if (!this.isOn) hearthLight.intensity = 0;
+    },
+  });
+  addCollider(6, 0.22, 7.90, 0.82, 8.50);
+
+  // Designer South-Facing Sky Lounge Sofa + Woven Salon Rug + Black Marble Coffee Table with Espresso Cups & Monograph!
+  addBox(furnitureGroup, 2.25, 0.015, 2.20, makeSurfaceMat('carpet_beige', 2.25, 2.20), 1.75, y6f + 0.016, 7.95, false);
+  addBox(furnitureGroup, 1.66, 0.36, 0.72, sofaMat, 1.75, y6f + 0.19, 7.42, true);
+  addBox(furnitureGroup, 1.66, 0.64, 0.18, sofaMat, 1.75, y6f + 0.40, 7.12, true);
+  addBox(furnitureGroup, 0.14, 0.52, 0.72, sofaMat, 0.98, y6f + 0.28, 7.42, true);
+  addBox(furnitureGroup, 0.14, 0.52, 0.72, sofaMat, 2.52, y6f + 0.28, 7.42, true);
+  // 3 Accent Throw Pillows
+  addBox(furnitureGroup, 0.34, 0.30, 0.12, denimMat, 1.24, y6f + 0.48, 7.26, false);
+  addBox(furnitureGroup, 0.34, 0.30, 0.12, makeFrontMat('fabric_sakura'), 1.75, y6f + 0.48, 7.26, false);
+  addBox(furnitureGroup, 0.34, 0.30, 0.12, makeFrontMat('fabric_rose_vintage'), 2.26, y6f + 0.48, 7.26, false);
+  addCollider(6, 0.88, 7.02, 2.62, 7.82);
+
+  addBox(furnitureGroup, 1.14, 0.04, 0.52, makeSurfaceMat('marble_black', 1.14, 0.52), 1.75, y6f + 0.36, 8.40, true);
+  addBox(furnitureGroup, 0.92, 0.34, 0.34, mat.walnut, 1.75, y6f + 0.17, 8.40, false);
+  // Open Architecture Monograph + 2 Ceramic Espresso Cups & Saucers + Brass Candlestick + Miniature Bonsai!
+  addBox(furnitureGroup, 0.32, 0.03, 0.24, bookNavyMat, 1.44, y6f + 0.395, 8.40, false);
+  [1.82, 1.98].forEach((cx) => {
+    const saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.042, 0.01, 12), mat.ceramic);
+    saucer.position.set(cx, y6f + 0.386, 8.34);
+    furnitureGroup.add(saucer);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.025, 0.052, 10), mat.ceramic);
+    cup.position.set(cx, y6f + 0.415, 8.34);
+    furnitureGroup.add(cup);
+  });
+  addPottedPlant(2.18, y6f + 0.38, 8.44, 0.55, mat.ceramic);
+  addCollider(6, 1.15, 8.12, 2.35, 8.68);
+
+  // HERO SHOWPIECE 3: 6F Italian Dual-Boiler Espresso & Pour-Over Sky Bar along East Wall!
+  addBox(furnitureGroup, 0.62, 0.96, 1.84, mat.walnut, 4.50, y6f + 0.48, 7.42, true);
+  addBox(furnitureGroup, 0.66, 0.045, 1.88, makeSurfaceMat('marble_white', 1.88, 0.66), 4.50, y6f + 0.98, 7.42, false);
+  // Chrome Dual-Boiler Italian Espresso Machine (Grouphead, Portafilter Handle, Steam Wand, Twin Gauges!)
+  addBox(furnitureGroup, 0.34, 0.36, 0.32, mat.chrome, 4.56, y6f + 1.18, 7.12, true);
+  addBox(furnitureGroup, 0.10, 0.08, 0.12, mat.chrome, 4.36, y6f + 1.20, 7.12, false); // E61 Grouphead
+  addBox(furnitureGroup, 0.14, 0.026, 0.026, mat.walnut, 4.26, y6f + 1.14, 7.12, false); // Portafilter handle
+  addBox(furnitureGroup, 0.28, 0.03, 0.28, mat.darkIron, 4.44, y6f + 1.02, 7.12, false); // Drip tray
+  // Conical Burr Coffee Grinder with Bean Hopper
+  addBox(furnitureGroup, 0.16, 0.24, 0.16, mat.darkIron, 4.56, y6f + 1.12, 7.50, false);
+  const hopper = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.035, 0.16, 12), amberGlassMat);
+  hopper.position.set(4.56, y6f + 1.32, 7.50);
+  furnitureGroup.add(hopper);
+  // 3 Glass Coffee-Bean Canisters + Pour-Over Glass Server
+  [7.78, 7.94, 8.10].forEach((cz, ci) => {
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.14 + (ci % 2) * 0.03, 10), amberGlassMat);
+    can.position.set(4.62, y6f + 1.08, cz);
+    furnitureGroup.add(can);
+  });
+  addCollider(6, 4.14, 6.46, 4.84, 8.38);
+  // 2 Walnut & Dark-Iron Bar Stools + Dual Suspended Brass Globe Pendant Lamps
+  [6.98, 7.86].forEach((bz) => {
+    const sTop = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.15, 0.045, 14), mat.walnut);
+    sTop.position.set(3.82, y6f + 0.68, bz);
+    furnitureGroup.add(sTop);
+    const sLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.038, 0.66, 8), mat.darkIron);
+    sLeg.position.set(3.82, y6f + 0.33, bz);
+    furnitureGroup.add(sLeg);
+    addCollider(6, 3.66, bz - 0.16, 3.98, bz + 0.16);
+    addBox(furnitureGroup, 0.016, 0.78, 0.016, mat.bronze, 4.24, y6f + 2.24, bz, false);
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(0.11, 14, 12), mat.washiGlow);
+    globe.position.set(4.24, y6f + 1.82, bz);
+    furnitureGroup.add(globe);
+  });
+
+  // Hi-Fi Vinyl Turntable Console + Upright LP Record Sleeves + Pair of Oak Audiophile Speakers along North Salon Wall!
+  addBox(furnitureGroup, 1.04, 0.64, 0.36, mat.walnut, 2.95, y6f + 0.32, 6.26, true);
+  addBox(furnitureGroup, 0.42, 0.06, 0.32, mat.darkIron, 2.74, y6f + 0.67, 6.26, false);
+  const lpPlatter = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.135, 0.012, 16), mat.wallCutCap);
+  lpPlatter.position.set(2.74, y6f + 0.708, 6.26);
+  furnitureGroup.add(lpPlatter);
+  const lpLabel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.015, 12), mat.terracotta);
+  lpLabel.position.set(2.74, y6f + 0.71, 6.26);
+  furnitureGroup.add(lpLabel);
+  // Upright LP Vinyl Sleeves + Oak Floorstanding Speakers flanking console
+  [bookNavyMat, bookOchreMat, mat.terracotta, denimMat, mat.oakLight].forEach((lm, li) => {
+    addBox(furnitureGroup, 0.025, 0.30, 0.28, lm, 3.10 + li * 0.05, y6f + 0.79, 6.26, false);
+  });
+  [2.32, 3.58].forEach((sx) => {
+    addBox(furnitureGroup, 0.22, 0.92, 0.26, mat.oak, sx, y6f + 0.46, 6.24, true);
+    const woofer = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.02, 12), mat.darkIron);
+    woofer.rotation.x = Math.PI / 2;
+    woofer.position.set(sx, y6f + 0.66, 6.37);
+    furnitureGroup.add(woofer);
+  });
+  addFramedArt(furnitureGroup, 'art_posters_trio', 0.96, 0.54, 2.95, y6f + 1.66, 6.08, 0);
+  addCollider(6, 2.20, 6.06, 3.70, 6.46);
+
+  // 6R07: Full-Width South Sky Observatory Terrace Outdoor Props (X=0.20..4.80, Z=10.00..11.10)
+  // West & East Cedar Planter Boxes with Sculpted Evergreen Forest Shrubs
+  addBox(furnitureGroup, 0.42, 0.42, 0.68, mat.walnut, 0.48, y6f + 0.19, 10.52, true);
+  addPottedPlant(0.48, y6f + 0.32, 10.36, 1.05, mat.walnut);
+  addPottedPlant(0.48, y6f + 0.32, 10.68, 0.95, mat.walnut);
+  addCollider(6, 0.22, 10.14, 0.72, 10.92);
+
+  // Horizon Spotting Scope / Observation Binocular Post at West Terrace Viewpoint
+  const scopePost = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.042, 1.24, 10), mat.darkIron);
+  scopePost.position.set(1.05, y6f + 0.60, 10.78);
+  furnitureGroup.add(scopePost);
+  const scopeHead = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.038, 0.28, 12), mat.bronze);
+  scopeHead.rotation.x = Math.PI / 2 - 0.18;
+  scopeHead.position.set(1.05, y6f + 1.26, 10.82);
+  furnitureGroup.add(scopeHead);
+
+  // East Terrace Outdoor Café Set: Round White Marble Bistro Table + Glowing Hurricane Lantern + 2 Wine Glasses + Teak Lounge Chair!
+  const bistroTop = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.03, 16), makeSurfaceMat('marble_white', 0.5, 0.5));
+  bistroTop.position.set(4.22, y6f + 0.68, 10.52);
+  furnitureGroup.add(bistroTop);
+  const bistroLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.66, 10), mat.darkIron);
+  bistroLeg.position.set(4.22, y6f + 0.34, 10.52);
+  furnitureGroup.add(bistroLeg);
+  const skyLantern = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.18, 10), mat.washiGlow);
+  skyLantern.position.set(4.22, y6f + 0.79, 10.52);
+  furnitureGroup.add(skyLantern);
+  addBox(furnitureGroup, 0.44, 0.42, 0.40, mat.oak, 4.30, y6f + 0.19, 10.18, true);
+  addBox(furnitureGroup, 0.44, 0.38, 0.06, mat.oak, 4.30, y6f + 0.58, 10.02, false);
+  addPottedPlant(4.60, y6f + 0.02, 10.82, 1.15, mat.terracotta);
+  addCollider(6, 3.96, 10.08, 4.78, 11.04);
+  // Dual Waterproof Architectural Sconces flanking 6F Sky Terrace Wall
+  [0.95, 4.10].forEach((sx) => {
+    addBox(furnitureGroup, 0.14, 0.22, 0.08, mat.washiGlow, sx, y6f + 1.72, 10.04, false);
+  });
+
+  // ---------- RF / ATTIC FURNISHING (Y = 16.10, Floor Index 7 = attFloorIdx) ----------
   const yAtt = attY;
   addBox(furnitureGroup, 0.62, 0.58, 0.62, crateMat, 4.25, yAtt + 0.29, 1.35, true);
   addBox(furnitureGroup, 0.54, 0.50, 0.54, crateMat, 4.22, yAtt + 0.83, 1.38, true);
@@ -1073,18 +1947,18 @@ export function buildHouse3D(scene) {
   sack2.scale.set(1.1, 1.0, 0.9);
   sack2.position.set(4.15, yAtt + 0.26, 3.68);
   furnitureGroup.add(sack2);
-  addCollider(5, 3.85, 0.98, 4.82, 4.00);
+  addCollider(attFloorIdx, 3.85, 0.98, 4.82, 4.00);
   addFramedArt(furnitureGroup, 'prop_crayon_house', 0.42, 0.34, 3.92, yAtt + 0.98, 5.18, Math.PI);
 
   addBox(furnitureGroup, 0.96, 0.04, 0.64, mat.walnut, 2.50, yAtt + 0.34, 7.45, true);
   addBox(furnitureGroup, 0.80, 0.32, 0.48, mat.walnut, 2.50, yAtt + 0.16, 7.45, false);
   addBox(furnitureGroup, 0.56, 0.08, 0.56, makeFrontMat('zabuton_red'), 2.50, yAtt + 0.06, 6.72, false);
   addBox(furnitureGroup, 0.56, 0.08, 0.56, denimMat, 2.50, yAtt + 0.06, 8.18, false);
-  addCollider(5, 1.98, 7.10, 3.02, 7.80);
+  addCollider(attFloorIdx, 1.98, 7.10, 3.02, 7.80);
   addBox(furnitureGroup, 0.54, 0.48, 1.15, crateMat, 0.52, yAtt + 0.24, 7.45, true);
   addBox(furnitureGroup, 0.52, 0.46, 1.05, makeFrontMat('furniture_chest'), 4.46, yAtt + 0.23, 7.55, true);
-  addCollider(5, 0.16, 6.84, 0.84, 8.06);
-  addCollider(5, 4.16, 6.98, 4.84, 8.12);
+  addCollider(attFloorIdx, 0.16, 6.84, 0.84, 8.06);
+  addCollider(attFloorIdx, 4.16, 6.98, 4.84, 8.12);
 
   addBox(furnitureGroup, 0.018, 0.92, 0.018, mat.darkIron, 2.50, ridgeY - 0.54, 7.45, false);
   const attLanternMat = mat.washiGlow.clone();
@@ -1098,15 +1972,15 @@ export function buildHouse3D(scene) {
   attCap.position.set(2.50, yAtt + 1.90, 7.45);
   furnitureGroup.add(attCap);
 
-  const atticLight = addLight('Attic_Lantern', 5, 'sanctuary', 0xffa448, 2.85, 9.0, 2.50, yAtt + 1.62, 7.45);
+  const atticLight = addLight('Attic_Lantern', attFloorIdx, 'sanctuary', 0xffa448, 2.85, 9.0, 2.50, yAtt + 1.62, 7.45);
   interactiveProps.push({
-    id: 'lantern_attic', floor: 5, mesh: attLanternMesh, isOn: true,
+    id: 'lantern_attic', floor: attFloorIdx, mesh: attLanternMesh, isOn: true,
     getLabel() { return this.isOn ? '小屋裏ランタンを消す' : '小屋裏ランタンを点ける'; },
     toggle() { this.isOn = !this.isOn; attLanternMat.emissiveIntensity = this.isOn ? 2.1 : 0.08; if (!this.isOn) atticLight.intensity = 0; },
   });
 
   // =========================================================================
-  // 6. FLOOR-SCOPED ATMOSPHERIC LIGHTING ACROSS ALL 6 LEVELS (<= 5-6 active!)
+  // 6. FLOOR-SCOPED ATMOSPHERIC LIGHTING ACROSS ALL 8 LEVELS (<= 5-6 active!)
   // =========================================================================
   // B1F (Floor 0): Sparse dim bunker lighting ("明かりが少し") — eerie low-lit cement atmosphere!
   addLight('B1F_Dim_Main', 0, 'main', 0xd6cfc2, 0.72, 5.8, 1.75, yb + 1.78, 5.65);
@@ -1138,11 +2012,23 @@ export function buildHouse3D(scene) {
   addLight('4F_SkyLounge_SE', 4, 'south', 0xffb86a, 2.05, 7.0, 3.65, y4f + 1.82, 8.15);
   addLight('4F_Balcony_Sconce', 4, 'balcony', 0xffae58, 1.35, 5.5, 3.50, y4f + 1.60, 10.45);
 
-  // Attic (Floor 5)
-  addLight('Attic_Hatch_Bulb', 5, 'north', 0xffc684, 1.55, 6.8, 2.15, yAtt + 2.10, 2.35);
+  // 5F (Floor 5 — 5 Active Budget: Studio Drafting + Hall/Sauna + Sky Bath + Conservatory Grow/Lamp + West Deck!)
+  addLight('5F_Hall_Sauna', 5, 'north', 0xffc686, 1.60, 6.5, 1.65, y5f + 2.15, 2.45);
+  addLight('5F_Sauna_Bath', 5, 'mid', 0xffb470, 1.85, 6.2, 3.55, y5f + 2.00, 4.75);
+  addLight('5F_Conservatory_Grow', 5, 'south', 0xffd2e6, 1.85, 7.2, 3.75, y5f + 2.05, 7.35);
+  addLight('5F_WestDeck_Sconce', 5, 'balcony', 0xffb262, 1.45, 5.8, -0.45, y5f + 1.72, 7.50);
+
+  // 6F (Floor 6 — 5 Active Budget: Starlight Landing/Alcove + Powder/Cellar + Espresso Bar + Interactive Hearth + Full-Width Sky Terrace!)
+  addLight('6F_Hall_Alcove', 6, 'north', 0xffca8f, 1.75, 7.0, 2.55, y6f + 2.25, 1.70);
+  addLight('6F_Powder_Cellar', 6, 'mid', 0xdcecff, 1.55, 5.8, 3.35, y6f + 2.15, 4.65);
+  addLight('6F_SkySalon_Bar', 6, 'south', 0xffbe74, 2.35, 8.5, 3.45, y6f + 2.18, 7.55);
+  addLight('6F_SkyTerrace_Lantern', 6, 'balcony', 0xffb05c, 1.65, 6.8, 2.55, y6f + 1.82, 10.55);
+
+  // Attic (Floor 7 = attFloorIdx)
+  addLight('Attic_Hatch_Bulb', attFloorIdx, 'north', 0xffc684, 1.55, 6.8, 2.15, yAtt + 2.10, 2.35);
 
   // =========================================================================
-  // 7. EXTERIOR FOREST GROUND (WITH EXACT 5m×10m HOUSE CUTOUT!) & 20-31m CEDARS
+  // 7. EXTERIOR FOREST GROUND (WITH EXACT 5m×10m HOUSE CUTOUT!) & 22-34m CEDARS
   // =========================================================================
   // Build exterior forest ground as 4 surrounding quads so it NEVER cuts across B1F / ST0!
   function addGroundQuad(x1, z1, x2, z2) {
@@ -1189,7 +2075,7 @@ export function buildHouse3D(scene) {
     boulderColliders.push({ x: bx, z: bz, r: sx * 0.88 });
   });
 
-  // GPU Wind-Animated Instanced Towering Ancient Cedars (20m - 31m tall enveloping all 3 buildings + Camper drive lane!)
+  // GPU Wind-Animated Instanced Towering Ancient Cedars (22m - 34m tall enveloping the 6-story 18.93m tower + compound!)
   const windTimeUniform = { value: 0 };
   let seed = 42081;
   const rand = () => {
@@ -1208,9 +2094,9 @@ export function buildHouse3D(scene) {
     if (inHouseClear || inDriveClearing) continue;
 
     const isUnderstory = i % 5 === 0;
-    const h = isUnderstory ? (6.0 + rand() * 6.5) : (20.0 + rand() * 11.0); // up to 31m ancient forest giants!
-    const rad = isUnderstory ? (0.12 + rand() * 0.08) : (0.22 + rand() * 0.18);
-    const cw = isUnderstory ? (0.95 + rand() * 0.55) : (1.18 + rand() * 0.72);
+    const h = isUnderstory ? (6.5 + rand() * 7.0) : (22.0 + rand() * 12.0); // up to 34m ancient forest giants framing 6F sky terrace!
+    const rad = isUnderstory ? (0.12 + rand() * 0.08) : (0.24 + rand() * 0.19);
+    const cw = isUnderstory ? (0.95 + rand() * 0.55) : (1.25 + rand() * 0.78);
     treeSpecs.push({ x: tx, z: tz, h, rad, cw, rot: rand() * Math.PI * 2 });
     if (tx > -19 && tx < 20 && tz > -19 && tz < 19) {
       treeColliders.push({ x: tx, z: tz, r: rad + 0.14 });
@@ -1288,12 +2174,13 @@ export function buildHouse3D(scene) {
   bushInst.instanceMatrix.needsUpdate = true;
   exteriorGroup.add(bushInst);
 
-  // Exterior Moonlit Canopy Fill Lights spanning all 3 buildings & Giant Camper Bay
+  // Exterior Moonlit Canopy Fill Lights spanning all 6-story Main Tower + Annex + Warehouse + Vehicles
   [
     [2.5, 4.5, 16.5, 0x4a73a3, 1.85, 22],
-    [2.5, 12.0, 17.5, 0x5886ba, 2.40, 26],
+    [2.5, 13.5, 17.8, 0x5c8ac0, 2.45, 28],
+    [2.5, 19.2, 16.5, 0x6696cc, 2.15, 28],
     [2.5, 5.5, -7.5, 0x446894, 1.45, 20],
-    [2.5, 12.0, -8.0, 0x527cb0, 2.00, 24],
+    [2.5, 15.0, -8.5, 0x5682b8, 2.25, 28],
     [-5.2, 7.8, 13.8, 0x4a73a3, 1.85, 24],
     [-5.2, 7.6, -4.8, 0x446894, 1.65, 22],
     [10.2, 5.8, -4.2, 0x4a73a3, 1.75, 24],
@@ -1304,8 +2191,8 @@ export function buildHouse3D(scene) {
     exteriorGroup.add(l);
   });
 
-  // Drifting Midnight Forest Fireflies across the compound clearing (excluding interiors)
-  const ffCount = 120;
+  // Drifting Midnight Forest Fireflies across the compound clearing (rising up to 19m past 5F/6F Sky Terraces!)
+  const ffCount = 136;
   const ffPositions = new Float32Array(ffCount * 3);
   const ffSeeds = [];
   for (let i = 0; i < ffCount; i++) {
@@ -1314,11 +2201,11 @@ export function buildHouse3D(scene) {
       fx = -16 + rand() * 36;
       fz = -13 + rand() * 36;
     } while (
-      (fx > -0.4 && fx < 5.4 && fz > -0.4 && fz < 11.2) ||
+      (fx > -1.3 && fx < 5.4 && fz > -0.4 && fz < 11.4) ||
       (fx > -8.8 && fx < -2.2 && fz > -0.2 && fz < 9.4) ||
       (fx > 6.1 && fx < 9.6 && fz > -2.2 && fz < 9.8)
     );
-    const fy = 0.65 + rand() * 13.6;
+    const fy = 0.65 + rand() * 18.6;
     ffPositions[i * 3] = fx;
     ffPositions[i * 3 + 1] = fy;
     ffPositions[i * 3 + 2] = fz;

@@ -10,9 +10,9 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <title>NARROW-50 ＋ 隣棟 ANNEX-40 ＋ RC倉庫棟 ＋ 巨大RV ＋ 日常軽バン KEI-340 | 深い森の5棟15図面 一人称探索</title>
-  <meta name="description" content="深い森の母屋(5m×10m 地下1階セメント倉庫＋地上4階＋屋根裏)、隣棟(5m×8m 3階建6室＋1×1.6mバルコニー×3＋5室屋根裏)、RC倉庫棟(2m×2m 低天井2階建4室)、運転可動な巨大キャンピングカー(2.7×7.5×H3.4m 1F14室＋2Fロフト2室)、そして主人公が日常使いする運転可動・進入可能な軽バン(3.40×1.48×H1.80m 運転席1席のみ＋進入可能フルフラット荷室)をPOCO F7最適化エンジンで一人称探索するオフライン対応PWAと5棟15図面実施設計図。" />
-  <script type="module" crossorigin src="./assets/dev-C2jbr8_V.js"></script>
+  <title>NARROW-50 (6階建8層) ＋ 隣棟 ANNEX-40 ＋ RC倉庫棟 ＋ 巨大RV ＋ 日常軽バン KEI-340 | 深い森の5棟17図面 一人称探索</title>
+  <meta name="description" content="深い森の母屋(5m×10m 地下1階セメント倉庫＋地上6階SRCハイブリッド塔屋＋6寸勾配屋根裏の全8層・全高18.93m)、隣棟(5m×8m 3階建6室＋1×1.6mバルコニー×3＋5室屋根裏)、RC倉庫棟(2m×2m 低天井2階建4室)、運転可動な巨大キャンピングカー(2.7×7.5×H3.4m 1F14室＋2Fロフト2室)、そして主人公が日常使いする運転可動・進入可能な軽バン(3.40×1.48×H1.80m 運転席1席のみ＋進入可能フルフラット荷室)をPOCO F7最適化エンジンで一人称探索するオフライン対応PWAと5棟17図面実施設計図。" />
+  <script type="module" crossorigin src="./assets/dev-DEm9JCh3.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/three-vendor-BW48nmf8.js">
   <link rel="stylesheet" crossorigin href="./assets/dev-CYdGXHDd.css">
 </head>
@@ -56,7 +56,7 @@
         <button id="btn-install" class="hud-btn hud-btn-install hidden" type="button" title="PWAとしてホーム画面に追加">アプリ追加</button>
         <button id="btn-flash" class="hud-btn" type="button" title="懐中電灯 [F]">懐中電灯</button>
         <button id="btn-audio" class="hud-btn" type="button" title="森の環境音・足音・車両エンジン音">音: ON</button>
-        <button id="btn-map" class="hud-btn" type="button" title="5棟15図面 実施設計 間取り図・車両図 [M]">間取り図</button>
+        <button id="btn-map" class="hud-btn" type="button" title="5棟17図面 実施設計 間取り図・車両図 [M]">間取り図</button>
         <button id="btn-perf" class="hud-btn hud-btn-mono" type="button" title="POCO F7 最適化テレメトリ [P]">F7</button>
       </div>
     </header>
@@ -90,18 +90,18 @@
       <span><kbd>Shift</kbd> 速歩</span>
       <span><kbd>C</kbd> しゃがむ</span>
       <span><kbd>マウス</kbd> 視点（クリックでFPSロック / ドラッグ対応）</span>
-      <span><kbd>E</kbd> ドア・照明・RV/軽バン運転席</span>
+      <span><kbd>E</kbd> ドア・照明・暖炉・RV/軽バン運転席</span>
       <span><kbd>F</kbd>/<kbd>H</kbd> ライト</span>
-      <span><kbd>M</kbd> 5棟15図面</span>
+      <span><kbd>M</kbd> 5棟17図面</span>
     </footer>
 
-    <!-- Slide-Over 5-Unit (15 Sheets) JIS Architectural & Vehicle CAD Blueprint Modal -->
-    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 5棟15図面平面詳細図">
+    <!-- Slide-Over 5-Unit (17 Sheets) JIS Architectural & Vehicle CAD Blueprint Modal -->
+    <section id="map-modal" class="map-modal hidden" role="dialog" aria-modal="true" aria-label="実施設計 5棟17図面平面詳細図">
       <div class="map-sheet">
         <div class="map-header">
           <div>
-            <h2>NARROW-50 ＋ 隣棟 ANNEX-40 ＋ RC倉庫棟 ＋ 巨大RV ＋ 日常軽バン KEI-340 実施設計図 (15図面)</h2>
-            <p class="map-sub">母屋 5×10m（6層）｜ 隣棟 5×8m（3F 6室+3B+屋根裏5室）｜ RC倉庫 2×2m（2F 4室）｜ 巨大RV 2.7×7.5×H3.4m（14室+ロフト2室）｜ 日常軽バン 3.40×1.48×H1.80m（1席＋進入可能荷室・厳格衝突可動）</p>
+            <h2>NARROW-50 (地上6階・全8層) ＋ 隣棟 ANNEX-40 ＋ RC倉庫棟 ＋ 巨大RV ＋ 日常軽バン KEI-340 実施設計図 (17図面)</h2>
+            <p class="map-sub">母屋 5×10m（B1F+地上6階+屋根裏＝全8層 / H18.93m）｜ 隣棟 5×8m（3F 6室+3B+屋根裏5室）｜ RC倉庫 2×2m（2F 4室）｜ 巨大RV 2.7×7.5×H3.4m（14室+ロフト2室）｜ 日常軽バン 3.40×1.48×H1.80m（1席＋進入可能荷室・厳格衝突可動）</p>
           </div>
           <div class="map-header-right">
             <button id="btn-export-svg" class="map-action-btn" type="button">SVG保存</button>
@@ -116,16 +116,18 @@
             <button class="floor-tab" data-floor="2" type="button" role="tab">母屋2F</button>
             <button class="floor-tab" data-floor="3" type="button" role="tab">母屋3F</button>
             <button class="floor-tab" data-floor="4" type="button" role="tab">母屋4F(5室)</button>
-            <button class="floor-tab" data-floor="5" type="button" role="tab">母屋屋根裏</button>
-            <button class="floor-tab" data-floor="6" type="button" role="tab">隣棟1F</button>
-            <button class="floor-tab" data-floor="7" type="button" role="tab">隣棟2F</button>
-            <button class="floor-tab" data-floor="8" type="button" role="tab">隣棟3F(6室+3B)</button>
-            <button class="floor-tab" data-floor="9" type="button" role="tab">隣棟屋根裏(5室)</button>
-            <button class="floor-tab" data-floor="10" type="button" role="tab">倉庫1F(2×2m)</button>
-            <button class="floor-tab" data-floor="11" type="button" role="tab">倉庫2F(2×2m)</button>
-            <button class="floor-tab floor-tab-rv" data-floor="12" type="button" role="tab">RV 1F(14室)</button>
-            <button class="floor-tab floor-tab-rv" data-floor="13" type="button" role="tab">RV 2F(ロフト2室)</button>
-            <button class="floor-tab floor-tab-kei" data-floor="14" type="button" role="tab">軽バン(1/20)</button>
+            <button class="floor-tab" data-floor="5" type="button" role="tab">母屋5F(スパ温室)</button>
+            <button class="floor-tab" data-floor="6" type="button" role="tab">母屋6F(天空天文)</button>
+            <button class="floor-tab" data-floor="7" type="button" role="tab">母屋屋根裏</button>
+            <button class="floor-tab" data-floor="8" type="button" role="tab">隣棟1F</button>
+            <button class="floor-tab" data-floor="9" type="button" role="tab">隣棟2F</button>
+            <button class="floor-tab" data-floor="10" type="button" role="tab">隣棟3F(6室+3B)</button>
+            <button class="floor-tab" data-floor="11" type="button" role="tab">隣棟屋根裏(5室)</button>
+            <button class="floor-tab" data-floor="12" type="button" role="tab">倉庫1F(2×2m)</button>
+            <button class="floor-tab" data-floor="13" type="button" role="tab">倉庫2F(2×2m)</button>
+            <button class="floor-tab floor-tab-rv" data-floor="14" type="button" role="tab">RV 1F(14室)</button>
+            <button class="floor-tab floor-tab-rv" data-floor="15" type="button" role="tab">RV 2F(ロフト2室)</button>
+            <button class="floor-tab floor-tab-kei" data-floor="16" type="button" role="tab">軽バン(1/20)</button>
           </div>
 
           <div class="map-layers" id="bp-layers">
@@ -153,11 +155,11 @@
               <table id="table-areas" class="arch-table"></table>
             </div>
             <div class="spec-card">
-              <h3>全5棟15図面 仕上表（提供素材121種＋車載内装）</h3>
+              <h3>全5棟17図面 仕上表（提供素材121種＋車載内装）</h3>
               <table id="table-finishes" class="arch-table"></table>
             </div>
             <div class="spec-card">
-              <h3>建具・階段・車載扉表（母屋＋隣棟＋RC倉庫＋巨大RV＋日常軽バン）</h3>
+              <h3>建具・階段・車載扉表（母屋6階建＋隣棟＋RC倉庫＋巨大RV＋日常軽バン）</h3>
               <table id="table-openings" class="arch-table"></table>
             </div>
           </div>

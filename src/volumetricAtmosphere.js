@@ -206,9 +206,19 @@ export function createVolumetricAtmosphere(scene) {
   addMoonShaft(1.28, 8.15 + 1.05, 9.05, 1.35, 2.15, 0.54, 0.12, 0.0, 0.086);
   addMoonShaft(3.65, 8.15 + 1.05, 9.15, 1.15, 2.10, 0.54, -0.08, 0.0, 0.088);
 
-  // Attic (RF at baseY=10.50m) Dramatic Gable Apex Moonlight Shafts
-  addMoonShaft(2.50, 10.50 + 1.18, 8.92, 1.45, 2.45, 0.56, 0.04, 0.0, 0.105);
-  addMoonShaft(2.50, 10.50 + 1.15, 1.05, 1.20, 2.15, -0.58, -0.05, 0.0, 0.078);
+  // 5F Moonlight Shafts (Conservatory South Windows W5-6/W5-7 & Drafting Studio North W5-2)
+  addMoonShaft(1.50, 10.50 + 1.25, 8.95, 1.65, 2.55, 0.54, 0.12, 0.0, 0.090);
+  addMoonShaft(3.75, 10.50 + 1.25, 9.00, 1.30, 2.45, 0.54, -0.08, 0.0, 0.084);
+  addMoonShaft(3.60, 10.50 + 1.20, 0.92, 1.25, 2.05, -0.58, 0.08, 0.0, 0.066);
+
+  // 6F Moonlight Shafts (Crown Observatory Panorama Window W6-7, Sky Terrace Door D6-5 & Starlight Alcove W6-2)
+  addMoonShaft(1.42, 13.25 + 1.30, 8.95, 1.85, 2.75, 0.52, 0.10, 0.0, 0.098);
+  addMoonShaft(3.15, 13.25 + 1.28, 9.08, 1.25, 2.45, 0.52, -0.06, 0.0, 0.092);
+  addMoonShaft(3.60, 13.25 + 1.25, 0.92, 1.25, 2.10, -0.58, 0.06, 0.0, 0.070);
+
+  // Attic (RF at baseY=16.10m) Dramatic Gable Apex Moonlight Shafts
+  addMoonShaft(2.50, 16.10 + 1.18, 8.92, 1.45, 2.45, 0.56, 0.04, 0.0, 0.105);
+  addMoonShaft(2.50, 16.10 + 1.15, 1.05, 1.20, 2.15, -0.58, -0.05, 0.0, 0.078);
 
   // Neighboring 5x8m Annex (ANNEX-40) Moonlight Shafts (1F, 2F, 3F, Attic!)
   addMoonShaft(-5.75, 1.10, 8.15, 1.55, 2.55, 0.56, 0.12, 0.0, 0.085);
@@ -216,11 +226,12 @@ export function createVolumetricAtmosphere(scene) {
   addMoonShaft(-4.00, 5.50 + 1.10, 8.15, 1.25, 2.10, 0.54, -0.08, 0.0, 0.082);
   addMoonShaft(-5.10, 8.15 + 1.15, 8.05, 1.35, 2.25, 0.56, 0.04, 0.0, 0.095);
 
-  // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 4F Balcony & Annex!)
+  // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 5F/6F Sky Terraces!)
   [
     { y: 0.26, col: 0x1b2b38 },
     { y: 1.05, col: 0x152330 },
     { y: 7.40, col: 0x11202e },
+    { y: 12.60, col: 0x101d2b },
   ].forEach((layer) => {
     const mistMat = new THREE.ShaderMaterial({
       vertexShader: MIST_VERT,

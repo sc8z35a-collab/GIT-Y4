@@ -71,7 +71,7 @@ export const CAMPER = {
 };
 
 export const CAMPER_1F = {
-  index: 12,
+  index: 14,
   physicalFloor: 1,
   building: 'camper',
   code: 'キャンピング1F',
@@ -331,7 +331,7 @@ export const CAMPER_1F = {
 };
 
 export const CAMPER_2F = {
-  index: 13,
+  index: 15,
   physicalFloor: 2,
   building: 'camper',
   code: 'キャンピング2F',
