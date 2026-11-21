@@ -23,6 +23,12 @@ const mobInteract = document.getElementById('mob-interact');
 const mobFlash = document.getElementById('mob-flash');
 const mobCrouch = document.getElementById('mob-crouch');
 
+const driveHudEl = document.getElementById('drive-hud');
+const driveSpeedValEl = document.getElementById('drive-speed-val');
+const driveCollisionTagEl = document.getElementById('drive-collision-tag');
+const btnDriveLights = document.getElementById('btn-drive-lights');
+const btnDriveExit = document.getElementById('btn-drive-exit');
+
 const mapModal = document.getElementById('map-modal');
 const blueprintMount = document.getElementById('blueprint-mount');
 const roomDetailBar = document.getElementById('room-detail-bar');
@@ -31,6 +37,7 @@ const tableAreas = document.getElementById('table-areas');
 
 let mapVisible = false;
 let perfVisible = false;
+let isDriving = false;
 let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: HOUSE.spawnFloor, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
 
 if ('serviceWorker' in navigator) {
@@ -71,10 +78,15 @@ function renderFloorAreaTable(sheetIdx) {
   const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[HOUSE.spawnFloor];
   const isAnnex = fl.building === 'annex';
   const isStorage = fl.building === 'storage';
+  const isCamper = fl.building === 'camper';
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
   let summaryLabel = `${fl.code} フロア計`;
-  if (isStorage) {
+  if (isCamper) {
+    summaryLabel = fl.camperLevel === 2
+      ? 'RV 2Fロフト計（2室＋連絡ブリッジ・吹抜CH3.02m）'
+      : 'RV 1F計（全14室＋極狭W460廊下＋高天井CH3.02m）';
+  } else if (isStorage) {
     summaryLabel = `${fl.code}計（RC倉庫 2×2m・低天井2階建 計4室）`;
   } else if (isAnnex) {
     if (fl.hasAnnexBalconies) summaryLabel = '隣棟3F計（6室＋1×1.6mバルコニー×3）';
@@ -87,12 +99,16 @@ function renderFloorAreaTable(sheetIdx) {
   } else if (fl.hasBalcony) {
     summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
   }
-  const footprintStr = isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000');
-  const grossStr = isStorage
-    ? '4.00m² (2F延8.0m²)'
-    : (isAnnex
-      ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
-      : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²')));
+  const footprintStr = isCamper
+    ? '2700×7500×H3400'
+    : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000'));
+  const grossStr = isCamper
+    ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
+    : (isStorage
+      ? '4.00m² (2F延8.0m²)'
+      : (isAnnex
+        ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
+        : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²'))));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
@@ -160,6 +176,23 @@ function togglePerf(force = null) {
   }
 }
 
+function updateDriveHUD(driving, state = {}) {
+  isDriving = driving;
+  driveHudEl.classList.toggle('hidden', !driving);
+  if (driving) {
+    driveSpeedValEl.textContent = String(state.speedKmh ?? 0);
+    driveCollisionTagEl.classList.toggle('hidden', !state.colliding);
+    driveHudEl.classList.toggle('colliding', Boolean(state.colliding));
+    btnDriveLights.classList.toggle('active', Boolean(state.headlightsOn));
+    mobInteract.textContent = '降車';
+    mobInteract.classList.remove('hidden');
+  } else {
+    driveHudEl.classList.remove('colliding');
+    mobInteract.textContent = '操作';
+    mobInteract.classList.add('hidden');
+  }
+}
+
 let explorer = null;
 try {
   explorer = new FirstPersonHouseExplorer(canvas3dEl, {
@@ -173,12 +206,18 @@ try {
       }
     },
     onAimChange: (aim) => {
+      if (isDriving) {
+        reticleEl.classList.remove('aiming');
+        interactPromptEl.classList.add('hidden');
+        return;
+      }
       const active = Boolean(aim);
       reticleEl.classList.toggle('aiming', active);
       interactPromptEl.classList.toggle('hidden', !active);
       mobInteract.classList.toggle('hidden', !active);
       if (aim) interactLabelEl.textContent = aim.prompt;
     },
+    onDriveChange: (driving, state) => updateDriveHUD(driving, state),
     onFlashlightChange: (on) => {
       btnFlash.classList.toggle('active', on);
       mobFlash.classList.toggle('active', on);
@@ -201,15 +240,25 @@ try {
   webglErrorMsgEl.textContent = `WebGL初期化エラー: ${err?.message || err}`;
 }
 
-btnFlash.addEventListener('click', () => explorer && explorer.toggleFlashlight());
-mobFlash.addEventListener('click', () => explorer && explorer.toggleFlashlight());
-mobCrouch.addEventListener('click', () => explorer && explorer.toggleCrouch());
+btnFlash.addEventListener('click', () => {
+  if (!explorer) return;
+  if (isDriving) explorer.toggleCamperHeadlights();
+  else explorer.toggleFlashlight();
+});
+mobFlash.addEventListener('click', () => {
+  if (!explorer) return;
+  if (isDriving) explorer.toggleCamperHeadlights();
+  else explorer.toggleFlashlight();
+});
+mobCrouch.addEventListener('click', () => explorer && !isDriving && explorer.toggleCrouch());
 btnAudio.addEventListener('click', () => explorer && explorer.toggleAudio());
 btnMap.addEventListener('click', () => toggleMap());
 document.getElementById('btn-close-map').addEventListener('click', () => toggleMap(false));
 btnPerf.addEventListener('click', () => togglePerf());
 interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
 mobInteract.addEventListener('click', () => explorer && explorer.interact());
+btnDriveLights.addEventListener('click', () => explorer && explorer.toggleCamperHeadlights());
+btnDriveExit.addEventListener('click', () => explorer && explorer.toggleCamperDrive(false));
 
 const joyZone = document.getElementById('joy-zone');
 const joyBase = document.getElementById('joy-base');
@@ -280,7 +329,7 @@ lookZone.addEventListener('pointermove', (e) => {
 function releaseLook(e) {
   if (e.pointerId !== lookTouchId) return;
   lookTouchId = null;
-  if (lookMoved < 10 && explorer) explorer.interact();
+  if (lookMoved < 10 && explorer && !isDriving) explorer.interact();
 }
 lookZone.addEventListener('pointerup', releaseLook);
 lookZone.addEventListener('pointercancel', releaseLook);
@@ -298,7 +347,7 @@ document.getElementById('btn-export-svg').addEventListener('click', () => {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `NARROW-50_TOWER_${fl.code}_1to50_blueprint.svg`;
+  a.download = `NARROW-50_${fl.code}_blueprint.svg`;
   a.click();
   URL.revokeObjectURL(url);
 });
@@ -334,8 +383,22 @@ document.getElementById('table-openings').innerHTML = `
 
 const params = new URLSearchParams(window.location.search);
 if (explorer) {
+  if (params.get('camperPose')) {
+    const [cx, cz, cyaw] = params.get('camperPose').split(',').map(Number);
+    if (!Number.isNaN(cx) && !Number.isNaN(cz)) {
+      explorer.setCamperPose(cx, cz, Number.isNaN(cyaw) ? 0 : cyaw);
+    }
+  }
   const floorParam = params.has('floor') ? Number(params.get('floor')) : null;
-  if (params.get('pos')) {
+  if (params.get('camperLocal')) {
+    const [lx, lz] = params.get('camperLocal').split(',').map(Number);
+    const yaw = params.has('yaw') ? Number(params.get('yaw')) : 0;
+    const pitch = params.has('pitch') ? Number(params.get('pitch')) : -0.04;
+    if (!Number.isNaN(lx) && !Number.isNaN(lz)) {
+      const wPos = explorer.camperLocalToWorld(lx, lz);
+      explorer.setPose(wPos.x, wPos.z, yaw, pitch, floorParam !== null ? floorParam : 1);
+    }
+  } else if (params.get('pos')) {
     const [x, z] = params.get('pos').split(',').map(Number);
     const yaw = params.has('yaw') ? Number(params.get('yaw')) : Math.PI - 0.24;
     const pitch = params.has('pitch') ? Number(params.get('pitch')) : -0.04;
@@ -344,6 +407,7 @@ if (explorer) {
     explorer.setPose(1.62, 6.25, Math.PI - 0.24, -0.04, floorParam);
   }
   if (params.get('doors') === 'open') explorer.openDoors();
+  if (params.get('drive') === '1') explorer.toggleCamperDrive(true);
   if (params.get('flash') === '1') explorer.toggleFlashlight(true);
 }
 if (params.get('perf') === '1') togglePerf(true);

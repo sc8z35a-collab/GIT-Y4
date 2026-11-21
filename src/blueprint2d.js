@@ -1,4 +1,4 @@
-import { HOUSE, ANNEX, STORAGE, BLUEPRINT_SHEETS, GRID_AXES, COLUMNS } from './planData.js';
+import { HOUSE, ANNEX, STORAGE, CAMPER, BLUEPRINT_SHEETS, GRID_AXES, COLUMNS } from './planData.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -77,20 +77,38 @@ export class ArchitecturalBlueprint2D {
     const floor = BLUEPRINT_SHEETS[this.activeFloor];
     const isAnnexSheet = floor.building === 'annex';
     const isStorageSheet = floor.building === 'storage';
+    const isCamperSheet = floor.building === 'camper';
     const poseSheet = pose.sheetIndex !== undefined ? pose.sheetIndex : pose.floor;
     const sameSheet = poseSheet === this.activeFloor;
     this.camGroup.setAttribute('opacity', sameSheet ? '1' : '0.24');
 
-    const mapX = isStorageSheet
-      ? (pose.x - STORAGE.originX)
-      : (isAnnexSheet ? (pose.x - ANNEX.originX) : pose.x);
-    const mapZ = isStorageSheet
-      ? (pose.z - STORAGE.originZ)
-      : (isAnnexSheet ? (pose.z - ANNEX.originZ) : pose.z);
+    let mapX = pose.x;
+    let mapZ = pose.z;
+    if (isCamperSheet) {
+      if (pose.building === 'camper' && pose.localX !== undefined) {
+        mapX = pose.localX;
+        mapZ = pose.localZ;
+      } else if (pose.camperPose) {
+        const cp = pose.camperPose;
+        const dx = pose.x - cp.cx;
+        const dz = pose.z - cp.cz;
+        const c = Math.cos(cp.yaw);
+        const s = Math.sin(cp.yaw);
+        mapX = dx * c - dz * s + CAMPER.width * 0.5;
+        mapZ = dx * s + dz * c + CAMPER.length * 0.5;
+      }
+    } else if (isStorageSheet) {
+      mapX = pose.x - STORAGE.originX;
+      mapZ = pose.z - STORAGE.originZ;
+    } else if (isAnnexSheet) {
+      mapX = pose.x - ANNEX.originX;
+      mapZ = pose.z - ANNEX.originZ;
+    }
+
     const maxW = floor.width || HOUSE.width;
     const maxD = floor.depth || HOUSE.depth;
-    const cx = this.px(Math.max(-1.3, Math.min(maxW + 1.3, mapX)));
-    const cz = this.pz(Math.max(-1.3, Math.min(maxD + 1.3, mapZ)));
+    const cx = this.px(Math.max(-1.2, Math.min(maxW + 1.2, mapX)));
+    const cz = this.pz(Math.max(-1.2, Math.min(maxD + 1.2, mapZ)));
     const ang = (Math.atan2(pose.dz, pose.dx) * 180) / Math.PI;
     this.camDot.setAttribute('cx', cx);
     this.camDot.setAttribute('cy', cz);
@@ -101,11 +119,18 @@ export class ArchitecturalBlueprint2D {
     const floor = BLUEPRINT_SHEETS[this.activeFloor];
     const isAnnex = floor.building === 'annex';
     const isStorage = floor.building === 'storage';
+    const isCamper = floor.building === 'camper';
     const bWidth = floor.width || HOUSE.width;
     const bDepth = floor.depth || HOUSE.depth;
 
-    if (isStorage) {
-      this.scale = 180; // Enlarged 1/28 detail view for 2m×2m concrete warehouse!
+    if (isCamper) {
+      this.scale = 148; // Precision 1/34 mechanical & architectural detail scale for 2.7×7.5m RV!
+      this.padL = 220;
+      this.padR = 220;
+      this.padT = 220;
+      this.padB = 345;
+    } else if (isStorage) {
+      this.scale = 180; // Enlarged 1/28 detail view for 2m×2m concrete warehouse
       this.padL = 200;
       this.padR = 280;
       this.padT = 300;
@@ -124,8 +149,8 @@ export class ArchitecturalBlueprint2D {
       this.padB = 345;
     }
 
-    const VW = this.padL + bWidth * this.scale + this.padR; // Always 840
-    const VH = this.padT + bDepth * this.scale + this.padB;
+    const VW = Math.round(this.padL + bWidth * this.scale + this.padR); // ~840
+    const VH = Math.round(this.padT + bDepth * this.scale + this.padB);
     this.curVW = VW;
     this.curVH = VH;
 
@@ -155,6 +180,12 @@ export class ArchitecturalBlueprint2D {
     patEarth.appendChild(el('line', { x1: 0, y1: 0, x2: 0, y2: 14, stroke: '#a9a398', 'stroke-width': 1.2 }));
     patEarth.appendChild(el('line', { x1: 4, y1: 0, x2: 4, y2: 14, stroke: '#b8b2a7', 'stroke-width': 0.8 }));
     defs.appendChild(patEarth);
+
+    const patArmor = el('pattern', { id: 'hatch-armor', width: 9, height: 9, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' });
+    patArmor.appendChild(el('rect', { width: 9, height: 9, fill: '#c4cbd2' }));
+    patArmor.appendChild(el('line', { x1: 0, y1: 0, x2: 0, y2: 9, stroke: '#6c7885', 'stroke-width': 1.4 }));
+    patArmor.appendChild(el('line', { x1: 0, y1: 0, x2: 9, y2: 0, stroke: '#8995a1', 'stroke-width': 0.7 }));
+    defs.appendChild(patArmor);
 
     const patTatami = el('pattern', { id: 'pat-tatami', width: 10, height: 5, patternUnits: 'userSpaceOnUse' });
     patTatami.appendChild(el('rect', { width: 10, height: 5, fill: '#dde6c8' }));
@@ -193,7 +224,7 @@ export class ArchitecturalBlueprint2D {
     svg.appendChild(el('rect', { x: 14, y: 14, width: VW - 28, height: VH - 28, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1.4 }));
     svg.appendChild(el('rect', { x: 18, y: 18, width: VW - 36, height: VH - 36, fill: 'none', stroke: '#9b968d', 'stroke-width': 0.5 }));
 
-    this._drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage);
+    this._drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper);
 
     const names = ['exterior', 'materials', 'grid', 'furniture', 'walls', 'openings', 'plumbing', 'outlets', 'lighting', 'flow', 'labels', 'dimensions', 'camera'];
     names.forEach((n) => {
@@ -202,49 +233,91 @@ export class ArchitecturalBlueprint2D {
       this.layerGroups[n] = g;
     });
 
-    this._drawExteriorContext(this.layerGroups.exterior, floor, isAnnex, isStorage, bWidth, bDepth);
-    this._drawRoomFloors(this.layerGroups.materials, floor, isAnnex, isStorage);
-    this._drawGridAxes(this.layerGroups.grid, floor, isAnnex, isStorage, bWidth, bDepth);
-    this._drawStairwellSymbol(this.layerGroups.furniture, floor, isAnnex, isStorage);
+    this._drawExteriorContext(this.layerGroups.exterior, floor, isAnnex, isStorage, isCamper, bWidth, bDepth);
+    this._drawRoomFloors(this.layerGroups.materials, floor, isAnnex, isStorage, isCamper);
+    this._drawGridAxes(this.layerGroups.grid, floor, isAnnex, isStorage, isCamper, bWidth, bDepth);
+    this._drawStairwellSymbol(this.layerGroups.furniture, floor, isAnnex, isStorage, isCamper);
     this._drawFurniturePlan(this.layerGroups.furniture, floor);
-    this._drawWallsAndColumns(this.layerGroups.walls, floor, isAnnex, isStorage);
+    this._drawWallsAndColumns(this.layerGroups.walls, floor, isAnnex, isStorage, isCamper);
     this._drawOpenings(this.layerGroups.openings, floor);
     this._drawPlumbing(this.layerGroups.plumbing, floor);
     this._drawOutlets(this.layerGroups.outlets, floor);
     this._drawLighting(this.layerGroups.lighting, floor);
     this._drawFlowPaths(this.layerGroups.flow, floor);
-    this._drawRoomLabels(this.layerGroups.labels, floor, isStorage);
-    this._drawDimensions(this.layerGroups.dimensions, floor, isAnnex, isStorage, bWidth, bDepth);
-    this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage);
-    this._drawTitleBlockAndSection(svg, floor, VW, VH);
+    this._drawRoomLabels(this.layerGroups.labels, floor, isStorage, isCamper);
+    this._drawDimensions(this.layerGroups.dimensions, floor, isAnnex, isStorage, isCamper, bWidth, bDepth);
+    this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage, isCamper);
+    this._drawTitleBlockAndSection(svg, floor, VW, VH, isCamper);
 
     this.container.appendChild(svg);
     this.syncLayerVisibility();
   }
 
-  _drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage) {
+  _drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper) {
     const g = el('g');
-    const sizeTxt = `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`;
-    const scaleTag = isStorage ? '1/28 拡大詳細' : '1/50';
-    g.appendChild(el('text', { x: 30, y: 42, 'font-size': 11.4, 'font-weight': 700, fill: '#1c1e22', 'letter-spacing': 0.3 },
-      `実施設計 ${floor.titleJp} (${scaleTag}) — ${sizeTxt} [${floor.code}]`));
-    g.appendChild(el('text', { x: 30, y: 59, 'font-size': 8.6, fill: '#5b5852' },
+    const sizeTxt = isCamper
+      ? '2,700×7,500×H3,400mm'
+      : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`;
+    const scaleTag = isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50');
+    g.appendChild(el('text', { x: 28, y: 42, 'font-size': isCamper ? 9.8 : 11.2, 'font-weight': 700, fill: '#1c1e22', 'letter-spacing': 0.2 },
+      `実施設計 ${floor.titleJp} (${scaleTag}) — ${sizeTxt}`));
+    g.appendChild(el('text', { x: 28, y: 59, 'font-size': isCamper ? 8.0 : 8.5, fill: '#5b5852' },
       `${floor.subtitle}  |  基準床 ${floor.floorLabel}`));
 
-    const nc = el('g', { transform: `translate(${VW - 60}, 52)` });
-    nc.appendChild(el('circle', { cx: 0, cy: 0, r: 18, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1 }));
-    nc.appendChild(el('polygon', { points: '0,-15 -5,3 0,-2 5,3', fill: '#1c1e22' }));
-    nc.appendChild(el('polygon', { points: '0,15 -4,3 0,6 4,3', fill: 'none', stroke: '#1c1e22', 'stroke-width': 0.8 }));
-    nc.appendChild(el('text', { x: 0, y: -21, 'text-anchor': 'middle', 'font-size': 9.5, 'font-weight': 700, fill: '#1c1e22' }, 'N'));
+    const nc = el('g', { transform: `translate(${VW - 56}, 52)` });
+    nc.appendChild(el('circle', { cx: 0, cy: 0, r: 17, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1 }));
+    nc.appendChild(el('polygon', { points: '0,-14 -4.5,3 0,-2 4.5,3', fill: '#1c1e22' }));
+    nc.appendChild(el('polygon', { points: '0,14 -3.5,3 0,6 3.5,3', fill: 'none', stroke: '#1c1e22', 'stroke-width': 0.8 }));
+    nc.appendChild(el('text', { x: 0, y: -20, 'text-anchor': 'middle', 'font-size': 9.2, 'font-weight': 700, fill: '#1c1e22' }, isCamper ? '前(N)' : 'N'));
     g.appendChild(nc);
     svg.appendChild(g);
   }
 
-  _drawExteriorContext(g, floor, isAnnex, isStorage, bWidth, bDepth) {
+  _drawExteriorContext(g, floor, isAnnex, isStorage, isCamper, bWidth, bDepth) {
     const sc = this.scale;
 
+    if (isCamper) {
+      // Heavy Steel Front Bull-Bar Bumper & Rear Bumper + Mounted Spare Tire
+      g.appendChild(el('rect', { x: this.px(0.02), y: this.pz(-0.16), width: 2.66 * sc, height: 0.16 * sc, rx: 4, fill: '#474f57', stroke: '#1c1e22', 'stroke-width': 1.2 }));
+      g.appendChild(el('text', { x: this.px(1.35), y: this.pz(-0.05), 'text-anchor': 'middle', 'font-size': 7.4, 'font-weight': 700, fill: '#fff' }, 'FRONT BULL-BAR / TWIN LED HEADLIGHTS'));
+      g.appendChild(el('rect', { x: this.px(0.02), y: this.pz(7.50), width: 2.66 * sc, height: 0.14 * sc, rx: 3, fill: '#474f57', stroke: '#1c1e22', 'stroke-width': 1.2 }));
+      // Rear mounted spare expedition wheel
+      g.appendChild(el('rect', { x: this.px(0.28), y: this.pz(7.60), width: 0.80 * sc, height: 0.24 * sc, rx: 5, fill: '#2c3138', stroke: '#1c1e22', 'stroke-width': 1 }));
+      g.appendChild(el('text', { x: this.px(0.68), y: this.pz(7.76), 'text-anchor': 'middle', 'font-size': 6.6, fill: '#fff', 'font-weight': 700 }, '予備タイヤ'));
+      // Left & Right Side Mirrors
+      g.appendChild(el('rect', { x: this.px(-0.18), y: this.pz(0.24), width: 0.14 * sc, height: 0.22 * sc, rx: 2, fill: '#2c3138' }));
+      g.appendChild(el('rect', { x: this.px(2.74), y: this.pz(0.24), width: 0.14 * sc, height: 0.22 * sc, rx: 2, fill: '#2c3138' }));
+
+      // Fold-Down West Steel Entry Steps outside DC-1
+      if (floor.camperLevel === 1) {
+        g.appendChild(el('rect', { x: this.px(-0.34), y: this.pz(2.20), width: 0.34 * sc, height: 0.58 * sc, fill: 'url(#pat-grate)', stroke: '#1c1e22', 'stroke-width': 1.2 }));
+        g.appendChild(el('line', { x1: this.px(-0.17), y1: this.pz(2.20), x2: this.px(-0.17), y2: this.pz(2.78), stroke: '#444', 'stroke-width': 0.8 }));
+        g.appendChild(el('text', { x: this.px(-0.46), y: this.pz(2.49), 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#9c4722', transform: `rotate(-90 ${this.px(-0.46)} ${this.pz(2.49)})` }, '格納ステップ (母屋東側)'));
+      }
+
+      // 3 Heavy Expedition Axle Centerlines & 6 Wheel Projections (dashed mechanical blue-grey)
+      const axleNames = ['FA 前輪操舵軸 (Ø800)', 'RA1 後前駆動軸 (Ø800)', 'RA2 後後駆動軸 (Ø800)'];
+      CAMPER.axlesZ.forEach((az, i) => {
+        g.appendChild(el('line', { x1: this.px(-0.32), y1: this.pz(az), x2: this.px(3.04), y2: this.pz(az), stroke: '#2563eb', 'stroke-width': 0.85, 'stroke-dasharray': '10 3 2 3', opacity: 0.72 }));
+        g.appendChild(el('text', { x: this.px(3.08), y: this.pz(az) + 3, 'font-size': 7.2, 'font-weight': 700, fill: '#1d4ed8', 'font-family': 'monospace' }, axleNames[i]));
+        // Left & Right Tires (dashed underbody projection)
+        [0.00, 2.42].forEach((tx) => {
+          g.appendChild(el('rect', {
+            x: this.px(tx), y: this.pz(az - 0.40), width: 0.28 * sc, height: 0.80 * sc, rx: 4,
+            fill: 'rgba(37,99,235,0.09)', stroke: '#1d4ed8', 'stroke-width': 0.9, 'stroke-dasharray': '4 2',
+          }));
+        });
+      });
+
+      // Right-side callout showing total height & soaring ceiling architecture
+      g.appendChild(el('text', { x: this.px(1.35), y: this.pz(8.02), 'text-anchor': 'middle', 'font-size': 8.6, 'font-weight': 700, fill: '#2c3138' },
+        floor.camperLevel === 1
+          ? '1F 全14室＋極狭廊下 W460 (主人公幅400)＋中央高天井 CH3,020 ｜ 厳格OBB当たり判定自走対応'
+          : '2F ロフト2室 (CL01前方寝台＋CL02後方展望収納)＋強化ガラス連絡ブリッジ＋中央吹抜 (CH3,020)'));
+      return;
+    }
+
     if (isStorage) {
-      // 2m×2m Concrete Warehouse Context
       if (floor.physicalFloor === 1) {
         g.appendChild(el('rect', {
           x: this.px(-0.85), y: this.pz(0.05), width: 0.85 * sc, height: 1.95 * sc,
@@ -254,7 +327,6 @@ export class ArchitecturalBlueprint2D {
           x: this.px(-0.44), y: this.pz(1.05), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3f4b54', 'font-weight': 700,
           transform: `rotate(-90 ${this.px(-0.44)} ${this.pz(1.05)})`,
         }, '← 西1.6m：コンクリート歩道 → 母屋北ポーチ'));
-        // Dashed projection of 2F landing above
         g.appendChild(el('rect', {
           x: this.px(0.40), y: this.pz(-0.76), width: 2.40 * sc, height: 0.76 * sc,
           fill: 'none', stroke: '#6c757d', 'stroke-width': 0.9, 'stroke-dasharray': '6 4',
@@ -262,7 +334,6 @@ export class ArchitecturalBlueprint2D {
         g.appendChild(el('text', { x: this.px(1.60), y: this.pz(-0.34), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#5b656e', 'font-weight': 600 },
           '上部2F 鋼製グレーチング踊場（+2,120 投影線）'));
       } else {
-        // 2F Steel Grating Landing (walkable catwalk X=7.00..9.40 -> local 0.40..2.80, Z=-1.96..-1.20 -> local -0.76..0.00)
         g.appendChild(el('rect', {
           x: this.px(0.40), y: this.pz(-0.76), width: 2.40 * sc, height: 0.76 * sc,
           fill: 'url(#pat-grate)', stroke: '#1c1e22', 'stroke-width': 2.0,
@@ -283,7 +354,6 @@ export class ArchitecturalBlueprint2D {
         g.appendChild(el('text', { x: this.px(5.68), y: this.pz(4.0), 'text-anchor': 'middle', 'font-size': 8.8, fill: '#3d523a', 'font-weight': 700, transform: `rotate(90 ${this.px(5.68)} ${this.pz(4.0)})` }, '東2.6m：石灯籠苔中庭 → 母屋 (5×10m 6層)'));
         g.appendChild(el('text', { x: this.px(2.50), y: this.pz(8.42), 'text-anchor': 'middle', 'font-size': 9.4, fill: '#5b6b59', 'font-weight': 600 }, '南面：老杉の森（離れカフェ南大窓ビュー）'));
       } else if (floor.hasAnnexBalconies) {
-        // Draw all 3 walkable 1.00m × 1.60m cantilevered balconies on Annex 3F!
         ANNEX.balconies3F.forEach((b) => {
           const bw = b.lx2 - b.lx1;
           const bd = b.lz2 - b.lz1;
@@ -292,14 +362,10 @@ export class ArchitecturalBlueprint2D {
             fill: 'url(#pat-deck)', stroke: '#1c1e22', 'stroke-width': 2.1,
           }));
         });
-        // Explicit copper dimension callouts for all 3 (1.0m × 1.6m) balconies
-        // North ABAL-1
         g.appendChild(el('line', { x1: this.px(2.85), y1: this.pz(-1.14), x2: this.px(4.45), y2: this.pz(-1.14), stroke: '#9c4722', 'stroke-width': 0.95 }));
         g.appendChild(el('text', { x: this.px(3.65), y: this.pz(-1.20), 'text-anchor': 'middle', 'font-size': 8.0, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W 1,600 × D 1,000'));
-        // West ABAL-2
         g.appendChild(el('line', { x1: this.px(-1.14), y1: this.pz(5.95), x2: this.px(-1.14), y2: this.pz(7.55), stroke: '#9c4722', 'stroke-width': 0.95 }));
         g.appendChild(el('text', { x: this.px(-1.24), y: this.pz(6.75), 'text-anchor': 'middle', 'font-size': 7.8, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace', transform: `rotate(-90 ${this.px(-1.24)} ${this.pz(6.75)})` }, '1,600×1,000'));
-        // South ABAL-3
         g.appendChild(el('line', { x1: this.px(2.85), y1: this.pz(9.18), x2: this.px(4.45), y2: this.pz(9.18), stroke: '#9c4722', 'stroke-width': 0.95 }));
         g.appendChild(el('text', { x: this.px(3.65), y: this.pz(9.32), 'text-anchor': 'middle', 'font-size': 8.0, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W 1,600 × D 1,000'));
       } else if (floor.isAttic) {
@@ -323,9 +389,9 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: this.px(0.10), y: this.pz(-1.20), width: 210, height: 120, fill: '#dde2db', stroke: '#8c9689', 'stroke-width': 0.9 }));
       g.appendChild(el('text', { x: this.px(1.15), y: this.pz(-0.55), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#4c5749', 'font-weight': 600 }, '玄関ポーチ・苔石森道'));
       g.appendChild(el('text', { x: this.px(-0.36), y: this.pz(5.0), 'text-anchor': 'middle', 'font-size': 8.4, fill: '#3d523a', 'font-weight': 700, transform: `rotate(-90 ${this.px(-0.36)} ${this.pz(5.0)})` }, '← 西2.6m 隣棟「森の離れ」(5×8m 3F+屋根裏)'));
-      g.appendChild(el('text', { x: this.px(5.40), y: this.pz(0.45), 'text-anchor': 'start', 'font-size': 8.2, fill: '#4f555c', 'font-weight': 700 }, '東1.6m→'));
-      g.appendChild(el('text', { x: this.px(5.40), y: this.pz(0.85), 'text-anchor': 'start', 'font-size': 8.0, fill: '#4f555c', 'font-weight': 700 }, 'RC倉庫棟'));
-      g.appendChild(el('text', { x: this.px(5.40), y: this.pz(1.22), 'text-anchor': 'start', 'font-size': 7.5, fill: '#646c75' }, '(2×2m 2階)'));
+      g.appendChild(el('text', { x: this.px(5.32), y: this.pz(0.45), 'text-anchor': 'start', 'font-size': 7.8, fill: '#4f555c', 'font-weight': 700 }, '東1.6m→RC倉庫'));
+      g.appendChild(el('text', { x: this.px(5.32), y: this.pz(5.20), 'text-anchor': 'start', 'font-size': 7.8, fill: '#9c4722', 'font-weight': 700 }, '東1.4m→巨大RV'));
+      g.appendChild(el('text', { x: this.px(5.32), y: this.pz(5.55), 'text-anchor': 'start', 'font-size': 7.2, fill: '#646c75' }, '(2.7×7.5×3.4m)'));
       g.appendChild(el('rect', { x: this.px(0.05), y: this.pz(10.0), width: 490, height: 120, fill: 'url(#pat-deck)', stroke: '#8d6e4a', 'stroke-width': 1 }));
       g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.68), 'text-anchor': 'middle', 'font-size': 10, fill: '#6b4f31', 'font-weight': 600 }, '南 縁側ウッドデッキ (W4,900×D1,350)  —  深い老杉の森'));
     } else if (floor.hasBalcony) {
@@ -350,15 +416,17 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawRoomFloors(g, floor, isAnnex, isStorage) {
+  _drawRoomFloors(g, floor, isAnnex, isStorage, isCamper) {
     const sc = this.scale;
     for (const r of floor.rooms) {
       const isTatami = r.floorTex.startsWith('tatami');
       const isDeck = r.floorTex === 'wood_deck';
+      const isArmor = r.id === 'c1_shelter';
+      const fill = isArmor ? 'url(#hatch-armor)' : (isTatami ? 'url(#pat-tatami)' : (isDeck ? 'url(#pat-deck)' : r.tint));
       const rect = el('rect', {
         x: this.px(r.x), y: this.pz(r.z), width: r.w * sc, height: r.d * sc,
-        fill: isTatami ? 'url(#pat-tatami)' : (isDeck ? 'url(#pat-deck)' : r.tint),
-        stroke: 'rgba(40,40,40,0.08)', 'stroke-width': 0.6,
+        fill,
+        stroke: isArmor ? '#2c3e50' : 'rgba(40,40,40,0.08)', 'stroke-width': isArmor ? 1.8 : 0.6,
         class: 'bp-room-hit',
         style: 'cursor:pointer',
       });
@@ -368,11 +436,37 @@ export class ArchitecturalBlueprint2D {
         if (this.callbacks.onRoomHover) this.callbacks.onRoomHover(r);
       });
       rect.addEventListener('mouseleave', () => {
-        rect.setAttribute('stroke', 'rgba(40,40,40,0.08)');
-        rect.setAttribute('stroke-width', '0.6');
+        rect.setAttribute('stroke', isArmor ? '#2c3e50' : 'rgba(40,40,40,0.08)');
+        rect.setAttribute('stroke-width', isArmor ? '1.8' : '0.6');
         if (this.callbacks.onRoomHover) this.callbacks.onRoomHover(null);
       });
       g.appendChild(rect);
+    }
+
+    if (isCamper && floor.camperLevel === 2) {
+      // Draw Double-Height Open 1F Atrium Void on 2F Loft Plan!
+      g.appendChild(el('rect', {
+        x: this.px(1.12), y: this.pz(2.17), width: 1.51 * sc, height: 3.08 * sc,
+        fill: 'url(#pat-void)', stroke: '#9c4722', 'stroke-width': 1.2, 'stroke-dasharray': '6 3',
+      }));
+      g.appendChild(el('line', { x1: this.px(1.12), y1: this.pz(2.17), x2: this.px(2.63), y2: this.pz(5.25), stroke: '#9c4722', 'stroke-width': 0.85, opacity: 0.65 }));
+      g.appendChild(el('line', { x1: this.px(2.63), y1: this.pz(2.17), x2: this.px(1.12), y2: this.pz(5.25), stroke: '#9c4722', 'stroke-width': 0.85, opacity: 0.65 }));
+      g.appendChild(el('rect', { x: this.px(1.26), y: this.pz(3.42), width: 1.22 * sc, height: 0.56 * sc, rx: 4, fill: 'rgba(255,255,255,0.92)', stroke: '#9c4722', 'stroke-width': 0.9 }));
+      g.appendChild(el('text', { x: this.px(1.87), y: this.pz(3.64), 'text-anchor': 'middle', 'font-size': 8.2, 'font-weight': 700, fill: '#9c4722' }, '1F 高天井 吹抜空間'));
+      g.appendChild(el('text', { x: this.px(1.87), y: this.pz(3.84), 'text-anchor': 'middle', 'font-size': 7.4, 'font-family': 'monospace', fill: '#4a4640' }, 'CH 3,020 mm (上部天窓)'));
+      // Roof skylight & solar projections
+      g.appendChild(el('rect', { x: this.px(0.72), y: this.pz(0.90), width: 1.26 * sc, height: 0.90 * sc, fill: 'none', stroke: '#0284c7', 'stroke-width': 1.0, 'stroke-dasharray': '5 3' }));
+      g.appendChild(el('text', { x: this.px(1.35), y: this.pz(0.84), 'text-anchor': 'middle', 'font-size': 7.0, fill: '#0284c7', 'font-weight': 700 }, '上部パノラマ天窓 (1260×900)'));
+      g.appendChild(el('rect', { x: this.px(0.42), y: this.pz(5.30), width: 1.85 * sc, height: 1.75 * sc, fill: 'none', stroke: '#1e3a8a', 'stroke-width': 0.9, 'stroke-dasharray': '6 3' }));
+      g.appendChild(el('text', { x: this.px(1.35), y: this.pz(5.44), 'text-anchor': 'middle', 'font-size': 7.0, fill: '#1e3a8a', 'font-weight': 700 }, '屋上ソーラー発電パネル投影 (1.8kW)'));
+    }
+
+    if (isCamper && floor.camperLevel === 1) {
+      // Highlight the 460mm Razor-Tight Central Corridor Width Callout!
+      g.appendChild(el('line', { x1: this.px(1.12), y1: this.pz(2.50), x2: this.px(1.58), y2: this.pz(2.50), stroke: '#b9381c', 'stroke-width': 1.4 }));
+      g.appendChild(el('text', { x: this.px(1.35), y: this.pz(2.42), 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#b9381c', 'font-family': 'monospace' }, 'W460'));
+      // Skylight overhead dashed projection across soaring CH 3.02m central atrium
+      g.appendChild(el('rect', { x: this.px(0.72), y: this.pz(2.80), width: 1.26 * sc, height: 1.95 * sc, fill: 'none', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
     }
 
     if (floor.isBasement) {
@@ -381,7 +475,7 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: this.px(2.94), y: this.pz(3.00), width: 18, height: 665, fill: '#aeb4ba', stroke: '#5c636b', 'stroke-width': 0.6 }));
     }
 
-    if (floor.isAttic && !isStorage) {
+    if (floor.isAttic && !isStorage && !isCamper) {
       const maxD = isAnnex ? ANNEX.depth - 0.15 : HOUSE.depth - 0.15;
       const ridgeLbl = isAnnex ? '棟木ライン CH2,800 (6寸勾配)' : '棟木ライン CH2,830 (6寸勾配頂部)';
       g.appendChild(el('line', { x1: this.px(2.50), y1: this.pz(0.15), x2: this.px(2.50), y2: this.pz(maxD), stroke: '#9c4722', 'stroke-width': 1.4, 'stroke-dasharray': '12 4 3 4' }));
@@ -392,32 +486,34 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawGridAxes(g, floor, isAnnex, isStorage, bWidth, bDepth) {
-    const axes = isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES);
-    const topOff = isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15);
-    const topLineOff = isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95);
-    const leftOff = isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15);
-    const leftLineOff = isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95);
-    const rightEnd = isStorage ? bWidth + 1.05 : bWidth + 0.85;
-    const botEnd = isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies ? bDepth + 1.15 : bDepth + 0.85);
+  _drawGridAxes(g, floor, isAnnex, isStorage, isCamper, bWidth, bDepth) {
+    const axes = isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES));
+    const topOff = isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15));
+    const topLineOff = isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95));
+    const leftOff = isCamper ? -0.82 : (isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15));
+    const leftLineOff = isCamper ? -0.64 : (isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95));
+    const rightEnd = isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85);
+    const botEnd = isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies ? bDepth + 1.15 : bDepth + 0.85));
 
     axes.x.forEach((ax) => {
       const x = this.px(ax.pos);
-      g.appendChild(el('line', { x1: x, y1: this.pz(topLineOff), x2: x, y2: this.pz(botEnd), stroke: '#b5563c', 'stroke-width': 0.55, 'stroke-dasharray': '12 4 2 4', opacity: 0.72 }));
-      g.appendChild(el('circle', { cx: x, cy: this.pz(topOff), r: 11, fill: '#fff', stroke: '#b5563c', 'stroke-width': 1 }));
-      g.appendChild(el('text', { x, y: this.pz(topOff) + 3.5, 'text-anchor': 'middle', 'font-size': 8.2, 'font-weight': 700, fill: '#b5563c' }, ax.id));
+      g.appendChild(el('line', { x1: x, y1: this.pz(topLineOff), x2: x, y2: this.pz(botEnd), stroke: '#b5563c', 'stroke-width': 0.5, 'stroke-dasharray': '12 4 2 4', opacity: 0.65 }));
+      g.appendChild(el('circle', { cx: x, cy: this.pz(topOff), r: 10.5, fill: '#fff', stroke: '#b5563c', 'stroke-width': 0.95 }));
+      g.appendChild(el('text', { x, y: this.pz(topOff) + 3.2, 'text-anchor': 'middle', 'font-size': 7.8, 'font-weight': 700, fill: '#b5563c' }, ax.id));
     });
     axes.z.forEach((az) => {
       const z = this.pz(az.pos);
-      g.appendChild(el('line', { x1: this.px(leftLineOff), y1: z, x2: this.px(rightEnd), y2: z, stroke: '#b5563c', 'stroke-width': 0.55, 'stroke-dasharray': '12 4 2 4', opacity: 0.72 }));
-      g.appendChild(el('circle', { cx: this.px(leftOff), cy: z, r: 11, fill: '#fff', stroke: '#b5563c', 'stroke-width': 1 }));
-      g.appendChild(el('text', { x: this.px(leftOff), y: z + 3.5, 'text-anchor': 'middle', 'font-size': 8.2, 'font-weight': 700, fill: '#b5563c' }, az.id));
+      g.appendChild(el('line', { x1: this.px(leftLineOff), y1: z, x2: this.px(rightEnd), y2: z, stroke: '#b5563c', 'stroke-width': 0.5, 'stroke-dasharray': '12 4 2 4', opacity: 0.65 }));
+      g.appendChild(el('circle', { cx: this.px(leftOff), cy: z, r: 10.5, fill: '#fff', stroke: '#b5563c', 'stroke-width': 0.95 }));
+      g.appendChild(el('text', { x: this.px(leftOff), y: z + 3.2, 'text-anchor': 'middle', 'font-size': 7.8, 'font-weight': 700, fill: '#b5563c' }, az.id));
     });
   }
 
-  _drawStairwellSymbol(g, floor, isAnnex, isStorage) {
+  _drawStairwellSymbol(g, floor, isAnnex, isStorage, isCamper) {
     let sb;
-    if (isStorage) {
+    if (isCamper) {
+      sb = { minX: CAMPER.stairLocal.minX, maxX: CAMPER.stairLocal.maxX, topZ: CAMPER.stairLocal.bottomZ, bottomZ: CAMPER.stairLocal.topZ, treads: CAMPER.stairLocal.treads };
+    } else if (isStorage) {
       sb = { minX: 2.00, maxX: 2.80, topZ: 0.00, bottomZ: 2.00, treads: STORAGE.stairWorld.treads };
     } else if (isAnnex) {
       sb = ANNEX.stairLocal;
@@ -432,7 +528,7 @@ export class ArchitecturalBlueprint2D {
     const w = x2 - x1;
     const h = yBot - yTop;
 
-    const isVoid = floor.isAttic;
+    const isVoid = floor.isAttic || (isCamper && floor.camperLevel === 2);
     g.appendChild(el('rect', {
       x: x1, y: yTop, width: w, height: h,
       fill: isStorage ? 'url(#pat-grate)' : (isVoid ? 'url(#pat-void)' : (floor.isBasement ? '#d8dce0' : '#f2ebe0')),
@@ -446,6 +542,18 @@ export class ArchitecturalBlueprint2D {
     }
 
     const cx = (x1 + x2) / 2;
+    if (isCamper) {
+      if (floor.stairUp) {
+        g.appendChild(el('line', { x1: cx, y1: yTop + 4, x2: cx, y2: yBot - 6, stroke: '#1c1e22', 'stroke-width': 1.4, 'marker-end': 'url(#arr-stair)' }));
+        g.appendChild(el('rect', { x: cx - 34, y: yBot + 4, width: 68, height: 14, rx: 3, fill: '#fff', stroke: '#1c1e22', 'stroke-width': 0.7 }));
+        g.appendChild(el('text', { x: cx, y: yBot + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#1c1e22' }, 'STC1 UP 2F'));
+      } else {
+        g.appendChild(el('rect', { x: cx - 34, y: yBot + 4, width: 68, height: 14, rx: 3, fill: '#fff8ec', stroke: '#9c4722', 'stroke-width': 0.7 }));
+        g.appendChild(el('text', { x: cx, y: yBot + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#9c4722' }, 'STC1 DN 1F'));
+      }
+      return;
+    }
+
     if (floor.stairUp) {
       g.appendChild(el('line', { x1: cx, y1: yBot - 16, x2: cx, y2: yTop + 16, stroke: '#1c1e22', 'stroke-width': 1.5, 'marker-end': 'url(#arr-stair)' }));
       g.appendChild(el('rect', { x: cx - 44, y: yBot - 48, width: 88, height: 16, rx: 3, fill: '#fff', stroke: '#1c1e22', 'stroke-width': 0.75 }));
@@ -465,9 +573,76 @@ export class ArchitecturalBlueprint2D {
     const box = (x, z, w, d, label, fill = '#fffdf8') => {
       g.appendChild(el('rect', { x: this.px(x), y: this.pz(z), width: w * sc, height: d * sc, fill, stroke: '#5c5348', 'stroke-width': 0.85, rx: 1.5 }));
       if (label) {
-        g.appendChild(el('text', { x: this.px(x + w / 2), y: this.pz(z + d / 2) + 2.8, 'text-anchor': 'middle', 'font-size': 7.2, fill: '#3d3832' }, label));
+        g.appendChild(el('text', { x: this.px(x + w / 2), y: this.pz(z + d / 2) + 2.6, 'text-anchor': 'middle', 'font-size': 6.9, fill: '#3d3832', 'font-weight': 600 }, label));
       }
     };
+
+    if (floor.index === 12) {
+      // ULTRA-DETAILED CAMPER 1F MECHANICAL & ARCHITECTURAL FIXTURES (ALL 14 ROOMS!)
+      // C01 Cockpit: dashboard, steering wheel symbol, GPS screen, captain seats
+      box(0.11, 0.08, 2.48, 0.34, '計器盤 / GPSコンソール', '#e2e6eb');
+      g.appendChild(el('circle', { cx: this.px(0.72), cy: this.pz(0.49), r: 16, fill: 'none', stroke: '#1c1e22', 'stroke-width': 2.0 }));
+      g.appendChild(el('line', { x1: this.px(0.72) - 14, y1: this.pz(0.49), x2: this.px(0.72) + 14, y2: this.pz(0.49), stroke: '#1c1e22', 'stroke-width': 1.2 }));
+      box(0.46, 0.58, 0.52, 0.46, '運転席[E]', '#d4dfe8');
+      box(1.72, 0.58, 0.52, 0.46, '助手席', '#d4dfe8');
+      // C02 Seating Lounge
+      box(0.09, 1.29, 0.40, 0.80, '座席', '#d8e0e8');
+      box(0.51, 1.41, 0.30, 0.56, '卓', '#f5ead6');
+      // C03 Galley Kitchen (sink + 2-burner IH rings)
+      box(0.08, 2.87, 0.40, 0.76, '', '#f5efe6');
+      g.appendChild(el('rect', { x: this.px(0.12), y: this.pz(2.91), width: 0.30 * sc, height: 0.28 * sc, fill: '#e6edf2', stroke: '#4b5563', 'stroke-width': 0.8 }));
+      g.appendChild(el('circle', { cx: this.px(0.27), cy: this.pz(3.35), r: 9, fill: 'none', stroke: '#1c1e22', 'stroke-width': 1.0 }));
+      g.appendChild(el('circle', { cx: this.px(0.27), cy: this.pz(3.52), r: 7, fill: 'none', stroke: '#1c1e22', 'stroke-width': 1.0 }));
+      // C04 Soaking Bath (deep tub)
+      g.appendChild(el('rect', { x: this.px(0.09), y: this.pz(3.71), width: 0.48 * sc, height: 0.76 * sc, rx: 8, fill: '#d0e9f7', stroke: '#0284c7', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: this.px(0.33), y: this.pz(4.11), 'text-anchor': 'middle', 'font-size': 7.0, fill: '#0369a1', 'font-weight': 700 }, '深型浴槽'));
+      // C05 Rain Shower (head + drain grate X)
+      g.appendChild(el('rect', { x: this.px(0.28), y: this.pz(4.75), width: 0.28 * sc, height: 0.28 * sc, fill: '#eef7fc', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('line', { x1: this.px(0.28), y1: this.pz(4.75), x2: this.px(0.56), y2: this.pz(5.03), stroke: '#0284c7', 'stroke-width': 0.7 }));
+      g.appendChild(el('line', { x1: this.px(0.56), y1: this.pz(4.75), x2: this.px(0.28), y2: this.pz(5.03), stroke: '#0284c7', 'stroke-width': 0.7 }));
+      // C06 RV Toilet
+      box(0.09, 5.46, 0.16, 0.34, '', '#fff');
+      g.appendChild(el('ellipse', { cx: this.px(0.36), cy: this.pz(5.63), rx: 0.14 * sc, ry: 0.17 * sc, fill: '#fff', stroke: '#4b5563', 'stroke-width': 0.9 }));
+      box(0.10, 5.82, 0.22, 0.18, '手洗', '#eef7fc');
+      // C10 Armored Shelter (locker + HEPA + beacon)
+      box(0.09, 6.66, 0.42, 0.72, '非常備蓄', '#a6b0ba');
+      g.appendChild(el('circle', { cx: this.px(0.62), cy: this.pz(7.30), r: 6, fill: '#ef4444', stroke: '#7f1d1d', 'stroke-width': 0.9 }));
+      // C11 Comms & Satellite Ops
+      box(2.23, 1.28, 0.38, 0.74, '衛星卓', '#d5e2ee');
+      // C08 Walk-In Closet (hanger rod)
+      box(2.25, 2.11, 0.36, 0.72, '衣類棚', '#f3e5cf');
+      g.appendChild(el('line', { x1: this.px(2.18), y1: this.pz(2.14), x2: this.px(2.18), y2: this.pz(2.80), stroke: '#7c5a38', 'stroke-width': 1.2, 'stroke-dasharray': '4 2' }));
+      // C09 Expedition Storage
+      box(2.25, 2.91, 0.36, 0.74, '装備棚', '#b8bec4');
+      // C12 Laundry & Drying (drum circle)
+      box(2.19, 3.83, 0.42, 0.56, '', '#fff');
+      g.appendChild(el('circle', { cx: this.px(2.40), cy: this.pz(4.11), r: 16, fill: '#e8f1f5', stroke: '#475569', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: this.px(2.40), y: this.pz(4.14), 'text-anchor': 'middle', 'font-size': 6.5, fill: '#334155', 'font-weight': 700 }, '洗濯'));
+      // C13 Power & Battery Vault
+      box(2.23, 4.56, 0.38, 0.66, '20kWh', '#cfd7df');
+      // C14 Medical & Repair (workbench + Red Cross)
+      box(2.23, 5.31, 0.38, 0.70, '整備台', '#f0e4cf');
+      g.appendChild(el('line', { x1: this.px(2.42) - 6, y1: this.pz(5.44), x2: this.px(2.42) + 6, y2: this.pz(5.44), stroke: '#dc2626', 'stroke-width': 2.4 }));
+      g.appendChild(el('line', { x1: this.px(2.42), y1: this.pz(5.44) - 6, x2: this.px(2.42), y2: this.pz(5.44) + 6, stroke: '#dc2626', 'stroke-width': 2.4 }));
+      // C07 1F Cabin Bedroom
+      box(1.65, 6.72, 0.94, 0.68, '1Fキャビンベッド', '#f4ece3');
+      box(2.32, 6.83, 0.24, 0.46, '枕', '#fff');
+      return;
+    }
+
+    if (floor.index === 13) {
+      // CAMPER 2F LOFT FIXTURES (CL01 Front Sky-Bunk Loft + CL02 Rear Observation & Gear Loft)
+      box(1.06, 0.18, 1.52, 1.72, 'キングサイズ寝台マット', '#f7ede0');
+      box(1.31, 0.20, 0.42, 0.26, '枕', '#fff');
+      box(1.91, 0.20, 0.42, 0.26, '枕', '#fff');
+      box(0.13, 0.16, 0.38, 0.52, 'ギア箱', '#d8cfc0');
+      // Rear Loft CL02
+      box(1.68, 5.71, 0.68, 0.48, 'ロフト座卓', '#efe2ce');
+      box(1.80, 6.23, 0.44, 0.44, '座布団', '#f2dcd6');
+      box(0.14, 5.41, 0.48, 0.48, '木箱', '#d8cfc0');
+      box(0.15, 5.97, 0.46, 0.46, '木箱', '#d8cfc0');
+      return;
+    }
 
     if (floor.index === 0) {
       const zones = [[2.85, 5.10], [5.20, 7.45], [7.55, 9.85]];
@@ -538,7 +713,6 @@ export class ArchitecturalBlueprint2D {
       box(4.20, 7.02, 0.52, 1.05, 'チェスト');
       g.appendChild(el('circle', { cx: this.px(2.50), cy: this.pz(7.45), r: 15, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.2 }));
     } else if (floor.index === 6) {
-      // Annex 1F
       box(4.46, 0.42, 0.36, 1.05, '靴ベンチ');
       box(0.47, 0.20, 1.55, 0.68, '作業台');
       box(0.22, 1.56, 0.48, 0.48, '木箱');
@@ -550,14 +724,12 @@ export class ArchitecturalBlueprint2D {
       box(1.24, 6.24, 0.48, 0.88, 'ロー卓');
       g.appendChild(el('circle', { cx: this.px(0.55), cy: this.pz(7.56), r: 14, fill: '#fff2d2', stroke: '#c97f2b', 'stroke-width': 1.1 }));
     } else if (floor.index === 7) {
-      // Annex 2F
       box(4.43, 0.57, 0.38, 1.15, '書庫棚');
       box(1.67, 0.19, 1.65, 0.38, '読書ベンチ');
       box(3.27, 3.45, 0.82, 0.82, 'ちゃぶ台');
       box(2.17, 5.78, 1.56, 1.92, 'クイーンベッド', '#f4ece3');
       box(4.29, 6.00, 0.52, 1.60, 'ワードローブ');
     } else if (floor.index === 8) {
-      // Annex 3F (6 Rooms + 3 Balconies!)
       box(0.20, 0.22, 1.08, 0.48, '書斎机');
       box(2.48, 1.24, 1.85, 0.86, 'ゲストベッド', '#f4ece3');
       box(4.43, 2.34, 0.38, 1.12, '書庫棚');
@@ -565,7 +737,6 @@ export class ArchitecturalBlueprint2D {
       box(1.08, 7.24, 1.15, 0.55, '作業台');
       box(3.28, 5.94, 1.35, 0.68, 'サロンソファ', '#d8e0e8');
     } else if (floor.index === 9) {
-      // Annex Attic (5 Rooms under 6寸 Gable!)
       box(0.24, 0.24, 0.42, 0.42, '木箱');
       box(0.68, 0.38, 0.54, 0.54, '座布団', '#d8e0e8');
       box(4.06, 0.46, 0.58, 0.58, '木箱');
@@ -576,13 +747,12 @@ export class ArchitecturalBlueprint2D {
       box(3.28, 6.48, 0.74, 0.54, '畳卓');
       g.appendChild(el('circle', { cx: this.px(3.25), cy: this.pz(6.75), r: 12, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.1 }));
     } else {
-      // Concrete Warehouse 1F & 2F (2m×2m, 2 rooms per floor with compact steel shelves)
       box(1.58, 0.19, 0.28, 0.68, '棚', '#aeb4ba');
       box(1.58, 1.13, 0.28, 0.68, '棚', '#aeb4ba');
     }
   }
 
-  _drawWallsAndColumns(g, floor, isAnnex, isStorage) {
+  _drawWallsAndColumns(g, floor, isAnnex, isStorage, isCamper) {
     const sc = this.scale;
     for (const w of floor.walls) {
       const isH = w.axis === 'h';
@@ -595,9 +765,9 @@ export class ArchitecturalBlueprint2D {
       const drawSeg = (a, b) => {
         if (b - a < 0.005) return;
         if (isH) {
-          g.appendChild(el('rect', { x: this.px(a), y: this.pz(w.z1), width: (b - a) * sc, height: (w.z2 - w.z1) * sc, fill, stroke: '#1c1e22', 'stroke-width': 0.95 }));
+          g.appendChild(el('rect', { x: this.px(a), y: this.pz(w.z1), width: (b - a) * sc, height: (w.z2 - w.z1) * sc, fill, stroke: '#1c1e22', 'stroke-width': 0.9 }));
         } else {
-          g.appendChild(el('rect', { x: this.px(w.x1), y: this.pz(a), width: (w.x2 - w.x1) * sc, height: (b - a) * sc, fill, stroke: '#1c1e22', 'stroke-width': 0.95 }));
+          g.appendChild(el('rect', { x: this.px(w.x1), y: this.pz(a), width: (w.x2 - w.x1) * sc, height: (b - a) * sc, fill, stroke: '#1c1e22', 'stroke-width': 0.9 }));
         }
       };
 
@@ -608,6 +778,7 @@ export class ArchitecturalBlueprint2D {
       drawSeg(cur, end);
     }
 
+    if (isCamper) return; // Camper uses monocoque aluminum/steel box frame without wood posts
     const cols = isStorage ? STORAGE.columns : (isAnnex ? ANNEX.columns : COLUMNS);
     const colSz = isStorage ? 14 : 11;
     cols.forEach(([cx, cz]) => {
@@ -648,16 +819,16 @@ export class ArchitecturalBlueprint2D {
         } else if (op.type === 'door_pocket') {
           if (isH) {
             g.appendChild(el('line', { x1: this.px(op.pos), y1: midOrtho - 3, x2: this.px(op.pos + op.width), y2: midOrtho - 3, stroke: '#9c4722', 'stroke-width': 1.8 }));
-            g.appendChild(el('line', { x1: this.px(op.pos) - len * 0.35, y1: midOrtho + 3, x2: this.px(op.pos + op.width), y2: midOrtho + 3, stroke: '#9c4722', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
+            g.appendChild(el('line', { x1: this.px(op.pos) - len * 0.25, y1: midOrtho + 3, x2: this.px(op.pos + op.width), y2: midOrtho + 3, stroke: '#9c4722', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
           } else {
             g.appendChild(el('line', { x1: midOrtho - 3, y1: this.pz(op.pos), x2: midOrtho - 3, y2: this.pz(op.pos + op.width), stroke: '#9c4722', 'stroke-width': 1.8 }));
-            g.appendChild(el('line', { x1: midOrtho + 3, y1: this.pz(op.pos) - len * 0.35, x2: midOrtho + 3, y2: this.pz(op.pos + op.width), stroke: '#9c4722', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
+            g.appendChild(el('line', { x1: midOrtho + 3, y1: this.pz(op.pos) - len * 0.25, x2: midOrtho + 3, y2: this.pz(op.pos + op.width), stroke: '#9c4722', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
           }
         }
 
-        const tx = isH ? this.px(op.pos + op.width / 2) : midOrtho + 16;
-        const ty = isH ? midOrtho - 10 : this.pz(op.pos + op.width / 2) + 3;
-        g.appendChild(el('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 7.4, 'font-weight': 700, fill: op.type.startsWith('window') ? '#1d7a8c' : '#9c4722' }, op.id));
+        const tx = isH ? this.px(op.pos + op.width / 2) : (midOrtho + (w.x1 > 1.5 && floor.isCamper ? -14 : 16));
+        const ty = isH ? midOrtho - 9 : this.pz(op.pos + op.width / 2) + 3;
+        g.appendChild(el('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 6.9, 'font-weight': 700, fill: op.type.startsWith('window') ? '#1d7a8c' : '#9c4722' }, op.id));
       }
     }
   }
@@ -666,14 +837,14 @@ export class ArchitecturalBlueprint2D {
     (floor.lighting || []).forEach((l) => {
       const cx = this.px(l.x);
       const cy = this.pz(l.z);
-      g.appendChild(el('circle', { cx, cy, r: 7, fill: '#fff8d6', stroke: '#d97706', 'stroke-width': 1.1 }));
-      g.appendChild(el('text', { x: cx, y: cy + 2.5, 'text-anchor': 'middle', 'font-size': 6.5, 'font-weight': 700, fill: '#b45309' }, l.type));
+      g.appendChild(el('circle', { cx, cy, r: 6.5, fill: '#fff8d6', stroke: '#d97706', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: cx, y: cy + 2.3, 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#b45309' }, l.type));
     });
     (floor.switches || []).forEach((s) => {
       const cx = this.px(s.x);
       const cy = this.pz(s.z);
-      g.appendChild(el('circle', { cx, cy, r: 3.5, fill: '#d97706' }));
-      g.appendChild(el('text', { x: cx + 6, y: cy + 3, 'font-size': 6.8, fill: '#92400e', 'font-weight': 700 }, s.label));
+      g.appendChild(el('circle', { cx, cy, r: 3.3, fill: '#d97706' }));
+      g.appendChild(el('text', { x: cx + 5, y: cy + 3, 'font-size': 6.5, fill: '#92400e', 'font-weight': 700 }, s.label));
     });
   }
 
@@ -681,8 +852,8 @@ export class ArchitecturalBlueprint2D {
     (floor.outlets || []).forEach((o) => {
       const cx = this.px(o.x);
       const cy = this.pz(o.z);
-      g.appendChild(el('circle', { cx, cy, r: 5, fill: '#fff', stroke: '#2563eb', 'stroke-width': 1.1 }));
-      g.appendChild(el('text', { x: cx + 8, y: cy + 3, 'font-size': 7, fill: '#1d4ed8', 'font-weight': 700 }, o.label));
+      g.appendChild(el('circle', { cx, cy, r: 4.8, fill: '#fff', stroke: '#2563eb', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: cx + 7, y: cy + 3, 'font-size': 6.8, fill: '#1d4ed8', 'font-weight': 700 }, o.label));
     });
   }
 
@@ -703,47 +874,59 @@ export class ArchitecturalBlueprint2D {
     (floor.flowPaths || []).forEach((fp) => {
       const [stroke, marker] = colorMap[fp.kind] || colorMap.entry;
       const d = fp.pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${this.px(pt[0])} ${this.pz(pt[1])}`).join(' ');
-      g.appendChild(el('path', { d, fill: 'none', stroke, 'stroke-width': 1.9, 'stroke-dasharray': '6 4', 'marker-end': marker, opacity: 0.78 }));
+      g.appendChild(el('path', { d, fill: 'none', stroke, 'stroke-width': 1.8, 'stroke-dasharray': '6 4', 'marker-end': marker, opacity: 0.78 }));
     });
   }
 
-  _drawRoomLabels(g, floor, isStorage) {
+  _drawRoomLabels(g, floor, isStorage, isCamper) {
     for (const r of floor.rooms) {
       const [lx, lz] = r.labelPos;
       const cx = this.px(lx);
       const cy = this.pz(lz);
-      const isNarrow = r.w <= 1.05 && !isStorage;
-      const boxW = isNarrow ? 82 : (isStorage ? 168 : 114);
+
+      if (isCamper && r.id === 'c1_corridor') {
+        const grp = el('g', { style: 'pointer-events:none' });
+        grp.appendChild(el('rect', { x: cx - 14, y: cy - 72, width: 28, height: 144, rx: 3, fill: 'rgba(255,255,255,0.92)', stroke: '#b9381c', 'stroke-width': 0.85 }));
+        grp.appendChild(el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'font-size': 7.4, 'font-weight': 700, fill: '#b9381c', transform: `rotate(-90 ${cx} ${cy})` }, 'C00 極狭廊下 W460 / CH3,020'));
+        g.appendChild(grp);
+        continue;
+      }
+
+      const isNarrow = r.w <= 1.05 && !isStorage && !isCamper;
+      const boxW = isCamper ? (r.w > 1.5 ? 148 : 112) : (isNarrow ? 82 : (isStorage ? 168 : 114));
+      const boxH = isCamper ? 30 : 34;
       const grp = el('g', { style: 'pointer-events:none' });
-      grp.appendChild(el('rect', { x: cx - boxW / 2, y: cy - 18, width: boxW, height: 34, rx: 3.5, fill: 'rgba(255,255,255,0.90)', stroke: 'rgba(28,30,34,0.22)', 'stroke-width': 0.7 }));
-      grp.appendChild(el('text', { x: cx, y: cy - 5, 'text-anchor': 'middle', 'font-size': isNarrow ? 7.0 : 7.8, 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp}`));
-      grp.appendChild(el('text', { x: cx, y: cy + 5, 'text-anchor': 'middle', 'font-size': 7.0, fill: '#5b5852' }, `${r.area.toFixed(2)}m² (${r.jo.toFixed(1)}帖)`));
-      grp.appendChild(el('text', { x: cx, y: cy + 13.5, 'text-anchor': 'middle', 'font-size': 6.4, fill: '#8a5328', 'font-family': 'monospace' }, `${r.fl} / ${r.ch}`));
+      grp.appendChild(el('rect', { x: cx - boxW / 2, y: cy - boxH / 2, width: boxW, height: boxH, rx: 3.2, fill: 'rgba(255,255,255,0.88)', stroke: 'rgba(28,30,34,0.22)', 'stroke-width': 0.65 }));
+      grp.appendChild(el('text', { x: cx, y: cy - 3.5, 'text-anchor': 'middle', 'font-size': isCamper ? 7.1 : (isNarrow ? 7.0 : 7.8), 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp}`));
+      grp.appendChild(el('text', { x: cx, y: cy + 5.5, 'text-anchor': 'middle', 'font-size': 6.5, fill: '#5b5852' }, `${r.area.toFixed(2)}m² · ${r.ch}`));
+      if (!isCamper) {
+        grp.appendChild(el('text', { x: cx, y: cy + 13.5, 'text-anchor': 'middle', 'font-size': 6.4, fill: '#8a5328', 'font-family': 'monospace' }, `${r.fl} / ${r.ch}`));
+      }
       g.appendChild(grp);
     }
   }
 
-  _drawDimensions(g, floor, isAnnex, isStorage, bWidth, bDepth) {
+  _drawDimensions(g, floor, isAnnex, isStorage, isCamper, bWidth, bDepth) {
     const dimH = (x1, x2, y, label) => {
       const a = this.px(x1), b = this.px(x2);
       g.appendChild(el('line', { x1: a, y1: y, x2: b, y2: y, stroke: '#2c2f36', 'stroke-width': 0.85 }));
       g.appendChild(el('line', { x1: a, y1: y - 5, x2: a, y2: y + 5, stroke: '#2c2f36', 'stroke-width': 0.9 }));
       g.appendChild(el('line', { x1: b, y1: y - 5, x2: b, y2: y + 5, stroke: '#2c2f36', 'stroke-width': 0.9 }));
-      g.appendChild(el('text', { x: (a + b) / 2, y: y - 4, 'text-anchor': 'middle', 'font-size': 8.5, 'font-family': 'monospace', fill: '#1c1e22' }, label));
+      g.appendChild(el('text', { x: (a + b) / 2, y: y - 4, 'text-anchor': 'middle', 'font-size': 8.2, 'font-family': 'monospace', fill: '#1c1e22' }, label));
     };
     const dimV = (z1, z2, x, label) => {
       const a = this.pz(z1), b = this.pz(z2);
       g.appendChild(el('line', { x1: x, y1: a, x2: x, y2: b, stroke: '#2c2f36', 'stroke-width': 0.85 }));
       g.appendChild(el('line', { x1: x - 5, y1: a, x2: x + 5, y2: a, stroke: '#2c2f36', 'stroke-width': 0.9 }));
       g.appendChild(el('line', { x1: x - 5, y1: b, x2: x + 5, y2: b, stroke: '#2c2f36', 'stroke-width': 0.9 }));
-      g.appendChild(el('text', { x: x - 6, y: (a + b) / 2, 'text-anchor': 'middle', 'font-size': 8.5, 'font-family': 'monospace', fill: '#1c1e22', transform: `rotate(-90 ${x - 6} ${(a + b) / 2})` }, label));
+      g.appendChild(el('text', { x: x - 6, y: (a + b) / 2, 'text-anchor': 'middle', 'font-size': 8.0, 'font-family': 'monospace', fill: '#1c1e22', transform: `rotate(-90 ${x - 6} ${(a + b) / 2})` }, label));
     };
 
-    const axes = isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES);
-    const dimHOuterY = isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55));
-    const dimHInnerY = isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78));
-    const dimVOuterX = isStorage ? this.px(-0.92) : (floor.hasAnnexBalconies ? this.px(-1.78) : this.px(-1.52));
-    const dimVInnerX = isStorage ? this.px(-0.48) : (floor.hasAnnexBalconies ? this.px(-1.54) : this.px(-0.78));
+    const axes = isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES));
+    const dimHOuterY = isCamper ? this.pz(-0.92) : (isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55)));
+    const dimHInnerY = isCamper ? this.pz(-0.46) : (isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78)));
+    const dimVOuterX = isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (floor.hasAnnexBalconies ? this.px(-1.78) : this.px(-1.52)));
+    const dimVInnerX = isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (floor.hasAnnexBalconies ? this.px(-1.54) : this.px(-0.78)));
 
     dimH(0, bWidth, dimHOuterY, Math.round(bWidth * 1000).toLocaleString());
     const xs = axes.x;
@@ -758,9 +941,9 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawCameraMarker(g, isAnnex, isStorage) {
-    const sx = isStorage ? 0.65 : (isAnnex ? 2.50 : 1.62);
-    const sz = isStorage ? 0.53 : (isAnnex ? 5.80 : 6.25);
+  _drawCameraMarker(g, isAnnex, isStorage, isCamper) {
+    const sx = isCamper ? 1.35 : (isStorage ? 0.65 : (isAnnex ? 2.50 : 1.62));
+    const sz = isCamper ? 2.49 : (isStorage ? 0.53 : (isAnnex ? 5.80 : 6.25));
     this.camGroup = el('g', { id: 'cam-marker' });
     this.camCone = el('g', { transform: `translate(${this.px(sx)}, ${this.pz(sz)}) rotate(90)` });
     this.camCone.appendChild(el('path', { d: 'M 0 0 L 42 -20 A 46 46 0 0 1 42 20 Z', fill: 'rgba(217, 70, 38, 0.24)', stroke: '#d94626', 'stroke-width': 0.9 }));
@@ -771,139 +954,168 @@ export class ArchitecturalBlueprint2D {
   }
 
   /**
-   * 3-Building Site Cross-Section Elevation Diagram:
-   *   Left:   Neighbor Annex (5×8m 3F + 3 Balconies + 5-Room 6寸 Gable Attic)
-   *   Center: Main Tower (5×10m B1F..4F + Balcony + Gable Attic)
-   *   Right:  Concrete Storage Warehouse (2×2m 2-Story Low-CH Bunker + Exterior Stair STS1)
+   * Bottom Engineering Section + JIS Title Block:
+   * - On Camper Sheets (12 & 13): Draws a precision 1/65 LONGITUDINAL SECTION (L7,500 × H3,400mm)
+   *   showing 6 off-road tires, drop chassis, 1F soaring CH3,020 atrium, 2F Front/Rear Lofts (CH980), & STC1!
+   * - On Building Sheets (0..11): Draws the 4-Structure Site Cross-Section Elevation Diagram!
    */
-  _drawTitleBlockAndSection(svg, floor, VW, VH) {
+  _drawTitleBlockAndSection(svg, floor, VW, VH, isCamper) {
     const baseTop = VH - 218;
     const g = el('g');
 
     const secX = 28;
     const secY = baseTop;
-    const secW = 344;
+    const secW = 356;
     const secH = 190;
     g.appendChild(el('rect', { x: secX, y: secY, width: secW, height: secH, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1 }));
-    g.appendChild(el('text', { x: secX + 10, y: secY + 15, 'font-size': 8.6, 'font-weight': 700, fill: '#1c1e22' },
-      '3棟配置 断面略図（隣棟3F+屋根裏 ｜ 母屋6層 ｜ RC倉庫2階建）'));
 
-    const sx = (m) => secX + 124 + m * 11.4;
-    const sy = (m) => secY + 152 - m * 8.6;
+    if (isCamper) {
+      g.appendChild(el('text', { x: secX + 10, y: secY + 15, 'font-size': 8.5, 'font-weight': 700, fill: '#1c1e22' },
+        'キャンピングカー 縦断面図 (L7,500 × H3,400 / 1F高天井CH3,020＋2Fロフト)'));
+      const scM = 34.5; // 7.5m -> 259px, 3.4m -> 117px!
+      const lx0 = secX + 32;
+      const glY = secY + 156;
+      const vx = (m) => lx0 + m * scM;
+      const vy = (m) => glY - m * scM;
 
-    // Ground line GL
-    g.appendChild(el('line', { x1: secX + 10, y1: sy(0), x2: secX + 332, y2: sy(0), stroke: '#5a6354', 'stroke-width': 1.4 }));
-    g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.8, fill: '#5a6354' }, 'GL'));
+      // Ground line
+      g.appendChild(el('line', { x1: secX + 12, y1: glY, x2: secX + secW - 12, y2: glY, stroke: '#5a6354', 'stroke-width': 1.4 }));
+      // Outer coach body shell (0.30..3.40m)
+      g.appendChild(el('rect', { x: vx(0), y: vy(3.40), width: 7.5 * scM, height: 3.10 * scM, fill: '#f7f4ec', stroke: '#1c1e22', 'stroke-width': 1.6 }));
+      // 1F Zone highlight
+      const f1Act = floor.camperLevel === 1;
+      const f2Act = floor.camperLevel === 2;
+      g.appendChild(el('rect', { x: vx(0.07), y: vy(2.28), width: 7.36 * scM, height: 1.98 * scM, fill: f1Act ? 'rgba(217,70,38,0.16)' : '#f8f5ef', stroke: '#4a4640', 'stroke-width': 0.7 }));
+      // Soaring CH 3,020 central atrium highlight (vz = 2.17..5.25 -> y = 0.30..3.32)
+      g.appendChild(el('rect', { x: vx(2.17), y: vy(3.32), width: 3.08 * scM, height: 3.02 * scM, fill: f1Act ? 'rgba(217,70,38,0.22)' : 'rgba(2,132,199,0.10)', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '4 2' }));
+      // 2F Front Loft CL01 (0.07..2.17, y = 2.34..3.32)
+      g.appendChild(el('rect', { x: vx(0.07), y: vy(3.32), width: 2.10 * scM, height: 0.98 * scM, fill: f2Act ? 'rgba(217,70,38,0.26)' : '#efe5d3', stroke: '#1c1e22', 'stroke-width': f2Act ? 1.5 : 0.9 }));
+      // 2F Rear Loft CL02 (5.25..7.43, y = 2.34..3.32)
+      g.appendChild(el('rect', { x: vx(5.25), y: vy(3.32), width: 2.18 * scM, height: 0.98 * scM, fill: f2Act ? 'rgba(217,70,38,0.26)' : '#dce6d4', stroke: '#1c1e22', 'stroke-width': f2Act ? 1.5 : 0.9 }));
+      // 2F Loft Skybridge beam line (dashed across 2.17..5.25)
+      g.appendChild(el('line', { x1: vx(2.17), y1: vy(2.34), x2: vx(5.25), y2: vy(2.34), stroke: '#9c4722', 'stroke-width': 1.2, 'stroke-dasharray': '5 3' }));
+      // Rear STC1 steep loft ladder diagonal
+      g.appendChild(el('line', { x1: vx(6.66), y1: vy(0.30), x2: vx(6.96), y2: vy(2.34), stroke: '#9c4722', 'stroke-width': 2.0 }));
+      // Roof solar array & front bull-bar & 3 axles/tires (Ø800mm)
+      g.appendChild(el('rect', { x: vx(5.10), y: vy(3.50), width: 1.95 * scM, height: 4, fill: '#1e3a8a' }));
+      g.appendChild(el('rect', { x: vx(-0.16), y: vy(0.92), width: 0.16 * scM, height: 0.56 * scM, fill: '#2c3138' }));
+      CAMPER.axlesZ.forEach((az) => {
+        g.appendChild(el('circle', { cx: vx(az), cy: vy(0.40), r: 0.40 * scM, fill: '#1f2428', stroke: '#555', 'stroke-width': 1.2 }));
+        g.appendChild(el('circle', { cx: vx(az), cy: vy(0.40), r: 0.21 * scM, fill: '#9aa3ad' }));
+      });
+      // Section labels & height dims
+      g.appendChild(el('text', { x: vx(1.12), y: vy(2.75), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#1c1e22' }, 'CL01 前ロフト(CH980)'));
+      g.appendChild(el('text', { x: vx(6.34), y: vy(2.75), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#1c1e22' }, 'CL02 後ロフト'));
+      g.appendChild(el('text', { x: vx(3.71), y: vy(1.90), 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#0369a1' }, '1F 高天井吹抜'));
+      g.appendChild(el('text', { x: vx(3.71), y: vy(1.52), 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 700, fill: '#0369a1', 'font-family': 'monospace' }, 'CH 3,020 mm'));
+      g.appendChild(el('text', { x: vx(1.10), y: vy(1.10), 'text-anchor': 'middle', 'font-size': 6.4, fill: '#333' }, '運転室/座席'));
+      g.appendChild(el('text', { x: vx(6.20), y: vy(1.10), 'text-anchor': 'middle', 'font-size': 6.4, fill: '#333' }, '寝室/シェルター'));
+      // Vertical total height dimension H=3,400mm on right
+      const dxR = vx(7.85);
+      g.appendChild(el('line', { x1: dxR, y1: vy(0), x2: dxR, y2: vy(3.40), stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: dxR + 5, y: vy(3.32), 'font-size': 6.4, 'font-family': 'monospace', fill: '#9c4722', 'font-weight': 700 }, '+3,400'));
+      g.appendChild(el('text', { x: dxR + 5, y: vy(2.34), 'font-size': 6.2, 'font-family': 'monospace', fill: '#444' }, '+2,340'));
+      g.appendChild(el('text', { x: dxR + 5, y: vy(0.30), 'font-size': 6.2, 'font-family': 'monospace', fill: '#444' }, '+300'));
+      g.appendChild(el('text', { x: vx(3.75), y: glY + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, '全長 L = 7,500 mm ｜ 全幅 W = 2,700 mm ｜ 全高 H = 3,400 mm'));
+    } else {
+      g.appendChild(el('text', { x: secX + 10, y: secY + 15, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+        '4施設配置 断面略図（隣棟3F+RF｜母屋6層｜RC倉庫｜巨大RV）'));
 
-    // --- 1. LEFT: Neighbor Annex (X = -7.6 .. -2.6, 3F + 6寸 Gable Attic + West Balcony) ---
-    const annexBands = [
-      { idx: 6, y0: 0.00, y1: 2.75, txt: '隣1F' },
-      { idx: 7, y0: 2.75, y1: 5.50, txt: '隣2F' },
-      { idx: 8, y0: 5.50, y1: 8.15, txt: '隣3F(6室)' },
-    ];
-    annexBands.forEach((b) => {
-      const act = floor.index === b.idx;
-      g.appendChild(el('rect', {
-        x: sx(-7.6), y: sy(b.y1), width: 5.0 * 11.4, height: sy(b.y0) - sy(b.y1),
-        fill: act ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb',
-        stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.85,
-      }));
-      g.appendChild(el('text', {
-        x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle',
-        'font-size': 6.3, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444',
-      }, b.txt));
-      if (b.idx === 8) {
-        // Cantilevered West Balcony stub
+      const sx = (m) => secX + 114 + m * 10.6;
+      const sy = (m) => secY + 152 - m * 8.6;
+
+      g.appendChild(el('line', { x1: secX + 10, y1: sy(0), x2: secX + secW - 10, y2: sy(0), stroke: '#5a6354', 'stroke-width': 1.4 }));
+      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.6, fill: '#5a6354' }, 'GL'));
+
+      // 1. Neighbor Annex (-7.6 .. -2.6)
+      [
+        { idx: 6, y0: 0.00, y1: 2.75, txt: '隣1F' },
+        { idx: 7, y0: 2.75, y1: 5.50, txt: '隣2F' },
+        { idx: 8, y0: 5.50, y1: 8.15, txt: '隣3F' },
+      ].forEach((b) => {
+        const act = floor.index === b.idx;
         g.appendChild(el('rect', {
-          x: sx(-8.6), y: sy(6.60), width: 1.0 * 11.4, height: sy(5.50) - sy(6.60),
-          fill: 'rgba(180,210,235,0.40)', stroke: '#1c1e22', 'stroke-width': 0.9,
+          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 10.6, height: sy(b.y0) - sy(b.y1),
+          fill: act ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.85,
         }));
-      }
-    });
-    // Annex Gable Attic (idx 9, 8.15 .. 10.95)
-    const arAct = floor.index === 9;
-    const arPts = `${sx(-7.6)},${sy(8.15)} ${sx(-7.6)},${sy(9.55)} ${sx(-5.1)},${sy(10.95)} ${sx(-2.6)},${sy(9.55)} ${sx(-2.6)},${sy(8.15)}`;
-    g.appendChild(el('polygon', { points: arPts, fill: arAct ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': arAct ? 1.5 : 0.9 }));
-    g.appendChild(el('polyline', { points: `${sx(-8.05)},${sy(9.30)} ${sx(-5.1)},${sy(11.05)} ${sx(-2.15)},${sy(9.30)}`, fill: 'none', stroke: '#1c1e22', 'stroke-width': 1.7 }));
-    g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏5室'));
-    g.appendChild(el('text', { x: sx(-5.1), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.5, 'font-weight': 700, fill: '#3d523a' }, '隣棟 5×8m'));
-    g.appendChild(el('text', { x: sx(-1.3), y: sy(0.8), 'text-anchor': 'middle', 'font-size': 5.8, fill: '#5b6b59' }, '2.6m'));
-
-    // --- 2. CENTER: Main Tower 6-Level Stack (X = 0 .. 5.0) ---
-    const mainBands = [
-      { idx: 0, y0: -2.40, y1: 0.00, txt: 'B1F' },
-      { idx: 1, y0: 0.00, y1: 2.75, txt: '1F' },
-      { idx: 2, y0: 2.75, y1: 5.50, txt: '2F' },
-      { idx: 3, y0: 5.50, y1: 8.15, txt: '3F' },
-      { idx: 4, y0: 8.15, y1: 10.50, txt: '4F(5室)' },
-    ];
-    mainBands.forEach((b) => {
-      const act = b.idx === floor.index;
-      g.appendChild(el('rect', {
-        x: sx(0), y: sy(b.y1), width: 5.0 * 11.4, height: sy(b.y0) - sy(b.y1),
-        fill: act ? 'rgba(217, 70, 38, 0.25)' : (b.idx === 0 ? '#dcdde0' : '#f8f5ef'),
-        stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.85,
+        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle', 'font-size': 6.1, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
+      });
+      const arAct = floor.index === 9;
+      g.appendChild(el('polygon', {
+        points: `${sx(-7.6)},${sy(8.15)} ${sx(-7.6)},${sy(9.55)} ${sx(-5.1)},${sy(10.95)} ${sx(-2.6)},${sy(9.55)} ${sx(-2.6)},${sy(8.15)}`,
+        fill: arAct ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': arAct ? 1.5 : 0.9,
       }));
-      g.appendChild(el('text', {
-        x: sx(2.5), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle',
-        'font-size': 6.3, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732',
-      }, b.txt));
-    });
-    const mAttAct = floor.index === 5;
-    const mPts = `${sx(0)},${sy(10.50)} ${sx(0)},${sy(11.92)} ${sx(2.5)},${sy(13.33)} ${sx(5)},${sy(11.92)} ${sx(5)},${sy(10.50)}`;
-    g.appendChild(el('polygon', { points: mPts, fill: mAttAct ? 'rgba(217, 70, 38, 0.25)' : '#f8f5ef', stroke: '#2c2f36', 'stroke-width': mAttAct ? 1.5 : 0.9 }));
-    g.appendChild(el('polyline', { points: `${sx(-0.5)},${sy(11.62)} ${sx(2.5)},${sy(13.43)} ${sx(5.5)},${sy(11.62)}`, fill: 'none', stroke: '#1c1e22', 'stroke-width': 1.7 }));
-    g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, '母屋RF'));
-    g.appendChild(el('text', { x: sx(2.5), y: sy(-3.35), 'text-anchor': 'middle', 'font-size': 6.5, 'font-weight': 700, fill: '#1c1e22' }, '母屋 5×10m (6層)'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏5室'));
 
-    // --- 3. RIGHT: Separate 2m×2m Concrete Warehouse (X = 6.6 .. 8.6, 2 Floors CH1.92m + STS1) ---
-    const s1Act = floor.index === 10;
-    const s2Act = floor.index === 11;
-    g.appendChild(el('rect', {
-      x: sx(6.6), y: sy(2.12), width: 2.0 * 11.4, height: sy(0) - sy(2.12),
-      fill: s1Act ? 'rgba(217, 70, 38, 0.28)' : '#cfd4d9',
-      stroke: '#2c2f36', 'stroke-width': s1Act ? 1.6 : 0.9,
-    }));
-    g.appendChild(el('rect', {
-      x: sx(6.6), y: sy(4.28), width: 2.0 * 11.4, height: sy(2.12) - sy(4.28),
-      fill: s2Act ? 'rgba(217, 70, 38, 0.28)' : '#c5cbd1',
-      stroke: '#2c2f36', 'stroke-width': s2Act ? 1.6 : 0.9,
-    }));
-    // Exterior steel stair STS1 & parapet silhouette
-    g.appendChild(el('line', { x1: sx(8.6), y1: sy(2.12), x2: sx(9.5), y2: sy(0), stroke: '#2c2f36', 'stroke-width': 1.3 }));
-    g.appendChild(el('text', { x: sx(7.6), y: sy(0.9), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': s1Act ? 700 : 500, fill: s1Act ? '#b9381c' : '#2c3138' }, '倉1F'));
-    g.appendChild(el('text', { x: sx(7.6), y: sy(3.0), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': s2Act ? 700 : 500, fill: s2Act ? '#b9381c' : '#2c3138' }, '倉2F'));
-    g.appendChild(el('text', { x: sx(7.8), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#4f555c' }, 'RC倉庫 2×2m'));
+      // 2. Main Tower (0 .. 5.0)
+      [
+        { idx: 0, y0: -2.40, y1: 0.00, txt: 'B1F' },
+        { idx: 1, y0: 0.00, y1: 2.75, txt: '1F' },
+        { idx: 2, y0: 2.75, y1: 5.50, txt: '2F' },
+        { idx: 3, y0: 5.50, y1: 8.15, txt: '3F' },
+        { idx: 4, y0: 8.15, y1: 10.50, txt: '4F' },
+      ].forEach((b) => {
+        const act = b.idx === floor.index;
+        g.appendChild(el('rect', {
+          x: sx(0), y: sy(b.y1), width: 5.0 * 10.6, height: sy(b.y0) - sy(b.y1),
+          fill: act ? 'rgba(217, 70, 38, 0.25)' : (b.idx === 0 ? '#dcdde0' : '#f8f5ef'), stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.85,
+        }));
+        g.appendChild(el('text', { x: sx(2.5), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle', 'font-size': 6.1, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732' }, b.txt));
+      });
+      const mAttAct = floor.index === 5;
+      g.appendChild(el('polygon', {
+        points: `${sx(0)},${sy(10.50)} ${sx(0)},${sy(11.92)} ${sx(2.5)},${sy(13.33)} ${sx(5)},${sy(11.92)} ${sx(5)},${sy(10.50)}`,
+        fill: mAttAct ? 'rgba(217, 70, 38, 0.25)' : '#f8f5ef', stroke: '#2c2f36', 'stroke-width': mAttAct ? 1.5 : 0.9,
+      }));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, '母屋RF'));
 
-    // Elevation level readout column on right edge of cross-section box
-    [
-      [13.33, '+13.3m 母屋棟'],
-      [10.95, '+11.0m 隣棟棟'],
-      [8.15, '+8.15m 4F/隣RF'],
-      [5.50, '+5.50m 3F'],
-      [4.28, '+4.28m 倉庫屋上'],
-      [2.12, '+2.12m 倉庫2F'],
-      [-2.40, '-2.40m 母屋B1F'],
-    ].forEach(([m, txt]) => {
-      g.appendChild(el('text', { x: secX + 244, y: sy(m) + 2.5, 'font-size': 6.3, fill: '#5b5852', 'font-family': 'monospace' }, txt));
-    });
+      // 3. Concrete Warehouse (6.6 .. 8.6)
+      const s1Act = floor.index === 10;
+      const s2Act = floor.index === 11;
+      g.appendChild(el('rect', { x: sx(6.6), y: sy(2.12), width: 2.0 * 10.6, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.9 }));
+      g.appendChild(el('rect', { x: sx(6.6), y: sy(4.28), width: 2.0 * 10.6, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.9 }));
+      g.appendChild(el('text', { x: sx(7.6), y: sy(0.9), 'text-anchor': 'middle', 'font-size': 5.5, fill: '#222' }, '倉1F'));
+      g.appendChild(el('text', { x: sx(7.6), y: sy(3.0), 'text-anchor': 'middle', 'font-size': 5.5, fill: '#222' }, '倉2F'));
+
+      // 4. Movable Giant Camper (East front view silhouette, H=3.40m, W=2.70m!)
+      g.appendChild(el('rect', { x: sx(10.0), y: sy(3.40), width: 2.7 * 10.6, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('line', { x1: sx(10.0), y1: sy(2.34), x2: sx(12.7), y2: sy(2.34), stroke: '#9c4722', 'stroke-width': 0.7, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('rect', { x: sx(10.1), y: sy(0.30), width: 4.5, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
+      g.appendChild(el('rect', { x: sx(12.2), y: sy(0.30), width: 4.5, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
+      g.appendChild(el('text', { x: sx(11.35), y: sy(1.5), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
+      g.appendChild(el('text', { x: sx(11.35), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#9c4722' }, '2.7×7.5m'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#3d523a' }, '隣棟5×8m'));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(-3.35), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#1c1e22' }, '母屋5×10m'));
+      g.appendChild(el('text', { x: sx(7.6), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#4f555c' }, 'RC倉庫'));
+
+      // Level readout right column
+      [
+        [13.33, '+13.3m'],
+        [10.95, '+11.0m'],
+        [8.15, '+8.15m'],
+        [3.40, '+3.40m RV'],
+        [-2.40, '-2.40m B1'],
+      ].forEach(([m, txt]) => {
+        g.appendChild(el('text', { x: secX + 276, y: sy(m) + 2.5, 'font-size': 6.2, fill: '#5b5852', 'font-family': 'monospace' }, txt));
+      });
+    }
 
     // --- JIS Title Block ---
-    const tbX = 382;
+    const tbX = 394;
     const tbW = VW - tbX - 28;
     g.appendChild(el('rect', { x: tbX, y: baseTop, width: tbW, height: secH, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 34, x2: tbX + tbW, y2: baseTop + 34, stroke: '#2c2f36', 'stroke-width': 0.8 }));
-    g.appendChild(el('line', { x1: tbX, y1: baseTop + 84, x2: tbX + tbW, y2: baseTop + 84, stroke: '#2c2f36', 'stroke-width': 0.8 }));
-    g.appendChild(el('line', { x1: tbX, y1: baseTop + 142, x2: tbX + tbW, y2: baseTop + 142, stroke: '#2c2f36', 'stroke-width': 0.8 }));
+    g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
+    g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 9.4, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 ＋ 隣棟 ANNEX-40 ＋ RC倉庫棟 STORAGE-4'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 52, 'font-size': 9.0, 'font-weight': 700, fill: '#9c4722' }, `図面名称 : ${floor.titleJp} [${floor.code}]`));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 70, 'font-size': 7.9, fill: '#5b5852' }, '3棟構成 : 母屋(5×10m 6層) ｜ 西2.6m 隣棟(5×8m 3F+屋根裏) ｜ 東1.6m RC倉庫(2×2m 2階)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 100, 'font-size': 7.8, fill: '#1c1e22' }, '母屋延床 : B1F 31.9m² + 1〜4F 200m² + バルコニー 2m² + 屋根裏 28.5m²'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 116, 'font-size': 7.8, fill: '#3d523a' }, '隣棟延床 : 1〜3F 120m² + バルコニー×3 (4.8m²) + 屋根裏5室 (有効29.5m²)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 132, 'font-size': 7.8, fill: '#4f555c' }, 'RC倉庫棟 : 1F 4.00m² (2室) + 2F 4.00m² (2室) ＝ 延8.00m²・計4室 (CH1,920)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 160, 'font-size': 7.8, fill: '#1c1e22' }, '縮尺 : S = 1/50 (倉庫詳細 1/28・断面 1/175) ｜ 単位 : mm ｜ 赤点 = 現在地'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.5, fill: '#6c665d' }, '母屋・隣棟3F+屋根裏・別棟2×2mコンクリート倉庫まで全3棟12フロア完全徒歩連結'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 9.0, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 ＋ 隣棟 ＋ RC倉庫 ＋ 巨大RV CAMPER-75'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.6, 'font-weight': 700, fill: '#9c4722' }, `図面名称 : ${floor.titleJp}`));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.6, fill: '#5b5852' }, '4拠点構成 : 母屋6層 ｜ 隣棟3F+屋根裏 ｜ RC倉庫2階 ｜ 移動式巨大キャンピングカー(2Fロフト付)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.6, fill: '#1c1e22' }, '母屋/隣棟 : 母屋延262.4m² (B1F〜RF) ｜ 隣棟延154.3m² (3F 6室+3B＋5室屋根裏)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.6, fill: '#4f555c' }, 'RC倉庫棟 : 2×2m 2階建 延8.00m²・計4室 (低天井 CH1,920 / 外鉄骨階段)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.6, fill: '#9c4722', 'font-weight': 700 }, '巨大RV : 2.7×7.5×H3.4m (1F 全14室＋極狭W460廊下＋高天井CH3,020 / 2F ロフト2室)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.6, fill: '#1c1e22' }, isCamper ? '縮尺 : S = 1/34 (縦断面 1/65) ｜ 厳格SAT/OBB当たり判定自走対応' : '縮尺 : S = 1/50 (倉庫 1/28・RV 1/34) ｜ 単位 : mm ｜ 赤点 = 現在地'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.4, fill: '#6c665d' }, '母屋・隣棟・RC倉庫・移動式巨大キャンピングカーまで全14図面＆完全一人称操作対応'));
 
     svg.appendChild(g);
   }
