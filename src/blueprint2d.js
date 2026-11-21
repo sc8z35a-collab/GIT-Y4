@@ -1,4 +1,4 @@
-import { HOUSE, ANNEX, STORAGE, CAMPER, BLUEPRINT_SHEETS, GRID_AXES, COLUMNS } from './planData.js';
+import { HOUSE, ANNEX, STORAGE, CAMPER, KEI, BLUEPRINT_SHEETS, GRID_AXES, COLUMNS } from './planData.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -78,13 +78,27 @@ export class ArchitecturalBlueprint2D {
     const isAnnexSheet = floor.building === 'annex';
     const isStorageSheet = floor.building === 'storage';
     const isCamperSheet = floor.building === 'camper';
+    const isKeiSheet = floor.building === 'kei';
     const poseSheet = pose.sheetIndex !== undefined ? pose.sheetIndex : pose.floor;
     const sameSheet = poseSheet === this.activeFloor;
     this.camGroup.setAttribute('opacity', sameSheet ? '1' : '0.24');
 
     let mapX = pose.x;
     let mapZ = pose.z;
-    if (isCamperSheet) {
+    if (isKeiSheet) {
+      if (pose.building === 'kei' && pose.localX !== undefined) {
+        mapX = pose.localX;
+        mapZ = pose.localZ;
+      } else if (pose.keiPose) {
+        const kp = pose.keiPose;
+        const dx = pose.x - kp.cx;
+        const dz = pose.z - kp.cz;
+        const c = Math.cos(kp.yaw);
+        const s = Math.sin(kp.yaw);
+        mapX = dx * c - dz * s + KEI.width * 0.5;
+        mapZ = dx * s + dz * c + KEI.length * 0.5;
+      }
+    } else if (isCamperSheet) {
       if (pose.building === 'camper' && pose.localX !== undefined) {
         mapX = pose.localX;
         mapZ = pose.localZ;
@@ -107,8 +121,8 @@ export class ArchitecturalBlueprint2D {
 
     const maxW = floor.width || HOUSE.width;
     const maxD = floor.depth || HOUSE.depth;
-    const cx = this.px(Math.max(-1.2, Math.min(maxW + 1.2, mapX)));
-    const cz = this.pz(Math.max(-1.2, Math.min(maxD + 1.2, mapZ)));
+    const cx = this.px(Math.max(-1.0, Math.min(maxW + 1.0, mapX)));
+    const cz = this.pz(Math.max(-1.0, Math.min(maxD + 1.0, mapZ)));
     const ang = (Math.atan2(pose.dz, pose.dx) * 180) / Math.PI;
     this.camDot.setAttribute('cx', cx);
     this.camDot.setAttribute('cy', cz);
@@ -120,17 +134,25 @@ export class ArchitecturalBlueprint2D {
     const isAnnex = floor.building === 'annex';
     const isStorage = floor.building === 'storage';
     const isCamper = floor.building === 'camper';
+    const isKei = floor.building === 'kei';
     const bWidth = floor.width || HOUSE.width;
     const bDepth = floor.depth || HOUSE.depth;
 
-    if (isCamper) {
-      this.scale = 148; // Precision 1/34 mechanical & architectural detail scale for 2.7×7.5m RV!
+    if (isKei) {
+      // Multi-View Automotive Engineering Sheet: Left = 1/20 Top-Down Plan, Right = Side Section + Rear Section + Specs!
+      this.scale = 185;
+      this.padL = 165;
+      this.padR = 468;
+      this.padT = 205;
+      this.padB = 310;
+    } else if (isCamper) {
+      this.scale = 148;
       this.padL = 220;
       this.padR = 220;
       this.padT = 220;
       this.padB = 345;
     } else if (isStorage) {
-      this.scale = 180; // Enlarged 1/28 detail view for 2m×2m concrete warehouse
+      this.scale = 180;
       this.padL = 200;
       this.padR = 280;
       this.padT = 300;
@@ -149,7 +171,7 @@ export class ArchitecturalBlueprint2D {
       this.padB = 345;
     }
 
-    const VW = Math.round(this.padL + bWidth * this.scale + this.padR); // ~840
+    const VW = Math.round(this.padL + bWidth * this.scale + this.padR);
     const VH = Math.round(this.padT + bDepth * this.scale + this.padB);
     this.curVW = VW;
     this.curVH = VH;
@@ -224,7 +246,7 @@ export class ArchitecturalBlueprint2D {
     svg.appendChild(el('rect', { x: 14, y: 14, width: VW - 28, height: VH - 28, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1.4 }));
     svg.appendChild(el('rect', { x: 18, y: 18, width: VW - 36, height: VH - 36, fill: 'none', stroke: '#9b968d', 'stroke-width': 0.5 }));
 
-    this._drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper);
+    this._drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper, isKei);
 
     const names = ['exterior', 'materials', 'grid', 'furniture', 'walls', 'openings', 'plumbing', 'outlets', 'lighting', 'flow', 'labels', 'dimensions', 'camera'];
     names.forEach((n) => {
@@ -233,48 +255,132 @@ export class ArchitecturalBlueprint2D {
       this.layerGroups[n] = g;
     });
 
-    this._drawExteriorContext(this.layerGroups.exterior, floor, isAnnex, isStorage, isCamper, bWidth, bDepth);
-    this._drawRoomFloors(this.layerGroups.materials, floor, isAnnex, isStorage, isCamper);
-    this._drawGridAxes(this.layerGroups.grid, floor, isAnnex, isStorage, isCamper, bWidth, bDepth);
-    this._drawStairwellSymbol(this.layerGroups.furniture, floor, isAnnex, isStorage, isCamper);
+    this._drawExteriorContext(this.layerGroups.exterior, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
+    this._drawRoomFloors(this.layerGroups.materials, floor, isAnnex, isStorage, isCamper, isKei);
+    this._drawGridAxes(this.layerGroups.grid, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
+    if (!isKei) this._drawStairwellSymbol(this.layerGroups.furniture, floor, isAnnex, isStorage, isCamper);
     this._drawFurniturePlan(this.layerGroups.furniture, floor);
-    this._drawWallsAndColumns(this.layerGroups.walls, floor, isAnnex, isStorage, isCamper);
+    this._drawWallsAndColumns(this.layerGroups.walls, floor, isAnnex, isStorage, isCamper, isKei);
     this._drawOpenings(this.layerGroups.openings, floor);
     this._drawPlumbing(this.layerGroups.plumbing, floor);
     this._drawOutlets(this.layerGroups.outlets, floor);
     this._drawLighting(this.layerGroups.lighting, floor);
     this._drawFlowPaths(this.layerGroups.flow, floor);
-    this._drawRoomLabels(this.layerGroups.labels, floor, isStorage, isCamper);
-    this._drawDimensions(this.layerGroups.dimensions, floor, isAnnex, isStorage, isCamper, bWidth, bDepth);
-    this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage, isCamper);
-    this._drawTitleBlockAndSection(svg, floor, VW, VH, isCamper);
+    this._drawRoomLabels(this.layerGroups.labels, floor, isStorage, isCamper, isKei);
+    this._drawDimensions(this.layerGroups.dimensions, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
+    this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage, isCamper, isKei);
+    if (isKei) this._drawKeiEngineeringViews(svg, VW, VH);
+    this._drawTitleBlockAndSection(svg, floor, VW, VH, isCamper, isKei);
 
     this.container.appendChild(svg);
     this.syncLayerVisibility();
   }
 
-  _drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper) {
+  _drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper, isKei) {
     const g = el('g');
-    const sizeTxt = isCamper
-      ? '2,700×7,500×H3,400mm'
-      : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`;
-    const scaleTag = isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50');
-    g.appendChild(el('text', { x: 28, y: 42, 'font-size': isCamper ? 9.8 : 11.2, 'font-weight': 700, fill: '#1c1e22', 'letter-spacing': 0.2 },
+    const sizeTxt = isKei
+      ? '3,400×1,480×H1,800mm'
+      : (isCamper
+        ? '2,700×7,500×H3,400mm'
+        : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`);
+    const scaleTag = isKei ? '1/20 三面精密設計' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50'));
+    g.appendChild(el('text', { x: 28, y: 42, 'font-size': (isCamper || isKei) ? 10.0 : 11.2, 'font-weight': 700, fill: '#1c1e22', 'letter-spacing': 0.2 },
       `実施設計 ${floor.titleJp} (${scaleTag}) — ${sizeTxt}`));
-    g.appendChild(el('text', { x: 28, y: 59, 'font-size': isCamper ? 8.0 : 8.5, fill: '#5b5852' },
+    g.appendChild(el('text', { x: 28, y: 59, 'font-size': (isCamper || isKei) ? 8.1 : 8.5, fill: '#5b5852' },
       `${floor.subtitle}  |  基準床 ${floor.floorLabel}`));
 
     const nc = el('g', { transform: `translate(${VW - 56}, 52)` });
     nc.appendChild(el('circle', { cx: 0, cy: 0, r: 17, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1 }));
     nc.appendChild(el('polygon', { points: '0,-14 -4.5,3 0,-2 4.5,3', fill: '#1c1e22' }));
     nc.appendChild(el('polygon', { points: '0,14 -3.5,3 0,6 3.5,3', fill: 'none', stroke: '#1c1e22', 'stroke-width': 0.8 }));
-    nc.appendChild(el('text', { x: 0, y: -20, 'text-anchor': 'middle', 'font-size': 9.2, 'font-weight': 700, fill: '#1c1e22' }, isCamper ? '前(N)' : 'N'));
+    nc.appendChild(el('text', { x: 0, y: -20, 'text-anchor': 'middle', 'font-size': 9.2, 'font-weight': 700, fill: '#1c1e22' }, (isCamper || isKei) ? '前(N)' : 'N'));
     g.appendChild(nc);
     svg.appendChild(g);
   }
 
-  _drawExteriorContext(g, floor, isAnnex, isStorage, isCamper, bWidth, bDepth) {
+  _drawExteriorContext(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
     const sc = this.scale;
+
+    if (isKei) {
+      // ULTRA-DETAILED 1/20 AUTOMOTIVE EXTERIOR PLAN CONTEXT FOR KEI-340 (3.40m × 1.48m × H1.80m)
+      // Front & Rear Rugged Commercial Bumpers + Authentic Yellow Kei License Plates (軽 580)
+      g.appendChild(el('rect', { x: this.px(-0.01), y: this.pz(-0.09), width: 1.50 * sc, height: 0.09 * sc, rx: 5, fill: '#2c3138', stroke: '#111', 'stroke-width': 1.2 }));
+      g.appendChild(el('rect', { x: this.px(0.575), y: this.pz(-0.115), width: 0.33 * sc, height: 0.045 * sc, rx: 1, fill: '#f2c738', stroke: '#1c1e22', 'stroke-width': 0.8 }));
+      g.appendChild(el('text', { x: this.px(0.74), y: this.pz(-0.025), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#fff' }, 'FRONT BUMPER / LED / 軽580'));
+      // Headlight beam cones (dashed schematic projection)
+      [0.24, 1.24].forEach((hx) => {
+        g.appendChild(el('polygon', {
+          points: `${this.px(hx)},${this.pz(-0.09)} ${this.px(hx - 0.18)},${this.pz(-0.34)} ${this.px(hx + 0.18)},${this.pz(-0.34)}`,
+          fill: 'rgba(245, 198, 70, 0.16)', stroke: '#d97706', 'stroke-width': 0.6, 'stroke-dasharray': '3 2',
+        }));
+      });
+      // Rear Bumper + Taillight markers + Rear Liftgate Open Swing Clearance Envelope
+      g.appendChild(el('rect', { x: this.px(-0.01), y: this.pz(3.40), width: 1.50 * sc, height: 0.08 * sc, rx: 4, fill: '#2c3138', stroke: '#111', 'stroke-width': 1.2 }));
+      g.appendChild(el('rect', { x: this.px(0.575), y: this.pz(3.465), width: 0.33 * sc, height: 0.045 * sc, rx: 1, fill: '#f2c738', stroke: '#1c1e22', 'stroke-width': 0.8 }));
+      // Open Rear Liftgate projection envelope (+Z 1.25m behind tailgate!)
+      g.appendChild(el('rect', {
+        x: this.px(0.15), y: this.pz(3.40), width: 1.18 * sc, height: 0.42 * sc,
+        fill: 'rgba(29,122,140,0.06)', stroke: '#1d7a8c', 'stroke-width': 0.9, 'stroke-dasharray': '5 3',
+      }));
+      g.appendChild(el('text', { x: this.px(0.74), y: this.pz(3.69), 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#1d7a8c' }, 'リア跳上ハッチ開放域 (DK-R / 開放角 81°)'));
+
+      // Folding Left & Right Side Mirrors
+      g.appendChild(el('rect', { x: this.px(-0.12), y: this.pz(0.28), width: 0.10 * sc, height: 0.14 * sc, rx: 2, fill: '#2c3138' }));
+      g.appendChild(el('rect', { x: this.px(1.50), y: this.pz(0.28), width: 0.10 * sc, height: 0.14 * sc, rx: 2, fill: '#2c3138' }));
+
+      // Left Exterior Sliding Door Track Rail + Open Slide Travel Arrow (DK-L)
+      g.appendChild(el('line', { x1: this.px(-0.045), y1: this.pz(1.24), x2: this.px(-0.045), y2: this.pz(2.96), stroke: '#9c4722', 'stroke-width': 2.2 }));
+      g.appendChild(el('rect', {
+        x: this.px(-0.095), y: this.pz(2.04), width: 0.06 * sc, height: 0.84 * sc,
+        fill: 'rgba(156,71,34,0.16)', stroke: '#9c4722', 'stroke-width': 0.85, 'stroke-dasharray': '3 2',
+      }));
+      g.appendChild(el('text', { x: this.px(-0.16), y: this.pz(2.46), 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#9c4722', transform: `rotate(-90 ${this.px(-0.16)} ${this.pz(2.46)})` }, '左スライド扉 開放軌跡 (W840)'));
+
+      // Monocoque Underbody Subframe Rails (dashed steel blue)
+      [0.24, 1.24].forEach((fx) => {
+        g.appendChild(el('line', { x1: this.px(fx), y1: this.pz(0.20), x2: this.px(fx), y2: this.pz(3.22), stroke: '#334155', 'stroke-width': 0.75, 'stroke-dasharray': '8 4', opacity: 0.45 }));
+      });
+      // Vehicle Longitudinal Centerline CL
+      g.appendChild(el('line', { x1: this.px(0.74), y1: this.pz(-0.36), x2: this.px(0.74), y2: this.pz(3.92), stroke: '#2563eb', 'stroke-width': 0.65, 'stroke-dasharray': '12 3 2 3', opacity: 0.55 }));
+      g.appendChild(el('text', { x: this.px(0.74), y: this.pz(-0.39), 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#1d4ed8', 'font-family': 'monospace' }, 'CL (車体中心線)'));
+
+      // Front Steering Axle (FA) & Rear Drive Axle (RA) + 4 Tires (145/80R12) + ±32° Steering Lock Projections!
+      const keiAxles = ['FA 前操舵軸 (±32°)', 'RA 後駆動軸'];
+      KEI.axlesZ.forEach((az, i) => {
+        g.appendChild(el('line', { x1: this.px(-0.22), y1: this.pz(az), x2: this.px(1.70), y2: this.pz(az), stroke: '#2563eb', 'stroke-width': 0.9, 'stroke-dasharray': '10 3 2 3', opacity: 0.78 }));
+        g.appendChild(el('text', { x: this.px(1.73), y: this.pz(az) + 3, 'font-size': 7.0, 'font-weight': 700, fill: '#1d4ed8', 'font-family': 'monospace' }, keiAxles[i]));
+        [-0.01, 1.33].forEach((tx) => {
+          const cxT = this.px(tx + 0.08);
+          const cyT = this.pz(az);
+          g.appendChild(el('rect', {
+            x: this.px(tx), y: this.pz(az - 0.27), width: 0.16 * sc, height: 0.54 * sc, rx: 3.5,
+            fill: 'rgba(30, 58, 138, 0.14)', stroke: '#1d4ed8', 'stroke-width': 1.0,
+          }));
+          if (i === 0) {
+            // Dashed ±32° steering envelope on front tires!
+            g.appendChild(el('rect', {
+              x: this.px(tx), y: this.pz(az - 0.27), width: 0.16 * sc, height: 0.54 * sc, rx: 3,
+              fill: 'none', stroke: '#1d4ed8', 'stroke-width': 0.65, 'stroke-dasharray': '3 2', opacity: 0.55,
+              transform: `rotate(28 ${cxT} ${cyT})`,
+            }));
+          }
+        });
+      });
+
+      // Right-side Wheelbase (WB = 1,980mm) & Overhang Dimension Chain (680 / 1,980 / 740)!
+      const wbX = this.px(1.66);
+      const drawDimR = (z1, z2, lbl, col = '#1d4ed8') => {
+        g.appendChild(el('line', { x1: wbX, y1: this.pz(z1), x2: wbX, y2: this.pz(z2), stroke: col, 'stroke-width': 0.85 }));
+        g.appendChild(el('line', { x1: wbX - 4, y1: this.pz(z1), x2: wbX + 4, y2: this.pz(z1), stroke: col, 'stroke-width': 0.9 }));
+        g.appendChild(el('line', { x1: wbX - 4, y1: this.pz(z2), x2: wbX + 4, y2: this.pz(z2), stroke: col, 'stroke-width': 0.9 }));
+        const ym = (this.pz(z1) + this.pz(z2)) / 2;
+        g.appendChild(el('text', { x: wbX + 10, y: ym, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: col, 'font-family': 'monospace', transform: `rotate(90 ${wbX + 10} ${ym})` }, lbl));
+      };
+      drawDimR(0.0, 0.68, 'FOH 680', '#475569');
+      drawDimR(0.68, 2.66, 'WB 1,980 mm', '#1d4ed8');
+      drawDimR(2.66, 3.40, 'ROH 740', '#475569');
+      return;
+    }
 
     if (isCamper) {
       // Heavy Steel Front Bull-Bar Bumper & Rear Bumper + Mounted Spare Tire
@@ -416,7 +522,7 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawRoomFloors(g, floor, isAnnex, isStorage, isCamper) {
+  _drawRoomFloors(g, floor, isAnnex, isStorage, isCamper, isKei = false) {
     const sc = this.scale;
     for (const r of floor.rooms) {
       const isTatami = r.floorTex.startsWith('tatami');
@@ -443,8 +549,28 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(rect);
     }
 
+    if (isKei) {
+      // Highlight Central Walk-In Cargo Alley (kx = 0.44..1.04, kz = 1.18..3.32 -> W 600 × L 2,140mm!)
+      g.appendChild(el('rect', {
+        x: this.px(0.44), y: this.pz(1.18), width: 0.60 * sc, height: 2.14 * sc,
+        fill: 'rgba(156, 71, 34, 0.08)', stroke: '#9c4722', 'stroke-width': 1.0, 'stroke-dasharray': '5 3',
+      }));
+      g.appendChild(el('line', { x1: this.px(0.44), y1: this.pz(2.05), x2: this.px(1.04), y2: this.pz(2.05), stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: this.px(0.74), y: this.pz(2.01), 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, '進入有効 W600'));
+      // Highlight Passenger-Delete Zone (K02: ZERO passenger seat!)
+      g.appendChild(el('rect', {
+        x: this.px(0.08), y: this.pz(0.42), width: 0.64 * sc, height: 0.72 * sc,
+        fill: 'none', stroke: '#b45309', 'stroke-width': 0.9, 'stroke-dasharray': '4 2',
+      }));
+      g.appendChild(el('text', { x: this.px(0.40), y: this.pz(1.08), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#b45309' }, '助手席撤去 (完全1人乗)'));
+      // 6 Floor Tie-Down D-Ring Anchors (cargo lashing points!)
+      [[0.12, 1.26], [1.36, 1.26], [0.12, 2.22], [1.36, 2.22], [0.12, 3.24], [1.36, 3.24]].forEach(([dx, dz]) => {
+        g.appendChild(el('circle', { cx: this.px(dx), cy: this.pz(dz), r: 3.5, fill: '#fff', stroke: '#334155', 'stroke-width': 1.0 }));
+        g.appendChild(el('circle', { cx: this.px(dx), cy: this.pz(dz), r: 1.2, fill: '#334155' }));
+      });
+    }
+
     if (isCamper && floor.camperLevel === 2) {
-      // Draw Double-Height Open 1F Atrium Void on 2F Loft Plan!
       g.appendChild(el('rect', {
         x: this.px(1.12), y: this.pz(2.17), width: 1.51 * sc, height: 3.08 * sc,
         fill: 'url(#pat-void)', stroke: '#9c4722', 'stroke-width': 1.2, 'stroke-dasharray': '6 3',
@@ -454,7 +580,6 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: this.px(1.26), y: this.pz(3.42), width: 1.22 * sc, height: 0.56 * sc, rx: 4, fill: 'rgba(255,255,255,0.92)', stroke: '#9c4722', 'stroke-width': 0.9 }));
       g.appendChild(el('text', { x: this.px(1.87), y: this.pz(3.64), 'text-anchor': 'middle', 'font-size': 8.2, 'font-weight': 700, fill: '#9c4722' }, '1F 高天井 吹抜空間'));
       g.appendChild(el('text', { x: this.px(1.87), y: this.pz(3.84), 'text-anchor': 'middle', 'font-size': 7.4, 'font-family': 'monospace', fill: '#4a4640' }, 'CH 3,020 mm (上部天窓)'));
-      // Roof skylight & solar projections
       g.appendChild(el('rect', { x: this.px(0.72), y: this.pz(0.90), width: 1.26 * sc, height: 0.90 * sc, fill: 'none', stroke: '#0284c7', 'stroke-width': 1.0, 'stroke-dasharray': '5 3' }));
       g.appendChild(el('text', { x: this.px(1.35), y: this.pz(0.84), 'text-anchor': 'middle', 'font-size': 7.0, fill: '#0284c7', 'font-weight': 700 }, '上部パノラマ天窓 (1260×900)'));
       g.appendChild(el('rect', { x: this.px(0.42), y: this.pz(5.30), width: 1.85 * sc, height: 1.75 * sc, fill: 'none', stroke: '#1e3a8a', 'stroke-width': 0.9, 'stroke-dasharray': '6 3' }));
@@ -462,10 +587,8 @@ export class ArchitecturalBlueprint2D {
     }
 
     if (isCamper && floor.camperLevel === 1) {
-      // Highlight the 460mm Razor-Tight Central Corridor Width Callout!
       g.appendChild(el('line', { x1: this.px(1.12), y1: this.pz(2.50), x2: this.px(1.58), y2: this.pz(2.50), stroke: '#b9381c', 'stroke-width': 1.4 }));
       g.appendChild(el('text', { x: this.px(1.35), y: this.pz(2.42), 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#b9381c', 'font-family': 'monospace' }, 'W460'));
-      // Skylight overhead dashed projection across soaring CH 3.02m central atrium
       g.appendChild(el('rect', { x: this.px(0.72), y: this.pz(2.80), width: 1.26 * sc, height: 1.95 * sc, fill: 'none', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
     }
 
@@ -475,7 +598,7 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('rect', { x: this.px(2.94), y: this.pz(3.00), width: 18, height: 665, fill: '#aeb4ba', stroke: '#5c636b', 'stroke-width': 0.6 }));
     }
 
-    if (floor.isAttic && !isStorage && !isCamper) {
+    if (floor.isAttic && !isStorage && !isCamper && !isKei) {
       const maxD = isAnnex ? ANNEX.depth - 0.15 : HOUSE.depth - 0.15;
       const ridgeLbl = isAnnex ? '棟木ライン CH2,800 (6寸勾配)' : '棟木ライン CH2,830 (6寸勾配頂部)';
       g.appendChild(el('line', { x1: this.px(2.50), y1: this.pz(0.15), x2: this.px(2.50), y2: this.pz(maxD), stroke: '#9c4722', 'stroke-width': 1.4, 'stroke-dasharray': '12 4 3 4' }));
@@ -486,26 +609,26 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawGridAxes(g, floor, isAnnex, isStorage, isCamper, bWidth, bDepth) {
-    const axes = isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES));
-    const topOff = isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15));
-    const topLineOff = isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95));
-    const leftOff = isCamper ? -0.82 : (isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15));
-    const leftLineOff = isCamper ? -0.64 : (isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95));
-    const rightEnd = isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85);
-    const botEnd = isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies ? bDepth + 1.15 : bDepth + 0.85));
+  _drawGridAxes(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
+    const axes = isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES)));
+    const topOff = isKei ? -0.50 : (isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15)));
+    const topLineOff = isKei ? -0.36 : (isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95)));
+    const leftOff = isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (floor.hasAnnexBalconies ? -1.42 : -1.15)));
+    const leftLineOff = isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (floor.hasAnnexBalconies ? -1.24 : -0.95)));
+    const rightEnd = isKei ? bWidth + 0.16 : (isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85));
+    const botEnd = isKei ? bDepth + 0.22 : (isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies ? bDepth + 1.15 : bDepth + 0.85)));
 
     axes.x.forEach((ax) => {
       const x = this.px(ax.pos);
       g.appendChild(el('line', { x1: x, y1: this.pz(topLineOff), x2: x, y2: this.pz(botEnd), stroke: '#b5563c', 'stroke-width': 0.5, 'stroke-dasharray': '12 4 2 4', opacity: 0.65 }));
-      g.appendChild(el('circle', { cx: x, cy: this.pz(topOff), r: 10.5, fill: '#fff', stroke: '#b5563c', 'stroke-width': 0.95 }));
-      g.appendChild(el('text', { x, y: this.pz(topOff) + 3.2, 'text-anchor': 'middle', 'font-size': 7.8, 'font-weight': 700, fill: '#b5563c' }, ax.id));
+      g.appendChild(el('circle', { cx: x, cy: this.pz(topOff), r: 10.0, fill: '#fff', stroke: '#b5563c', 'stroke-width': 0.95 }));
+      g.appendChild(el('text', { x, y: this.pz(topOff) + 3.1, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#b5563c' }, ax.id));
     });
     axes.z.forEach((az) => {
       const z = this.pz(az.pos);
       g.appendChild(el('line', { x1: this.px(leftLineOff), y1: z, x2: this.px(rightEnd), y2: z, stroke: '#b5563c', 'stroke-width': 0.5, 'stroke-dasharray': '12 4 2 4', opacity: 0.65 }));
-      g.appendChild(el('circle', { cx: this.px(leftOff), cy: z, r: 10.5, fill: '#fff', stroke: '#b5563c', 'stroke-width': 0.95 }));
-      g.appendChild(el('text', { x: this.px(leftOff), y: z + 3.2, 'text-anchor': 'middle', 'font-size': 7.8, 'font-weight': 700, fill: '#b5563c' }, az.id));
+      g.appendChild(el('circle', { cx: this.px(leftOff), cy: z, r: 10.0, fill: '#fff', stroke: '#b5563c', 'stroke-width': 0.95 }));
+      g.appendChild(el('text', { x: this.px(leftOff), y: z + 3.1, 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#b5563c' }, az.id));
     });
   }
 
@@ -746,13 +869,63 @@ export class ArchitecturalBlueprint2D {
       box(1.07, 6.49, 0.76, 0.52, '座卓');
       box(3.28, 6.48, 0.74, 0.54, '畳卓');
       g.appendChild(el('circle', { cx: this.px(3.25), cy: this.pz(6.75), r: 12, fill: '#fff1cc', stroke: '#c97f2b', 'stroke-width': 1.1 }));
+    } else if (floor.index === 14) {
+      // ULTRA-DETAILED 1/20 KEI-340 INTERIOR FIXTURES (SINGLE RHD SEAT ONLY + WALK-IN DAILY CARGO!)
+      // Dashboard + amber speedometer cluster + center AC console + 3-pedal box
+      box(0.07, 0.07, 1.34, 0.27, 'インストルメントパネル', '#dde2e8');
+      box(0.90, 0.24, 0.36, 0.11, '計器盤', '#fef3c7');
+      [0.94, 1.06, 1.18].forEach((ppx, pi) => {
+        box(ppx - 0.025, 0.20, 0.05, 0.08, ['C', 'B', 'A'][pi], '#cbd5e1');
+      });
+      // Steering wheel Ø350 symbol on RIGHT (RHD!) + shift lever + handbrake
+      g.appendChild(el('circle', { cx: this.px(1.08), cy: this.pz(0.46), r: 17, fill: 'none', stroke: '#1c1e22', 'stroke-width': 2.2 }));
+      g.appendChild(el('circle', { cx: this.px(1.08), cy: this.pz(0.46), r: 4, fill: '#1c1e22' }));
+      g.appendChild(el('line', { x1: this.px(1.08) - 15, y1: this.pz(0.46), x2: this.px(1.08) + 15, y2: this.pz(0.46), stroke: '#1c1e22', 'stroke-width': 1.3 }));
+      g.appendChild(el('circle', { cx: this.px(0.76), cy: this.pz(0.58), r: 5.5, fill: '#334155', stroke: '#111', 'stroke-width': 0.8 }));
+      g.appendChild(el('text', { x: this.px(0.76), y: this.pz(0.58) + 2.2, 'text-anchor': 'middle', 'font-size': 5.8, fill: '#fff', 'font-weight': 700 }, 'MT'));
+      box(0.73, 0.72, 0.06, 0.22, '', '#475569');
+      // ONLY ONE SEAT: RHD Driver Bucket Seat (bolstered cushion + backrest + headrest)
+      box(0.84, 0.58, 0.48, 0.44, '運転席(1脚のみ)', '#cbd9e8');
+      box(0.85, 0.96, 0.46, 0.10, '背もたれ', '#94a3b8');
+      box(0.96, 0.98, 0.24, 0.07, '', '#64748b');
+      // Single-side protective cargo divider bar behind driver ONLY
+      g.appendChild(el('line', { x1: this.px(0.79), y1: this.pz(1.15), x2: this.px(1.41), y2: this.pz(1.15), stroke: '#1c1e22', 'stroke-width': 2.6 }));
+      g.appendChild(el('text', { x: this.px(1.10), y: this.pz(1.12), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#1c1e22' }, '荷室仕切バー'));
+
+      // Passenger-Delete Front Cargo (K02: daily tool tote + umbrella)
+      box(0.08, 0.46, 0.26, 0.44, '工具箱', '#cfdbe8');
+      box(0.09, 0.94, 0.07, 0.18, '傘', '#cbd5e1');
+
+      // Rear Inner Wheel-Arch Humps (dashed mechanical steel)
+      box(0.06, 2.35, 0.18, 0.62, '', '#e2e6ea');
+      box(1.24, 2.35, 0.18, 0.62, '', '#e2e6ea');
+
+      // Right Cargo Wall: DIY 2-Tier Birch Utility Shelf + Oricons + Parcel + Emergency Kit + Pegboard
+      box(1.07, 1.36, 0.34, 1.88, '', '#f5ebdc');
+      box(1.09, 1.43, 0.30, 0.46, 'オリコン×2', '#d7e2d3');
+      box(1.10, 2.06, 0.28, 0.44, '日用品箱', '#eadcc7');
+      box(1.10, 2.75, 0.28, 0.38, '非常工具', '#f4d3d0');
+      g.appendChild(el('text', { x: this.px(1.24), y: this.pz(1.31), 'text-anchor': 'middle', 'font-size': 6.4, 'font-weight': 700, fill: '#7c5a38' }, 'DIY 2段合板棚'));
+
+      // Left Rear Cargo Wall (aft of sliding door DK-L): Cooler + Wood Crate + Rolled Tarp
+      box(0.08, 2.28, 0.32, 0.48, 'クーラー', '#d1e6dc');
+      box(0.08, 2.82, 0.32, 0.44, '木箱+シート', '#e8dcc7');
+
+      // TO-SCALE PROTAGONIST HUMAN SILHOUETTE (Ø400 mm!) standing/crouching inside walk-in cargo bay!
+      const hx = this.px(0.74);
+      const hy = this.pz(2.58);
+      g.appendChild(el('circle', { cx: hx, cy: hy, r: 0.20 * sc, fill: 'rgba(156,71,34,0.12)', stroke: '#9c4722', 'stroke-width': 1.0, 'stroke-dasharray': '3 2' }));
+      g.appendChild(el('ellipse', { cx: hx, cy: hy, rx: 0.18 * sc, ry: 0.095 * sc, fill: 'rgba(156,71,34,0.22)', stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('circle', { cx: hx, cy: hy, r: 0.075 * sc, fill: '#fff', stroke: '#9c4722', 'stroke-width': 1.1 }));
+      g.appendChild(el('text', { x: hx, y: hy + 0.27 * sc, 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#9c4722' }, '主人公進入確認 (Ø400)'));
+      return;
     } else {
       box(1.58, 0.19, 0.28, 0.68, '棚', '#aeb4ba');
       box(1.58, 1.13, 0.28, 0.68, '棚', '#aeb4ba');
     }
   }
 
-  _drawWallsAndColumns(g, floor, isAnnex, isStorage, isCamper) {
+  _drawWallsAndColumns(g, floor, isAnnex, isStorage, isCamper, isKei = false) {
     const sc = this.scale;
     for (const w of floor.walls) {
       const isH = w.axis === 'h';
@@ -778,7 +951,7 @@ export class ArchitecturalBlueprint2D {
       drawSeg(cur, end);
     }
 
-    if (isCamper) return; // Camper uses monocoque aluminum/steel box frame without wood posts
+    if (isCamper || isKei) return;
     const cols = isStorage ? STORAGE.columns : (isAnnex ? ANNEX.columns : COLUMNS);
     const colSz = isStorage ? 14 : 11;
     cols.forEach(([cx, cz]) => {
@@ -816,19 +989,24 @@ export class ArchitecturalBlueprint2D {
             g.appendChild(el('line', { x1: hx, y1: hy, x2: hx + dir * len, y2: hy, stroke: '#9c4722', 'stroke-width': 1.6 }));
             g.appendChild(el('path', { d: `M ${hx} ${hy + len} A ${len} ${len} 0 0 ${dir > 0 ? 0 : 1} ${hx + dir * len} ${hy}`, fill: 'none', stroke: '#9c4722', 'stroke-width': 0.85, 'stroke-dasharray': '3 2' }));
           }
-        } else if (op.type === 'door_pocket') {
+        } else if (op.type === 'door_pocket' || op.type === 'door_slide_ext') {
           if (isH) {
             g.appendChild(el('line', { x1: this.px(op.pos), y1: midOrtho - 3, x2: this.px(op.pos + op.width), y2: midOrtho - 3, stroke: '#9c4722', 'stroke-width': 1.8 }));
             g.appendChild(el('line', { x1: this.px(op.pos) - len * 0.25, y1: midOrtho + 3, x2: this.px(op.pos + op.width), y2: midOrtho + 3, stroke: '#9c4722', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
           } else {
             g.appendChild(el('line', { x1: midOrtho - 3, y1: this.pz(op.pos), x2: midOrtho - 3, y2: this.pz(op.pos + op.width), stroke: '#9c4722', 'stroke-width': 1.8 }));
-            g.appendChild(el('line', { x1: midOrtho + 3, y1: this.pz(op.pos) - len * 0.25, x2: midOrtho + 3, y2: this.pz(op.pos + op.width), stroke: '#9c4722', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
+            g.appendChild(el('line', { x1: midOrtho + 3, y1: this.pz(op.pos) + (op.type === 'door_slide_ext' ? 0 : -len * 0.25), x2: midOrtho + 3, y2: this.pz(op.pos + op.width) + (op.type === 'door_slide_ext' ? len * 0.55 : 0), stroke: '#9c4722', 'stroke-width': 0.9, 'stroke-dasharray': '3 2' }));
           }
+        } else if (op.type === 'door_liftgate') {
+          g.appendChild(el('line', { x1: this.px(op.pos), y1: midOrtho, x2: this.px(op.pos + op.width), y2: midOrtho, stroke: '#1d7a8c', 'stroke-width': 2.2, 'stroke-dasharray': '6 2' }));
+          [op.pos + 0.12, op.pos + op.width - 0.12].forEach((hx) => {
+            g.appendChild(el('rect', { x: this.px(hx) - 3, y: midOrtho - 3, width: 6, height: 6, fill: '#1d7a8c' }));
+          });
         }
 
-        const tx = isH ? this.px(op.pos + op.width / 2) : (midOrtho + (w.x1 > 1.5 && floor.isCamper ? -14 : 16));
+        const tx = isH ? this.px(op.pos + op.width / 2) : (midOrtho + (w.x1 > 1.2 && (floor.isCamper || floor.isKei) ? -18 : 16));
         const ty = isH ? midOrtho - 9 : this.pz(op.pos + op.width / 2) + 3;
-        g.appendChild(el('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 6.9, 'font-weight': 700, fill: op.type.startsWith('window') ? '#1d7a8c' : '#9c4722' }, op.id));
+        g.appendChild(el('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 6.9, 'font-weight': 700, fill: op.type.startsWith('window') || op.type === 'door_liftgate' ? '#1d7a8c' : '#9c4722' }, op.id));
       }
     }
   }
@@ -838,7 +1016,7 @@ export class ArchitecturalBlueprint2D {
       const cx = this.px(l.x);
       const cy = this.pz(l.z);
       g.appendChild(el('circle', { cx, cy, r: 6.5, fill: '#fff8d6', stroke: '#d97706', 'stroke-width': 1.1 }));
-      g.appendChild(el('text', { x: cx, y: cy + 2.3, 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#b45309' }, l.type));
+      g.appendChild(el('text', { x: cx, y: cy + 2.3, 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#b45309' }, l.type));
     });
     (floor.switches || []).forEach((s) => {
       const cx = this.px(s.x);
@@ -872,17 +1050,29 @@ export class ArchitecturalBlueprint2D {
   _drawFlowPaths(g, floor) {
     const colorMap = { entry: ['#c25e28', 'url(#arr-entry)'], work: ['#1d7a8c', 'url(#arr-work)'], priv: ['#6b4fa1', 'url(#arr-priv)'] };
     (floor.flowPaths || []).forEach((fp) => {
-      const [stroke, marker] = colorMap[fp.kind] || colorMap.entry;
+      const [stroke, marker] = fp.color ? [fp.color, 'url(#arr-entry)'] : (colorMap[fp.kind] || colorMap.entry);
       const d = fp.pts.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${this.px(pt[0])} ${this.pz(pt[1])}`).join(' ');
       g.appendChild(el('path', { d, fill: 'none', stroke, 'stroke-width': 1.8, 'stroke-dasharray': '6 4', 'marker-end': marker, opacity: 0.78 }));
     });
   }
 
-  _drawRoomLabels(g, floor, isStorage, isCamper) {
+  _drawRoomLabels(g, floor, isStorage, isCamper, isKei = false) {
     for (const r of floor.rooms) {
       const [lx, lz] = r.labelPos;
       const cx = this.px(lx);
       const cy = this.pz(lz);
+
+      if (isKei) {
+        const yAdj = r.code === 'K03' ? this.pz(1.58) : (r.code === 'K02' ? this.pz(0.70) : this.pz(0.76));
+        const xAdj = r.code === 'K02' ? this.px(0.50) : cx;
+        const bw = r.code === 'K03' ? 140 : 94;
+        const grp = el('g', { style: 'pointer-events:none' });
+        grp.appendChild(el('rect', { x: xAdj - bw / 2, y: yAdj - 13, width: bw, height: 26, rx: 3, fill: 'rgba(255,255,255,0.90)', stroke: 'rgba(28,30,34,0.28)', 'stroke-width': 0.7 }));
+        grp.appendChild(el('text', { x: xAdj, y: yAdj - 2, 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp.split('（')[0]}`));
+        grp.appendChild(el('text', { x: xAdj, y: yAdj + 8, 'text-anchor': 'middle', 'font-size': 6.3, fill: '#7a4b25', 'font-family': 'monospace' }, `${r.area.toFixed(2)}m² · ${r.ch}`));
+        g.appendChild(grp);
+        continue;
+      }
 
       if (isCamper && r.id === 'c1_corridor') {
         const grp = el('g', { style: 'pointer-events:none' });
@@ -906,13 +1096,13 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawDimensions(g, floor, isAnnex, isStorage, isCamper, bWidth, bDepth) {
+  _drawDimensions(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
     const dimH = (x1, x2, y, label) => {
       const a = this.px(x1), b = this.px(x2);
       g.appendChild(el('line', { x1: a, y1: y, x2: b, y2: y, stroke: '#2c2f36', 'stroke-width': 0.85 }));
       g.appendChild(el('line', { x1: a, y1: y - 5, x2: a, y2: y + 5, stroke: '#2c2f36', 'stroke-width': 0.9 }));
       g.appendChild(el('line', { x1: b, y1: y - 5, x2: b, y2: y + 5, stroke: '#2c2f36', 'stroke-width': 0.9 }));
-      g.appendChild(el('text', { x: (a + b) / 2, y: y - 4, 'text-anchor': 'middle', 'font-size': 8.2, 'font-family': 'monospace', fill: '#1c1e22' }, label));
+      g.appendChild(el('text', { x: (a + b) / 2, y: y - 4, 'text-anchor': 'middle', 'font-size': 8.0, 'font-family': 'monospace', fill: '#1c1e22' }, label));
     };
     const dimV = (z1, z2, x, label) => {
       const a = this.pz(z1), b = this.pz(z2);
@@ -922,11 +1112,11 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: x - 6, y: (a + b) / 2, 'text-anchor': 'middle', 'font-size': 8.0, 'font-family': 'monospace', fill: '#1c1e22', transform: `rotate(-90 ${x - 6} ${(a + b) / 2})` }, label));
     };
 
-    const axes = isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES));
-    const dimHOuterY = isCamper ? this.pz(-0.92) : (isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55)));
-    const dimHInnerY = isCamper ? this.pz(-0.46) : (isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78)));
-    const dimVOuterX = isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (floor.hasAnnexBalconies ? this.px(-1.78) : this.px(-1.52)));
-    const dimVInnerX = isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (floor.hasAnnexBalconies ? this.px(-1.54) : this.px(-0.78)));
+    const axes = isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES)));
+    const dimHOuterY = isKei ? this.pz(-0.66) : (isCamper ? this.pz(-0.92) : (isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55))));
+    const dimHInnerY = isKei ? this.pz(-0.34) : (isCamper ? this.pz(-0.46) : (isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78))));
+    const dimVOuterX = isKei ? this.px(-0.74) : (isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (floor.hasAnnexBalconies ? this.px(-1.78) : this.px(-1.52))));
+    const dimVInnerX = isKei ? this.px(-0.42) : (isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (floor.hasAnnexBalconies ? this.px(-1.54) : this.px(-0.78))));
 
     dimH(0, bWidth, dimHOuterY, Math.round(bWidth * 1000).toLocaleString());
     const xs = axes.x;
@@ -941,9 +1131,9 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawCameraMarker(g, isAnnex, isStorage, isCamper) {
-    const sx = isCamper ? 1.35 : (isStorage ? 0.65 : (isAnnex ? 2.50 : 1.62));
-    const sz = isCamper ? 2.49 : (isStorage ? 0.53 : (isAnnex ? 5.80 : 6.25));
+  _drawCameraMarker(g, isAnnex, isStorage, isCamper, isKei = false) {
+    const sx = isKei ? 0.74 : (isCamper ? 1.35 : (isStorage ? 0.65 : (isAnnex ? 2.50 : 1.62)));
+    const sz = isKei ? 1.72 : (isCamper ? 2.49 : (isStorage ? 0.53 : (isAnnex ? 5.80 : 6.25)));
     this.camGroup = el('g', { id: 'cam-marker' });
     this.camCone = el('g', { transform: `translate(${this.px(sx)}, ${this.pz(sz)}) rotate(90)` });
     this.camCone.appendChild(el('path', { d: 'M 0 0 L 42 -20 A 46 46 0 0 1 42 20 Z', fill: 'rgba(217, 70, 38, 0.24)', stroke: '#d94626', 'stroke-width': 0.9 }));
@@ -954,12 +1144,167 @@ export class ArchitecturalBlueprint2D {
   }
 
   /**
-   * Bottom Engineering Section + JIS Title Block:
-   * - On Camper Sheets (12 & 13): Draws a precision 1/65 LONGITUDINAL SECTION (L7,500 × H3,400mm)
-   *   showing 6 off-road tires, drop chassis, 1F soaring CH3,020 atrium, 2F Front/Rear Lofts (CH980), & STC1!
-   * - On Building Sheets (0..11): Draws the 4-Structure Site Cross-Section Elevation Diagram!
+   * Dedicated Right-Column 3-View Engineering Projection Suite for Sheet 14 (KEI-340):
+   * 1) 1/30 Longitudinal Side Cross-Section (L 3,400 × H 1,800 mm, driver & cargo crouch heights, 81° liftgate arc!)
+   * 2) 1/26 Rear Elevation & Cargo Bay Cross-Section (W 1,480 × H 1,800 mm, W600 walk-in alley + DIY shelf + cooler!)
+   * 3) Complete Automotive Specification Schedule (主要諸元表)
    */
-  _drawTitleBlockAndSection(svg, floor, VW, VH, isCamper) {
+  _drawKeiEngineeringViews(svg, VW, VH) {
+    const g = el('g');
+    const colX = 500;
+    const colW = VW - colX - 28; // ~379px
+
+    // --- PANEL 1: 1/30 LONGITUDINAL SIDE CROSS-SECTION (L 3,400 × H 1,800 mm) ---
+    const p1Y = 82;
+    const p1H = 264;
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: p1H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.1 }));
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.7 }));
+    g.appendChild(el('text', { x: colX + 10, y: p1Y + 14.5, 'font-size': 8.4, 'font-weight': 700, fill: '#1c1e22' },
+      '① 側面縦断面図 (1/30) — 全長 3,400 × 全高 1,800 mm（1席＋進入可能荷室）'));
+
+    const scS = 66; // 3.40m -> 224px + 81deg liftgate arc -> 309px, fits cleanly inside 379px box!
+    const sx0 = colX + 20;
+    const glS = p1Y + 216;
+    const vx = (m) => sx0 + m * scS;
+    const vy = (m) => glS - m * scS;
+
+    g.appendChild(el('line', { x1: colX + 12, y1: glS, x2: colX + colW - 12, y2: glS, stroke: '#5a6354', 'stroke-width': 1.4 }));
+    g.appendChild(el('text', { x: colX + 14, y: glS - 4, 'font-size': 6.6, fill: '#5a6354', 'font-family': 'monospace' }, 'GL'));
+
+    // Outer High-Roof Kei-Van Silhouette (0..3.40m, y=0.34..1.80m)
+    g.appendChild(el('rect', { x: vx(0), y: vy(1.80), width: 3.40 * scS, height: 1.46 * scS, rx: 4, fill: '#f8f6f0', stroke: '#1c1e22', 'stroke-width': 1.8 }));
+    // Interior Cavity (0.06..3.34m, y=0.34..1.72m -> exact CH 1,380mm!)
+    g.appendChild(el('rect', { x: vx(0.06), y: vy(1.72), width: 3.28 * scS, height: 1.38 * scS, fill: '#fcfbf7', stroke: '#555', 'stroke-width': 0.8 }));
+    // Front & Rear Bumpers + Headlight + Taillight
+    g.appendChild(el('rect', { x: vx(-0.08), y: vy(0.56), width: 0.09 * scS, height: 0.28 * scS, rx: 2, fill: '#2c3138' }));
+    g.appendChild(el('rect', { x: vx(3.39), y: vy(0.54), width: 0.08 * scS, height: 0.24 * scS, rx: 2, fill: '#2c3138' }));
+    // Front Windshield & Side Windows
+    g.appendChild(el('rect', { x: vx(0.00), y: vy(1.62), width: 0.06 * scS, height: 0.56 * scS, fill: '#dff0fa', stroke: '#1d7a8c', 'stroke-width': 0.9 }));
+    g.appendChild(el('rect', { x: vx(1.24), y: vy(1.66), width: 0.84 * scS, height: 1.30 * scS, fill: 'rgba(156,71,34,0.06)', stroke: '#9c4722', 'stroke-width': 0.9, 'stroke-dasharray': '4 2' }));
+    g.appendChild(el('text', { x: vx(1.66), y: vy(1.52), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#9c4722' }, 'DK-L 開口'));
+
+    // Single RHD Driver Seat Profile + Steering Column + Dash + Seated Driver Eye Height (FL+980)
+    g.appendChild(el('rect', { x: vx(0.06), y: vy(1.06), width: 0.28 * scS, height: 0.38 * scS, fill: '#cbd5e1', stroke: '#334155', 'stroke-width': 0.8 }));
+    g.appendChild(el('line', { x1: vx(0.28), y1: vy(0.95), x2: vx(0.50), y2: vy(1.16), stroke: '#1c1e22', 'stroke-width': 2.0 }));
+    g.appendChild(el('rect', { x: vx(0.60), y: vy(0.68), width: 0.44 * scS, height: 0.16 * scS, rx: 2, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 0.8 }));
+    g.appendChild(el('rect', { x: vx(0.96), y: vy(1.24), width: 0.10 * scS, height: 0.58 * scS, rx: 2, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 0.8 }));
+    g.appendChild(el('circle', { cx: vx(0.84), cy: vy(1.32), r: 6.5, fill: 'none', stroke: '#1d4ed8', 'stroke-width': 1.1, 'stroke-dasharray': '2 1.5' }));
+    g.appendChild(el('text', { x: vx(0.74), y: vy(1.44), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 700, fill: '#1d4ed8' }, '運転目線+980'));
+    // Cargo Divider Post behind Driver
+    g.appendChild(el('line', { x1: vx(1.15), y1: vy(0.34), x2: vx(1.15), y2: vy(1.20), stroke: '#1c1e22', 'stroke-width': 1.8 }));
+
+    // Walk-In Cargo Bay: Crouching Protagonist Silhouette (Eye FL+1,040, Headroom CH 1,380!) + 2-Tier Shelf
+    g.appendChild(el('rect', { x: vx(1.36), y: vy(0.88), width: 1.88 * scS, height: 0.04 * scS, fill: '#d6bfa0', stroke: '#7c5a38', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: vx(1.36), y: vy(1.32), width: 1.88 * scS, height: 0.04 * scS, fill: '#d6bfa0', stroke: '#7c5a38', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: vx(1.43), y: vy(0.64), width: 0.46 * scS, height: 0.28 * scS, fill: '#d7e2d3', stroke: '#45543e', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: vx(2.06), y: vy(1.16), width: 0.44 * scS, height: 0.26 * scS, fill: '#eadcc7', stroke: '#7c5a38', 'stroke-width': 0.7 }));
+    // Crouching Protagonist Silhouette inside cargo bay
+    g.appendChild(el('circle', { cx: vx(2.60), cy: vy(1.42), r: 6.8, fill: 'rgba(156,71,34,0.16)', stroke: '#9c4722', 'stroke-width': 1.1 }));
+    g.appendChild(el('path', { d: `M ${vx(2.60)} ${vy(1.32)} L ${vx(2.57)} ${vy(0.82)} L ${vx(2.46)} ${vy(0.34)} M ${vx(2.57)} ${vy(0.82)} L ${vx(2.72)} ${vy(0.34)}`, fill: 'none', stroke: '#9c4722', 'stroke-width': 1.4 }));
+    g.appendChild(el('text', { x: vx(2.60), y: vy(1.56), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#9c4722' }, '荷室目線+1,040'));
+    // Overhead Dome LED Strip
+    g.appendChild(el('rect', { x: vx(1.69), y: vy(1.72), width: 0.42 * scS, height: 3.5, fill: '#f59e0b' }));
+
+    // Rear Liftgate Open Swing Arc (81° UPWARD!) — cleanly inside Panel 1!
+    const hX = vx(3.37);
+    const hY = vy(1.70);
+    const lgLen = 1.30 * scS;
+    const endX = hX + lgLen * Math.sin(1.42);
+    const endY = hY + lgLen * Math.cos(1.42);
+    g.appendChild(el('line', { x1: hX, y1: hY, x2: endX, y2: endY, stroke: '#1d7a8c', 'stroke-width': 1.8 }));
+    g.appendChild(el('path', { d: `M ${hX} ${vy(0.40)} A ${lgLen} ${lgLen} 0 0 0 ${endX} ${endY}`, fill: 'none', stroke: '#1d7a8c', 'stroke-width': 0.9, 'stroke-dasharray': '4 2' }));
+    g.appendChild(el('text', { x: hX + 42, y: endY - 10, 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#1d7a8c' }, 'DK-R 開放81°'));
+
+    // Underfloor 658cc Engine & Fuel Tank Dashed Outlines + 2 Wheels (Ø540 mm)
+    g.appendChild(el('rect', { x: vx(0.82), y: vy(0.32), width: 0.56 * scS, height: 0.16 * scS, fill: 'rgba(51,65,85,0.16)', stroke: '#334155', 'stroke-width': 0.7, 'stroke-dasharray': '3 2' }));
+    g.appendChild(el('text', { x: vx(1.10), y: vy(0.22), 'text-anchor': 'middle', 'font-size': 5.4, fill: '#334155' }, '658cc'));
+    KEI.axlesZ.forEach((az) => {
+      g.appendChild(el('circle', { cx: vx(az), cy: vy(0.27), r: 0.27 * scS, fill: '#1f2428', stroke: '#555', 'stroke-width': 1.3 }));
+      g.appendChild(el('circle', { cx: vx(az), cy: vy(0.27), r: 0.14 * scS, fill: '#9aa3ad' }));
+    });
+
+    // Side Section Height & Length Dimensions (cleanly positioned inside Panel 1!)
+    const rDimX = vx(4.84);
+    g.appendChild(el('line', { x1: rDimX, y1: vy(0), x2: rDimX, y2: vy(1.80), stroke: '#9c4722', 'stroke-width': 1.0 }));
+    g.appendChild(el('text', { x: rDimX - 3, y: vy(1.86), 'text-anchor': 'end', 'font-size': 6.3, 'font-family': 'monospace', 'font-weight': 700, fill: '#9c4722' }, '+1,800'));
+    g.appendChild(el('text', { x: rDimX + 3, y: vy(1.02), 'font-size': 5.8, 'font-family': 'monospace', fill: '#0369a1', 'font-weight': 700 }, 'CH1380'));
+    g.appendChild(el('text', { x: rDimX + 3, y: vy(0.30), 'font-size': 5.8, 'font-family': 'monospace', fill: '#444' }, '+340'));
+    g.appendChild(el('text', { x: colX + colW / 2, y: glS + 16, 'text-anchor': 'middle', 'font-size': 6.9, 'font-family': 'monospace', fill: '#1c1e22' }, 'FOH 680 ｜ WB 1,980 ｜ ROH 740 ＝ 全長 3,400 mm'));
+
+    // --- PANEL 2: 1/26 REAR ELEVATION & CARGO BAY CROSS-SECTION (W 1,480 × H 1,800 mm) ---
+    const p2Y = p1Y + p1H + 14;
+    const p2H = 240;
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.1 }));
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.7 }));
+    g.appendChild(el('text', { x: colX + 10, y: p2Y + 14.5, 'font-size': 8.4, 'font-weight': 700, fill: '#1c1e22' },
+      '② 後部横断面図 (1/26) — 全幅 1,480 × 全高 1,800 mm（荷室進入クリアランス）'));
+
+    const scR = 88; // 1.48m -> 130px, 1.80m -> 158px!
+    const rx0 = colX + 112;
+    const glR = p2Y + 206;
+    const rvx = (m) => rx0 + m * scR;
+    const rvy = (m) => glR - m * scR;
+
+    g.appendChild(el('line', { x1: colX + 24, y1: glR, x2: colX + colW - 24, y2: glR, stroke: '#5a6354', 'stroke-width': 1.4 }));
+    // Rear Tires (Track 1,300mm)
+    [0.01, 1.31].forEach((tx) => {
+      g.appendChild(el('rect', { x: rvx(tx), y: rvy(0.54), width: 0.16 * scR, height: 0.54 * scR, rx: 3, fill: '#1f2428' }));
+    });
+    // Body Shell (W 1.48m × H 1.46m above +0.34m floor) + Roof Rails
+    g.appendChild(el('rect', { x: rvx(0), y: rvy(1.80), width: 1.48 * scR, height: 1.46 * scR, rx: 4, fill: '#f8f6f0', stroke: '#1c1e22', 'stroke-width': 1.8 }));
+    g.appendChild(el('rect', { x: rvx(0.06), y: rvy(1.72), width: 1.36 * scR, height: 1.38 * scR, fill: '#fcfbf7', stroke: '#555', 'stroke-width': 0.8 }));
+    // Taillights & Yellow Kei License Plate at Rear Bumper
+    g.appendChild(el('rect', { x: rvx(0.02), y: rvy(0.90), width: 0.07 * scR, height: 0.34 * scR, fill: '#dc2626' }));
+    g.appendChild(el('rect', { x: rvx(1.39), y: rvy(0.90), width: 0.07 * scR, height: 0.34 * scR, fill: '#dc2626' }));
+    g.appendChild(el('rect', { x: rvx(0.575), y: rvy(0.49), width: 0.33 * scR, height: 0.14 * scR, fill: '#f2c738', stroke: '#1c1e22', 'stroke-width': 0.7 }));
+    g.appendChild(el('text', { x: rvx(0.74), y: rvy(0.40), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 700, fill: '#1c1e22' }, '軽 580'));
+
+    // Cutaway Cargo Bay Contents: Left Cooler & Crate | CENTER W600 PROTAGONIST ALLEY | Right 2-Tier Birch Rack!
+    g.appendChild(el('rect', { x: rvx(0.07), y: rvy(0.72), width: 0.34 * scR, height: 0.38 * scR, fill: '#d1e6dc', stroke: '#2d5e48', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: rvx(0.24), y: rvy(0.50), 'text-anchor': 'middle', 'font-size': 5.6, fill: '#1e4633', 'font-weight': 700 }, 'クーラー'));
+    // Right 2-Tier Birch Shelf + Containers
+    g.appendChild(el('rect', { x: rvx(1.07), y: rvy(0.88), width: 0.34 * scR, height: 0.04 * scR, fill: '#d6bfa0', stroke: '#7c5a38', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: rvx(1.07), y: rvy(1.32), width: 0.34 * scR, height: 0.04 * scR, fill: '#d6bfa0', stroke: '#7c5a38', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: rvx(1.09), y: rvy(0.64), width: 0.30 * scR, height: 0.28 * scR, fill: '#d7e2d3', stroke: '#45543e', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: rvx(1.09), y: rvy(1.16), width: 0.30 * scR, height: 0.26 * scR, fill: '#cfdbe8', stroke: '#2c3f59', 'stroke-width': 0.7 }));
+    g.appendChild(el('text', { x: rvx(1.24), y: rvy(1.40), 'text-anchor': 'middle', 'font-size': 5.6, fill: '#7c5a38', 'font-weight': 700 }, '2段棚'));
+    // Center Open Walk-In Alley Highlight + Front-Facing Crouching Protagonist Silhouette!
+    g.appendChild(el('rect', { x: rvx(0.44), y: rvy(1.72), width: 0.60 * scR, height: 1.38 * scR, fill: 'rgba(156,71,34,0.08)', stroke: '#9c4722', 'stroke-width': 0.85, 'stroke-dasharray': '3 2' }));
+    g.appendChild(el('circle', { cx: rvx(0.74), cy: rvy(1.40), r: 7.5, fill: 'rgba(156,71,34,0.18)', stroke: '#9c4722', 'stroke-width': 1.1 }));
+    g.appendChild(el('rect', { x: rvx(0.56), y: rvy(1.28), width: 0.36 * scR, height: 0.44 * scR, rx: 6, fill: 'rgba(156,71,34,0.15)', stroke: '#9c4722', 'stroke-width': 1.0 }));
+    g.appendChild(el('text', { x: rvx(0.74), y: rvy(1.57), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#9c4722', 'font-family': 'monospace' }, 'W600×H1380'));
+    // Rear Section Dimensions (W1,480 / Inner 1,360 / H1,800)
+    g.appendChild(el('line', { x1: rvx(0), y1: glR + 10, x2: rvx(1.48), y2: glR + 10, stroke: '#1c1e22', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: rvx(0.74), y: glR + 22, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', 'font-weight': 700, fill: '#1c1e22' }, '全幅 W = 1,480 mm (内幅 1,360)'));
+    g.appendChild(el('line', { x1: rvx(1.62), y1: rvy(0), x2: rvx(1.62), y2: rvy(1.80), stroke: '#9c4722', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: rvx(1.68), y: rvy(0.92), 'font-size': 6.6, 'font-family': 'monospace', 'font-weight': 700, fill: '#9c4722' }, 'H 1,800'));
+
+    // --- PANEL 3: AUTOMOTIVE SPECIFICATION SCHEDULE (主要諸元表) ---
+    const p3Y = p2Y + p2H + 14;
+    const p3H = Math.max(150, VH - 232 - p3Y);
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: p3H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.1 }));
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: 21, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.7 }));
+    g.appendChild(el('text', { x: colX + 10, y: p3Y + 14, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '③ KEI-340 主要諸元・厳格衝突設計仕様'));
+
+    const rowH = Math.min(20, (p3H - 25) / KEI.specs.length);
+    KEI.specs.forEach(([k, v], i) => {
+      const ry = p3Y + 21 + i * rowH;
+      if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
+      g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.72, 'font-size': 6.9, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 132, y: ry + rowH * 0.72, 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+    });
+
+    svg.appendChild(g);
+  }
+
+  /**
+   * Bottom Engineering Section + JIS Title Block:
+   * - On Camper Sheets (12 & 13): Draws 1/65 Longitudinal Section (L7,500 × H3,400mm)
+   * - On Building Sheets (0..11) & Kei Sheet (14): Draws 5-Unit Compound Site Elevation Diagram!
+   */
+  _drawTitleBlockAndSection(svg, floor, VW, VH, isCamper, isKei = false) {
     const baseTop = VH - 218;
     const g = el('g');
 
@@ -972,45 +1317,34 @@ export class ArchitecturalBlueprint2D {
     if (isCamper) {
       g.appendChild(el('text', { x: secX + 10, y: secY + 15, 'font-size': 8.5, 'font-weight': 700, fill: '#1c1e22' },
         'キャンピングカー 縦断面図 (L7,500 × H3,400 / 1F高天井CH3,020＋2Fロフト)'));
-      const scM = 34.5; // 7.5m -> 259px, 3.4m -> 117px!
+      const scM = 34.5;
       const lx0 = secX + 32;
       const glY = secY + 156;
       const vx = (m) => lx0 + m * scM;
       const vy = (m) => glY - m * scM;
 
-      // Ground line
       g.appendChild(el('line', { x1: secX + 12, y1: glY, x2: secX + secW - 12, y2: glY, stroke: '#5a6354', 'stroke-width': 1.4 }));
-      // Outer coach body shell (0.30..3.40m)
       g.appendChild(el('rect', { x: vx(0), y: vy(3.40), width: 7.5 * scM, height: 3.10 * scM, fill: '#f7f4ec', stroke: '#1c1e22', 'stroke-width': 1.6 }));
-      // 1F Zone highlight
       const f1Act = floor.camperLevel === 1;
       const f2Act = floor.camperLevel === 2;
       g.appendChild(el('rect', { x: vx(0.07), y: vy(2.28), width: 7.36 * scM, height: 1.98 * scM, fill: f1Act ? 'rgba(217,70,38,0.16)' : '#f8f5ef', stroke: '#4a4640', 'stroke-width': 0.7 }));
-      // Soaring CH 3,020 central atrium highlight (vz = 2.17..5.25 -> y = 0.30..3.32)
       g.appendChild(el('rect', { x: vx(2.17), y: vy(3.32), width: 3.08 * scM, height: 3.02 * scM, fill: f1Act ? 'rgba(217,70,38,0.22)' : 'rgba(2,132,199,0.10)', stroke: '#0284c7', 'stroke-width': 0.9, 'stroke-dasharray': '4 2' }));
-      // 2F Front Loft CL01 (0.07..2.17, y = 2.34..3.32)
       g.appendChild(el('rect', { x: vx(0.07), y: vy(3.32), width: 2.10 * scM, height: 0.98 * scM, fill: f2Act ? 'rgba(217,70,38,0.26)' : '#efe5d3', stroke: '#1c1e22', 'stroke-width': f2Act ? 1.5 : 0.9 }));
-      // 2F Rear Loft CL02 (5.25..7.43, y = 2.34..3.32)
       g.appendChild(el('rect', { x: vx(5.25), y: vy(3.32), width: 2.18 * scM, height: 0.98 * scM, fill: f2Act ? 'rgba(217,70,38,0.26)' : '#dce6d4', stroke: '#1c1e22', 'stroke-width': f2Act ? 1.5 : 0.9 }));
-      // 2F Loft Skybridge beam line (dashed across 2.17..5.25)
       g.appendChild(el('line', { x1: vx(2.17), y1: vy(2.34), x2: vx(5.25), y2: vy(2.34), stroke: '#9c4722', 'stroke-width': 1.2, 'stroke-dasharray': '5 3' }));
-      // Rear STC1 steep loft ladder diagonal
       g.appendChild(el('line', { x1: vx(6.66), y1: vy(0.30), x2: vx(6.96), y2: vy(2.34), stroke: '#9c4722', 'stroke-width': 2.0 }));
-      // Roof solar array & front bull-bar & 3 axles/tires (Ø800mm)
       g.appendChild(el('rect', { x: vx(5.10), y: vy(3.50), width: 1.95 * scM, height: 4, fill: '#1e3a8a' }));
       g.appendChild(el('rect', { x: vx(-0.16), y: vy(0.92), width: 0.16 * scM, height: 0.56 * scM, fill: '#2c3138' }));
       CAMPER.axlesZ.forEach((az) => {
         g.appendChild(el('circle', { cx: vx(az), cy: vy(0.40), r: 0.40 * scM, fill: '#1f2428', stroke: '#555', 'stroke-width': 1.2 }));
         g.appendChild(el('circle', { cx: vx(az), cy: vy(0.40), r: 0.21 * scM, fill: '#9aa3ad' }));
       });
-      // Section labels & height dims
       g.appendChild(el('text', { x: vx(1.12), y: vy(2.75), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#1c1e22' }, 'CL01 前ロフト(CH980)'));
       g.appendChild(el('text', { x: vx(6.34), y: vy(2.75), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#1c1e22' }, 'CL02 後ロフト'));
       g.appendChild(el('text', { x: vx(3.71), y: vy(1.90), 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#0369a1' }, '1F 高天井吹抜'));
       g.appendChild(el('text', { x: vx(3.71), y: vy(1.52), 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 700, fill: '#0369a1', 'font-family': 'monospace' }, 'CH 3,020 mm'));
       g.appendChild(el('text', { x: vx(1.10), y: vy(1.10), 'text-anchor': 'middle', 'font-size': 6.4, fill: '#333' }, '運転室/座席'));
       g.appendChild(el('text', { x: vx(6.20), y: vy(1.10), 'text-anchor': 'middle', 'font-size': 6.4, fill: '#333' }, '寝室/シェルター'));
-      // Vertical total height dimension H=3,400mm on right
       const dxR = vx(7.85);
       g.appendChild(el('line', { x1: dxR, y1: vy(0), x2: dxR, y2: vy(3.40), stroke: '#9c4722', 'stroke-width': 1.1 }));
       g.appendChild(el('text', { x: dxR + 5, y: vy(3.32), 'font-size': 6.4, 'font-family': 'monospace', fill: '#9c4722', 'font-weight': 700 }, '+3,400'));
@@ -1018,14 +1352,14 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: dxR + 5, y: vy(0.30), 'font-size': 6.2, 'font-family': 'monospace', fill: '#444' }, '+300'));
       g.appendChild(el('text', { x: vx(3.75), y: glY + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, '全長 L = 7,500 mm ｜ 全幅 W = 2,700 mm ｜ 全高 H = 3,400 mm'));
     } else {
-      g.appendChild(el('text', { x: secX + 10, y: secY + 15, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
-        '4施設配置 断面略図（隣棟3F+RF｜母屋6層｜RC倉庫｜巨大RV）'));
+      g.appendChild(el('text', { x: secX + 10, y: secY + 15, 'font-size': 8.0, 'font-weight': 700, fill: '#1c1e22' },
+        '全5拠点配置 断面比較（隣棟｜母屋6層｜軽バン｜RC倉庫｜巨大RV）'));
 
-      const sx = (m) => secX + 114 + m * 10.6;
+      const sx = (m) => secX + 106 + m * 9.6;
       const sy = (m) => secY + 152 - m * 8.6;
 
       g.appendChild(el('line', { x1: secX + 10, y1: sy(0), x2: secX + secW - 10, y2: sy(0), stroke: '#5a6354', 'stroke-width': 1.4 }));
-      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.6, fill: '#5a6354' }, 'GL'));
+      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.4, fill: '#5a6354' }, 'GL'));
 
       // 1. Neighbor Annex (-7.6 .. -2.6)
       [
@@ -1035,17 +1369,17 @@ export class ArchitecturalBlueprint2D {
       ].forEach((b) => {
         const act = floor.index === b.idx;
         g.appendChild(el('rect', {
-          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 10.6, height: sy(b.y0) - sy(b.y1),
+          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 9.6, height: sy(b.y0) - sy(b.y1),
           fill: act ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.85,
         }));
-        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle', 'font-size': 6.1, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
+        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
       });
       const arAct = floor.index === 9;
       g.appendChild(el('polygon', {
         points: `${sx(-7.6)},${sy(8.15)} ${sx(-7.6)},${sy(9.55)} ${sx(-5.1)},${sy(10.95)} ${sx(-2.6)},${sy(9.55)} ${sx(-2.6)},${sy(8.15)}`,
         fill: arAct ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': arAct ? 1.5 : 0.9,
       }));
-      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏5室'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.2), 'text-anchor': 'middle', 'font-size': 5.5, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏5室'));
 
       // 2. Main Tower (0 .. 5.0)
       [
@@ -1057,46 +1391,50 @@ export class ArchitecturalBlueprint2D {
       ].forEach((b) => {
         const act = b.idx === floor.index;
         g.appendChild(el('rect', {
-          x: sx(0), y: sy(b.y1), width: 5.0 * 10.6, height: sy(b.y0) - sy(b.y1),
+          x: sx(0), y: sy(b.y1), width: 5.0 * 9.6, height: sy(b.y0) - sy(b.y1),
           fill: act ? 'rgba(217, 70, 38, 0.25)' : (b.idx === 0 ? '#dcdde0' : '#f8f5ef'), stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.85,
         }));
-        g.appendChild(el('text', { x: sx(2.5), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle', 'font-size': 6.1, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732' }, b.txt));
+        g.appendChild(el('text', { x: sx(2.5), y: (sy(b.y0) + sy(b.y1)) / 2 + 2.5, 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#3a3732' }, b.txt));
       });
       const mAttAct = floor.index === 5;
       g.appendChild(el('polygon', {
         points: `${sx(0)},${sy(10.50)} ${sx(0)},${sy(11.92)} ${sx(2.5)},${sy(13.33)} ${sx(5)},${sy(11.92)} ${sx(5)},${sy(10.50)}`,
         fill: mAttAct ? 'rgba(217, 70, 38, 0.25)' : '#f8f5ef', stroke: '#2c2f36', 'stroke-width': mAttAct ? 1.5 : 0.9,
       }));
-      g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, '母屋RF'));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(11.5), 'text-anchor': 'middle', 'font-size': 5.5, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, '母屋RF'));
 
-      // 3. Concrete Warehouse (6.6 .. 8.6)
+      // 3. Daily Kei-Van Silhouette (front parked beside Main Entrance, W1.48 × H1.80m!)
+      g.appendChild(el('rect', { x: sx(5.6), y: sy(1.80), width: 1.55 * 9.6, height: sy(0.30) - sy(1.80), fill: isKei ? 'rgba(217,70,38,0.32)' : '#e6ece8', stroke: isKei ? '#b9381c' : '#1d7a8c', 'stroke-width': isKei ? 1.5 : 1.0 }));
+      g.appendChild(el('rect', { x: sx(5.7), y: sy(0.30), width: 3.2, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
+      g.appendChild(el('rect', { x: sx(6.75), y: sy(0.30), width: 3.2, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
+      g.appendChild(el('text', { x: sx(6.38), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: isKei ? '#b9381c' : '#1d7a8c' }, '軽バン'));
+
+      // 4. Concrete Warehouse (7.8 .. 9.8)
       const s1Act = floor.index === 10;
       const s2Act = floor.index === 11;
-      g.appendChild(el('rect', { x: sx(6.6), y: sy(2.12), width: 2.0 * 10.6, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.9 }));
-      g.appendChild(el('rect', { x: sx(6.6), y: sy(4.28), width: 2.0 * 10.6, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.9 }));
-      g.appendChild(el('text', { x: sx(7.6), y: sy(0.9), 'text-anchor': 'middle', 'font-size': 5.5, fill: '#222' }, '倉1F'));
-      g.appendChild(el('text', { x: sx(7.6), y: sy(3.0), 'text-anchor': 'middle', 'font-size': 5.5, fill: '#222' }, '倉2F'));
+      g.appendChild(el('rect', { x: sx(7.8), y: sy(2.12), width: 2.0 * 9.6, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.9 }));
+      g.appendChild(el('rect', { x: sx(7.8), y: sy(4.28), width: 2.0 * 9.6, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.9 }));
+      g.appendChild(el('text', { x: sx(8.8), y: sy(0.9), 'text-anchor': 'middle', 'font-size': 5.2, fill: '#222' }, '倉1F'));
+      g.appendChild(el('text', { x: sx(8.8), y: sy(3.0), 'text-anchor': 'middle', 'font-size': 5.2, fill: '#222' }, '倉2F'));
 
-      // 4. Movable Giant Camper (East front view silhouette, H=3.40m, W=2.70m!)
-      g.appendChild(el('rect', { x: sx(10.0), y: sy(3.40), width: 2.7 * 10.6, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.1 }));
-      g.appendChild(el('line', { x1: sx(10.0), y1: sy(2.34), x2: sx(12.7), y2: sy(2.34), stroke: '#9c4722', 'stroke-width': 0.7, 'stroke-dasharray': '3 2' }));
-      g.appendChild(el('rect', { x: sx(10.1), y: sy(0.30), width: 4.5, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
-      g.appendChild(el('rect', { x: sx(12.2), y: sy(0.30), width: 4.5, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
-      g.appendChild(el('text', { x: sx(11.35), y: sy(1.5), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
-      g.appendChild(el('text', { x: sx(11.35), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#9c4722' }, '2.7×7.5m'));
-      g.appendChild(el('text', { x: sx(-5.1), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#3d523a' }, '隣棟5×8m'));
-      g.appendChild(el('text', { x: sx(2.5), y: sy(-3.35), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#1c1e22' }, '母屋5×10m'));
-      g.appendChild(el('text', { x: sx(7.6), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#4f555c' }, 'RC倉庫'));
+      // 5. Movable Giant Camper (10.5 .. 13.2, H=3.40m!)
+      g.appendChild(el('rect', { x: sx(10.6), y: sy(3.40), width: 2.7 * 9.6, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.0 }));
+      g.appendChild(el('rect', { x: sx(10.7), y: sy(0.30), width: 4.0, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
+      g.appendChild(el('rect', { x: sx(12.8), y: sy(0.30), width: 4.0, height: sy(0) - sy(0.30), fill: '#1c1e22' }));
+      g.appendChild(el('text', { x: sx(11.95), y: sy(1.5), 'text-anchor': 'middle', 'font-size': 5.5, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
+      g.appendChild(el('text', { x: sx(11.95), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 700, fill: '#9c4722' }, 'RV3.4m'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#3d523a' }, '隣棟5×8m'));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(-3.35), 'text-anchor': 'middle', 'font-size': 6.0, 'font-weight': 700, fill: '#1c1e22' }, '母屋5×10m'));
+      g.appendChild(el('text', { x: sx(8.8), y: sy(-1.45), 'text-anchor': 'middle', 'font-size': 5.6, 'font-weight': 700, fill: '#4f555c' }, 'RC倉庫'));
 
-      // Level readout right column
       [
         [13.33, '+13.3m'],
-        [10.95, '+11.0m'],
         [8.15, '+8.15m'],
-        [3.40, '+3.40m RV'],
-        [-2.40, '-2.40m B1'],
+        [3.40, '+3.4m RV'],
+        [1.80, '+1.8m 軽'],
+        [-2.40, '-2.4m B1'],
       ].forEach(([m, txt]) => {
-        g.appendChild(el('text', { x: secX + 276, y: sy(m) + 2.5, 'font-size': 6.2, fill: '#5b5852', 'font-family': 'monospace' }, txt));
+        g.appendChild(el('text', { x: secX + 278, y: sy(m) + 2.5, 'font-size': 6.0, fill: '#5b5852', 'font-family': 'monospace' }, txt));
       });
     }
 
@@ -1108,14 +1446,14 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 9.0, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 ＋ 隣棟 ＋ RC倉庫 ＋ 巨大RV CAMPER-75'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.6, 'font-weight': 700, fill: '#9c4722' }, `図面名称 : ${floor.titleJp}`));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.6, fill: '#5b5852' }, '4拠点構成 : 母屋6層 ｜ 隣棟3F+屋根裏 ｜ RC倉庫2階 ｜ 移動式巨大キャンピングカー(2Fロフト付)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.6, fill: '#1c1e22' }, '母屋/隣棟 : 母屋延262.4m² (B1F〜RF) ｜ 隣棟延154.3m² (3F 6室+3B＋5室屋根裏)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.6, fill: '#4f555c' }, 'RC倉庫棟 : 2×2m 2階建 延8.00m²・計4室 (低天井 CH1,920 / 外鉄骨階段)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.6, fill: '#9c4722', 'font-weight': 700 }, '巨大RV : 2.7×7.5×H3.4m (1F 全14室＋極狭W460廊下＋高天井CH3,020 / 2F ロフト2室)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.6, fill: '#1c1e22' }, isCamper ? '縮尺 : S = 1/34 (縦断面 1/65) ｜ 厳格SAT/OBB当たり判定自走対応' : '縮尺 : S = 1/50 (倉庫 1/28・RV 1/34) ｜ 単位 : mm ｜ 赤点 = 現在地'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.4, fill: '#6c665d' }, '母屋・隣棟・RC倉庫・移動式巨大キャンピングカーまで全14図面＆完全一人称操作対応'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.8, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 ＋ 隣棟 ＋ RC倉庫 ＋ 巨大RV ＋ 日常軽バン KEI-340'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.5, 'font-weight': 700, fill: '#9c4722' }, `図面名称 : ${floor.titleJp}`));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.5, fill: '#5b5852' }, '5拠点構成 : 母屋6層 ｜ 隣棟3F+RF ｜ RC倉庫2F ｜ 巨大RV(14室+2F) ｜ 軽バン(1席+進入荷室)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.5, fill: '#1c1e22' }, '建築3棟 : 母屋延262.4m² ｜ 隣棟延154.3m² (3F 6室+3B+5室RF) ｜ RC倉庫 2×2m 4室'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.5, fill: '#9c4722' }, '巨大RV : 2.7×7.5×H3.4m (1F 全14室＋W460極狭廊下＋CH3,020吹抜 / 2F ロフト2室)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.5, fill: '#1d7a8c', 'font-weight': 700 }, '日常軽バン : 3.40×1.48×H1.80m (RHD運転席1脚のみ＋主人公進入可能フル荷室・相互SAT衝突自走)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.5, fill: '#1c1e22' }, isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT OBB-vs-OBB 厳格衝突判定' : (isCamper ? '縮尺 : S = 1/34 (縦断面 1/65) ｜ 厳格SAT/OBB当たり判定自走対応' : '縮尺 : S = 1/50 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地')));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.3, fill: '#6c665d' }, '母屋・隣棟・RC倉庫・巨大RV・日常軽バンまで全15図面＆完全一人称徒歩・運転探索対応'));
 
     svg.appendChild(g);
   }

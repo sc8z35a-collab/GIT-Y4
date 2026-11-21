@@ -24,6 +24,7 @@ const mobFlash = document.getElementById('mob-flash');
 const mobCrouch = document.getElementById('mob-crouch');
 
 const driveHudEl = document.getElementById('drive-hud');
+const driveBadgeEl = document.getElementById('drive-badge');
 const driveSpeedValEl = document.getElementById('drive-speed-val');
 const driveCollisionTagEl = document.getElementById('drive-collision-tag');
 const btnDriveLights = document.getElementById('btn-drive-lights');
@@ -79,10 +80,13 @@ function renderFloorAreaTable(sheetIdx) {
   const isAnnex = fl.building === 'annex';
   const isStorage = fl.building === 'storage';
   const isCamper = fl.building === 'camper';
+  const isKei = fl.building === 'kei';
   areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
   const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
   let summaryLabel = `${fl.code} フロア計`;
-  if (isCamper) {
+  if (isKei) {
+    summaryLabel = '軽バン計（1席＋進入可能フル荷室 3.52m³）';
+  } else if (isCamper) {
     summaryLabel = fl.camperLevel === 2
       ? 'RV 2Fロフト計（2室＋連絡ブリッジ・吹抜CH3.02m）'
       : 'RV 1F計（全14室＋極狭W460廊下＋高天井CH3.02m）';
@@ -99,16 +103,20 @@ function renderFloorAreaTable(sheetIdx) {
   } else if (fl.hasBalcony) {
     summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
   }
-  const footprintStr = isCamper
-    ? '2700×7500×H3400'
-    : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000'));
-  const grossStr = isCamper
-    ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
-    : (isStorage
-      ? '4.00m² (2F延8.0m²)'
-      : (isAnnex
-        ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
-        : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²'))));
+  const footprintStr = isKei
+    ? '1480×3400×H1800'
+    : (isCamper
+      ? '2700×7500×H3400'
+      : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000')));
+  const grossStr = isKei
+    ? '車体床 5.03m²'
+    : (isCamper
+      ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
+      : (isStorage
+        ? '4.00m² (2F延8.0m²)'
+        : (isAnnex
+          ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
+          : (fl.isBasement ? '31.88m²' : (fl.isAttic ? '有効 28.50m²' : '50.00m²')))));
   tableAreas.innerHTML = `
     <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
     <tbody>
@@ -124,7 +132,7 @@ function renderFloorAreaTable(sheetIdx) {
         <td>${summaryLabel}</td>
         <td class="num">${footprintStr}</td>
         <td class="num">${grossStr}</td>
-        <td>室計 ${netSum.toFixed(1)}m²</td>
+        <td>室計 ${netSum.toFixed(2)}m²</td>
       </tr>
     </tbody>
   `;
@@ -180,6 +188,10 @@ function updateDriveHUD(driving, state = {}) {
   isDriving = driving;
   driveHudEl.classList.toggle('hidden', !driving);
   if (driving) {
+    if (driveBadgeEl) {
+      driveBadgeEl.textContent = state.badge || (state.vehicle === 'kei' ? 'KEI-340 660cc' : 'CAMPER-75 6×6');
+      driveBadgeEl.classList.toggle('kei', state.vehicle === 'kei');
+    }
     driveSpeedValEl.textContent = String(state.speedKmh ?? 0);
     driveCollisionTagEl.classList.toggle('hidden', !state.colliding);
     driveHudEl.classList.toggle('colliding', Boolean(state.colliding));
@@ -242,12 +254,12 @@ try {
 
 btnFlash.addEventListener('click', () => {
   if (!explorer) return;
-  if (isDriving) explorer.toggleCamperHeadlights();
+  if (isDriving) explorer.toggleVehicleHeadlights();
   else explorer.toggleFlashlight();
 });
 mobFlash.addEventListener('click', () => {
   if (!explorer) return;
-  if (isDriving) explorer.toggleCamperHeadlights();
+  if (isDriving) explorer.toggleVehicleHeadlights();
   else explorer.toggleFlashlight();
 });
 mobCrouch.addEventListener('click', () => explorer && !isDriving && explorer.toggleCrouch());
@@ -257,8 +269,8 @@ document.getElementById('btn-close-map').addEventListener('click', () => toggleM
 btnPerf.addEventListener('click', () => togglePerf());
 interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
 mobInteract.addEventListener('click', () => explorer && explorer.interact());
-btnDriveLights.addEventListener('click', () => explorer && explorer.toggleCamperHeadlights());
-btnDriveExit.addEventListener('click', () => explorer && explorer.toggleCamperDrive(false));
+btnDriveLights.addEventListener('click', () => explorer && explorer.toggleVehicleHeadlights());
+btnDriveExit.addEventListener('click', () => explorer && explorer.interact());
 
 const joyZone = document.getElementById('joy-zone');
 const joyBase = document.getElementById('joy-base');
@@ -389,8 +401,22 @@ if (explorer) {
       explorer.setCamperPose(cx, cz, Number.isNaN(cyaw) ? 0 : cyaw);
     }
   }
+  if (params.get('keiPose')) {
+    const [kx, kz, kyaw] = params.get('keiPose').split(',').map(Number);
+    if (!Number.isNaN(kx) && !Number.isNaN(kz)) {
+      explorer.setKeiPose(kx, kz, Number.isNaN(kyaw) ? 0 : kyaw);
+    }
+  }
   const floorParam = params.has('floor') ? Number(params.get('floor')) : null;
-  if (params.get('camperLocal')) {
+  if (params.get('keiLocal')) {
+    const [lx, lz] = params.get('keiLocal').split(',').map(Number);
+    const yaw = params.has('yaw') ? Number(params.get('yaw')) : 0;
+    const pitch = params.has('pitch') ? Number(params.get('pitch')) : -0.05;
+    if (!Number.isNaN(lx) && !Number.isNaN(lz)) {
+      const wPos = explorer.keiLocalToWorld(lx, lz);
+      explorer.setPose(wPos.x, wPos.z, yaw, pitch, floorParam !== null ? floorParam : 1);
+    }
+  } else if (params.get('camperLocal')) {
     const [lx, lz] = params.get('camperLocal').split(',').map(Number);
     const yaw = params.has('yaw') ? Number(params.get('yaw')) : 0;
     const pitch = params.has('pitch') ? Number(params.get('pitch')) : -0.04;
@@ -408,6 +434,7 @@ if (explorer) {
   }
   if (params.get('doors') === 'open') explorer.openDoors();
   if (params.get('drive') === '1') explorer.toggleCamperDrive(true);
+  if (params.get('driveKei') === '1') explorer.toggleKeiDrive(true);
   if (params.get('flash') === '1') explorer.toggleFlashlight(true);
 }
 if (params.get('perf') === '1') togglePerf(true);

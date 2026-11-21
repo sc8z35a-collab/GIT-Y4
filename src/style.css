@@ -437,6 +437,12 @@ html, body {
   border-radius: 999px;
 }
 
+.drive-badge.kei {
+  background: #f2c938;
+  color: #121210;
+  box-shadow: 0 0 0 1px rgba(20, 18, 10, 0.45) inset;
+}
+
 .drive-speed {
   display: inline-flex;
   align-items: baseline;
@@ -660,6 +666,23 @@ html, body {
 .floor-tab.active {
   background: #9c4722;
   border-color: #9c4722;
+  color: #fff;
+}
+
+.floor-tab-rv {
+  border-color: rgba(156, 71, 34, 0.42);
+  background: #fbf4ec;
+}
+
+.floor-tab-kei {
+  border-color: rgba(178, 128, 16, 0.58);
+  background: #fdf7df;
+  color: #4a3706;
+}
+
+.floor-tab-kei.active {
+  background: #c88e10;
+  border-color: #a87408;
   color: #fff;
 }
 
