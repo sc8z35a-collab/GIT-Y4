@@ -128,19 +128,23 @@ export class AdaptiveMobileEngine {
       if (b === 'both') {
         weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
       } else if (activeBuilding === 'courtyard') {
-        // Outdoors in the compound courtyard: warm doorway glow across all 3 buildings!
-        if (entry.floor === 1 && (entry.zone === 'exterior' || entry.zone === 'ldk' || entry.zone === 'south' || entry.zone === 'cafe')) {
+        // Outdoors in the compound courtyard: keep strictly <= 6 GPU lights active on POCO F7!
+        if (entry.floor === 1 && (entry.zone === 'exterior' || (b === 'main' && entry.zone === 'ldk'))) {
           weight = entry.zone === 'exterior' ? 1.0 : 0.42;
         }
       } else if (b === activeBuilding) {
         if (entry.floor === currentFloor) {
           weight = 1.0;
+        } else if (b === 'camper' && entry.zone === 'mid') {
+          weight = 0.72; // Soaring 3.02m central skylight atrium illuminates both 1F & 2F Loft bridge!
+        } else if (b === 'camper' && currentFloor === 1 && entry.floor === 2) {
+          weight = 0.30;
         } else if (activeFlight !== null && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
           weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' || entry.zone === 'south' || entry.zone === 'exterior' ? 0.65 : 0.12;
         } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
           weight = 0.20;
         }
-      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage') {
+      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage' && b !== 'camper') {
         weight = 0.55;
       }
 

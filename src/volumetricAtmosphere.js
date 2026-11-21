@@ -81,6 +81,7 @@ const MIST_FRAG = /* glsl */ `
   precision highp float;
   uniform float uTime;
   uniform vec3 uMistColor;
+  uniform vec4 uCamperPose;
   varying vec2 vUv;
   varying vec3 vWorldPos;
 
@@ -113,7 +114,7 @@ const MIST_FRAG = /* glsl */ `
   }
 
   void main() {
-    // Mask mist out of Main Tower (0..5, 0..11.2), Neighbor Annex (-7.6..-2.6, 1..9), & Concrete Warehouse (6.6..8.6, -1.2..0.8)
+    // Mask mist out of Main Tower, Neighbor Annex, Concrete Warehouse, AND Movable Giant Camper OBB!
     float dx1 = max(max(0.0 - vWorldPos.x, vWorldPos.x - 5.0), 0.0);
     float dz1 = max(max(0.0 - vWorldPos.z, vWorldPos.z - 11.2), 0.0);
     float distMain = length(vec2(dx1, dz1));
@@ -126,10 +127,17 @@ const MIST_FRAG = /* glsl */ `
     float dz3 = max(max(-1.2 - vWorldPos.z, vWorldPos.z - 0.8), 0.0);
     float distStorage = length(vec2(dx3, dz3));
 
-    float outsideDist = min(min(distMain, distAnnex), distStorage);
+    vec2 relC = vWorldPos.xz - uCamperPose.xy;
+    vec2 locC = vec2(
+      relC.x * uCamperPose.z - relC.y * uCamperPose.w,
+      relC.x * uCamperPose.w + relC.y * uCamperPose.z
+    );
+    float distCamper = length(max(abs(locC) - vec2(1.42, 3.82), 0.0));
+
+    float outsideDist = min(min(min(distMain, distAnnex), distStorage), distCamper);
     float houseMask = smoothstep(0.35, 2.0, outsideDist);
 
-    float radialFade = 1.0 - smoothstep(20.0, 44.0, length(vWorldPos.xz - vec2(0.0, 4.5)));
+    float radialFade = 1.0 - smoothstep(22.0, 46.0, length(vWorldPos.xz - vec2(1.0, 4.5)));
 
     vec2 p1 = vWorldPos.xz * 0.15 + vec2(uTime * 0.045, uTime * 0.022);
     vec2 p2 = vWorldPos.xz * 0.30 + vec2(-uTime * 0.032, uTime * 0.038);
@@ -147,6 +155,7 @@ export function createVolumetricAtmosphere(scene) {
 
   const uniforms = {
     uTime: { value: 0 },
+    uCamperPose: { value: new THREE.Vector4(7.75, 5.75, 1.0, 0.0) },
   };
 
   function addMoonShaft(x, y, z, w, length, rotX, rotY, rotZ, opacity = 0.088) {
@@ -210,22 +219,31 @@ export function createVolumetricAtmosphere(scene) {
       uniforms: {
         uTime: uniforms.uTime,
         uMistColor: { value: new THREE.Color(layer.col) },
+        uCamperPose: uniforms.uCamperPose,
       },
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(84, 84), mistMat);
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(88, 88), mistMat);
     plane.rotation.x = -Math.PI / 2;
-    plane.position.set(-1.5, layer.y, 5.0);
+    plane.position.set(0.0, layer.y, 4.0);
     plane.renderOrder = 2;
     group.add(plane);
   });
 
   return {
     group,
-    update(elapsed) {
+    update(elapsed, camperPose = null) {
       uniforms.uTime.value = elapsed;
+      if (camperPose) {
+        uniforms.uCamperPose.value.set(
+          camperPose.cx,
+          camperPose.cz,
+          Math.cos(camperPose.yaw),
+          Math.sin(camperPose.yaw),
+        );
+      }
     },
   };
 }

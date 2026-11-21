@@ -180,4 +180,50 @@ export class SpatialForestAudio {
     g.connect(this.ctx.destination);
     src.start(t, Math.random() * 1.5, 0.32);
   }
+
+  updateEngine(active, speedNorm = 0) {
+    if (!this.ctx || this.muted) {
+      if (this.engineGain && this.ctx) {
+        this.engineGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.12);
+      }
+      return;
+    }
+    if (!this.engineOsc) {
+      this.engineOsc = this.ctx.createOscillator();
+      this.engineOsc.type = 'sawtooth';
+      this.engineOsc.frequency.value = 46;
+      this.engineFilt = this.ctx.createBiquadFilter();
+      this.engineFilt.type = 'lowpass';
+      this.engineFilt.frequency.value = 125;
+      this.engineGain = this.ctx.createGain();
+      this.engineGain.gain.value = 0.0;
+      this.engineOsc.connect(this.engineFilt);
+      this.engineFilt.connect(this.engineGain);
+      this.engineGain.connect(this.ctx.destination);
+      this.engineOsc.start();
+    }
+    const t = this.ctx.currentTime;
+    const targetGain = active ? (0.048 + Math.min(1, speedNorm) * 0.045) : 0.0;
+    const targetFreq = 44 + Math.min(1, speedNorm) * 42;
+    const targetCutoff = 115 + Math.min(1, speedNorm) * 165;
+    this.engineGain.gain.setTargetAtTime(targetGain, t, 0.10);
+    this.engineOsc.frequency.setTargetAtTime(targetFreq, t, 0.09);
+    this.engineFilt.frequency.setTargetAtTime(targetCutoff, t, 0.10);
+  }
+
+  playBump() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(115, t);
+    osc.frequency.exponentialRampToValueAtTime(34, t + 0.14);
+    g.gain.setValueAtTime(0.18, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.17);
+  }
 }
