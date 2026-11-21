@@ -155,7 +155,7 @@ export function loadTex(name, repeatX = 1, repeatY = 1, options = {}) {
   return tex;
 }
 
-function attachNormalMap(mat, name, rx, ry, clamp) {
+export function attachNormalMap(mat, name, rx, ry, clamp) {
   if (!NORMAL_STRENGTH[name]) return;
   const apply = (nBase) => {
     const nt = nBase.clone();
@@ -347,6 +347,13 @@ export function makeSurfaceMat(texName, wMeters, hMeters, extra = {}) {
     emissiveIntensity: extra.emissiveIntensity ?? 0,
   });
   attachNormalMap(mat, texName, rx, ry, Boolean(extra.clamp));
+  mat.userData.batchTex = {
+    name: texName,
+    rx,
+    ry,
+    clamp: Boolean(extra.clamp),
+    rotation: extra.rotation || 0,
+  };
 
   if (!extra.noCache && !extra.emissive && !extra.transparent) {
     materialCache.set(cacheKey, mat);

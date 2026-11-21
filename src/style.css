@@ -600,7 +600,6 @@ html, body {
 
 .blueprint-svg {
   width: 100%;
-  aspect-ratio: 840 / 1590;
   height: auto;
   display: block;
 }

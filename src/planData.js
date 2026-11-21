@@ -832,21 +832,30 @@ const FLOOR_RF = {
 };
 
 // =========================================================================
-// NEIGHBORING HOUSE — ANNEX-40 / 隣棟・森の離れ (5.00m × 8.00m 2階建て)
+// NEIGHBORING HOUSE — ANNEX-40 / 隣棟「森の離れ」（5.00m × 8.00m 3階建＋屋根裏部屋）
 // Positioned 2.60m West of Main Tower across a lantern-lit moss courtyard:
 //   World X = -7.60 .. -2.60 m (width 5,000 mm)
 //   World Z =  1.00 ..  9.00 m (depth 8,000 mm)
-//   Local coordinates in ANNEX_FLOORS: lx ∈ [0..5.0], lz ∈ [0..8.0]
+//   4 Levels: 1F (0.00) -> 2F (2.75) -> 3F (5.50, 6 rooms + 3× 1×1.6m balconies) -> Attic (8.15..10.95, 5 rooms)
 // =========================================================================
 export const ANNEX = {
-  name: 'ANNEX-40 / 隣棟「森の離れ」（5m×8m 2階建て）',
-  subtitle: '5,000 × 8,000 mm（木造2階建・片流れ屋根｜延床 80.00 m² / 24.20坪｜母屋西2.6m隣接地）',
+  name: 'ANNEX-40 / 隣棟「森の離れ」（5m×8m 3階建＋屋根裏部屋）',
+  subtitle: '5,000 × 8,000 mm（木造3階建＋6寸勾配5室屋根裏｜3F 6室＋1×1.6mバルコニー×3｜母屋西2.6m隣接）',
   originX: -7.60,
   originZ: 1.00,
   width: 5.0,
   depth: 8.0,
-  eaveWestY: 5.45,
-  ridgeEastY: 6.35,
+  atticBaseY: 8.15,
+  atticKneewallH: 1.40,
+  atticEaveY: 9.55,
+  atticRidgeY: 10.95,
+  atticSlope: 0.56,
+  // 3 Walkable 1.00m × 1.60m Cantilevered Balconies on Annex 3F (Local & World coords)
+  balconies3F: [
+    { id: 'ABAL-1', nameJp: '北バルコニー (1.0×1.6m)', side: 'north', lx1: 2.85, lx2: 4.45, lz1: -1.00, lz2: 0.00 },
+    { id: 'ABAL-2', nameJp: '西バルコニー (1.0×1.6m)', side: 'west',  lx1: -1.00, lx2: 0.00, lz1: 5.95, lz2: 7.55 },
+    { id: 'ABAL-3', nameJp: '南バルコニー (1.0×1.6m)', side: 'south', lx1: 2.85, lx2: 4.45, lz1: 8.00, lz2: 9.00 },
+  ],
   stairLocal: {
     minX: 0.15,
     maxX: 1.15,
@@ -865,32 +874,41 @@ export const ANNEX = {
     x: [
       { id: 'AX1', pos: 0.075, label: '0' },
       { id: 'AX2', pos: 1.200, label: '1,125' },
-      { id: 'AX3', pos: 2.800, label: '2,725' },
+      { id: 'AX3', pos: 2.200, label: '2,125' },
       { id: 'AX4', pos: 4.925, label: '4,850' },
     ],
     z: [
       { id: 'AY1', pos: 0.075, label: '0' },
-      { id: 'AY2', pos: 1.700, label: '1,625' },
+      { id: 'AY2', pos: 1.500, label: '1,425' },
       { id: 'AY3', pos: 2.250, label: '2,175' },
-      { id: 'AY4', pos: 4.000, label: '3,925' },
-      { id: 'AY5', pos: 5.050, label: '4,975' },
-      { id: 'AY6', pos: 7.925, label: '7,850' },
+      { id: 'AY4', pos: 3.600, label: '3,525' },
+      { id: 'AY5', pos: 5.000, label: '4,925' },
+      { id: 'AY6', pos: 5.700, label: '5,625' },
+      { id: 'AY7', pos: 7.925, label: '7,850' },
     ],
   },
   columns: [
-    [0.075, 0.075], [2.800, 0.075], [4.925, 0.075],
-    [0.075, 2.250], [1.200, 2.250], [2.800, 2.250], [4.925, 2.250],
-    [0.075, 5.000], [1.200, 5.000], [2.800, 5.000], [4.925, 5.000],
-    [0.075, 7.925], [2.800, 7.925], [4.925, 7.925],
+    [0.075, 0.075], [2.200, 0.075], [4.925, 0.075],
+    [0.075, 2.250], [1.200, 2.250], [2.200, 2.250], [4.925, 2.250],
+    [0.075, 5.000], [1.200, 5.000], [2.200, 5.000], [4.925, 5.000],
+    [0.075, 7.925], [2.400, 7.925], [4.925, 7.925],
   ],
 };
+
+/**
+ * Exact interior gable ceiling height at local X in Annex Attic (Y = 8.15..10.95m).
+ */
+export function getAnnexAtticCeilingY(lx) {
+  const distFromCenter = Math.abs(lx - ANNEX.width / 2);
+  return Math.max(ANNEX.atticEaveY, ANNEX.atticRidgeY - distFromCenter * ANNEX.atticSlope);
+}
 
 const ANNEX_1F = {
   index: 6,
   physicalFloor: 1,
   building: 'annex',
   code: '隣棟1F',
-  titleJp: '隣棟（5m×8m 2階建）1階 平面詳細図',
+  titleJp: '隣棟（5m×8m 3階建＋屋根裏）1階 平面詳細図',
   subtitle: '土間玄関・北アトリエ・シャワー洗面WC・森のカフェLDK・STA1直階段（母屋西2.6m隣接）',
   baseY: 0.0,
   ceilingH: 2.50,
@@ -963,7 +981,6 @@ const ANNEX_1F = {
         { id: 'WA1-4', type: 'window', pos: 5.45, width: 1.45, height: 1.45, sill: 0.72, label: 'WA1-4 中庭・母屋ビュー窓' },
       ],
     },
-    // Annex 1F Interior (non-overlapping corner joints — zero z-fighting!)
     { id: 'WA1_ST_E', axis: 'v', x1: 1.15, z1: 2.20, x2: 1.25, z2: 4.95, kind: 'int', texA: 'concrete_cedar_form', texB: 'concrete_cedar_form', openings: [] },
     { id: 'WA1_ST_N', axis: 'h', x1: 0.15, z1: 2.20, x2: 1.15, z2: 2.30, kind: 'int', texA: 'concrete_cedar_form', texB: 'concrete_pcon', openings: [] },
     { id: 'WA1_GEN_S', axis: 'h', x1: 2.85, z1: 1.65, x2: 4.85, z2: 1.75, kind: 'int', texA: 'wallpaper_white', texB: 'tile_emerald_gloss', openings: [] },
@@ -1009,42 +1026,42 @@ const ANNEX_2F = {
   physicalFloor: 2,
   building: 'annex',
   code: '隣棟2F',
-  titleJp: '隣棟（5m×8m 2階建）2階 平面詳細図',
-  subtitle: '北書庫ホール・鉄柵階段吹抜・東和モダン畳客室・南森見主寝室（片流れ勾配天井）',
+  titleJp: '隣棟（5m×8m 3階建＋屋根裏）2階 平面詳細図',
+  subtitle: '北書庫ホール・STA2階段前室・東和モダン畳客室・南森見主寝室（3Fへ連続階段接続）',
   baseY: 2.75,
-  ceilingH: 2.45,
-  slabTopY: 5.45,
+  ceilingH: 2.50,
+  slabTopY: 5.50,
   floorLabel: 'A2FL+2750',
   width: 5.0,
   depth: 8.0,
   rooms: [
     {
       id: 'a2_library', code: 'A201', building: 'annex', floor: 2, nameJp: '離れ2F 北書庫・階段ホール', nameEn: 'Annex 2F Library Hall',
-      x: 0.15, z: 0.15, w: 4.70, d: 2.10, area: 9.87, jo: 6.09, fl: 'A2FL±0', ch: 'CH2450',
+      x: 0.15, z: 0.15, w: 4.70, d: 2.10, area: 9.87, jo: 6.09, fl: 'A2FL±0', ch: 'CH2500',
       floorTex: 'parquet_oak', floorName: 'オーク寄木パーケット',
       wallName: '木縦格子＋珪藻土ベージュ＋造作本棚', tint: '#f0e2ca', labelPos: [2.65, 1.15],
       notes: '1Fから上がる開放ライブラリーホール。北側の老杉林を望む読書ベンチ',
     },
     {
-      id: 'a2_corridor', code: 'A202', building: 'annex', floor: 2, nameJp: '離れ2F 中央廊下・鉄柵吹抜', nameEn: 'Annex 2F Corridor',
-      x: 1.25, z: 2.25, w: 1.20, d: 2.80, area: 3.36, jo: 2.07, fl: 'A2FL±0', ch: 'CH2450',
+      id: 'a2_corridor', code: 'A202', building: 'annex', floor: 2, nameJp: '離れ2F 階段ギャラリー前室', nameEn: 'Annex 2F Corridor',
+      x: 1.25, z: 2.25, w: 1.20, d: 3.30, area: 4.56, jo: 2.81, fl: 'A2FL±0', ch: 'CH2500',
       floorTex: 'parquet_oak', floorName: 'オーク寄木パーケット',
-      wallName: 'アイアン安全柵（西階段吹抜）＋白クロス', tint: '#f3e8d5', labelPos: [1.85, 3.65],
-      notes: '階段吹抜越しに1Fカフェ空間の気配を感じる明るい2F廊下',
+      wallName: '杉板RC階段壁＋3F直階段 STA2 昇降口', tint: '#f3e8d5', labelPos: [1.85, 3.85],
+      notes: '南側前室からSTA2直階段で隣棟3F（6室＋3バルコニー）へ連続昇降',
     },
     {
       id: 'a2_tatami', code: 'A203', building: 'annex', floor: 2, nameJp: '離れ2F 和モダン畳客室', nameEn: 'Annex 2F Tatami Room',
-      x: 2.55, z: 2.35, w: 2.30, d: 2.70, area: 6.21, jo: 3.83, fl: 'A2FL±0', ch: 'CH2450',
+      x: 2.55, z: 2.35, w: 2.30, d: 3.20, area: 7.36, jo: 4.54, fl: 'A2FL±0', ch: 'CH2500',
       floorTex: 'tatami_ryukyu', floorName: '琉球半帖畳',
-      wallName: 'セージグリーン漆喰＋障子引戸(DA-3)', tint: '#dce6d4', labelPos: [3.70, 3.70],
+      wallName: 'セージグリーン漆喰＋障子引戸(DA-3)', tint: '#dce6d4', labelPos: [3.70, 3.90],
       notes: '東中庭窓から母屋4階建の灯りを望む静謐な畳ゲスト室',
     },
     {
       id: 'a2_bedroom', code: 'A204', building: 'annex', floor: 2, nameJp: '離れ2F 森見主寝室', nameEn: 'Annex 2F Master Bedroom',
-      x: 0.15, z: 5.15, w: 4.70, d: 2.70, area: 12.69, jo: 7.83, fl: 'A2FL±0', ch: 'CH2450',
+      x: 0.15, z: 5.65, w: 4.70, d: 2.20, area: 10.34, jo: 6.38, fl: 'A2FL±0', ch: 'CH2500',
       floorTex: 'wood_floor', floorName: 'オーク複合フローリング＋ラグ',
-      wallName: 'レトロ花柄アクセント壁＋木製腰壁', tint: '#eee1d1', labelPos: [2.50, 6.50],
-      notes: '7.8帖の離れ主寝室。クイーンベッド・造作収納・南西2面老杉森ビュー',
+      wallName: 'レトロ花柄アクセント壁＋木製腰壁', tint: '#eee1d1', labelPos: [2.50, 6.75],
+      notes: '6.4帖の離れ主寝室。クイーンベッド・造作収納・南西2面老杉森ビュー',
     },
   ],
   walls: [
@@ -1063,81 +1080,565 @@ const ANNEX_2F = {
     {
       id: 'WA2_W', axis: 'v', x1: 0, z1: 0.15, x2: 0.15, z2: 7.85, kind: 'ext', extTex: 'yakisugi_deep', intTex: 'wainscot_wood',
       openings: [
-        { id: 'WA2-4', type: 'window', pos: 5.85, width: 1.15, height: 1.25, sill: 0.85, label: 'WA2-4 離れ寝室西森窓' },
+        { id: 'WA2-4', type: 'window', pos: 6.10, width: 1.15, height: 1.25, sill: 0.85, label: 'WA2-4 離れ寝室西森窓' },
       ],
     },
     {
       id: 'WA2_E', axis: 'v', x1: 4.85, z1: 0.15, x2: 5.0, z2: 7.85, kind: 'ext', extTex: 'yakisugi_deep', intTex: 'plaster_sage',
       openings: [
-        { id: 'WA2-2', type: 'window', pos: 2.95, width: 1.35, height: 1.35, sill: 0.78, label: 'WA2-2 母屋ビュー東窓' },
+        { id: 'WA2-2', type: 'window', pos: 3.15, width: 1.35, height: 1.35, sill: 0.78, label: 'WA2-2 母屋ビュー東窓' },
       ],
     },
-    // Annex 2F Interior & Stair Guardrails (non-overlapping corner joints!)
-    { id: 'WA2_RAIL_E', axis: 'v', x1: 1.15, z1: 2.25, x2: 1.24, z2: 5.04, kind: 'railing', openings: [] },
-    { id: 'WA2_RAIL_S', axis: 'h', x1: 0.15, z1: 4.95, x2: 1.24, z2: 5.04, kind: 'railing', openings: [] },
+    { id: 'WA2_ST_E', axis: 'v', x1: 1.15, z1: 2.25, x2: 1.25, z2: 4.95, kind: 'int', texA: 'concrete_cedar_form', texB: 'wallpaper_white', openings: [] },
     { id: 'WA2_TAT_N', axis: 'h', x1: 2.55, z1: 2.25, x2: 4.85, z2: 2.35, kind: 'int', texA: 'plaster_beige', texB: 'plaster_sage', openings: [] },
     {
-      id: 'WA2_TAT_W', axis: 'v', x1: 2.45, z1: 2.25, x2: 2.55, z2: 5.05, kind: 'int', texA: 'wallpaper_white', texB: 'plaster_sage',
+      id: 'WA2_TAT_W', axis: 'v', x1: 2.45, z1: 2.25, x2: 2.55, z2: 5.55, kind: 'int', texA: 'wallpaper_white', texB: 'plaster_sage',
       openings: [
         { id: 'DA-3', type: 'door_pocket', pos: 3.15, width: 0.82, height: 2.02, sill: 0, tex: 'shoji_grid', slideDir: -1, label: 'DA-3 畳客室障子引戸' },
       ],
     },
     {
-      id: 'WA2_BED_N', axis: 'h', x1: 0.15, z1: 5.05, x2: 4.85, z2: 5.15, kind: 'int', texA: 'wallpaper_white', texB: 'wallpaper_vintage_floral',
+      id: 'WA2_BED_N', axis: 'h', x1: 0.15, z1: 5.55, x2: 4.85, z2: 5.65, kind: 'int', texA: 'wallpaper_white', texB: 'wallpaper_vintage_floral',
       openings: [
-        { id: 'DA-4', type: 'door_pocket', pos: 1.40, width: 0.85, height: 2.05, sill: 0, tex: 'door_walnut', slideDir: 1, label: 'DA-4 離れ主寝室引戸' },
+        { id: 'DA-4', type: 'door_pocket', pos: 1.35, width: 0.82, height: 2.05, sill: 0, tex: 'door_walnut', slideDir: 1, label: 'DA-4 離れ主寝室引戸' },
       ],
     },
   ],
-  stairUp: null,
+  stairUp: { id: 'STA2', label: 'UP 隣棟3Fへ (13段)', dir: 'north' },
   stairDown: { id: 'STA1', label: 'DN 隣棟1Fへ', dir: 'south' },
   lighting: [
     { type: 'DL', x: 2.50, z: 1.15, label: 'DL-A201 書庫ホール灯' },
-    { type: 'LN', x: 3.70, z: 3.70, label: 'LN-A202 畳客室和紙灯' },
-    { type: 'BL', x: 2.50, z: 6.45, label: 'BL-A203 離れ寝室間接灯' },
+    { type: 'LN', x: 3.70, z: 3.90, label: 'LN-A202 畳客室和紙灯' },
+    { type: 'BL', x: 2.50, z: 6.75, label: 'BL-A203 離れ寝室間接灯' },
   ],
   switches: [
     { x: 1.32, z: 2.12, label: 'SWA21' },
-    { x: 1.32, z: 5.24, label: 'SWA22' },
+    { x: 1.32, z: 5.45, label: 'SWA22' },
   ],
   outlets: [
     { x: 4.70, z: 1.15, label: '書庫2P' },
-    { x: 4.70, z: 6.45, label: 'USB/2P' },
+    { x: 4.70, z: 6.75, label: 'USB/2P' },
   ],
   plumbing: [
     { kind: 'vent', x: 3.70, z: 2.65, label: '24h換気' },
   ],
   flowPaths: [
-    { kind: 'entry', pts: [[0.65, 2.05], [1.85, 1.75], [1.85, 5.75]] },
+    { kind: 'entry', pts: [[0.65, 2.05], [1.85, 1.75], [1.85, 5.25], [0.65, 5.25], [0.65, 2.55]] },
     { kind: 'work', pts: [[1.85, 3.55], [3.55, 3.55]] },
   ],
 };
 
+// =========================================================================
+// ANNEX 3F — 6 ROOMS + 3× (1.00m × 1.60m) WALKABLE BALCONIES (A3FL+5,500)
+// =========================================================================
+const ANNEX_3F = {
+  index: 8,
+  physicalFloor: 3,
+  building: 'annex',
+  code: '隣棟3F',
+  titleJp: '隣棟（5m×8m）3階 平面詳細図（6室＋1m×1.6mバルコニー×3）',
+  subtitle: '全室引戸6部屋＋北・西・南 3方向 1,000×1,600mm 樹冠バルコニー＋屋根裏直階段 STA3',
+  baseY: 5.50,
+  ceilingH: 2.40,
+  slabTopY: 8.15,
+  floorLabel: 'A3FL+5500',
+  width: 5.0,
+  depth: 8.0,
+  hasAnnexBalconies: true,
+  rooms: [
+    {
+      id: 'a3_study', code: 'A301', building: 'annex', floor: 3, nameJp: '① 北西・ミニ書斎室', nameEn: '3F NW Study',
+      x: 0.15, z: 0.15, w: 2.00, d: 1.30, area: 2.60, jo: 1.60, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'carpet_charcoal_tile', floorName: 'チャコールタイルカーペット',
+      wallName: '木縦格子＋白漆喰・集中デスク', tint: '#dcdad5', labelPos: [1.15, 0.80],
+      notes: '北森を見下ろす静かな独立ワークスペース（引戸 DA3-1）',
+    },
+    {
+      id: 'a3_guest', code: 'A302', building: 'annex', floor: 3, nameJp: '② 北東・フォレストゲスト室', nameEn: '3F NE Guest Room',
+      x: 2.25, z: 0.15, w: 2.60, d: 2.00, area: 5.20, jo: 3.21, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'wood_floor', floorName: 'ライトオーク複合床',
+      wallName: 'トラバーチン調石壁＋北バルコニー大開口', tint: '#f2e8d9', labelPos: [3.55, 1.15],
+      notes: '北バルコニー（1.0×1.6m）へガラス引戸 DA3-B1 で直接出られるゲスト個室',
+    },
+    {
+      id: 'a3_library', code: 'A303', building: 'annex', floor: 3, nameJp: '③ 東中・樹冠書庫ルーム', nameEn: '3F East Library',
+      x: 2.25, z: 2.25, w: 2.60, d: 1.30, area: 3.38, jo: 2.09, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'parquet_oak', floorName: 'オーク寄木パーケット',
+      wallName: '造作書棚＋白パネル＋東中庭ビュー窓', tint: '#ece6dc', labelPos: [3.55, 2.90],
+      notes: '壁面造作書棚と読書スツールを備えた東向きプライベート書庫',
+    },
+    {
+      id: 'a3_tea', code: 'A304', building: 'annex', floor: 3, nameJp: '④ 東・茶小間＆ドレス室', nameEn: '3F East Tea & Dressing',
+      x: 2.25, z: 3.65, w: 2.60, d: 1.30, area: 3.38, jo: 2.09, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'tatami_ryukyu', floorName: '琉球半帖畳',
+      wallName: 'セージ漆喰＋造作ドレッサー＋母屋ビュー窓', tint: '#dce6d4', labelPos: [3.55, 4.30],
+      notes: '琉球畳敷きの静謐な茶小間兼パウダールーム',
+    },
+    {
+      id: 'a3_atelier', code: 'A305', building: 'annex', floor: 3, nameJp: '⑤ 南西・森のアトリエ室', nameEn: '3F SW Forest Atelier',
+      x: 0.15, z: 5.75, w: 2.20, d: 2.10, area: 4.62, jo: 2.85, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'wood_walnut_floor', floorName: 'ウォールナット床',
+      wallName: '赤煉瓦アクセント＋西バルコニー掃出窓', tint: '#e8dccb', labelPos: [1.25, 6.80],
+      notes: '西バルコニー（1.0×1.6m）へガラス引戸 DA3-B2 で直結する樹冠アトリエ',
+    },
+    {
+      id: 'a3_salon', code: 'A306', building: 'annex', floor: 3, nameJp: '⑥ 南東・スカイサロン室', nameEn: '3F SE Sky Salon',
+      x: 2.45, z: 5.75, w: 2.40, d: 2.10, area: 5.04, jo: 3.11, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'wood_floor', floorName: 'ライトオーク＋ラグ',
+      wallName: 'クリーム煉瓦＋南バルコニー大開口', tint: '#f5ead6', labelPos: [3.65, 6.80],
+      notes: '南バルコニー（1.0×1.6m）へガラス引戸 DA3-B3 で直結する展望サロン',
+    },
+    {
+      id: 'a3_hall', code: 'A300', building: 'annex', floor: 3, nameJp: '3F 集中ギャラリー廊下', nameEn: '3F Central Spine',
+      x: 1.25, z: 1.55, w: 0.90, d: 4.10, area: 4.82, jo: 2.98, fl: 'A3FL±0', ch: 'CH2400',
+      floorTex: 'wood_floor', floorName: 'ライトオーク床',
+      wallName: '白漆喰＋STA3屋根裏階段口', tint: '#f4ece0', labelPos: [1.70, 3.60],
+      notes: '全6室と屋根裏階段 STA3 を最短距離で繋ぐT字集中廊下',
+    },
+    {
+      id: 'a3_bal_n', code: 'ABAL-1', building: 'annex', floor: 3, nameJp: '北バルコニー (1×1.6m)', nameEn: 'North Balcony 1×1.6m',
+      x: 2.85, z: -1.00, w: 1.60, d: 1.00, area: 1.60, jo: 0.99, fl: 'A3FL-40', ch: '屋外',
+      floorTex: 'wood_deck', floorName: '耐候ウッドデッキ',
+      wallName: '黒アイアン＋強化ガラス手摺 H1,100', tint: '#e4d5be', labelPos: [3.65, -0.50],
+      notes: '1,000×1,600mm 北樹冠バルコニー（A302より直結）',
+    },
+    {
+      id: 'a3_bal_w', code: 'ABAL-2', building: 'annex', floor: 3, nameJp: '西バルコニー (1×1.6m)', nameEn: 'West Balcony 1×1.6m',
+      x: -1.00, z: 5.95, w: 1.00, d: 1.60, area: 1.60, jo: 0.99, fl: 'A3FL-40', ch: '屋外',
+      floorTex: 'wood_deck', floorName: '耐候ウッドデッキ',
+      wallName: '黒アイアン＋強化ガラス手摺 H1,100', tint: '#e4d5be', labelPos: [-0.50, 6.75],
+      notes: '1,000×1,600mm 西老杉森バルコニー（A305より直結）',
+    },
+    {
+      id: 'a3_bal_s', code: 'ABAL-3', building: 'annex', floor: 3, nameJp: '南バルコニー (1×1.6m)', nameEn: 'South Balcony 1×1.6m',
+      x: 2.85, z: 8.00, w: 1.60, d: 1.00, area: 1.60, jo: 0.99, fl: 'A3FL-40', ch: '屋外',
+      floorTex: 'wood_deck', floorName: '耐候ウッドデッキ',
+      wallName: '黒アイアン＋強化ガラス手摺 H1,100', tint: '#e4d5be', labelPos: [3.65, 8.50],
+      notes: '1,000×1,600mm 南樹冠バルコニー（A306より直結）',
+    },
+  ],
+  walls: [
+    {
+      id: 'WA3_N', axis: 'h', x1: 0, z1: 0, x2: 5.0, z2: 0.15, kind: 'ext', extTex: 'shikkui_white', intTex: 'travertine',
+      openings: [
+        { id: 'WA3-1', type: 'window', pos: 0.55, width: 1.10, height: 1.20, sill: 0.78, label: 'WA3-1 北西書斎窓' },
+        { id: 'DA3-B1', type: 'door_pocket', pos: 3.15, width: 0.96, height: 2.02, sill: 0, tex: 'door_glass_white', slideDir: -1, label: 'DA3-B1 北バルコニー引戸' },
+      ],
+    },
+    {
+      id: 'WA3_S', axis: 'h', x1: 0, z1: 7.85, x2: 5.0, z2: 8.0, kind: 'ext', extTex: 'shikkui_white', intTex: 'brick_cream',
+      openings: [
+        { id: 'WA3-5', type: 'window', pos: 0.55, width: 1.35, height: 1.35, sill: 0.72, label: 'WA3-5 アトリエ南窓' },
+        { id: 'DA3-B3', type: 'door_pocket', pos: 3.15, width: 0.96, height: 2.02, sill: 0, tex: 'door_glass_white', slideDir: -1, label: 'DA3-B3 南バルコニー引戸' },
+      ],
+    },
+    {
+      id: 'WA3_W', axis: 'v', x1: 0, z1: 0.15, x2: 0.15, z2: 7.85, kind: 'ext', extTex: 'yakisugi_deep', intTex: 'brick_red_classic',
+      openings: [
+        { id: 'WA3-2', type: 'window_high', pos: 3.00, width: 1.10, height: 0.70, sill: 1.55, label: 'WA3-2 3F階段高窓' },
+        { id: 'DA3-B2', type: 'door_pocket', pos: 6.25, width: 0.96, height: 2.02, sill: 0, tex: 'door_glass_white', slideDir: -1, label: 'DA3-B2 西バルコニー引戸' },
+      ],
+    },
+    {
+      id: 'WA3_E', axis: 'v', x1: 4.85, z1: 0.15, x2: 5.0, z2: 7.85, kind: 'ext', extTex: 'yakisugi_deep', intTex: 'plaster_sage',
+      openings: [
+        { id: 'WA3-3', type: 'window', pos: 2.55, width: 0.80, height: 1.15, sill: 0.80, label: 'WA3-3 書庫東中庭窓' },
+        { id: 'WA3-4', type: 'window', pos: 3.95, width: 0.80, height: 1.15, sill: 0.80, label: 'WA3-4 茶小間東中庭窓' },
+        { id: 'WA3-6', type: 'window', pos: 5.10, width: 0.50, height: 1.15, sill: 0.80, label: 'WA3-6 廊下東小窓' },
+      ],
+    },
+    // Interior Partition Walls (ALL Pocket Doors, zero overlapping corners!)
+    { id: 'WA3_ST_E', axis: 'v', x1: 1.15, z1: 2.25, x2: 1.25, z2: 4.95, kind: 'int', texA: 'concrete_cedar_form', texB: 'wallpaper_white', openings: [] },
+    {
+      id: 'WA3_R1_S', axis: 'h', x1: 0.15, z1: 1.45, x2: 2.15, z2: 1.55, kind: 'int', texA: 'wood_slats', texB: 'wallpaper_white',
+      openings: [
+        { id: 'DA3-1', type: 'door_pocket', pos: 1.30, width: 0.74, height: 1.98, sill: 0, tex: 'door_oak', slideDir: -1, label: 'DA3-1 北西書斎引戸' },
+      ],
+    },
+    {
+      id: 'WA3_MID_V', axis: 'v', x1: 2.15, z1: 0.15, x2: 2.25, z2: 4.95, kind: 'int', texA: 'wallpaper_white', texB: 'travertine',
+      openings: [
+        { id: 'DA3-2', type: 'door_pocket', pos: 1.32, width: 0.72, height: 1.98, sill: 0, tex: 'door_oak', slideDir: -1, label: 'DA3-2 ゲスト室引戸' },
+        { id: 'DA3-3', type: 'door_pocket', pos: 2.58, width: 0.72, height: 1.98, sill: 0, tex: 'door_white', slideDir: -1, label: 'DA3-3 書庫ルーム引戸' },
+        { id: 'DA3-4', type: 'door_pocket', pos: 3.98, width: 0.72, height: 1.98, sill: 0, tex: 'shoji_grid', slideDir: -1, label: 'DA3-4 茶小間障子引戸' },
+      ],
+    },
+    { id: 'WA3_E_DIV1', axis: 'h', x1: 2.25, z1: 2.15, x2: 4.85, z2: 2.25, kind: 'int', texA: 'travertine', texB: 'panel_white_vert', openings: [] },
+    { id: 'WA3_E_DIV2', axis: 'h', x1: 2.25, z1: 3.55, x2: 4.85, z2: 3.65, kind: 'int', texA: 'panel_white_vert', texB: 'plaster_sage', openings: [] },
+    { id: 'WA3_E_DIV3', axis: 'h', x1: 2.15, z1: 4.95, x2: 4.85, z2: 5.05, kind: 'int', texA: 'plaster_sage', texB: 'wallpaper_white', openings: [] },
+    {
+      id: 'WA3_S_N', axis: 'h', x1: 0.15, z1: 5.65, x2: 4.85, z2: 5.75, kind: 'int', texA: 'wallpaper_white', texB: 'brick_cream',
+      openings: [
+        { id: 'DA3-5', type: 'door_pocket', pos: 1.30, width: 0.76, height: 1.98, sill: 0, tex: 'door_walnut', slideDir: -1, label: 'DA3-5 森アトリエ引戸' },
+        { id: 'DA3-6', type: 'door_pocket', pos: 2.60, width: 0.76, height: 1.98, sill: 0, tex: 'door_glass_white', slideDir: 1, label: 'DA3-6 スカイサロン引戸' },
+      ],
+    },
+    { id: 'WA3_S_MID', axis: 'v', x1: 2.35, z1: 5.75, x2: 2.45, z2: 7.85, kind: 'int', texA: 'wainscot_wood', texB: 'brick_cream', openings: [] },
+  ],
+  stairUp: { id: 'STA3', label: 'UP 隣棟屋根裏へ (13段)', dir: 'north' },
+  stairDown: { id: 'STA2', label: 'DN 隣棟2Fへ', dir: 'south' },
+  lighting: [
+    { type: 'DL', x: 1.15, z: 0.80, label: 'DL-A301 北西書斎灯' },
+    { type: 'DL', x: 3.55, z: 1.15, label: 'DL-A302 ゲスト室灯' },
+    { type: 'CL', x: 3.55, z: 2.90, label: 'CL-A303 書庫灯' },
+    { type: 'LN', x: 3.55, z: 4.30, label: 'LN-A304 茶小間灯' },
+    { type: 'PD', x: 1.25, z: 6.80, label: 'PD-A305 アトリエ灯' },
+    { type: 'PD', x: 3.65, z: 6.80, label: 'PD-A306 サロン灯' },
+  ],
+  switches: [
+    { x: 1.25, z: 1.62, label: 'SWA31' },
+    { x: 2.08, z: 5.15, label: 'SWA32' },
+  ],
+  outlets: [
+    { x: 0.25, z: 0.80, label: 'PC 2P' },
+    { x: 4.70, z: 1.15, label: 'USB/2P' },
+    { x: 0.25, z: 7.40, label: '2P' },
+    { x: 4.70, z: 7.40, label: 'WP屋外' },
+  ],
+  plumbing: [
+    { kind: 'vent', x: 3.55, z: 3.85, label: '24h換気' },
+  ],
+  flowPaths: [
+    { kind: 'entry', pts: [[0.65, 2.05], [1.70, 1.85], [1.70, 5.35], [3.65, 5.35], [3.65, 8.45]] },
+    { kind: 'work', pts: [[1.70, 5.35], [1.25, 6.75], [-0.45, 6.75]] },
+    { kind: 'priv', pts: [[1.70, 1.85], [3.65, 1.45], [3.65, -0.45]] },
+  ],
+};
+
+// =========================================================================
+// ANNEX ATTIC / 隣棟 屋根裏部屋 — 5 DISTINCT ROOMS UNDER 6寸 GABLE ROOF (ARFL+8,150)
+// =========================================================================
+const ANNEX_ATTIC = {
+  index: 9,
+  physicalFloor: 4,
+  building: 'annex',
+  code: '隣棟屋根裏',
+  titleJp: '隣棟（5m×8m）屋根裏部屋 平面詳細図（全5部屋・6寸勾配）',
+  subtitle: '6寸勾配切妻小屋裏（軒1,400〜棟2,800）・鉄柵吹抜回廊＋独立5部屋（全引戸）',
+  baseY: 8.15,
+  ceilingH: 2.80,
+  slabTopY: 10.95,
+  floorLabel: 'ARFL+8150',
+  width: 5.0,
+  depth: 8.0,
+  isAttic: true,
+  rooms: [
+    {
+      id: 'ar_nook', code: 'AR01', building: 'annex', floor: 4, nameJp: '① 小屋裏・北西星見ノック', nameEn: 'Attic NW Stargaze Nook',
+      x: 0.15, z: 0.15, w: 2.00, d: 1.20, area: 2.40, jo: 1.48, fl: 'ARFL±0', ch: 'CH1400〜2600',
+      floorTex: 'wood_scratched_cedar', floorName: '古杉板フローリング',
+      wallName: '構造合板勾配天井＋北切妻展望窓', tint: '#e4d8c4', labelPos: [1.15, 0.75],
+      notes: '北切妻窓から樹冠と夜空を眺める静かな小屋裏小室',
+    },
+    {
+      id: 'ar_archive', code: 'AR02', building: 'annex', floor: 4, nameJp: '② 小屋裏・北東アーカイブ室', nameEn: 'Attic NE Archive Room',
+      x: 2.25, z: 0.15, w: 2.60, d: 2.40, area: 6.24, jo: 3.85, fl: 'ARFL±0', ch: 'CH1400〜2800',
+      floorTex: 'wood_scratched_cedar', floorName: '古杉板フローリング',
+      wallName: '木箱・麻袋・古書シェルフ＋ラスティック腰板', tint: '#e2d5bf', labelPos: [3.55, 1.35],
+      notes: '思い出の木箱や蔵書を収める小屋裏アーカイブ室',
+    },
+    {
+      id: 'ar_hobby', code: 'AR03', building: 'annex', floor: 4, nameJp: '③ 小屋裏・東中ホビールーム', nameEn: 'Attic East Hobby Room',
+      x: 2.25, z: 2.65, w: 2.60, d: 2.30, area: 5.98, jo: 3.69, fl: 'ARFL±0', ch: 'CH1400〜2800',
+      floorTex: 'parquet_oak', floorName: 'オーク寄木パーケット',
+      wallName: '有孔ボード工作壁＋作業デスク', tint: '#e8decb', labelPos: [3.55, 3.80],
+      notes: 'クラフト・模型製作に没頭できる屋根裏ホビールーム',
+    },
+    {
+      id: 'ar_books', code: 'AR04', building: 'annex', floor: 4, nameJp: '④ 小屋裏・南西古書読書室', nameEn: 'Attic SW Reading Room',
+      x: 0.15, z: 5.65, w: 2.20, d: 2.20, area: 4.84, jo: 2.99, fl: 'ARFL±0', ch: 'CH1400〜2800',
+      floorTex: 'wood_walnut_floor', floorName: 'ウォールナット床',
+      wallName: 'レトロ花柄妻壁＋壁面書棚＋読書座卓', tint: '#e6d8c5', labelPos: [1.25, 6.75],
+      notes: '南切妻窓の光が差し込む秘密の古書読書室',
+    },
+    {
+      id: 'ar_tatami', code: 'AR05', building: 'annex', floor: 4, nameJp: '⑤ 小屋裏・南東秘密の畳室', nameEn: 'Attic SE Secret Tatami',
+      x: 2.45, z: 5.65, w: 2.40, d: 2.20, area: 5.28, jo: 3.26, fl: 'ARFL±0', ch: 'CH1400〜2800',
+      floorTex: 'tatami_aged', floorName: '古畳敷き',
+      wallName: 'レトロ花柄妻壁＋和紙ランタン＋座布団', tint: '#dfe4ca', labelPos: [3.65, 6.75],
+      notes: '古畳と和紙灯りに包まれた屋根裏最奥の隠れ家和室',
+    },
+    {
+      id: 'ar_hall', code: 'AR00', building: 'annex', floor: 4, nameJp: '屋根裏 鉄柵吹抜回廊', nameEn: 'Attic Hatch Gallery',
+      x: 1.25, z: 1.45, w: 0.90, d: 4.10, area: 4.75, jo: 2.93, fl: 'ARFL±0', ch: 'CH2100〜2800',
+      floorTex: 'rubber_black_stud', floorName: '黒スタッド防滑ゴム床',
+      wallName: 'アイアン安全柵（STA3吹抜）＋現し棟木', tint: '#d8d7d3', labelPos: [1.70, 3.55],
+      notes: '全5つの屋根裏個室へ繋がる棟木直下の中央回廊',
+    },
+  ],
+  walls: [
+    {
+      id: 'WAR_N', axis: 'h', x1: 0, z1: 0, x2: 5.0, z2: 0.15, kind: 'ext', extTex: 'yakisugi_deep', intTex: 'wood_scratched_cedar',
+      openings: [
+        { id: 'WAR-1', type: 'window', pos: 1.85, width: 1.30, height: 1.25, sill: 0.62, label: 'WAR-1 隣棟北切妻窓' },
+      ],
+    },
+    {
+      id: 'WAR_S', axis: 'h', x1: 0, z1: 7.85, x2: 5.0, z2: 8.0, kind: 'ext', extTex: 'yakisugi_deep', intTex: 'wallpaper_vintage_floral',
+      openings: [
+        { id: 'WAR-2', type: 'window', pos: 1.80, width: 1.40, height: 1.30, sill: 0.60, label: 'WAR-2 隣棟南切妻窓' },
+      ],
+    },
+    { id: 'WAR_W', axis: 'v', x1: 0, z1: 0.15, x2: 0.15, z2: 7.85, kind: 'ext_knee', extTex: 'yakisugi_deep', intTex: 'wainscot_rustic', openings: [] },
+    { id: 'WAR_E', axis: 'v', x1: 4.85, z1: 0.15, x2: 5.0, z2: 7.85, kind: 'ext_knee', extTex: 'yakisugi_deep', intTex: 'wainscot_rustic', openings: [] },
+    { id: 'WAR_RAIL_E', axis: 'v', x1: 1.15, z1: 2.25, x2: 1.24, z2: 5.04, kind: 'railing', openings: [] },
+    { id: 'WAR_RAIL_S', axis: 'h', x1: 0.15, z1: 4.95, x2: 1.24, z2: 5.04, kind: 'railing', openings: [] },
+    // 5-Room Attic Interior Walls (built clipped cleanly beneath 6寸 gable roof!)
+    {
+      id: 'WAR_R1_S', axis: 'h', x1: 0.15, z1: 1.35, x2: 2.15, z2: 1.45, kind: 'int', texA: 'wood_scratched_cedar', texB: 'wainscot_rustic',
+      openings: [
+        { id: 'DAR-1', type: 'door_pocket', pos: 1.30, width: 0.72, height: 1.74, sill: 0, tex: 'door_oak', slideDir: -1, label: 'DAR-1 星見ノック引戸' },
+      ],
+    },
+    {
+      id: 'WAR_MID_V', axis: 'v', x1: 2.15, z1: 0.15, x2: 2.25, z2: 4.95, kind: 'int', texA: 'wainscot_rustic', texB: 'wood_scratched_cedar',
+      openings: [
+        { id: 'DAR-2', type: 'door_pocket', pos: 1.55, width: 0.72, height: 1.74, sill: 0, tex: 'door_oak', slideDir: -1, label: 'DAR-2 アーカイブ室引戸' },
+        { id: 'DAR-3', type: 'door_pocket', pos: 3.45, width: 0.72, height: 1.74, sill: 0, tex: 'door_oak', slideDir: -1, label: 'DAR-3 ホビー室引戸' },
+      ],
+    },
+    { id: 'WAR_E_DIV1', axis: 'h', x1: 2.25, z1: 2.55, x2: 4.85, z2: 2.65, kind: 'int', texA: 'wood_scratched_cedar', texB: 'pegboard_wood', openings: [] },
+    { id: 'WAR_E_DIV2', axis: 'h', x1: 2.15, z1: 4.95, x2: 4.85, z2: 5.05, kind: 'int', texA: 'pegboard_wood', texB: 'wainscot_rustic', openings: [] },
+    {
+      id: 'WAR_S_N', axis: 'h', x1: 0.15, z1: 5.55, x2: 4.85, z2: 5.65, kind: 'int', texA: 'wainscot_rustic', texB: 'wallpaper_vintage_floral',
+      openings: [
+        { id: 'DAR-4', type: 'door_pocket', pos: 1.30, width: 0.74, height: 1.74, sill: 0, tex: 'door_walnut', slideDir: -1, label: 'DAR-4 古書読書室引戸' },
+        { id: 'DAR-5', type: 'door_pocket', pos: 2.60, width: 0.74, height: 1.74, sill: 0, tex: 'shoji_grid', slideDir: 1, label: 'DAR-5 秘密の畳室引戸' },
+      ],
+    },
+    { id: 'WAR_S_MID', axis: 'v', x1: 2.35, z1: 5.65, x2: 2.45, z2: 7.85, kind: 'int', texA: 'wainscot_rustic', texB: 'wallpaper_vintage_floral', openings: [] },
+  ],
+  stairUp: null,
+  stairDown: { id: 'STA3', label: 'DN 隣棟3Fへ', dir: 'south' },
+  lighting: [
+    { type: 'BL', x: 1.70, z: 1.70, label: 'BL-AR01 小屋裏北灯' },
+    { type: 'PD', x: 3.55, z: 3.80, label: 'PD-AR02 ホビー灯' },
+    { type: 'LN', x: 2.50, z: 6.75, label: 'LN-AR03 南屋根裏ランタン' },
+  ],
+  switches: [
+    { x: 1.32, z: 2.15, label: 'SWAR1' },
+    { x: 2.05, z: 5.42, label: 'SWAR2' },
+  ],
+  outlets: [
+    { x: 3.55, z: 2.75, label: '工作2P' },
+    { x: 1.25, z: 7.65, label: '読書2P' },
+  ],
+  plumbing: [
+    { kind: 'vent', x: 2.50, z: 0.40, label: '棟換気(北)' },
+    { kind: 'vent', x: 2.50, z: 7.60, label: '棟換気(南)' },
+  ],
+  flowPaths: [
+    { kind: 'entry', pts: [[0.65, 2.05], [1.70, 1.85], [1.70, 5.30], [3.35, 5.30], [3.35, 6.65]] },
+    { kind: 'work', pts: [[1.70, 3.80], [3.55, 3.80]] },
+  ],
+};
+
+// =========================================================================
+// 3RD BUILDING — STORAGE-4 / コンクリート倉庫棟 (2.00m × 2.00m 2階建・低天井・計4部屋)
+// Positioned East of Main Tower (World X = 6.60 .. 8.60 m, Z = -1.20 .. 0.80 m)
+// Low-ceiling cast-in-place grey concrete bunker (CH 1,920mm each floor, 2F at Y = 2.12m)
+// Exterior galvanized steel stair STS1 (X = 8.60..9.40, Z = 0.80 -> -1.20) + 2F catwalk landing!
+// =========================================================================
+export const STORAGE = {
+  name: 'STORAGE-4 / コンクリート倉庫棟（2m×2m 2階建・計4室）',
+  subtitle: '2,000 × 2,000 mm（低天井 CH1,920 灰色RC打放し2階建｜1F 2室＋2F 2室＝計4室｜母屋東1.6m別棟）',
+  originX: 6.60,
+  originZ: -1.20,
+  width: 2.0,
+  depth: 2.0,
+  ceilingH: 1.92,
+  floor2Y: 2.12,
+  roofTopY: 4.28,
+  stairWorld: {
+    minX: 8.60,
+    maxX: 9.40,
+    topZ: -1.20,   // North upper landing at Y=2.12m
+    bottomZ: 0.80, // South ground entry at Y=0.00m
+    treads: 11,
+  },
+  landing2FWorld: {
+    minX: 7.00,
+    maxX: 9.40,
+    minZ: -1.96,
+    maxZ: -1.20,
+  },
+  gridAxes: {
+    x: [
+      { id: 'SX1', pos: 0.05, label: '0' },
+      { id: 'SX2', pos: 1.95, label: '1,900' },
+    ],
+    z: [
+      { id: 'SY1', pos: 0.05, label: '0' },
+      { id: 'SY2', pos: 1.00, label: '950' },
+      { id: 'SY3', pos: 1.95, label: '1,900' },
+    ],
+  },
+  columns: [
+    [0.05, 0.05], [1.95, 0.05],
+    [0.05, 1.00], [1.95, 1.00],
+    [0.05, 1.95], [1.95, 1.95],
+  ],
+};
+
+const STORAGE_1F = {
+  index: 10,
+  physicalFloor: 1,
+  building: 'storage',
+  code: '倉庫1F',
+  titleJp: 'コンクリート倉庫棟（2m×2m・低天井）1階 平面詳細図',
+  subtitle: '灰色RC打放しコンクリート固め（CH1,920）・1F 倉庫2室（S101・S102）＋外階段 STS1',
+  baseY: 0.0,
+  ceilingH: 1.92,
+  slabTopY: 2.12,
+  floorLabel: 'S1FL±0',
+  width: 2.0,
+  depth: 2.0,
+  isConcreteStorage: true,
+  rooms: [
+    {
+      id: 's1_north', code: 'S101', building: 'storage', floor: 1, nameJp: '倉庫1F・北コンクリート室 (1/4)', nameEn: 'Storage 1F North',
+      x: 0.10, z: 0.10, w: 1.80, d: 0.86, area: 1.55, jo: 0.96, fl: 'S1FL±0', ch: 'CH1920',
+      floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート',
+      wallName: 'Pコン打放しコンクリート固め・重鋼製扉 DS-1', tint: '#ced2d6', labelPos: [1.00, 0.53],
+      notes: '2×2mコンクリート棟の1F北倉庫。低天井1,920mm・スチール棚＆木箱収容',
+    },
+    {
+      id: 's1_south', code: 'S102', building: 'storage', floor: 1, nameJp: '倉庫1F・南コンクリート室 (2/4)', nameEn: 'Storage 1F South',
+      x: 0.10, z: 1.04, w: 1.80, d: 0.86, area: 1.55, jo: 0.96, fl: 'S1FL±0', ch: 'CH1920',
+      floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート',
+      wallName: 'Pコン打放しコンクリート固め・鋼製引戸 DS-12', tint: '#c5cacf', labelPos: [1.00, 1.47],
+      notes: 'DS-12引戸で北室から直結する1F南倉庫。重備品・木箱・工具棚',
+    },
+  ],
+  walls: [
+    { id: 'WS1_N', axis: 'h', x1: 0, z1: 0, x2: 2.0, z2: 0.10, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    { id: 'WS1_S', axis: 'h', x1: 0, z1: 1.90, x2: 2.0, z2: 2.0, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    {
+      id: 'WS1_W', axis: 'v', x1: 0, z1: 0.10, x2: 0.10, z2: 1.90, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon',
+      openings: [
+        { id: 'DS-1', type: 'door_swing', pos: 0.18, width: 0.72, height: 1.76, sill: 0, tex: 'exterior_siding_grey', hinge: 'left', swingDir: -1, label: 'DS-1 倉庫1F鋼製扉' },
+      ],
+    },
+    {
+      id: 'WS1_E', axis: 'v', x1: 1.90, z1: 0.10, x2: 2.0, z2: 1.90, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon',
+      openings: [
+        { id: 'WS1-1', type: 'window_frosted', pos: 0.25, width: 0.55, height: 0.28, sill: 1.48, label: 'WS1-1 換気スリット窓' },
+        { id: 'WS1-2', type: 'window_frosted', pos: 1.20, width: 0.55, height: 0.28, sill: 1.48, label: 'WS1-2 換気スリット窓' },
+      ],
+    },
+    {
+      id: 'WS1_DIV', axis: 'h', x1: 0.10, z1: 0.96, x2: 1.90, z2: 1.04, kind: 'int', texA: 'concrete_pcon', texB: 'concrete_pcon',
+      openings: [
+        { id: 'DS-12', type: 'door_pocket', pos: 0.22, width: 0.70, height: 1.76, sill: 0, tex: 'exterior_siding_grey', slideDir: 1, label: 'DS-12 倉庫1F間仕切鉄引戸' },
+      ],
+    },
+  ],
+  stairUp: { id: 'STS1', label: 'UP 倉庫2Fへ (外階段)', dir: 'north' },
+  stairDown: null,
+  lighting: [
+    { type: 'BH', x: 0.95, z: 0.53, label: 'BH-S101 防湿バルクヘッド灯' },
+    { type: 'BH', x: 0.95, z: 1.47, label: 'BH-S102 防湿バルクヘッド灯' },
+  ],
+  switches: [{ x: 0.18, z: 0.88, label: 'SWS1' }],
+  outlets: [{ x: 1.82, z: 0.53, label: '防雨2P' }],
+  plumbing: [{ kind: 'vent', x: 1.80, z: 1.47, label: '排気ガラリ' }],
+  flowPaths: [
+    { kind: 'entry', pts: [[-0.45, 0.54], [0.58, 0.54], [0.58, 1.47]] },
+    { kind: 'work', pts: [[2.40, 2.00], [2.40, 0.00]] },
+  ],
+};
+
+const STORAGE_2F = {
+  index: 11,
+  physicalFloor: 2,
+  building: 'storage',
+  code: '倉庫2F',
+  titleJp: 'コンクリート倉庫棟（2m×2m・低天井）2階 平面詳細図',
+  subtitle: '灰色RC打放しコンクリート固め（CH1,920）・2F 倉庫2室（S201・S202 / 計4室完成）＋鋼製踊場',
+  baseY: 2.12,
+  ceilingH: 1.92,
+  slabTopY: 4.28,
+  floorLabel: 'S2FL+2120',
+  width: 2.0,
+  depth: 2.0,
+  isConcreteStorage: true,
+  rooms: [
+    {
+      id: 's2_north', code: 'S201', building: 'storage', floor: 2, nameJp: '倉庫2F・北コンクリート室 (3/4)', nameEn: 'Storage 2F North',
+      x: 0.10, z: 0.10, w: 1.80, d: 0.86, area: 1.55, jo: 0.96, fl: 'S2FL±0', ch: 'CH1920',
+      floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート',
+      wallName: 'Pコン打放しコンクリート固め・2F鋼製扉 DS-2', tint: '#ced2d6', labelPos: [1.00, 0.53],
+      notes: '外階段 STS1→2F鋼製踊場から入る2F北倉庫。低天井1,920mm・棚＆麻袋',
+    },
+    {
+      id: 's2_south', code: 'S202', building: 'storage', floor: 2, nameJp: '倉庫2F・南コンクリート室 (4/4)', nameEn: 'Storage 2F South',
+      x: 0.10, z: 1.04, w: 1.80, d: 0.86, area: 1.55, jo: 0.96, fl: 'S2FL±0', ch: 'CH1920',
+      floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート',
+      wallName: 'Pコン打放しコンクリート固め・鋼製引戸 DS-22', tint: '#c5cacf', labelPos: [1.00, 1.47],
+      notes: 'DS-22引戸で直結する4番目のコンクリート倉庫室。完全密閉保管室',
+    },
+  ],
+  walls: [
+    {
+      id: 'WS2_N', axis: 'h', x1: 0, z1: 0, x2: 2.0, z2: 0.10, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon',
+      openings: [
+        { id: 'DS-2', type: 'door_swing', pos: 0.55, width: 0.72, height: 1.76, sill: 0, tex: 'exterior_siding_grey', hinge: 'left', swingDir: -1, label: 'DS-2 倉庫2F鋼製扉' },
+      ],
+    },
+    { id: 'WS2_S', axis: 'h', x1: 0, z1: 1.90, x2: 2.0, z2: 2.0, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    { id: 'WS2_W', axis: 'v', x1: 0, z1: 0.10, x2: 0.10, z2: 1.90, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon', openings: [] },
+    {
+      id: 'WS2_E', axis: 'v', x1: 1.90, z1: 0.10, x2: 2.0, z2: 1.90, kind: 'ext', extTex: 'concrete_pcon', intTex: 'concrete_pcon',
+      openings: [
+        { id: 'WS2-1', type: 'window_frosted', pos: 0.25, width: 0.55, height: 0.28, sill: 1.48, label: 'WS2-1 2F換気スリット窓' },
+        { id: 'WS2-2', type: 'window_frosted', pos: 1.20, width: 0.55, height: 0.28, sill: 1.48, label: 'WS2-2 2F換気スリット窓' },
+      ],
+    },
+    {
+      id: 'WS2_DIV', axis: 'h', x1: 0.10, z1: 0.96, x2: 1.90, z2: 1.04, kind: 'int', texA: 'concrete_pcon', texB: 'concrete_pcon',
+      openings: [
+        { id: 'DS-22', type: 'door_pocket', pos: 0.22, width: 0.70, height: 1.76, sill: 0, tex: 'exterior_siding_grey', slideDir: 1, label: 'DS-22 倉庫2F間仕切鉄引戸' },
+      ],
+    },
+  ],
+  stairUp: null,
+  stairDown: { id: 'STS1', label: 'DN 倉庫1Fへ (外階段)', dir: 'south' },
+  lighting: [
+    { type: 'BH', x: 0.95, z: 0.53, label: 'BH-S201 2Fバルクヘッド灯' },
+    { type: 'BH', x: 0.95, z: 1.47, label: 'BH-S202 2Fバルクヘッド灯' },
+  ],
+  switches: [{ x: 1.36, z: 0.18, label: 'SWS2' }],
+  outlets: [{ x: 1.82, z: 0.53, label: '防雨2P' }],
+  plumbing: [{ kind: 'vent', x: 1.80, z: 1.47, label: '排気ガラリ' }],
+  flowPaths: [
+    { kind: 'entry', pts: [[2.40, -0.35], [0.91, -0.35], [0.91, 0.53], [0.58, 1.47]] },
+  ],
+};
+
 export const FLOORS = [FLOOR_B1F, FLOOR_1F, FLOOR_2F, FLOOR_3F, FLOOR_4F, FLOOR_RF];
-export const ANNEX_FLOORS = [ANNEX_1F, ANNEX_2F];
-export const BLUEPRINT_SHEETS = [...FLOORS, ...ANNEX_FLOORS];
-export const ALL_ROOMS = [...FLOORS, ...ANNEX_FLOORS].flatMap((f) => f.rooms);
+export const ANNEX_FLOORS = [ANNEX_1F, ANNEX_2F, ANNEX_3F, ANNEX_ATTIC];
+export const STORAGE_FLOORS = [STORAGE_1F, STORAGE_2F];
+export const BLUEPRINT_SHEETS = [...FLOORS, ...ANNEX_FLOORS, ...STORAGE_FLOORS];
+export const ALL_ROOMS = BLUEPRINT_SHEETS.flatMap((f) => f.rooms);
 export const ROOMS = FLOOR_1F.rooms;
 export const WALLS = FLOOR_1F.walls;
 
 export const FINISH_SCHEDULE = [
-  { floor: '外部', room: '基礎・外壁・森道・中庭', floorTex: 'paver_moss_stones', floorName: '苔石アプローチ・中庭小径・森腐葉土', wallTex: 'yakisugi_deep', wallName: '深焼杉板・漆喰・古暗煉瓦(離れ)', accentTex: 'stone_moss_wall', accentName: '苔むす石積基礎・石灯籠' },
-  { floor: 'B1F', room: '地下3×7m主空間＋倉庫3室', floorTex: 'concrete_clean', floorName: '金鏝押え灰色セメント土間', wallTex: 'concrete_pcon', wallName: '灰色RC打放擁壁 (CH2,020)', accentTex: 'metal_grate', accentName: '排水溝グレーチング・倉庫棚15基' },
-  { floor: '1F', room: '母屋 玄関・道具室・LDK', floorTex: 'wood_floor', floorName: '白テラゾー / オーク床 / 半帖畳', wallTex: 'wood_slats', wallName: '杉板RC・木縦格子・キャラメル煉瓦', accentTex: 'timber_logs', accentName: '積薪・ネイビー玄関扉' },
-  { floor: '2F', room: '母屋 書斎・浴室・主寝室', floorTex: 'wood_walnut_floor', floorName: 'ウォールナット / チャコールカーペット', wallTex: 'brick_red_classic', wallName: '赤煉瓦・エメラルド艶・珪藻土', accentTex: 'stone_wet_granite', accentName: '濡れ御影石浴室・コルク' },
-  { floor: '3F', room: '母屋 琉球畳茶室・展望バー', floorTex: 'parquet_oak', floorName: 'オーク寄木 / 琉球半帖畳', wallTex: 'plaster_sage', wallName: 'セージ漆喰・古暗煉瓦・コバルト', accentTex: 'marble_black', accentName: '黒大理石バー・和紙障子' },
-  { floor: '4F', room: '母屋 プロ監修5室＋バルコニー', floorTex: 'wood_floor', floorName: 'オーク / 寄木 / ウォールナット / デッキ', wallTex: 'travertine', wallName: 'トラバーチン・クリーム煉瓦(CH2,150)', accentTex: 'wood_deck', accentName: '1m×2m樹冠バルコニー・全引戸' },
-  { floor: '屋根裏', room: '母屋 ハッチ・保管庫・読書室', floorTex: 'tatami_aged', floorName: '黒スタッドゴム / 古杉 / 古畳', wallTex: 'plywood_attic', wallName: '合板6寸勾配天井・レトロ花柄妻壁', accentTex: 'crate_wood', accentName: '木箱・麻袋・ロープ・吊りランタン' },
-  { floor: '隣棟1F', room: '離れ(5×8m) アトリエ・カフェLDK', floorTex: 'wood_walnut_floor', floorName: '御影石土間 / 白テラゾー / ウォールナット', wallTex: 'brick_red_classic', wallName: 'PコンRC・赤煉瓦・エメラルド艶', accentTex: 'fabric_denim', accentName: 'カフェカウンター・デニムソファ' },
-  { floor: '隣棟2F', room: '離れ(5×8m) 書庫・畳客室・寝室', floorTex: 'parquet_oak', floorName: 'オーク寄木 / 琉球畳 / オーク床', wallTex: 'wallpaper_vintage_floral', wallName: 'セージ漆喰・花柄クロス・木腰壁', accentTex: 'slate_charcoal', accentName: '片流れスレート屋根・中庭ビュー' },
+  { floor: '外部', room: '基礎・外壁・森道・中庭', floorTex: 'paver_moss_stones', floorName: '苔石アプローチ・中庭小径・コンクリート歩道', wallTex: 'yakisugi_deep', wallName: '深焼杉板・漆喰・古暗煉瓦・RC打放(倉庫)', accentTex: 'stone_moss_wall', accentName: '苔むす石積基礎・石灯籠' },
+  { floor: '母屋B1F', room: '地下3×7m主空間＋倉庫3室', floorTex: 'concrete_clean', floorName: '金鏝押え灰色セメント土間', wallTex: 'concrete_pcon', wallName: '灰色RC打放擁壁 (CH2,020)', accentTex: 'metal_grate', accentName: '排水溝・倉庫棚15基' },
+  { floor: '母屋1〜3F', room: '玄関・LDK・書斎・茶室・バー', floorTex: 'wood_floor', floorName: '白テラゾー / オーク / 琉球畳', wallTex: 'wood_slats', wallName: '杉板RC・赤煉瓦・セージ漆喰', accentTex: 'marble_black', accentName: '黒大理石バー・和紙障子' },
+  { floor: '母屋4F/RF', room: 'プロ監修5室＋1×2mバルコニー・屋根裏', floorTex: 'tatami_aged', floorName: 'オーク / デッキ / 古杉 / 古畳', wallTex: 'travertine', wallName: 'トラバーチン・合板6寸勾配天井', accentTex: 'wood_deck', accentName: '1×2mバルコニー・吊りランタン' },
+  { floor: '隣棟1〜2F', room: '離れ(5×8m) カフェLDK・書庫・畳・寝室', floorTex: 'wood_walnut_floor', floorName: '御影石 / 白テラゾー / ウォールナット / 畳', wallTex: 'brick_red_classic', wallName: 'PコンRC・赤煉瓦・セージ漆喰・花柄', accentTex: 'fabric_denim', accentName: 'デニムソファ・カフェキッチン' },
+  { floor: '隣棟3F', room: '離れ3F 6室＋1×1.6mバルコニー×3', floorTex: 'parquet_oak', floorName: 'オーク寄木 / カーペット / 琉球畳 / デッキ', wallTex: 'brick_cream', wallName: 'トラバーチン・クリーム煉瓦・セージ漆喰', accentTex: 'wood_deck', accentName: '北・西・南 3方向バルコニー' },
+  { floor: '隣棟屋根裏', room: '離れ屋根裏 全5部屋（6寸勾配）', floorTex: 'wood_scratched_cedar', floorName: '古杉板 / 寄木 / 古畳 / スタッドゴム', wallTex: 'plywood_attic', wallName: '構造合板切妻勾配天井・有孔ボード', accentTex: 'crate_wood', accentName: '現し垂木・木箱・和紙ランタン' },
+  { floor: '倉庫棟1〜2F', room: '別棟2×2m 灰色RC倉庫（計4室）', floorTex: 'concrete_clean', floorName: '金鏝押え灰色コンクリート', wallTex: 'concrete_pcon', wallName: '低天井コンクリート固め (CH1,920)', accentTex: 'metal_grate', accentName: '外鉄骨階段・スチール棚・鋼製扉' },
 ];
 
 export const OPENING_SCHEDULE = [
-  { code: 'DB-1〜3', kind: '母屋 B1F 地下倉庫鉄扉', size: 'W750×H1880', spec: '低天井対応グレー防湿鋼製扉（3×7m主空間から各倉庫へ直結）' },
-  { code: 'D1-1〜D3-4', kind: '母屋 1F〜3F 玄関・建具', size: 'W750〜900×H2250', spec: 'ネイビー断熱玄関扉・室内扉・茶室障子引戸' },
-  { code: 'D4-1〜6', kind: '母屋 4F 全引戸＋バルコニー扉', size: 'W760〜1050×H1980', spec: 'プロ監修の全室引戸仕様＋1m×2mバルコニー掃出窓' },
-  { code: 'ST0〜ST4', kind: '母屋 5層積層直階段', size: 'W1000×踏面207×13段', spec: 'B1F↔1F↔2F↔3F↔4F↔屋根裏 連続積層直階段' },
-  { code: 'DA-1〜4', kind: '隣棟 玄関・室内建具', size: 'W780〜900×H2220', spec: 'オーク断熱玄関扉(DA-1)・水回り引戸・畳客室障子・寝室引戸' },
-  { code: 'STA1', kind: '隣棟 1F→2F 直階段', size: 'W1000×踏面207×13段', spec: '隣棟5×8m 1FカフェLDK↔2F書庫ホール連続直階段（鉄柵吹抜付）' },
+  { code: 'DB-1〜3 / ST0〜4', kind: '母屋 地下鉄扉・5層積層階段', size: 'W750〜1000', spec: '母屋 B1F↔1F↔2F↔3F↔4F↔屋根裏 連続積層直階段＆全建具' },
+  { code: 'DA-1〜4 / STA1〜3', kind: '隣棟 1〜2F建具・3層積層階段', size: 'W780〜1000', spec: 'オーク玄関扉(DA-1)・STA1〜STA3(1F↔2F↔3F↔屋根裏)' },
+  { code: 'DA3-1〜6 / B1〜3', kind: '隣棟 3F全引戸＋3バルコニー戸', size: 'W720〜960×H2020', spec: '6部屋全引戸＋北/西/南 1×1.6mバルコニー掃出ガラス引戸×3' },
+  { code: 'DAR-1〜5', kind: '隣棟 屋根裏 5部屋引戸', size: 'W720〜740×H1740', spec: '6寸勾配小屋裏対応 ローハイト引戸×5（全5室独立アクセス）' },
+  { code: 'DS-1〜22 / STS1', kind: 'コンクリート倉庫棟 鋼製扉・外階段', size: 'W700〜720×H1760', spec: '低天井RC倉庫 1F/2F外開鋼製扉・間仕切鉄引戸・外鉄骨階段(11段)' },
 ];
 

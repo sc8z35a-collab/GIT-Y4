@@ -43,7 +43,9 @@ export class AdaptiveMobileEngine {
   snapFloorLights(floorIdx, activeBuilding = 'main') {
     for (const entry of this.house.interiorLights) {
       const b = entry.light.userData.building || 'main';
-      const sameBuilding = b === 'both' || b === activeBuilding || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard'));
+      const sameBuilding = b === 'both'
+        || b === activeBuilding
+        || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard'));
       const active = entry.floor === floorIdx && sameBuilding;
       entry.light.intensity = active ? entry.baseInt : 0;
       entry.light.visible = active;
@@ -94,9 +96,8 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * Dual-Building + 6-Level Vertical Spatial Portal Light Culler:
-   * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant across
-   * BOTH the 6-level Main Tower AND the 2-story Neighboring 5m×8m Annex!
+   * 3-Building Spatial Portal Light Culler (Main 6-Level Tower + Annex 4-Level + Concrete Storage 2-Level):
+   * Strictly keeps <= 3–7 interior point lights active on the GPU at any instant on POCO F7!
    */
   _updateFloorSpatialLightBudget(dtSec, { currentFloor, activeFlight, activeBuilding = 'main', propStates }) {
     for (const entry of this.house.interiorLights) {
@@ -125,24 +126,22 @@ export class AdaptiveMobileEngine {
       let weight = 0.0;
 
       if (b === 'both') {
-        // Courtyard / porch guide lantern stays softly visible on floor 1 across both houses & courtyard
         weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
       } else if (activeBuilding === 'courtyard') {
-        // Standing outdoors in the mossy courtyard between both houses: warm porch + window glow from both!
+        // Outdoors in the compound courtyard: warm doorway glow across all 3 buildings!
         if (entry.floor === 1 && (entry.zone === 'exterior' || entry.zone === 'ldk' || entry.zone === 'south' || entry.zone === 'cafe')) {
-          weight = entry.zone === 'exterior' ? 1.0 : 0.45;
+          weight = entry.zone === 'exterior' ? 1.0 : 0.42;
         }
       } else if (b === activeBuilding) {
         if (entry.floor === currentFloor) {
           weight = 1.0;
         } else if (activeFlight !== null && (entry.floor === activeFlight || entry.floor === activeFlight + 1)) {
-          weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' || entry.zone === 'south' ? 0.65 : 0.12;
+          weight = entry.zone === 'north' || entry.zone === 'ldk' || entry.zone === 'main' || entry.zone === 'sanctuary' || entry.zone === 'south' || entry.zone === 'exterior' ? 0.65 : 0.12;
         } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
           weight = 0.20;
         }
-      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior') {
-        // Keep Main porch sconce glowing softly even when stepping near Annex porch
-        weight = 0.60;
+      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage') {
+        weight = 0.55;
       }
 
       const targetInt = entry.baseInt * weight;
