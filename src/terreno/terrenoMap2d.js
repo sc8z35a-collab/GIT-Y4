@@ -20,15 +20,15 @@ import {
  */
 
 function hypsometricColor(asl) {
-  // Authentic Japanese GSI topographic hypsometric ramp (EL +300m .. +1,650m ASL)
+  // Authentic Japanese GSI topographic hypsometric ramp (EL +260m .. +2,260m ASL)
   const stops = [
-    [320,  34,  68,  52],
+    [280,  34,  68,  52],
     [520,  46,  92,  60],
-    [760,  72, 118,  66],
-    [1020, 118, 138, 76],
-    [1260, 164, 146, 98],
-    [1440, 198, 178, 144],
-    [1680, 232, 224, 210],
+    [820,  72, 118,  66],
+    [1160, 118, 138,  76],
+    [1480, 164, 146,  98],
+    [1820, 198, 178, 144],
+    [2260, 238, 234, 226],
   ];
   if (asl <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
   for (let i = 0; i < stops.length - 1; i++) {
@@ -266,14 +266,14 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(reliefCanvas, ox, oy, drawW, drawH);
 
-    // 2. 1 km Metric Grid Lines & Labels
+    // 2. 2 km / 4 km Metric Grid Lines & Labels for 15km × 40km
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.16)';
     ctx.lineWidth = 0.8;
     ctx.fillStyle = '#9db4c8';
     ctx.font = '10px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
-    for (let x = -2000; x <= 2000; x += 1000) {
+    for (let x = -6000; x <= 6000; x += 3000) {
       const p = worldToMapPx(x, TERRENO_WORLD.minZ);
       ctx.beginPath();
       ctx.moveTo(p.px, oy);
@@ -282,7 +282,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       ctx.fillText(`${x >= 0 ? '+' : ''}${x / 1000}k`, p.px, oy + drawH + 14);
     }
     ctx.textAlign = 'right';
-    for (let z = -6000; z <= 12000; z += 2000) {
+    for (let z = -12000; z <= 24000; z += 4000) {
       const p = worldToMapPx(TERRENO_WORLD.minX, z);
       ctx.beginPath();
       ctx.moveTo(ox, p.py);
@@ -292,7 +292,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     }
     ctx.restore();
 
-    // 3. Draw 19 km Graded Forestry Road (奥山林道) dashed line
+    // 3. Draw 40 km Graded Forestry Road (奥山林道) dashed line
     ctx.save();
     ctx.beginPath();
     const rd = geomorph.roadDense;
@@ -310,15 +310,15 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
 
     // 4. Draw Named Mountain Peaks (▲)
     ctx.save();
-    ctx.font = 'bold 10px sans-serif';
+    ctx.font = 'bold 9.5px sans-serif';
     MOUNTAIN_PEAKS.forEach((pk) => {
       const p = worldToMapPx(pk.x, pk.z);
       const asl = Math.round(TERRENO_WORLD.baseElevationASL + geomorph.getHeightAt(pk.x, pk.z));
       ctx.fillStyle = '#ffe9b8';
       ctx.beginPath();
-      ctx.moveTo(p.px, p.py - 5);
-      ctx.lineTo(p.px - 4.5, p.py + 3.5);
-      ctx.lineTo(p.px + 4.5, p.py + 3.5);
+      ctx.moveTo(p.px, p.py - 4.5);
+      ctx.lineTo(p.px - 4.0, p.py + 3.0);
+      ctx.lineTo(p.px + 4.0, p.py + 3.0);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = '#1b1610';
@@ -334,24 +334,25 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     });
     ctx.restore();
 
-    // 5. Draw 6 Curated Landmarks
+    // 5. Draw 8 Curated Landmarks (including Suginosato 5-House Village!)
     ctx.save();
     TERRENO_LANDMARKS.forEach((lm) => {
       const p = worldToMapPx(lm.x, lm.z);
       const isBase = lm.id === 'compound';
-      ctx.fillStyle = isBase ? '#38bdf8' : '#f59e0b';
+      const isVillage = lm.id === 'village';
+      ctx.fillStyle = isBase ? '#38bdf8' : (isVillage ? '#34d399' : '#f59e0b');
       ctx.strokeStyle = '#071018';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(p.px, p.py, isBase ? 5.2 : 3.8, 0, Math.PI * 2);
+      ctx.arc(p.px, p.py, isBase || isVillage ? 5.2 : 3.8, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.font = 'bold 9.5px "JetBrains Mono", monospace';
-      ctx.textAlign = lm.x > 400 ? 'right' : 'left';
-      const offX = lm.x > 400 ? -7 : 7;
+      ctx.textAlign = lm.x > 1200 ? 'right' : 'left';
+      const offX = lm.x > 1200 ? -7 : 7;
       ctx.fillStyle = '#071018';
       ctx.fillText(lm.code, p.px + offX + 1, p.py + 3);
-      ctx.fillStyle = isBase ? '#7dd3fc' : '#fde68a';
+      ctx.fillStyle = isBase ? '#7dd3fc' : (isVillage ? '#6ee7b7' : '#fde68a');
       ctx.fillText(lm.code, p.px + offX, p.py + 2);
     });
     ctx.restore();
@@ -362,7 +363,6 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     const pYaw = playerState?.yaw ?? 0;
     const pp = worldToMapPx(pxW, pzW);
     ctx.save();
-    // Forward direction: yaw=0 -> North (-Z -> -Y on map!), yaw=+PI/2 -> West (-X)
     const dirX = -Math.sin(pYaw);
     const dirY = -Math.cos(pYaw);
     const ang = Math.atan2(dirY, dirX);
@@ -391,26 +391,26 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     ctx.textAlign = 'left';
     ctx.fillText('N ▲', ox, oy - 7);
     ctx.textAlign = 'right';
-    ctx.fillText('5×19km', ox + drawW, oy - 7);
+    ctx.fillText('15×40km', ox + drawW, oy - 7);
 
-    // ---- Render 19 km Longitudinal Elevation Profile ----
+    // ---- Render 40 km Longitudinal Elevation Profile ----
     const pCtx = profileCanvas.getContext('2d');
     const PW = profileCanvas.width;
     const PH = profileCanvas.height;
     pCtx.fillStyle = '#0b131c';
     pCtx.fillRect(0, 0, PW, PH);
 
-    const pL = 40, pR = 12, pT = 10, pB = 18;
+    const pL = 42, pR = 12, pT = 10, pB = 18;
     const gW = PW - pL - pR;
     const gH = PH - pT - pB;
-    const elevMin = 300, elevMax = 1650;
+    const elevMin = 250, elevMax = 2350;
     const eToY = (e) => pT + gH * (1.0 - (e - elevMin) / (elevMax - elevMin));
 
     pCtx.strokeStyle = 'rgba(148, 184, 214, 0.16)';
     pCtx.fillStyle = '#8fa9bf';
     pCtx.font = '10px "JetBrains Mono", monospace';
     pCtx.textAlign = 'right';
-    [400, 800, 1200, 1600].forEach((e) => {
+    [400, 1000, 1600, 2200].forEach((e) => {
       const y = eToY(e);
       pCtx.beginPath();
       pCtx.moveTo(pL, y);
@@ -464,9 +464,9 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
 
     pCtx.fillStyle = '#9db4c8';
     pCtx.textAlign = 'center';
-    pCtx.fillText('-6.5km', pL + 22, PH - 4);
+    pCtx.fillText('-14km', pL + 22, PH - 4);
     pCtx.fillText('BASE', pL + ((0 - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth) * gW, PH - 4);
-    pCtx.fillText('+12.5km', pL + gW - 26, PH - 4);
+    pCtx.fillText('+26km', pL + gW - 24, PH - 4);
 
     if (telemetryEl) {
       const distBaseKm = (Math.hypot(pxW - TERRENO_WORLD.compoundCenterX, pzW - TERRENO_WORLD.compoundCenterZ) / 1000).toFixed(2);
