@@ -362,6 +362,7 @@ uniform vec2 uWorldSize;
 uniform vec2 uAtlasSize;
 uniform vec2 uCompoundCenter;
 uniform float uBaseElevationASL;
+uniform float uSurfaceSuper;
 
 ${TERRENO_ATMO_UNIFORMS_GLSL}
 
@@ -514,27 +515,26 @@ vec4 sampleSeamlessPbr(sampler2D tex, vec2 uv, float macroBlend) {
   return finalTex;
 }
 
-// ---- TR-POM: 5-Step Steep Parallax Occlusion Mapping (0..26m underfoot tactile micro-relief!) ----
-vec2 computeTerrainPomUv(sampler2D tex, vec2 baseUv, vec3 V, float pomScale) {
+// ---- TR-POM: 5-Step (Standard) / 8-Step (SM1.1S Super) Steep Parallax Occlusion Mapping ----
+vec2 computeTerrainPomUv(sampler2D tex, vec2 baseUv, vec3 V, float pomScale, float superMode) {
   if (pomScale <= 0.0005) return baseUv;
-  // Horizontal view ray offset in UV space
   vec2 deltaUv = (-V.xz / max(abs(V.y), 0.34)) * pomScale;
-  float layerStep = 1.0 / 5.0;
+  float steps = superMode > 0.5 ? 8.0 : 5.0;
+  float layerStep = 1.0 / steps;
   float curLayer = 0.0;
   vec2 stepUv = deltaUv * layerStep;
   vec2 curUv = baseUv;
   float curH = texture2D(tex, curUv).a;
   float prevH = curH;
 
-  for (int i = 0; i < 5; i++) {
-    if (curLayer >= (1.0 - curH)) break;
+  for (int i = 0; i < 8; i++) {
+    if (float(i) >= steps || curLayer >= (1.0 - curH)) break;
     prevH = curH;
     curUv -= stepUv;
     curLayer += layerStep;
     curH = texture2D(tex, curUv).a;
   }
 
-  // Linear secant interpolation between final two layers for silky-smooth zero-stairstep parallax
   float afterD = (1.0 - curH) - curLayer;
   float beforeD = (1.0 - prevH) - (curLayer - layerStep);
   float w = clamp(afterD / min(-0.0001, afterD - beforeD), 0.0, 1.0);
@@ -596,26 +596,29 @@ void main() {
   float slopeMacro = 1.0 - clamp(N.y, 0.0, 1.0);
 
   // 2. BREAKTHROUGH TR-HYPERDETAIL: 5-Octave Analytical-Derivative Alpine Crag & Gully Synthesis!
-  //    Synthesizes sharp eroded rock ribs, chutes, & mountain micro-topography across all 19 km!
   vec3 hyper = evalAlpineHyperDetail(xz, dist);
   float dComp = length(xz - uCompoundCenter);
   float isCompoundYard = 1.0 - smoothstep(21.0, 35.0, dComp);
   float isRoad = smoothstep(0.32, 0.68, roadPad) * (1.0 - isCompoundYard);
 
+  float hyperBoost = mix(1.0, 1.32, uSurfaceSuper);
   float hyperStrength = (1.0 - isCompoundYard) * (1.0 - isRoad * 0.88)
-                      * mix(0.28, 1.15, smoothstep(0.08, 0.42, slopeMacro) + smoothstep(900.0, 1420.0, asl) * 0.65);
+                      * mix(0.28, 1.15, smoothstep(0.08, 0.42, slopeMacro) + smoothstep(900.0, 1420.0, asl) * 0.65)
+                      * hyperBoost;
   N = normalize(N + vec3(-hyper.y, 0.0, -hyper.z) * (hyperStrength * 42.0));
 
   float slope = 1.0 - clamp(N.y, 0.0, 1.0);
   float slopeRad = acos(clamp(N.y, 0.0, 1.0));
   float macroBlend = smoothstep(35.0, 260.0, dist) * 0.58;
 
-  // 3. TR-POM: Steep Parallax Occlusion Mapping (0..26m) + Micro Self-Shadowing!
-  float pomFade = (1.0 - smoothstep(12.0, 26.0, dist)) * (1.0 - slope * 0.55);
+  // 3. TR-POM: Steep Parallax Occlusion Mapping (26m standard / 42m SM1.1S Super) + Micro Self-Shadowing!
+  float pomDistEnd = mix(26.0, 42.0, uSurfaceSuper);
+  float pomDepthBoost = mix(1.0, 1.38, uSurfaceSuper);
+  float pomFade = (1.0 - smoothstep(12.0, pomDistEnd, dist)) * (1.0 - slope * 0.55);
   vec2 forestBaseUv = xz * 0.24;
   vec2 gravelBaseUv = xz * 0.34;
-  vec2 forestUv = pomFade > 0.01 ? computeTerrainPomUv(uTexForest, forestBaseUv, V, 0.022 * pomFade * (1.0 - isCompoundYard * 0.45)) : forestBaseUv;
-  vec2 gravelUv = pomFade > 0.01 ? computeTerrainPomUv(uTexGravel, gravelBaseUv, V, 0.032 * pomFade) : gravelBaseUv;
+  vec2 forestUv = pomFade > 0.01 ? computeTerrainPomUv(uTexForest, forestBaseUv, V, 0.022 * pomDepthBoost * pomFade * (1.0 - isCompoundYard * 0.45), uSurfaceSuper) : forestBaseUv;
+  vec2 gravelUv = pomFade > 0.01 ? computeTerrainPomUv(uTexGravel, gravelBaseUv, V, 0.032 * pomDepthBoost * pomFade, uSurfaceSuper) : gravelBaseUv;
 
   vec4 texForest = sampleSeamlessPbr(uTexForest, forestUv, macroBlend);
   vec4 texGravel = sampleSeamlessPbr(uTexGravel, gravelUv, macroBlend);
@@ -627,7 +630,7 @@ void main() {
     vec2 sunUvStep = sunDir.xz * 0.014;
     float hHere  = mix(texForest.a, texGravel.a, isRoad);
     float hSun   = mix(texture2D(uTexForest, forestUv + sunUvStep).a, texture2D(uTexGravel, gravelUv + sunUvStep).a, isRoad);
-    float occl   = clamp((hSun - hHere) * 2.6, 0.0, 0.48);
+    float occl   = clamp((hSun - hHere) * mix(2.6, 3.3, uSurfaceSuper), 0.0, 0.56);
     pomMicroShadow = 1.0 - occl * pomFade;
   }
 
@@ -939,6 +942,7 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     buildClipmapLTrimGeometry(CLIPMAP_HALF, 1, 1),
   ];
 
+  const surfaceSuperUniform = { value: 0.0 };
   const baseUniforms = {
     ...atmoUniforms,
     uGeoMap: { value: geomorph.geoTexture },
@@ -955,6 +959,7 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     uCompoundGroundY: { value: TERRENO_WORLD.compoundGroundY },
     uBaseElevationASL: { value: TERRENO_WORLD.baseElevationASL },
     uHalfExtent: { value: CLIPMAP_HALF },
+    uSurfaceSuper: surfaceSuperUniform,
   };
 
   const rings = [];
@@ -1016,6 +1021,14 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
   skyDome.name = 'TERRENO_SkyDome_24km';
   group.add(skyDome);
 
+  function setSurfaceSuper(enabled, maxAniso = 8) {
+    surfaceSuperUniform.value = enabled ? 1.0 : 0.0;
+    const aniso = enabled ? Math.min(16, maxAniso) : 4;
+    [texForest, texRock, texGravel].forEach((t) => {
+      if (t) { t.anisotropy = aniso; t.needsUpdate = true; }
+    });
+  }
+
   function update(cameraPos) {
     const camX = cameraPos.x;
     const camZ = cameraPos.z;
@@ -1044,6 +1057,7 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     group,
     skyDome,
     rings,
+    setSurfaceSuper,
     update,
   };
 }

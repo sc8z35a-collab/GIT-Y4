@@ -1,69 +1,132 @@
-import { HOUSE, BLUEPRINT_SHEETS, FINISH_SCHEDULE, OPENING_SCHEDULE } from './planData.js';
+import { HOUSE, BLUEPRINT_SHEETS } from './planData.js';
 import { FirstPersonHouseExplorer } from './scene3d.js';
 import { ArchitecturalBlueprint2D } from './blueprint2d.js';
+
+const STORAGE_SENS_KEY = 'narrow50_cam_sens';
+const STORAGE_SM11S_KEY = 'narrow50_sm11s';
 
 const canvas3dEl = document.getElementById('canvas-3d');
 const webglErrorEl = document.getElementById('webgl-error');
 const webglErrorMsgEl = document.getElementById('webgl-error-msg');
+const hudTopEl = document.getElementById('hud-top');
+const touchLayerEl = document.getElementById('touch-layer');
 const reticleEl = document.getElementById('reticle');
 const interactPromptEl = document.getElementById('interact-prompt');
 const interactLabelEl = document.getElementById('interact-label');
-const floorBadgeEl = document.getElementById('floor-badge');
-const roomCodeEl = document.getElementById('room-code');
-const roomNameEl = document.getElementById('room-name');
-const btnInstall = document.getElementById('btn-install');
-const btnTod = document.getElementById('btn-tod');
-const btnFlash = document.getElementById('btn-flash');
-const btnAudio = document.getElementById('btn-audio');
+
 const btnMap = document.getElementById('btn-map');
-const btnPerf = document.getElementById('btn-perf');
+const btnSettings = document.getElementById('btn-settings');
+const settingsSheet = document.getElementById('settings-sheet');
+const btnCloseSettings = document.getElementById('btn-close-settings');
+const inputSens = document.getElementById('input-sens');
+const sensValEl = document.getElementById('sens-val');
+const toggleSm11s = document.getElementById('toggle-sm11s');
+const toggleLight = document.getElementById('toggle-light');
+const toggleAudio = document.getElementById('toggle-audio');
+const togglePerfCb = document.getElementById('toggle-perf');
+const btnFullscreen = document.getElementById('btn-fullscreen');
+const btnDriveExitSettings = document.getElementById('btn-drive-exit-settings');
+const btnInstall = document.getElementById('btn-install');
+const btnEnterLandscape = document.getElementById('btn-enter-landscape');
+
 const perfPanel = document.getElementById('perf-panel');
 const perfGrid = document.getElementById('perf-grid');
 
-const mobInteract = document.getElementById('mob-interact');
-const mobFlash = document.getElementById('mob-flash');
+const driveHudEl = document.getElementById('drive-hud');
+const driveSpeedValEl = document.getElementById('drive-speed-val');
+
+const mobileActionsEl = document.getElementById('mobile-actions');
 const mobCrouch = document.getElementById('mob-crouch');
 
-const driveHudEl = document.getElementById('drive-hud');
-const driveBadgeEl = document.getElementById('drive-badge');
-const driveSpeedValEl = document.getElementById('drive-speed-val');
-const driveCollisionTagEl = document.getElementById('drive-collision-tag');
-const btnDriveLights = document.getElementById('btn-drive-lights');
-const btnDriveExit = document.getElementById('btn-drive-exit');
-
-const elvHudEl = document.getElementById('elevator-hud');
-const elvHudFloorEl = document.getElementById('elv-hud-floor');
-const elvHudArrowEl = document.getElementById('elv-hud-arrow');
-const elvHudStatusEl = document.getElementById('elv-hud-status');
-const elvFloorBtns = Array.from(document.querySelectorAll('.elv-btn[data-elv-floor]'));
-const elvBtnCall = document.getElementById('elv-btn-call');
-const elvBtnOpen = document.getElementById('elv-btn-open');
-const elvBtnClose = document.getElementById('elv-btn-close');
-
 const mapModal = document.getElementById('map-modal');
+const map3dGestureLayer = document.getElementById('map3d-gesture-layer');
+const map3dControls = document.getElementById('map3d-controls');
+const btnMap3dFocus = document.getElementById('btn-map3d-focus');
+const btnMap3dOrbit = document.getElementById('btn-map3d-orbit');
 const cadMapBody = document.getElementById('cad-map-body');
-const terrenoMapPanel = document.getElementById('terreno-map-panel');
-const bpLayersEl = document.getElementById('bp-layers');
+const bpToolsGroup = document.getElementById('bp-tools-group');
 const btnExportSvg = document.getElementById('btn-export-svg');
+const btnExportAllSvg = document.getElementById('btn-export-all-svg');
+const btnExportAllZip = document.getElementById('btn-export-all-zip');
 const blueprintMount = document.getElementById('blueprint-mount');
-const roomDetailBar = document.getElementById('room-detail-bar');
-const areaTableTitle = document.getElementById('area-table-title');
-const tableAreas = document.getElementById('table-areas');
 
 let mapVisible = false;
+let settingsVisible = false;
 let perfVisible = false;
 let isDriving = false;
-let activeSheetIdx = 4;
-let terrenoMap2d = null;
-let terrenoMapMounted = false;
-let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, yaw: Math.PI, todId: 'night', dx: 0, dz: 1 };
+let activeSheetIdx = 20; // Default to full-screen High-Precision 3D Map
+let map3dOrbitMode = false;
+let bpZoom = 1.0;
+let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, yaw: Math.PI, todId: 'day', dx: 0, dz: 1 };
 
+// ---- Service Worker Registration ----
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {});
   });
 }
 
+// ---- Automatic Mobile Landscape Fullscreen Controller (POCO F7) ----
+const isTouchDevice = () =>
+  window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+function isFullscreenActive() {
+  return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+async function enterLandscapeFullscreen() {
+  try {
+    if (!isFullscreenActive()) {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen({ navigationUI: 'hide' });
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    }
+  } catch (_) {}
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+    }
+  } catch (_) {}
+  syncFullscreenUi();
+}
+
+async function toggleFullscreen() {
+  if (isFullscreenActive()) {
+    try {
+      if (document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (_) {}
+  } else {
+    await enterLandscapeFullscreen();
+  }
+  syncFullscreenUi();
+}
+
+function syncFullscreenUi() {
+  if (btnFullscreen) {
+    btnFullscreen.classList.toggle('active', isFullscreenActive());
+  }
+}
+
+document.addEventListener('fullscreenchange', syncFullscreenUi);
+document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
+
+let autoFsAttempted = false;
+function tryAutoMobileFullscreen() {
+  if (autoFsAttempted || !isTouchDevice()) return;
+  autoFsAttempted = true;
+  enterLandscapeFullscreen();
+}
+window.addEventListener('pointerdown', tryAutoMobileFullscreen, { passive: true });
+window.addEventListener('touchstart', tryAutoMobileFullscreen, { passive: true });
+if (btnEnterLandscape) {
+  btnEnterLandscape.addEventListener('click', () => enterLandscapeFullscreen());
+}
+
+// ---- PWA Install Prompt (Inside Settings) ----
 let deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -82,157 +145,43 @@ btnInstall.addEventListener('click', async () => {
   btnInstall.classList.add('hidden');
 });
 
-const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {
-  onRoomHover: (room) => {
-    if (!room) {
-      roomDetailBar.textContent = '図面上の各部屋にカーソルを合わせると、寸法・床レベル・採用素材が表示されます。';
-      return;
-    }
-    roomDetailBar.innerHTML = `<strong>${room.code} ${room.nameJp}</strong>（${room.area.toFixed(2)}m² / ${room.jo.toFixed(1)}帖・${room.fl} / ${room.ch}）— ${room.notes}`;
-  },
-});
+// ---- CAD Blueprint 2D Controller ----
+const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {});
 
-function renderFloorAreaTable(sheetIdx) {
-  const fl = BLUEPRINT_SHEETS[sheetIdx] || BLUEPRINT_SHEETS[4];
-  const isAnnex = fl.building === 'annex';
-  const isStorage = fl.building === 'storage';
-  const isCamper = fl.building === 'camper';
-  const isKei = fl.building === 'kei';
-  areaTableTitle.textContent = `求積・天井高一覧（${fl.code} — ${fl.floorLabel}）`;
-  const netSum = fl.rooms.reduce((acc, r) => acc + r.area, 0);
-  let summaryLabel = `${fl.code} フロア計`;
-  if (fl.isDeepB4) {
-    summaryLabel = '地下4階計（ELV専用・階段なし・2.7×15.5m CH3.55m ギャング極秘研究所5区画）';
-  } else if (fl.isDeepB3) {
-    summaryLabel = '地下3階計（シェルター＋第1/第2食料備蓄庫＋防音ワーク室＋3サウナ/準備室/檜＆水風呂/ととのい）';
-  } else if (fl.isDeepB2) {
-    summaryLabel = '地下2階計（10×10m CH3.8mスタジオ＋4×6m 2室＋ELV乗場）';
-  } else if (isKei) {
-    summaryLabel = '軽バン計（1席＋進入可能フル荷室 3.52m³）';
-  } else if (isCamper) {
-    summaryLabel = fl.camperLevel === 2
-      ? 'RV 2Fロフト計（2室＋連絡ブリッジ・吹抜CH3.02m）'
-      : 'RV 1F計（全14室＋拡幅W560廊下＋高天井CH3.02m）';
-  } else if (isStorage) {
-    summaryLabel = `${fl.code}計（RC倉庫 2×2m・低天井2階建 計4室）`;
-  } else if (isAnnex) {
-    if (fl.hasAnnexBalconies) summaryLabel = '隣棟3F計（6室＋1×1.6mバルコニー×3）';
-    else if (fl.isAttic) summaryLabel = '隣棟屋根裏計（全5室・6寸勾配小屋裏）';
-    else summaryLabel = `${fl.code}計（隣棟 5×8m 3階建＋屋根裏）`;
-  } else if (fl.isBasement) {
-    summaryLabel = '地下1階計 (3×7m主空間 + 倉庫3室・棚15基 + ST_B2 + ELV-1)';
-  } else if (fl.isAttic) {
-    summaryLabel = '母屋屋根裏計 (地上16.1m〜18.9m / 有効 28.5m²)';
-  } else if (fl.hasBalcony6F) {
-    summaryLabel = '母屋6F計 (天空天文サロン・珈琲バー・星空畳 + 全幅南テラス)';
-  } else if (fl.hasBalcony5F) {
-    summaryLabel = '母屋5F計 (建築模型工房・サウナ＆桧展望浴・温室 + 西スパデッキ)';
-  } else if (fl.hasBalcony) {
-    summaryLabel = '母屋4F計 (5室 + 1×2mバルコニー)';
+function setBlueprintZoom(nextZoom) {
+  bpZoom = Math.max(0.75, Math.min(3.0, Math.round(nextZoom * 100) / 100));
+  blueprintMount.style.width = `${Math.round(bpZoom * 100)}%`;
+  const svgEl = blueprintMount.querySelector('.blueprint-svg');
+  if (svgEl) {
+    svgEl.style.maxHeight = bpZoom > 1.05 ? 'none' : '';
   }
-  const footprintStr = fl.isDeepB4
-    ? '2700×15500 (CH3550)'
-    : (fl.isDeepB3
-      ? '最大 15250×29850 (全15室)'
-      : (fl.isDeepB2
-        ? '10000×10000 + 4000×6000×2'
-        : (isKei
-          ? '1480×3400×H1800'
-          : (isCamper
-            ? '2700×7500×H3400'
-            : (isStorage ? '2000×2000' : (isAnnex ? '5000×8000' : '5000×10000'))))));
-  const grossStr = fl.isDeepB4
-    ? '41.85m² (ELV専用)'
-    : (fl.isDeepB3
-      ? '計 141.26m² (+ELV)'
-      : (fl.isDeepB2
-        ? '計 151.20m²'
-        : (isKei
-          ? '車体床 5.03m²'
-          : (isCamper
-            ? (fl.camperLevel === 2 ? 'ロフト床 13.9m²' : '車体床 20.25m²')
-            : (isStorage
-              ? '4.00m² (2F延8.0m²)'
-              : (isAnnex
-                ? (fl.isAttic ? '有効 29.49m²' : (fl.hasAnnexBalconies ? '40.00m² + B4.8m²' : '40.00m²'))
-                : (fl.isBasement
-                  ? '31.88m²'
-                  : (fl.isAttic
-                    ? '有効 28.50m²'
-                    : (fl.hasBalcony6F
-                      ? '50.00m² + T5.06m²'
-                      : (fl.hasBalcony5F
-                        ? '50.00m² + B2.60m²'
-                        : (fl.hasBalcony ? '50.00m² + B2.00m²' : '50.00m²')))))))))));
-  tableAreas.innerHTML = `
-    <thead><tr><th>室名</th><th class="num">内法 (mm)</th><th class="num">面積</th><th>FL / CH</th></tr></thead>
-    <tbody>
-      ${fl.rooms.map((r) => `
-        <tr>
-          <td><strong>${r.code} ${r.nameJp}</strong></td>
-          <td class="num">${Math.round(r.w * 1000)}×${Math.round(r.d * 1000)}</td>
-          <td class="num">${r.area.toFixed(2)}m² (${r.jo.toFixed(1)}帖)</td>
-          <td>${r.fl} / ${r.ch}</td>
-        </tr>
-      `).join('')}
-      <tr style="background:#f3efe6;font-weight:700;">
-        <td>${summaryLabel}</td>
-        <td class="num">${footprintStr}</td>
-        <td class="num">${grossStr}</td>
-        <td>室計 ${netSum.toFixed(2)}m²</td>
-      </tr>
-    </tbody>
-  `;
 }
 
-function ensureTerrenoMapMounted() {
-  if (!explorer || !explorer.terreno) return null;
-  if (!terrenoMap2d) {
-    terrenoMap2d = explorer.terreno.getOrCreateMap2D({
-      onSetTimeOfDay: (todId) => {
-        if (explorer) explorer.setTimeOfDay(todId);
-      },
-      onTeleportLandmark: (lmId) => {
-        if (explorer) {
-          explorer.teleportToLandmark(lmId);
-          toggleMap(false);
-        }
-      },
-      onTeleportWorld: (wx, wz) => {
-        if (explorer) {
-          explorer.teleportToWorld(wx, wz);
-          toggleMap(false);
-        }
-      },
-    });
-  }
-  if (!terrenoMapMounted && terrenoMapPanel) {
-    terrenoMap2d.mount(terrenoMapPanel);
-    terrenoMapMounted = true;
-  }
-  return terrenoMap2d;
-}
+document.getElementById('btn-zoom-in').addEventListener('click', () => setBlueprintZoom(bpZoom + 0.35));
+document.getElementById('btn-zoom-out').addEventListener('click', () => setBlueprintZoom(bpZoom - 0.35));
 
 function selectBlueprintFloor(sheetIdx) {
   const numIdx = Number(sheetIdx);
-  const isTerrenoSheet = numIdx === 20;
-  activeSheetIdx = isTerrenoSheet ? 20 : Math.max(0, Math.min(BLUEPRINT_SHEETS.length - 1, numIdx || 0));
+  const is3DMap = numIdx === 20;
+  activeSheetIdx = is3DMap ? 20 : Math.max(0, Math.min(BLUEPRINT_SHEETS.length - 1, numIdx || 0));
 
   document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
     btn.classList.toggle('active', Number(btn.dataset.floor) === activeSheetIdx);
   });
 
-  if (cadMapBody) cadMapBody.classList.toggle('hidden', isTerrenoSheet);
-  if (terrenoMapPanel) terrenoMapPanel.classList.toggle('hidden', !isTerrenoSheet);
-  if (bpLayersEl) bpLayersEl.classList.toggle('hidden', isTerrenoSheet);
-  if (btnExportSvg) btnExportSvg.classList.toggle('hidden', isTerrenoSheet);
+  mapModal.classList.toggle('mode-3d', is3DMap);
+  map3dGestureLayer.classList.toggle('hidden', !is3DMap);
+  map3dControls.classList.toggle('hidden', !is3DMap);
+  cadMapBody.classList.toggle('hidden', is3DMap);
+  bpToolsGroup.classList.toggle('hidden', is3DMap);
 
-  if (isTerrenoSheet) {
-    const m2d = ensureTerrenoMapMounted();
-    if (m2d) m2d.render(lastPose);
-  } else {
+  if (explorer) {
+    explorer.setMap3DMode(mapVisible && is3DMap);
+  }
+
+  if (!is3DMap) {
+    setBlueprintZoom(1.0);
     blueprint.setFloor(activeSheetIdx);
-    renderFloorAreaTable(activeSheetIdx);
     if (lastPose) blueprint.updateCameraPose(lastPose);
   }
 }
@@ -241,39 +190,59 @@ document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
   btn.addEventListener('click', () => selectBlueprintFloor(Number(btn.dataset.floor)));
 });
 
-renderFloorAreaTable(4);
+function syncGameplayOverlayVisibility() {
+  const hideGameplay = mapVisible;
+  hudTopEl.classList.toggle('hidden', hideGameplay);
+  touchLayerEl.classList.toggle('hidden', hideGameplay);
+  reticleEl.classList.toggle('hidden', hideGameplay);
+  if (hideGameplay) {
+    interactPromptEl.classList.add('hidden');
+    mobileActionsEl.classList.add('hidden');
+    driveHudEl.classList.add('hidden');
+  } else {
+    driveHudEl.classList.toggle('hidden', !isDriving);
+    mobileActionsEl.classList.toggle('hidden', isDriving);
+  }
+}
+
+function toggleSettings(force = null) {
+  settingsVisible = force !== null ? force : !settingsVisible;
+  settingsSheet.classList.toggle('hidden', !settingsVisible);
+  btnSettings.classList.toggle('active', settingsVisible);
+  if (settingsVisible && mapVisible) toggleMap(false);
+}
 
 function toggleMap(force = null) {
   mapVisible = force !== null ? force : !mapVisible;
   mapModal.classList.toggle('hidden', !mapVisible);
   btnMap.classList.toggle('active', mapVisible);
-  if (mapVisible) selectBlueprintFloor(lastPose.sheetIndex !== undefined ? lastPose.sheetIndex : (lastPose.floor + 3));
-  if (explorer) explorer.setMapOpen(mapVisible);
+  if (mapVisible) {
+    if (settingsVisible) toggleSettings(false);
+    if (explorer) explorer.setMapOpen(true);
+    // Open immediately into the High-Precision Full-Screen 3D Topographic Map!
+    selectBlueprintFloor(20);
+  } else {
+    if (explorer) {
+      explorer.setMap3DMode(false);
+      explorer.setMapOpen(false);
+    }
+  }
+  syncGameplayOverlayVisibility();
 }
 
 function renderTelemetry(t) {
-  const tr = t.terreno;
-  const trHtml = tr ? `
-    <div>TERRENO: <strong>5×19km (${tr.bakeMs}ms)</strong></div>
-    <div>Forest: <strong>${tr.forest.sugi + tr.forest.abies + tr.forest.buna + tr.forest.midConifers + tr.forest.midBroad}</strong> inst</div>
-  ` : '';
   perfGrid.innerHTML = `
-    <div>FPS: <strong>${t.fps}</strong> / ${t.targetHz}Hz</div>
-    <div>Frame: <strong>${t.frameMs}ms</strong></div>
-    <div>DRS Scale: <strong>${t.scale}x</strong></div>
-    <div>DrawCalls: <strong>${t.drawCalls}</strong></div>
-    <div>Batch Cut: <strong>-${t.batch.reductionPct}%</strong></div>
-    <div>Tris: <strong>${(t.triangles / 1000).toFixed(1)}k</strong></div>
-    <div>Lights: <strong>${t.activeLights}</strong> active</div>
-    <div>Shadows: <strong>${t.shadowRate}/s</strong></div>
-    ${trHtml}
+    <span><strong>${t.fps}</strong>fps</span>
+    <span><strong>${t.frameMs}</strong>ms</span>
+    <span><strong>${t.scale}×</strong>${t.surfaceSuper ? ' SM1.1S' : ''}</span>
+    <span>DC<strong>${t.drawCalls}</strong></span>
   `;
 }
 
 function togglePerf(force = null) {
   perfVisible = force !== null ? force : !perfVisible;
   perfPanel.classList.toggle('hidden', !perfVisible);
-  btnPerf.classList.toggle('active', perfVisible);
+  if (togglePerfCb) togglePerfCb.checked = perfVisible;
   if (perfVisible && explorer && explorer.adaptive) {
     renderTelemetry({
       ...explorer.adaptive.getTelemetry(),
@@ -285,85 +254,31 @@ function togglePerf(force = null) {
 
 function updateDriveHUD(driving, state = {}) {
   isDriving = driving;
-  driveHudEl.classList.toggle('hidden', !driving);
+  if (!mapVisible) {
+    driveHudEl.classList.toggle('hidden', !driving);
+    mobileActionsEl.classList.toggle('hidden', driving);
+  }
+  btnDriveExitSettings.classList.toggle('hidden', !driving);
   if (driving) {
-    if (driveBadgeEl) {
-      driveBadgeEl.textContent = state.badge || (state.vehicle === 'kei' ? 'KEI-340 660cc' : 'CAMPER-75 6×6');
-      driveBadgeEl.classList.toggle('kei', state.vehicle === 'kei');
-    }
     driveSpeedValEl.textContent = String(state.speedKmh ?? 0);
-    driveCollisionTagEl.classList.toggle('hidden', !state.colliding);
-    driveHudEl.classList.toggle('colliding', Boolean(state.colliding));
-    btnDriveLights.classList.toggle('active', Boolean(state.headlightsOn));
-    mobInteract.textContent = '降車';
-    mobInteract.classList.remove('hidden');
+    if (toggleLight) toggleLight.checked = Boolean(state.headlightsOn);
   } else {
-    driveHudEl.classList.remove('colliding');
-    mobInteract.textContent = '操作';
-    mobInteract.classList.add('hidden');
+    if (toggleLight && explorer) toggleLight.checked = Boolean(explorer.flashlightOn);
   }
 }
 
-function updateElevatorHUD(show, state = {}) {
-  elvHudEl.classList.toggle('hidden', !show);
-  if (!show) return;
-  elvHudFloorEl.textContent = state.floorCode || 'B3';
-  elvHudArrowEl.textContent = state.dir > 0 ? '▲' : (state.dir < 0 ? '▼' : '●');
-  const depthStr = state.cabY !== undefined ? `${state.cabY >= 0 ? '±0.0' : state.cabY.toFixed(1)}m` : '';
-  const isMoving = state.phase === 'RUNNING' || state.phase === 'RELEVELING' || state.phase === 'BRAKE_RELEASE';
-  let stText = `${state.floorCode} 待機中 (${depthStr})`;
-  if (state.phase === 'BRAKE_RELEASE') {
-    stText = '電磁ブレーキ解除…';
-  } else if (state.phase === 'RUNNING') {
-    stText = `${state.dir > 0 ? 'S字上昇' : 'S字下降'} ${(state.speedMs || 0).toFixed(1)}m/s (${depthStr})`;
-  } else if (state.phase === 'RELEVELING') {
-    stText = `精密微速着床中 (${depthStr})`;
-  } else if (state.phase === 'DOOR_CLOSING') {
-    stText = '連動扉 閉鎖中…';
-  } else if (state.phase === 'DOOR_OPENING' || state.phase === 'IDLE_OPEN') {
-    stText = `${state.floorCode} 到着 · 扉開 (${depthStr})`;
-  }
-  elvHudStatusEl.textContent = stText;
-
-  const queuedSet = new Set(state.queuedFloors || []);
-  elvFloorBtns.forEach((btn) => {
-    const fl = Number(btn.dataset.elvFloor);
-    const isTarget = fl === state.targetFloor && (isMoving || state.phase === 'DOOR_CLOSING');
-    btn.classList.toggle('current', fl === state.currentStopFloor && !isMoving);
-    btn.classList.toggle('target', isTarget);
-    btn.classList.toggle('queued', !isTarget && queuedSet.has(fl));
-  });
-
-  const needCall = !state.inCab && (state.currentStopFloor !== state.playerFloor || state.phase === 'IDLE_CLOSED');
-  elvBtnCall.classList.toggle('hidden', !needCall);
-}
-
+// ---- Initialize 3D Explorer ----
 let explorer = null;
 try {
   explorer = new FirstPersonHouseExplorer(canvas3dEl, {
     onPoseUpdate: (pose) => {
       lastPose = pose;
-      if (mapVisible) {
-        if (activeSheetIdx === 20 && terrenoMap2d) terrenoMap2d.render(pose);
-        else blueprint.updateCameraPose(pose);
-      }
-      floorBadgeEl.textContent = pose.floorCode || '1F';
-      if (pose.room) {
-        roomCodeEl.textContent = pose.room.code;
-        roomNameEl.textContent = pose.room.nameJp;
-      }
-    },
-    onTimeOfDayChange: (preset) => {
-      if (btnTod && preset) {
-        btnTod.textContent = `空: ${preset.labelJp}`;
-        btnTod.classList.toggle('active', preset.id !== 'night');
-      }
-      if (mapVisible && activeSheetIdx === 20 && terrenoMap2d) {
-        terrenoMap2d.render({ ...lastPose, todId: preset?.id });
+      if (mapVisible && activeSheetIdx !== 20) {
+        blueprint.updateCameraPose(pose);
       }
     },
     onAimChange: (aim) => {
-      if (isDriving) {
+      if (isDriving || mapVisible) {
         reticleEl.classList.remove('aiming');
         interactPromptEl.classList.add('hidden');
         return;
@@ -371,21 +286,22 @@ try {
       const active = Boolean(aim);
       reticleEl.classList.toggle('aiming', active);
       interactPromptEl.classList.toggle('hidden', !active);
-      mobInteract.classList.toggle('hidden', !active);
-      if (aim) interactLabelEl.textContent = aim.prompt;
+      if (aim) {
+        interactLabelEl.textContent = aim.prompt;
+      }
     },
     onDriveChange: (driving, state) => updateDriveHUD(driving, state),
-    onElevatorChange: (show, state) => updateElevatorHUD(show, state),
     onFlashlightChange: (on) => {
-      btnFlash.classList.toggle('active', on);
-      mobFlash.classList.toggle('active', on);
+      if (!isDriving && toggleLight) toggleLight.checked = Boolean(on);
     },
     onCrouchChange: (crouching) => {
       mobCrouch.classList.toggle('active', crouching);
     },
     onAudioChange: (active) => {
-      btnAudio.textContent = active ? '音: ON' : '音: OFF';
-      btnAudio.classList.toggle('active', active);
+      if (toggleAudio) toggleAudio.checked = Boolean(active);
+    },
+    onSurfaceSuperChange: (on) => {
+      if (toggleSm11s) toggleSm11s.checked = Boolean(on);
     },
     onToggleMap: () => toggleMap(),
     onToggleTelemetry: () => togglePerf(),
@@ -395,39 +311,177 @@ try {
   });
 } catch (err) {
   webglErrorEl.classList.remove('hidden');
-  webglErrorMsgEl.textContent = `WebGL初期化エラー: ${err?.message || err}`;
+  webglErrorMsgEl.textContent = String(err?.message || err);
 }
 
-if (btnTod) {
-  btnTod.addEventListener('click', () => explorer && explorer.cycleTimeOfDay());
+// ---- Restore Persisted Settings (Camera Sensitivity & SM1.1S) ----
+function applySensitivity(val, persist = true) {
+  const clamped = explorer ? explorer.setCameraSensitivity(val) : Math.max(0.2, Math.min(3.0, Number(val) || 1.0));
+  inputSens.value = String(clamped);
+  sensValEl.textContent = `${clamped.toFixed(1)}×`;
+  if (persist) {
+    try { localStorage.setItem(STORAGE_SENS_KEY, String(clamped)); } catch (_) {}
+  }
 }
-btnFlash.addEventListener('click', () => {
-  if (!explorer) return;
-  if (isDriving) explorer.toggleVehicleHeadlights();
-  else explorer.toggleFlashlight();
-});
-mobFlash.addEventListener('click', () => {
-  if (!explorer) return;
-  if (isDriving) explorer.toggleVehicleHeadlights();
-  else explorer.toggleFlashlight();
-});
-mobCrouch.addEventListener('click', () => explorer && !isDriving && explorer.toggleCrouch());
-btnAudio.addEventListener('click', () => explorer && explorer.toggleAudio());
+
+function applySm11s(enabled, persist = true) {
+  const on = Boolean(enabled);
+  toggleSm11s.checked = on;
+  if (explorer) explorer.setSurfaceSuper(on);
+  if (persist) {
+    try { localStorage.setItem(STORAGE_SM11S_KEY, on ? '1' : '0'); } catch (_) {}
+  }
+}
+
+try {
+  const savedSens = localStorage.getItem(STORAGE_SENS_KEY);
+  if (savedSens !== null) applySensitivity(Number(savedSens), false);
+  const savedSm11s = localStorage.getItem(STORAGE_SM11S_KEY);
+  if (savedSm11s === '1') applySm11s(true, false);
+} catch (_) {}
+
+// ---- Wire HUD & Settings Events ----
 btnMap.addEventListener('click', () => toggleMap());
 document.getElementById('btn-close-map').addEventListener('click', () => toggleMap(false));
-btnPerf.addEventListener('click', () => togglePerf());
-interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
-mobInteract.addEventListener('click', () => explorer && explorer.interact());
-btnDriveLights.addEventListener('click', () => explorer && explorer.toggleVehicleHeadlights());
-btnDriveExit.addEventListener('click', () => explorer && explorer.interact());
+btnSettings.addEventListener('click', () => toggleSettings());
+btnCloseSettings.addEventListener('click', () => toggleSettings(false));
 
-elvFloorBtns.forEach((btn) => {
-  btn.addEventListener('click', () => explorer && explorer.selectElevatorFloor(Number(btn.dataset.elvFloor)));
+inputSens.addEventListener('input', () => applySensitivity(Number(inputSens.value), true));
+toggleSm11s.addEventListener('change', () => applySm11s(toggleSm11s.checked, true));
+toggleLight.addEventListener('change', () => {
+  if (!explorer) return;
+  if (isDriving) explorer.toggleVehicleHeadlights(toggleLight.checked);
+  else explorer.toggleFlashlight(toggleLight.checked);
 });
-elvBtnCall.addEventListener('click', () => explorer && explorer.callElevator(explorer.currentFloor));
-elvBtnOpen.addEventListener('click', () => explorer && explorer.openElevatorDoors());
-elvBtnClose.addEventListener('click', () => explorer && explorer.closeElevatorDoors());
+toggleAudio.addEventListener('change', () => {
+  if (!explorer) return;
+  const active = explorer.toggleAudio();
+  toggleAudio.checked = active;
+});
+togglePerfCb.addEventListener('change', () => togglePerf(togglePerfCb.checked));
+btnFullscreen.addEventListener('click', () => toggleFullscreen());
+btnDriveExitSettings.addEventListener('click', () => {
+  if (explorer && isDriving) {
+    explorer.interact();
+    toggleSettings(false);
+  }
+});
 
+driveHudEl.addEventListener('click', () => {
+  if (explorer && isDriving) explorer.interact();
+});
+interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
+mobCrouch.addEventListener('click', () => explorer && !isDriving && explorer.toggleCrouch());
+
+// ---- High-Precision 3D Map Touch / Mouse Orbit, Pan, Pinch-Zoom & Tap-to-Teleport ----
+btnMap3dFocus.addEventListener('click', () => {
+  if (!explorer || !explorer.map3d) return;
+  const focused = explorer.map3d.toggleFocusMode();
+  btnMap3dFocus.classList.toggle('active', focused);
+});
+
+btnMap3dOrbit.addEventListener('click', () => {
+  map3dOrbitMode = !map3dOrbitMode;
+  btnMap3dOrbit.classList.toggle('active', map3dOrbitMode);
+});
+
+const mapPointers = new Map();
+let mapSingleMoved = 0;
+let mapHadMultiTouch = false;
+let mapDragIsOrbit = false;
+let mapPrevPinchDist = 0;
+let mapPrevPinchAngle = 0;
+let mapPrevPinchMidY = 0;
+
+map3dGestureLayer.addEventListener('contextmenu', (e) => e.preventDefault());
+
+map3dGestureLayer.addEventListener('pointerdown', (e) => {
+  if (!mapVisible || activeSheetIdx !== 20 || !explorer || !explorer.map3d) return;
+  map3dGestureLayer.setPointerCapture(e.pointerId);
+  mapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (mapPointers.size === 1) {
+    mapSingleMoved = 0;
+    mapHadMultiTouch = false;
+    mapDragIsOrbit = map3dOrbitMode || e.button === 2 || e.shiftKey;
+  } else if (mapPointers.size === 2) {
+    mapHadMultiTouch = true;
+    const pts = Array.from(mapPointers.values());
+    mapPrevPinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    mapPrevPinchAngle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+    mapPrevPinchMidY = (pts[0].y + pts[1].y) * 0.5;
+  }
+});
+
+map3dGestureLayer.addEventListener('pointermove', (e) => {
+  if (!mapPointers.has(e.pointerId) || !explorer || !explorer.map3d) return;
+  const prev = mapPointers.get(e.pointerId);
+  const dx = e.clientX - prev.x;
+  const dy = e.clientY - prev.y;
+  mapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (mapPointers.size === 1 && !mapHadMultiTouch) {
+    mapSingleMoved += Math.hypot(dx, dy);
+    if (mapDragIsOrbit || e.buttons === 2 || e.shiftKey) {
+      explorer.map3d.orbitByDelta(dx, dy);
+    } else {
+      const rect = map3dGestureLayer.getBoundingClientRect();
+      explorer.map3d.panByScreenDelta(dx, dy, rect.width, rect.height);
+      btnMap3dFocus.classList.remove('active');
+    }
+  } else if (mapPointers.size === 2) {
+    const pts = Array.from(mapPointers.values());
+    const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    const angle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
+    const midY = (pts[0].y + pts[1].y) * 0.5;
+
+    if (mapPrevPinchDist > 8 && dist > 8) {
+      explorer.map3d.zoomByFactor(mapPrevPinchDist / dist);
+    }
+    let dAng = angle - mapPrevPinchAngle;
+    if (dAng > Math.PI) dAng -= Math.PI * 2;
+    if (dAng < -Math.PI) dAng += Math.PI * 2;
+    const dTilt = midY - mapPrevPinchMidY;
+    explorer.map3d.orbitByDelta(-dAng * 165, dTilt * 0.9);
+
+    mapPrevPinchDist = dist;
+    mapPrevPinchAngle = angle;
+    mapPrevPinchMidY = midY;
+  }
+});
+
+function releaseMapPointer(e) {
+  if (!mapPointers.has(e.pointerId)) return;
+  const wasSingleTap = mapPointers.size === 1 && !mapHadMultiTouch && mapSingleMoved < 9 && e.button !== 2;
+  mapPointers.delete(e.pointerId);
+  if (mapPointers.size === 0) {
+    mapHadMultiTouch = false;
+  }
+
+  if (wasSingleTap && mapVisible && activeSheetIdx === 20 && explorer && explorer.map3d) {
+    const rect = map3dGestureLayer.getBoundingClientRect();
+    const hit = explorer.map3d.pickAtScreenPoint(e.clientX, e.clientY, rect);
+    if (hit) {
+      if (hit.kind === 'landmark') {
+        explorer.teleportToLandmark(hit.id);
+      } else {
+        explorer.teleportToWorld(hit.worldX, hit.worldZ);
+      }
+      toggleMap(false);
+    }
+  }
+}
+
+map3dGestureLayer.addEventListener('pointerup', releaseMapPointer);
+map3dGestureLayer.addEventListener('pointercancel', releaseMapPointer);
+
+map3dGestureLayer.addEventListener('wheel', (e) => {
+  if (!mapVisible || activeSheetIdx !== 20 || !explorer || !explorer.map3d) return;
+  e.preventDefault();
+  explorer.map3d.zoomByFactor(e.deltaY > 0 ? 1.12 : 0.89);
+}, { passive: false });
+
+// ---- 2.3× Ergonomic Touch Dual-Thumb Joystick + Direct 3D Physical Button Tap ----
 const joyZone = document.getElementById('joy-zone');
 const joyBase = document.getElementById('joy-base');
 const joyKnob = document.getElementById('joy-knob');
@@ -435,14 +489,20 @@ const lookZone = document.getElementById('look-zone');
 
 let joyTouchId = null;
 let joyOrigin = { x: 0, y: 0 };
-const JOY_MAX_R = 60;
+const getJoyMaxR = () => Math.max(48, (joyBase.offsetWidth || 285) * 0.388);
 
 joyZone.addEventListener('pointerdown', (e) => {
-  if (mapVisible || joyTouchId !== null || !explorer) return;
+  if (mapVisible || settingsVisible || joyTouchId !== null || !explorer) return;
   joyTouchId = e.pointerId;
   joyZone.setPointerCapture(e.pointerId);
   const rect = joyZone.getBoundingClientRect();
-  joyOrigin = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  const half = (joyBase.offsetWidth || 285) * 0.5;
+  const padX = Math.min(half * 0.65, rect.width * 0.36);
+  const padY = Math.min(half * 0.55, rect.height * 0.36);
+  joyOrigin = {
+    x: Math.max(padX, Math.min(rect.width - padX * 0.45, e.clientX - rect.left)),
+    y: Math.max(padY, Math.min(rect.height - padY, e.clientY - rect.top)),
+  };
   joyBase.classList.remove('joy-base-idle');
   joyBase.style.left = `${joyOrigin.x}px`;
   joyBase.style.top = `${joyOrigin.y}px`;
@@ -452,16 +512,17 @@ joyZone.addEventListener('pointerdown', (e) => {
 joyZone.addEventListener('pointermove', (e) => {
   if (e.pointerId !== joyTouchId || !explorer) return;
   const rect = joyZone.getBoundingClientRect();
+  const maxR = getJoyMaxR();
   let dx = (e.clientX - rect.left) - joyOrigin.x;
   let dy = (e.clientY - rect.top) - joyOrigin.y;
   const dist = Math.hypot(dx, dy);
-  if (dist > JOY_MAX_R) {
-    dx = (dx / dist) * JOY_MAX_R;
-    dy = (dy / dist) * JOY_MAX_R;
+  if (dist > maxR) {
+    dx = (dx / dist) * maxR;
+    dy = (dy / dist) * maxR;
   }
   joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-  const norm = Math.min(1, dist / JOY_MAX_R);
-  explorer.setVirtualMove(dx / JOY_MAX_R, dy / JOY_MAX_R, norm > 0.86);
+  const norm = Math.min(1, dist / maxR);
+  explorer.setVirtualMove(dx / maxR, dy / maxR, norm > 0.86);
 });
 
 function releaseJoy(e) {
@@ -480,6 +541,10 @@ let lookMoved = 0;
 
 lookZone.addEventListener('pointerdown', (e) => {
   if (mapVisible || lookTouchId !== null || !explorer) return;
+  if (settingsVisible) {
+    toggleSettings(false);
+    return;
+  }
   lookTouchId = e.pointerId;
   lookZone.setPointerCapture(e.pointerId);
   lookLast = { x: e.clientX, y: e.clientY };
@@ -498,63 +563,47 @@ lookZone.addEventListener('pointermove', (e) => {
 function releaseLook(e) {
   if (e.pointerId !== lookTouchId) return;
   lookTouchId = null;
-  if (lookMoved < 10 && explorer && !isDriving) explorer.interact();
+  if (lookMoved < 10 && explorer && !isDriving) {
+    explorer.interactAtScreenPoint(e.clientX, e.clientY);
+  }
 }
 lookZone.addEventListener('pointerup', releaseLook);
 lookZone.addEventListener('pointercancel', releaseLook);
 
-document.querySelectorAll('#bp-layers input[type="checkbox"]').forEach((cb) => {
-  cb.addEventListener('change', () => {
-    cb.closest('.layer-chip').classList.toggle('active', cb.checked);
-    blueprint.setLayer(cb.dataset.layer, cb.checked);
-  });
-});
-
-document.getElementById('btn-export-svg').addEventListener('click', () => {
-  const fl = BLUEPRINT_SHEETS[blueprint.activeFloor];
-  const blob = new Blob([blueprint.exportSVGString()], { type: 'image/svg+xml;charset=utf-8' });
+// ---- Bulk SVG / ZIP Blueprint Downloads ----
+function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `NARROW-50_${fl.code}_blueprint.svg`;
+  a.download = filename;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+btnExportSvg.addEventListener('click', () => {
+  const fl = BLUEPRINT_SHEETS[blueprint.activeFloor];
+  const blob = new Blob([blueprint.exportSVGString()], { type: 'image/svg+xml;charset=utf-8' });
+  triggerDownload(blob, `NARROW50_${fl.code}.svg`);
 });
 
-document.getElementById('table-finishes').innerHTML = `
-  <thead><tr><th>階</th><th>室・部位</th><th>床仕上</th><th>壁仕上</th><th>アクセント</th></tr></thead>
-  <tbody>
-    ${FINISH_SCHEDULE.map((f) => `
-      <tr>
-        <td><strong>${f.floor}</strong></td>
-        <td><strong>${f.room}</strong></td>
-        <td><span class="swatch-cell"><img class="swatch-img" src="./textures/${f.floorTex}.png" alt="" />${f.floorName}</span></td>
-        <td><span class="swatch-cell"><img class="swatch-img" src="./textures/${f.wallTex}.png" alt="" />${f.wallName}</span></td>
-        <td><span class="swatch-cell"><img class="swatch-img" src="./textures/${f.accentTex}.png" alt="" />${f.accentName}</span></td>
-      </tr>
-    `).join('')}
-  </tbody>
-`;
+btnExportAllSvg.addEventListener('click', () => {
+  const combinedSvg = blueprint.exportAllSheetsCombinedSVG();
+  const blob = new Blob([combinedSvg], { type: 'image/svg+xml;charset=utf-8' });
+  triggerDownload(blob, 'NARROW50_ALL_20_BLUEPRINTS.svg');
+});
 
-document.getElementById('table-openings').innerHTML = `
-  <thead><tr><th>記号</th><th>種別</th><th class="num">開口 (mm)</th><th>仕様</th></tr></thead>
-  <tbody>
-    ${OPENING_SCHEDULE.map((o) => `
-      <tr>
-        <td><strong>${o.code}</strong></td>
-        <td>${o.kind}</td>
-        <td class="num">${o.size}</td>
-        <td>${o.spec}</td>
-      </tr>
-    `).join('')}
-  </tbody>
-`;
+btnExportAllZip.addEventListener('click', () => {
+  const zipBlob = blueprint.exportAllSheetsZipBlob();
+  triggerDownload(zipBlob, 'NARROW50_ALL_20_SVG.zip');
+});
 
+// ---- URL Parameters for Verification & Deep-Links ----
 const params = new URLSearchParams(window.location.search);
 if (explorer) {
-  if (params.get('tod')) {
-    explorer.setTimeOfDay(params.get('tod'));
-  }
+  if (params.has('sens')) applySensitivity(Number(params.get('sens')), false);
+  if (params.get('sm11s') === '1') applySm11s(true, false);
   if (params.has('elvFloor')) {
     const ef = Number(params.get('elvFloor'));
     const eOpen = params.get('elvDoors') !== 'closed';
@@ -618,9 +667,19 @@ if (explorer) {
   if (params.get('flash') === '1') explorer.toggleFlashlight(true);
 }
 if (params.get('perf') === '1') togglePerf(true);
+if (params.get('settings') === '1') toggleSettings(true);
 if (params.get('map') === '1') {
   toggleMap(true);
   if (params.has('bpFloor')) selectBlueprintFloor(Number(params.get('bpFloor')));
 }
 
-window.__FPS_APP__ = { explorer, blueprint, selectBlueprintFloor };
+window.__FPS_APP__ = {
+  explorer,
+  blueprint,
+  selectBlueprintFloor,
+  toggleSettings,
+  toggleMap,
+  applySensitivity,
+  applySm11s,
+  getMap3D: () => explorer?.map3d || null,
+};

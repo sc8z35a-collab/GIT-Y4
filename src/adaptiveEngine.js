@@ -11,7 +11,9 @@ export class AdaptiveMobileEngine {
     this.postfx = postfx;
     this.house = house;
 
-    this.maxPR = Math.min(window.devicePixelRatio || 1, 2.0);
+    this.surfaceSuper = false;
+    this.baseMaxPR = Math.min(window.devicePixelRatio || 1, 2.0);
+    this.maxPR = this.baseMaxPR;
     this.stepIdx = DRS_STEPS.findIndex((s) => s >= Math.min(this.maxPR, 1.5));
     if (this.stepIdx < 0) this.stepIdx = 2;
 
@@ -29,9 +31,26 @@ export class AdaptiveMobileEngine {
     this._applyPixelRatio();
   }
 
+  setSurfaceSuper(enabled) {
+    this.surfaceSuper = Boolean(enabled);
+    const nativeDpr = window.devicePixelRatio || 1;
+    this.maxPR = this.surfaceSuper
+      ? Math.min(Math.max(nativeDpr, 1.1) * 1.1, 2.4)
+      : this.baseMaxPR;
+    if (this.surfaceSuper) {
+      this.stepIdx = DRS_STEPS.length - 1;
+    }
+    this._applyPixelRatio();
+    if (this.postfx && this.postfx.setSurfaceSuper) {
+      this.postfx.setSurfaceSuper(this.surfaceSuper);
+    }
+    this.markShadowsDirty();
+  }
+
   _applyPixelRatio() {
-    const pr = Math.min(DRS_STEPS[this.stepIdx], this.maxPR);
-    this.renderer.setPixelRatio(pr);
+    const baseScale = DRS_STEPS[this.stepIdx];
+    const targetPR = this.surfaceSuper ? Math.min(baseScale * 1.1, this.maxPR) : Math.min(baseScale, this.maxPR);
+    this.renderer.setPixelRatio(targetPR);
     if (this.postfx) this.postfx.resize();
   }
 
@@ -247,7 +266,8 @@ export class AdaptiveMobileEngine {
       fps: Math.round(1000 / Math.max(1, this.emaFrameMs)),
       frameMs: this.emaFrameMs.toFixed(1),
       targetHz: this.detectedHz,
-      scale: Math.min(DRS_STEPS[this.stepIdx], this.maxPR).toFixed(2),
+      scale: this.renderer.getPixelRatio().toFixed(2),
+      surfaceSuper: this.surfaceSuper,
       drawCalls: (this.postfx && this.postfx.lastMainCalls) ? this.postfx.lastMainCalls : info.render.calls,
       triangles: (this.postfx && this.postfx.lastMainTris) ? this.postfx.lastMainTris : info.render.triangles,
       activeLights,

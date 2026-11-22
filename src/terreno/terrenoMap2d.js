@@ -1,10 +1,7 @@
 import {
   TERRENO_WORLD,
   MOUNTAIN_PEAKS,
-  TRIBUTARIES,
   TERRENO_LANDMARKS,
-  ATMOSPHERE_PRESETS,
-  ATMOSPHERE_ORDER,
   evalMainRiver,
 } from './terrenoConfig.js';
 
@@ -167,7 +164,6 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
   let profileCanvas = null;
   let telemetryEl = null;
   let mapRect = { x: 0, y: 0, w: 1, h: 1 };
-  let activeTodId = 'night';
 
   function worldToMapPx(wx, wz) {
     const u = (wx - TERRENO_WORLD.minX) / TERRENO_WORLD.width;
@@ -195,31 +191,13 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
 
     root.innerHTML = `
       <div class="terreno-survey-left">
-        <div class="terreno-map-header">
-          <span>国土地理院風 広域地形図 5.0km × 19.0km (95.0 km²)</span>
-          <span class="terreno-map-hint">地図の任意地点をクリックで現地テレポート</span>
-        </div>
         <canvas class="terreno-map-canvas" width="460" height="820"></canvas>
       </div>
       <div class="terreno-survey-right">
-        <div class="terreno-card terreno-telemetry-card">
-          <div class="terreno-card-title">TERRENO 土地エンジン リアルタイム計測</div>
-          <div class="terreno-telemetry-grid" id="terreno-telemetry-grid"></div>
-        </div>
-
-        <div class="terreno-card">
-          <div class="terreno-card-title">時刻・大気プリセット切替 <span class="terreno-kbd">[T]</span></div>
-          <div class="terreno-tod-row" id="terreno-tod-row"></div>
-        </div>
-
-        <div class="terreno-card">
-          <div class="terreno-card-title">主要6名所ファストトラベル（クリックで即移動）</div>
-          <div class="terreno-landmarks-grid" id="terreno-landmarks-grid"></div>
-        </div>
-
-        <div class="terreno-card terreno-profile-card">
-          <div class="terreno-card-title">南北 19.0 km 縦断標高断面図（稜線包絡 & 黒杉川河床）</div>
-          <canvas class="terreno-profile-canvas" width="560" height="145"></canvas>
+        <div class="terreno-telemetry-strip" id="terreno-telemetry-grid"></div>
+        <div class="terreno-landmarks-grid" id="terreno-landmarks-grid"></div>
+        <div class="terreno-profile-wrap">
+          <canvas class="terreno-profile-canvas" width="560" height="126"></canvas>
         </div>
       </div>
     `;
@@ -229,39 +207,19 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     profileCanvas = root.querySelector('.terreno-profile-canvas');
     telemetryEl = root.querySelector('#terreno-telemetry-grid');
 
-    // Time-of-Day buttons
-    const todRow = root.querySelector('#terreno-tod-row');
-    ATMOSPHERE_ORDER.forEach((id) => {
-      const p = ATMOSPHERE_PRESETS[id];
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'terreno-tod-btn';
-      btn.dataset.tod = id;
-      btn.innerHTML = `<strong>${p.labelJp}</strong><span>${p.fullNameJp.split('（')[0]}</span>`;
-      btn.addEventListener('click', () => {
-        activeTodId = id;
-        updateTodButtons();
-        if (callbacks.onSetTimeOfDay) callbacks.onSetTimeOfDay(id);
-      });
-      todRow.appendChild(btn);
-    });
-
-    // 6 Curated Landmark Teleport Cards
+    // Minimalist Landmark Teleport Grid (NO verbose descriptions, NO Time-of-Day switcher!)
     const lmGrid = root.querySelector('#terreno-landmarks-grid');
     TERRENO_LANDMARKS.forEach((lm) => {
       const y = geomorph.getHeightAt(lm.x, lm.z);
       const asl = Math.round(TERRENO_WORLD.baseElevationASL + y);
-      const distKm = (Math.hypot(lm.x - TERRENO_WORLD.compoundCenterX, lm.z - TERRENO_WORLD.compoundCenterZ) / 1000).toFixed(2);
+      const shortName = lm.nameJp.split('・')[0].replace('母屋 ', '').replace(' 拠点', '');
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'terreno-lm-btn';
       btn.innerHTML = `
-        <div class="terreno-lm-head">
-          <span class="terreno-lm-code">${lm.code}</span>
-          <span class="terreno-lm-name">${lm.nameJp}</span>
-          <span class="terreno-lm-asl">EL +${asl}m</span>
-        </div>
-        <div class="terreno-lm-desc">${lm.desc} (${distKm} km)</div>
+        <span class="terreno-lm-code">${lm.code}</span>
+        <span class="terreno-lm-name">${shortName}</span>
+        <span class="terreno-lm-asl">+${asl}m</span>
       `;
       btn.addEventListener('click', () => {
         if (callbacks.onTeleportLandmark) callbacks.onTeleportLandmark(lm.id);
@@ -269,7 +227,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       lmGrid.appendChild(btn);
     });
 
-    // Click anywhere on 5km × 19km Topographic Map to teleport!
+    // Tap anywhere on 5×19km map to teleport
     mapCanvas.addEventListener('click', (ev) => {
       const rect = mapCanvas.getBoundingClientRect();
       const scaleX = mapCanvas.width / rect.width;
@@ -281,25 +239,10 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
         callbacks.onTeleportWorld(world.x, world.z);
       }
     });
-
-    updateTodButtons();
-  }
-
-  function updateTodButtons() {
-    if (!mapCanvas) return;
-    const root = mapCanvas.closest('.terreno-survey-root');
-    if (!root) return;
-    root.querySelectorAll('.terreno-tod-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.tod === activeTodId);
-    });
   }
 
   function render(playerState) {
     if (!mapCanvas || !profileCanvas) return;
-    if (playerState?.todId) {
-      activeTodId = playerState.todId;
-      updateTodButtons();
-    }
 
     const ctx = mapCanvas.getContext('2d');
     const CW = mapCanvas.width;
@@ -439,16 +382,16 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     ctx.stroke();
     ctx.restore();
 
-    // Map border + North arrow + Scale bar
+    // Map border + minimal North marker
     ctx.strokeStyle = 'rgba(148, 184, 214, 0.55)';
     ctx.lineWidth = 1.4;
     ctx.strokeRect(ox, oy, drawW, drawH);
     ctx.fillStyle = '#cbd5e1';
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('N ▲ (北 -6.5km)', ox, oy - 7);
+    ctx.fillText('N ▲', ox, oy - 7);
     ctx.textAlign = 'right';
-    ctx.fillText('50m主曲線 / 200m計曲線', ox + drawW, oy - 7);
+    ctx.fillText('5×19km', ox + drawW, oy - 7);
 
     // ---- Render 19 km Longitudinal Elevation Profile ----
     const pCtx = profileCanvas.getContext('2d');
@@ -457,13 +400,12 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     pCtx.fillStyle = '#0b131c';
     pCtx.fillRect(0, 0, PW, PH);
 
-    const pL = 44, pR = 14, pT = 14, pB = 22;
+    const pL = 40, pR = 12, pT = 10, pB = 18;
     const gW = PW - pL - pR;
     const gH = PH - pT - pB;
     const elevMin = 300, elevMax = 1650;
     const eToY = (e) => pT + gH * (1.0 - (e - elevMin) / (elevMax - elevMin));
 
-    // Horizontal elevation gridlines
     pCtx.strokeStyle = 'rgba(148, 184, 214, 0.16)';
     pCtx.fillStyle = '#8fa9bf';
     pCtx.font = '10px "JetBrains Mono", monospace';
@@ -477,7 +419,6 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       pCtx.fillText(`${e}m`, pL - 5, y + 3);
     });
 
-    // Filled Mountain Peak Envelope
     pCtx.beginPath();
     pCtx.moveTo(pL, pT + gH);
     for (let b = 0; b < profBins; b++) {
@@ -496,7 +437,6 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     pCtx.lineWidth = 1.4;
     pCtx.stroke();
 
-    // River longitudinal profile (blue curve)
     pCtx.beginPath();
     for (let b = 0; b < profBins; b++) {
       const x = pL + (b / (profBins - 1)) * gW;
@@ -508,7 +448,6 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     pCtx.lineWidth = 1.8;
     pCtx.stroke();
 
-    // Current Player position on 19km profile!
     const playerBiome = geomorph.getBiomeInfoAt(pxW, pzW);
     const ptX = pL + ((pzW - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth) * gW;
     const ptY = eToY(playerBiome.asl);
@@ -523,26 +462,20 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     pCtx.arc(ptX, ptY, 4.2, 0, Math.PI * 2);
     pCtx.fill();
 
-    // X-axis labels
     pCtx.fillStyle = '#9db4c8';
     pCtx.textAlign = 'center';
-    pCtx.fillText('北端 -6.5km (源流)', pL + 54, PH - 6);
-    pCtx.fillText('NARROW-50 (0km)', pL + ((0 - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth) * gW, PH - 6);
-    pCtx.fillText('南端 +12.5km (白雲峰)', pL + gW - 62, PH - 6);
+    pCtx.fillText('-6.5km', pL + 22, PH - 4);
+    pCtx.fillText('BASE', pL + ((0 - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth) * gW, PH - 4);
+    pCtx.fillText('+12.5km', pL + gW - 26, PH - 4);
 
-    // ---- Telemetry Grid ----
     if (telemetryEl) {
       const distBaseKm = (Math.hypot(pxW - TERRENO_WORLD.compoundCenterX, pzW - TERRENO_WORLD.compoundCenterZ) / 1000).toFixed(2);
       const slopeDeg = Math.round((Math.atan(playerBiome.slope) * 180) / Math.PI);
-      const minAsl = Math.round(TERRENO_WORLD.baseElevationASL + geomorph.minElev);
-      const maxAsl = Math.round(TERRENO_WORLD.baseElevationASL + geomorph.maxElev);
       telemetryEl.innerHTML = `
-        <div><label>領域総面積</label><strong>5.0 × 19.0 km (95 km²)</strong></div>
-        <div><label>現在地標高</label><strong>EL +${Math.round(playerBiome.asl)} m</strong></div>
-        <div><label>生態植生帯</label><strong>${playerBiome.zoneJp}</strong></div>
-        <div><label>現地勾配 / 湿潤</label><strong>${slopeDeg}° / ${Math.round(playerBiome.wetness * 100)}%</strong></div>
-        <div><label>母屋からの距離</label><strong>${distBaseKm} km (X:${Math.round(pxW)} Z:${Math.round(pzW)})</strong></div>
-        <div><label>起伏レンジ / 生成</label><strong>${minAsl}〜${maxAsl}m (${Math.round(geomorph.bakeMs)}ms)</strong></div>
+        <div><span>標高</span><strong>+${Math.round(playerBiome.asl)}m</strong></div>
+        <div><span>勾配</span><strong>${slopeDeg}°</strong></div>
+        <div><span>距離</span><strong>${distBaseKm}km</strong></div>
+        <div><span>植生</span><strong>${playerBiome.zoneJp}</strong></div>
       `;
     }
   }

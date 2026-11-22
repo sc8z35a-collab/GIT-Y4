@@ -868,6 +868,19 @@ export function buildTerrenoGeomorphology() {
     return { x: nx / len, y: ny / len, z: nz / len, slope: Math.hypot(hR - hL, hU - hD) / (2.0 * step) };
   }
 
+  // Smooth macro terrain normal (no micro-bump spikes!) for accurate cliff/grade climbing physics
+  function getMacroNormalAt(wx, wz, step = 3.0) {
+    const hL = sampleGeoBilinear(wx - step, wz).hMacro;
+    const hR = sampleGeoBilinear(wx + step, wz).hMacro;
+    const hD = sampleGeoBilinear(wx, wz - step).hMacro;
+    const hU = sampleGeoBilinear(wx, wz + step).hMacro;
+    const nx = hL - hR;
+    const ny = 2.0 * step;
+    const nz = hD - hU;
+    const len = Math.hypot(nx, ny, nz) || 1.0;
+    return { x: nx / len, y: ny / len, z: nz / len, slope: Math.hypot(hR - hL, hU - hD) / (2.0 * step) };
+  }
+
   function getBiomeInfoAt(wx, wz) {
     const g = sampleGeoBilinear(wx, wz);
     const y = g.hMacro + evalSharedMicroRelief(wx, wz, g.roadPad);
@@ -877,14 +890,14 @@ export function buildTerrenoGeomorphology() {
     const inRiver = Math.abs(wx - rv.x) < rv.halfWidth * 0.95 && y < rv.waterY + 0.4;
     const isRoad = g.roadPad > 0.45 && Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ) > 22.0;
 
-    let zoneJp = '低山スギ・ヒノキ深森帯';
-    if (inRiver) zoneJp = '黒杉渓谷・清流河原';
-    else if (isRoad) zoneJp = '奥山林道（砕石・通行可）';
-    else if (n.slope > 0.85) zoneJp = '成層花崗岩 急崖・ガレ場';
-    else if (asl >= 1360) zoneJp = '高山帯・花崗岩稜＆ハイマツ';
-    else if (asl >= 1120) zoneJp = '亜高山帯・シラビソ＆クマザサ';
-    else if (asl >= 820) zoneJp = '山地帯・ブナ＆ミズナラ原生林';
-    else if (g.wetness > 0.55) zoneJp = '湿潤沢筋・苔羊歯原生林';
+    let zoneJp = 'スギ深森帯';
+    if (inRiver) zoneJp = '黒杉渓谷';
+    else if (isRoad) zoneJp = '奥山林道';
+    else if (n.slope > 0.85) zoneJp = '花崗岩急崖';
+    else if (asl >= 1360) zoneJp = '高山帯';
+    else if (asl >= 1120) zoneJp = '亜高山帯';
+    else if (asl >= 820) zoneJp = 'ブナ原生林';
+    else if (g.wetness > 0.55) zoneJp = '沢筋原生林';
 
     return {
       y,
@@ -924,6 +937,7 @@ export function buildTerrenoGeomorphology() {
     bakeMs,
     getHeightAt,
     getNormalAt,
+    getMacroNormalAt,
     sampleGeoBilinear,
     getBiomeInfoAt,
   };

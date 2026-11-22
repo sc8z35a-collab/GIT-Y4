@@ -23,6 +23,7 @@ const POST_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uExposure;
   uniform float uBloomStrength;
+  uniform float uCasStrength;
   varying vec2 vUv;
 
   vec3 acesFilm(vec3 x) {
@@ -49,17 +50,15 @@ const POST_FRAG = /* glsl */ `
   void main() {
     vec3 col = texture2D(tDiffuse, vUv).rgb;
 
-    // Subtle 5-tap Contrast-Adaptive Optical Micro-Sharpening (CAS) — snaps pine needles,
-    // granite fractures, and leaf veins to prime-lens crispness without ringing halos!
+    // 5-tap Contrast-Adaptive Optical Micro-Sharpening (CAS) — boosted in SM1.1S (SURFACE MODE 1.1 SUPER)
     vec3 cN = texture2D(tDiffuse, vUv + vec2(0.0,  uTexel.y)).rgb;
     vec3 cS = texture2D(tDiffuse, vUv + vec2(0.0, -uTexel.y)).rgb;
     vec3 cE = texture2D(tDiffuse, vUv + vec2( uTexel.x, 0.0)).rgb;
     vec3 cW = texture2D(tDiffuse, vUv + vec2(-uTexel.x, 0.0)).rgb;
     vec3 mnRGB = min(col, min(min(cN, cS), min(cE, cW)));
     vec3 mxRGB = max(col, max(max(cN, cS), max(cE, cW)));
-    // Adaptive weight drops smoothly on high-contrast silhouette edges to prevent haloing
     vec3 amp = sqrt(clamp(min(mnRGB, 2.0 - mxRGB) / max(mxRGB, vec3(0.0001)), 0.0, 1.0));
-    vec3 wCas = amp * -0.115;
+    vec3 wCas = amp * -uCasStrength;
     col = clamp((col + (cN + cS + cE + cW) * wCas) / (vec3(1.0) + 4.0 * wCas), vec3(0.0), vec3(64.0));
 
     // 9-tap circular kernel analytic bloom (single Adreno TBDR pass)
@@ -139,6 +138,7 @@ export class SinglePassPostFX {
         uTime: { value: 0 },
         uExposure: { value: 1.15 },
         uBloomStrength: { value: hasHalfFloatRender ? 0.48 : 0.28 },
+        uCasStrength: { value: 0.115 },
       },
       depthTest: false,
       depthWrite: false,
@@ -148,6 +148,12 @@ export class SinglePassPostFX {
     triGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
     triGeo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 2, 0, 0, 2]), 2));
     this.scene.add(new THREE.Mesh(triGeo, this.material));
+  }
+
+  setSurfaceSuper(enabled) {
+    if (this.material && this.material.uniforms.uCasStrength) {
+      this.material.uniforms.uCasStrength.value = enabled ? 0.185 : 0.115;
+    }
   }
 
   resize() {
