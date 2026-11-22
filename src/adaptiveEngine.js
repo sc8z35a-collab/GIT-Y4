@@ -73,17 +73,24 @@ export class AdaptiveMobileEngine {
     return new Set(b3Lights.slice(0, maxCount).map((e) => e.name));
   }
 
-  snapFloorLights(floorIdx, activeBuilding = 'main', inElevator = false, playerX = 1.6, playerZ = 5.8) {
+  snapFloorLights(floorIdx, activeBuilding = 'main', inElevator = false, playerX = 1.6, playerZ = 5.8, inExtElevator = false) {
     const elvStop = this.house.elevator ? this.house.elevator.currentStopFloor : -2;
     const b3NearSet = (floorIdx === -2 && activeBuilding === 'main' && !inElevator)
       ? this._getNearestB3LightSet(playerX, playerZ, 5)
       : null;
     for (const entry of this.house.interiorLights) {
-      const b = entry.light.userData.building || 'main';
+      const b = entry.light.userData.building
+        || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' ? entry.zone : 'main');
       if (b === 'elevator') {
         const activeElv = inElevator || (activeBuilding === 'main' && floorIdx <= 1 && (floorIdx === elvStop));
         entry.light.intensity = activeElv ? entry.baseInt : 0;
         entry.light.visible = activeElv;
+        continue;
+      }
+      if (b === 'ext_elv') {
+        const activeExtElv = inExtElevator || (floorIdx === 1 && activeBuilding === 'courtyard') || floorIdx === 7;
+        entry.light.intensity = activeExtElv ? entry.baseInt : 0;
+        entry.light.visible = activeExtElv;
         continue;
       }
       if (inElevator) {
@@ -94,7 +101,9 @@ export class AdaptiveMobileEngine {
       }
       const sameBuilding = b === 'both'
         || b === activeBuilding
-        || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard'));
+        || (activeBuilding === 'garage' && b === 'garage')
+        || (activeBuilding === 'container' && b === 'garage')
+        || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard' || b === 'garage'));
       let active = entry.floor === floorIdx && sameBuilding;
       if (active && b3NearSet && b === 'main' && entry.floor === -2) {
         active = b3NearSet.has(entry.name);
@@ -148,7 +157,7 @@ export class AdaptiveMobileEngine {
   }
 
   /**
-   * 5-Unit + 11-Level Main Tower (B4F..6F+RF) Spatial Portal Light Culler:
+   * Multi-Unit + 11-Level Main Tower (B4F..6F+RF) Spatial Portal Light Culler:
    * Strictly keeps <= 6–7 interior point lights active on the GPU at any instant on POCO F7!
    */
   _updateFloorSpatialLightBudget(dtSec, {
@@ -156,6 +165,7 @@ export class AdaptiveMobileEngine {
     activeFlight,
     activeBuilding = 'main',
     inElevator = false,
+    inExtElevator = false,
     doorOpenMap = {},
     propStates,
     playerX = 1.6,
@@ -205,25 +215,33 @@ export class AdaptiveMobileEngine {
         continue;
       }
 
-      const b = entry.light.userData.building || 'main';
+      const b = entry.light.userData.building
+        || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' ? entry.zone : 'main');
       let weight = 0.0;
 
       if (b === 'elevator') {
-        // Elevator cab interior LED ceiling light: glows whenever player is inside cab OR doors are open on player's floor!
         if (inElevator) weight = 1.0;
         else if (activeBuilding === 'main' && currentFloor <= 1 && (elvOpenHere || currentFloor === elvStop)) weight = 0.85;
+      } else if (b === 'ext_elv') {
+        if (inExtElevator) weight = 1.0;
+        else if (currentFloor === 7 || (currentFloor === 1 && playerX > -4.5 && playerX < 1.5 && playerZ > -1.5 && playerZ < 4.5)) weight = 0.85;
+      } else if (b === 'armor') {
+        if (activeBuilding === 'armor') weight = 1.0;
+      } else if (b === 'garage') {
+        if (activeBuilding === 'garage' || activeBuilding === 'container') weight = 1.0;
+        else if (activeBuilding === 'courtyard' && currentFloor === 1 && playerX > 6.5 && playerX < 25.0 && playerZ > -14.0 && playerZ < 18.0) {
+          weight = (doorOpenMap['DG-N'] || doorOpenMap['DG-S'] || doorOpenMap['DG-W']) ? 0.90 : 0.45;
+        }
       } else if (inElevator) {
-        // Enclosed steel cab optimization (strictly <= 5 active GPU lights on POCO F7 at all stops!)
         if (b === 'main' && entry.floor === currentFloor && (entry.zone === 'north' || entry.zone === 'elv' || entry.zone === 'studio' || entry.zone === 'living')) {
           weight = elvOpenHere ? 0.95 : 0.35;
         }
       } else if (b === 'both') {
         weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
       } else if (activeBuilding === 'courtyard') {
-        // Outdoors in the compound courtyard: keep strictly <= 7 GPU lights active on POCO F7!
         const keiDoorOpen = Boolean(doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D']);
         if (b === 'kei' && keiDoorOpen) {
-          weight = 0.90; // Authentic automatic dome light when opening Kei-Van cargo doors!
+          weight = 0.90;
         } else if (entry.floor === 1 && entry.zone === 'exterior') {
           weight = 1.0;
         } else if (!keiDoorOpen && entry.floor === 1 && b === 'main' && entry.zone === 'ldk') {
@@ -237,7 +255,7 @@ export class AdaptiveMobileEngine {
             weight = 1.0;
           }
         } else if (b === 'camper' && entry.zone === 'mid') {
-          weight = 0.72; // Soaring 3.02m central skylight atrium illuminates both 1F & 2F Loft bridge!
+          weight = 0.72;
         } else if (b === 'camper' && currentFloor === 1 && entry.floor === 2) {
           weight = 0.30;
         } else if (activeFlight === 'st_b2' && (entry.floor === 0 || entry.floor === -1)) {

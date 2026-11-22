@@ -383,4 +383,67 @@ export class SpatialForestAudio {
     this.elvPwmGain.gain.setTargetAtTime(moving ? (0.004 + s * 0.012) : 0.0, t, 0.10);
     this.elvPwmOsc.frequency.setTargetAtTime(340 + s * 740, t, 0.08);
   }
+
+  updateStorm(intensity, muffle = 0.0) {
+    if (!this.ctx || !this.noiseBuffer) return;
+    if (!this.rainGain) {
+      const rainSrc = this.ctx.createBufferSource();
+      rainSrc.buffer = this.noiseBuffer;
+      rainSrc.loop = true;
+      this.rainFilter = this.ctx.createBiquadFilter();
+      this.rainFilter.type = 'bandpass';
+      this.rainFilter.frequency.value = 1400;
+      this.rainFilter.Q.value = 0.7;
+      this.rainGain = this.ctx.createGain();
+      this.rainGain.gain.value = 0.0;
+      rainSrc.connect(this.rainFilter);
+      this.rainFilter.connect(this.rainGain);
+      this.rainGain.connect(this.ctx.destination);
+      rainSrc.start();
+    }
+    const t = this.ctx.currentTime;
+    const active = this.muted ? 0 : Math.max(0, Math.min(1, intensity));
+    const atten = 1.0 - Math.max(0, Math.min(0.85, muffle));
+    this.rainGain.gain.setTargetAtTime(active * 0.16 * atten, t, 0.18);
+    this.rainFilter.frequency.setTargetAtTime(520 + 1350 * atten, t, 0.18);
+  }
+
+  playThunder(distanceM = 300) {
+    if (!this.ctx || this.muted || !this.noiseBuffer) return;
+    const delay = Math.min(1.6, Math.max(0.08, distanceM / 420));
+    const t = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(190, t);
+    filt.frequency.exponentialRampToValueAtTime(48, t + 2.4);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.24, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.6);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.ctx.destination);
+    src.start(t, Math.random() * 0.5, 2.7);
+  }
+
+  playShutterClank(closing = true) {
+    if (!this.ctx || this.muted || !this.noiseBuffer) return;
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(closing ? 340 : 480, t);
+    filt.frequency.linearRampToValueAtTime(closing ? 160 : 620, t + 0.42);
+    filt.Q.value = 3.2;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.14, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.ctx.destination);
+    src.start(t, Math.random() * 1.2, 0.48);
+  }
 }

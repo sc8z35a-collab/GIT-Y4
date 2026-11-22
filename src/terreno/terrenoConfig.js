@@ -18,8 +18,8 @@ export const TERRENO_WORLD = {
   baseElevationASL: 520.35,
   compoundCenterX: 1.5,
   compoundCenterZ: 3.5,
-  compoundFlatRadius: 26.0,
-  compoundBlendRadius: 175.0,
+  compoundFlatRadius: 36.0,
+  compoundBlendRadius: 195.0,
   // Playable movement bounds (keep 40m inset from outer map rim)
   playMinX: -2460,
   playMaxX: 2460,

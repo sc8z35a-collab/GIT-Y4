@@ -90,6 +90,12 @@
         </label>
 
         <label class="setting-row setting-toggle">
+          <span>嵐</span>
+          <input id="toggle-storm" type="checkbox" />
+          <span class="switch-track"></span>
+        </label>
+
+        <label class="setting-row setting-toggle">
           <span>ライト</span>
           <input id="toggle-light" type="checkbox" />
           <span class="switch-track"></span>
@@ -130,12 +136,15 @@
       </button>
     </div>
 
-    <!-- Edge-to-Edge Fullscreen High-Precision 3D Map & 20-Sheet CAD Blueprint Modal (Zero Clutter) -->
+    <!-- Edge-to-Edge Fullscreen High-Precision 3D Map, Authentic 2D Route Map & 23-Sheet CAD Blueprint Modal -->
     <section id="map-modal" class="map-modal mode-3d hidden" role="dialog" aria-modal="true" aria-label="地図">
       <!-- Transparent Full-Screen Interactive Gesture Layer for Live 3D Topographic Map -->
       <div id="map3d-gesture-layer" class="map3d-gesture-layer"></div>
 
-      <!-- Full-Screen Edge-to-Edge CAD Architectural Blueprint Layer -->
+      <!-- Full-Screen Authentic 2D Topographic Map & 30-Waypoint Autonomous Route Selector -->
+      <div id="terreno-2d-panel" class="terreno-2d-panel hidden"></div>
+
+      <!-- Full-Screen Edge-to-Edge CAD Architectural Blueprint Layer (2-Finger Zoom Out/In & Free Pan) -->
       <div id="cad-map-body" class="cad-fullscreen hidden">
         <div id="blueprint-viewport" class="blueprint-viewport">
           <div id="blueprint-mount" class="blueprint-mount"></div>
@@ -170,9 +179,10 @@
         <button id="btn-close-map" class="map-icon-btn map-close-icon" type="button" aria-label="閉じる">✕</button>
       </div>
 
-      <!-- Slim Floating Bottom Floor/3D Switcher Pill Bar -->
+      <!-- Slim Floating Bottom Floor / 3D / 2D Switcher Pill Bar -->
       <nav id="bp-floor-tabs" class="floor-pill-bar" role="tablist" aria-label="地図切替">
-        <button class="floor-tab floor-tab-3d active" data-floor="20" type="button" role="tab">3D</button>
+        <button class="floor-tab floor-tab-3d active" data-floor="30" type="button" role="tab">3D</button>
+        <button class="floor-tab floor-tab-2d" data-floor="31" type="button" role="tab">2D</button>
         <button class="floor-tab floor-tab-classified" data-floor="0" type="button" role="tab">B4</button>
         <button class="floor-tab floor-tab-deep" data-floor="1" type="button" role="tab">B3</button>
         <button class="floor-tab floor-tab-deep" data-floor="2" type="button" role="tab">B2</button>
@@ -193,6 +203,9 @@
         <button class="floor-tab floor-tab-rv" data-floor="17" type="button" role="tab">RV1</button>
         <button class="floor-tab floor-tab-rv" data-floor="18" type="button" role="tab">RV2</button>
         <button class="floor-tab floor-tab-kei" data-floor="19" type="button" role="tab">軽</button>
+        <button class="floor-tab floor-tab-garage" data-floor="20" type="button" role="tab">車庫</button>
+        <button class="floor-tab floor-tab-armor" data-floor="21" type="button" role="tab">装甲</button>
+        <button class="floor-tab floor-tab-cont" data-floor="22" type="button" role="tab">箱</button>
       </nav>
     </section>
   </div>

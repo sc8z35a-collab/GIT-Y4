@@ -9,8 +9,10 @@ import {
   FLOORS, HOUSE, ANNEX, ANNEX_FLOORS, getAnnexAtticCeilingY,
   STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, SHEET_OFFSETS, getAtticCeilingY,
   ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F, getFloorByPhysicalIndex,
+  GARAGE, GARAGE_PLAN, ARMOR_CAMPER, ARMOR_CAMPER_PLAN, TOW_CONTAINER, TOW_CONTAINER_PLAN, EXT_ELEVATOR,
 } from './planData.js';
 import { TERRENO_WORLD, TERRENO_LANDMARKS, evalMainRiver } from './terreno/terrenoConfig.js';
+import { AUTOPILOT_WAYPOINTS } from './terreno/terrenoAutopilot.js';
 
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -24,6 +26,7 @@ const _flashWorldDir = new THREE.Vector3();
 // Exact Ground-Level Static Building World AABBs for Movable Vehicles (ZERO invisible air under high balconies!)
 const STATIC_VEHICLE_OBSTACLES = [
   { minX: 0.00, maxX: 5.02, minZ: 0.00, maxZ: 10.02 },    // Main Tower ground walls
+  { minX: -1.58, maxX: 0.02, minZ: 0.32, maxZ: 1.88 },    // Exterior Attic Express Elevator (ELV-EXT) steel shaft
   { minX: 0.00, maxX: 2.22, minZ: -1.25, maxZ: 0.02 },    // Main Tower north entry porch
   { minX: 0.02, maxX: 4.98, minZ: 10.00, maxZ: 11.35 },   // Main Tower south engawa deck
   { minX: 5.00, maxX: 5.38, minZ: 2.24, maxZ: 3.06 },     // East outdoor AC condenser only
@@ -41,13 +44,15 @@ export class FirstPersonHouseExplorer {
     this.container = container;
     this.callbacks = callbacks;
 
-    // 5-Unit Forest Compound + Deep Basement Expansion (B4F..6F+RF + Real Traction Elevator ELV-1):
+    // Multi-Unit Forest Compound + Deep Basement Expansion + Giant Garage + Armor Camper + Exterior Attic Elevator:
     this.currentFloor = HOUSE.spawnFloor; // 1 (1F LDK)
     this.activeFlight = null;
-    this.activeBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper' | 'kei' | 'courtyard'
+    this.activeBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper' | 'kei' | 'garage' | 'armor' | 'container' | 'courtyard'
     this.activeStairBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper'
     this.inElevator = false;
     this.nearElevator = false;
+    this.inExtElevator = false;
+    this.nearExtElevator = false;
     this.lastElvHudSig = '';
     this.playerPos = new THREE.Vector3(1.62, 0.0, 6.25);
     this.playerVel = new THREE.Vector3();
@@ -63,9 +68,13 @@ export class FirstPersonHouseExplorer {
     this.autoJumpCooldown = 0.0;
     this.autoDoorsReadyTimer = 0.55;
 
-    this.drivingVehicle = null; // null | 'camper' | 'kei'
+    this.drivingVehicle = null; // null | 'camper' | 'kei' | 'armor'
     this.bumpCooldown = 0;
     this.vehicleBlockedTimer = 0;
+
+    // Silent On-Board Computer Autonomous Navigation State (ZERO special HUD!)
+    this.autopilotRoute = null; // null | { targetId, goalX, goalZ, points, cursor }
+    this.stormEnabled = false;
 
     this.cameraSensitivity = 1.0;
     this.surfaceSuper = false;
@@ -105,6 +114,14 @@ export class FirstPersonHouseExplorer {
     this.postfx = new SinglePassPostFX(this.renderer);
     this.adaptive = new AdaptiveMobileEngine(this.renderer, this.postfx, this.house);
     this.audio = new SpatialForestAudio();
+
+    if (this.terreno && this.terreno.storm) {
+      this.terreno.storm.setThunderCallback((distM) => this.audio.playThunder(distM));
+    }
+
+    // Snap initial terrain poses for ARMOR-155 & CON-24 cleanly onto level garage slab
+    this._applyVehicleTerrainPose(this.house.armorCamper, 'armor');
+    this._applyVehicleTerrainPose(this.house.towContainer, 'container');
 
     // Locked daylight alpine/deep-forest atmosphere (時間帯変更不可)
     this.currentTodId = 'day';
@@ -269,7 +286,9 @@ export class FirstPersonHouseExplorer {
 
   teleportToWorld(x, z, yaw = null, pitch = -0.06) {
     if (this.drivingVehicle) this.toggleVehicleDrive(this.drivingVehicle, false);
+    this.cancelAutopilot();
     this.inElevator = false;
+    this.inExtElevator = false;
     this.activeFlight = null;
     this.currentFloor = 1;
     this.jumpOffset = 0;
@@ -413,11 +432,165 @@ export class FirstPersonHouseExplorer {
     };
   }
 
+  worldToArmorLocal(wx, wz) {
+    const ap = this.house.armorCamper.pose;
+    const dx = wx - ap.cx;
+    const dz = wz - ap.cz;
+    const c = Math.cos(ap.yaw);
+    const s = Math.sin(ap.yaw);
+    return {
+      lx: dx * c - dz * s + ARMOR_CAMPER.width * 0.5,
+      lz: dx * s + dz * c + ARMOR_CAMPER.length * 0.5,
+    };
+  }
+
+  armorLocalToWorld(lx, lz) {
+    const ap = this.house.armorCamper.pose;
+    const rx = lx - ARMOR_CAMPER.width * 0.5;
+    const rz = lz - ARMOR_CAMPER.length * 0.5;
+    const c = Math.cos(ap.yaw);
+    const s = Math.sin(ap.yaw);
+    return {
+      x: ap.cx + rx * c + rz * s,
+      z: ap.cz - rx * s + rz * c,
+    };
+  }
+
+  worldToContainerLocal(wx, wz) {
+    const tp = this.house.towContainer.pose;
+    const dx = wx - tp.cx;
+    const dz = wz - tp.cz;
+    const c = Math.cos(tp.yaw);
+    const s = Math.sin(tp.yaw);
+    return {
+      lx: dx * c - dz * s + TOW_CONTAINER.width * 0.5,
+      lz: dx * s + dz * c + TOW_CONTAINER.length * 0.5,
+    };
+  }
+
+  containerLocalToWorld(lx, lz) {
+    const tp = this.house.towContainer.pose;
+    const rx = lx - TOW_CONTAINER.width * 0.5;
+    const rz = lz - TOW_CONTAINER.length * 0.5;
+    const c = Math.cos(tp.yaw);
+    const s = Math.sin(tp.yaw);
+    return {
+      x: tp.cx + rx * c + rz * s,
+      z: tp.cz - rx * s + rz * c,
+    };
+  }
+
+  _getVehicleObj(key) {
+    if (key === 'kei') return this.house.kei;
+    if (key === 'armor') return this.house.armorCamper;
+    return this.house.camper;
+  }
+
+  setStormEnabled(enabled, instant = false) {
+    this.stormEnabled = Boolean(enabled);
+    if (this.terreno && this.terreno.storm) {
+      this.terreno.storm.setStormEnabled(this.stormEnabled, instant);
+    }
+    if (this.callbacks.onStormChange) this.callbacks.onStormChange(this.stormEnabled);
+    return this.stormEnabled;
+  }
+
+  toggleArmorShutters(force = null) {
+    const armor = this.house.armorCamper;
+    if (!armor || !armor.shutters) return false;
+    const closed = armor.shutters.toggleShutters(force);
+    this.audio.playShutterClank(closed);
+    this.adaptive.markShadowsDirty();
+    if (navigator.vibrate) navigator.vibrate(14);
+    return closed;
+  }
+
+  toggleArmorHitch(force = null) {
+    const armor = this.house.armorCamper;
+    const cont = this.house.towContainer;
+    if (!armor || !cont) return false;
+    const next = force !== null ? Boolean(force) : !cont.hitched;
+    if (next) {
+      const dist = Math.hypot(cont.pose.cx - armor.pose.cx, cont.pose.cz - armor.pose.cz);
+      if (force !== true && dist > 30.0) {
+        return false;
+      }
+      cont.hitched = true;
+      cont.jockeyLeg.position.y = TOW_CONTAINER.groundY + 0.66; // Retract support leg cleanly
+      // Snap coupled trailer neatly aligned directly behind ARMOR-155 rear pintle ball!
+      const rearDist = ARMOR_CAMPER.hitchLocalZ - ARMOR_CAMPER.length * 0.5;
+      const hx = armor.pose.cx + Math.sin(armor.pose.yaw) * rearDist;
+      const hz = armor.pose.cz + Math.cos(armor.pose.yaw) * rearDist;
+      const dHitch = TOW_CONTAINER.length * 0.5 + TOW_CONTAINER.drawbarLength;
+      cont.pose.yaw = armor.pose.yaw;
+      cont.pose.cx = hx + Math.sin(cont.pose.yaw) * dHitch;
+      cont.pose.cz = hz + Math.cos(cont.pose.yaw) * dHitch;
+      this._applyVehicleTerrainPose(cont, 'container');
+      // If hitching inside garage, auto-open South shutter so hitched trailer never clips closed gate
+      if (cont.pose.cx > 11.0 && cont.pose.cx < 23.0 && cont.pose.cz > 10.0 && cont.pose.cz < 17.5) {
+        const dgs = this.house.interactiveDoors.find((d) => d.id === 'DG-S');
+        if (dgs) { dgs.isOpen = true; dgs.autoHoldTimer = 2.0; }
+      }
+    } else {
+      cont.hitched = false;
+      cont.jockeyLeg.position.y = TOW_CONTAINER.groundY + 0.33; // Lower support leg to ground
+    }
+    armor.setHitchVisual(cont.hitched);
+    this.house.interactiveProps.forEach((p) => {
+      if (p.id === 'armor_hitch' || p.id === 'armor_hitch_cab') p.isOn = cont.hitched;
+    });
+    this.audio.playShutterClank(cont.hitched);
+    this.adaptive.markShadowsDirty();
+    return cont.hitched;
+  }
+
+  cancelAutopilot() {
+    this.autopilotRoute = null;
+  }
+
+  startArmorAutopilotTo(goalX, goalZ, targetId = 'custom') {
+    if (!this.terreno || !this.terreno.autopilot) return null;
+    const armor = this.house.armorCamper;
+    const points = this.terreno.autopilot.computeSafeRoute(armor.pose.cx, armor.pose.cz, goalX, goalZ);
+    this.autopilotRoute = {
+      targetId,
+      goalX,
+      goalZ,
+      points,
+      cursor: 0,
+    };
+    // Silently seat protagonist inside ARMOR-155 cockpit and begin autonomous navigation (ZERO special HUD!)
+    if (this.drivingVehicle !== 'armor') {
+      if (this.drivingVehicle) this.toggleVehicleDrive(this.drivingVehicle, false);
+      this.toggleVehicleDrive('armor', true);
+    }
+    return this.autopilotRoute;
+  }
+
+  startArmorAutopilotToDynamic(kind) {
+    if (kind === 'home') {
+      return this.startArmorAutopilotTo(15.6, -15.0, 'dyn_home');
+    }
+    if (kind === 'kei') {
+      const kp = this.house.kei.pose;
+      return this.startArmorAutopilotTo(kp.cx, kp.cz, 'dyn_kei');
+    }
+    if (kind === 'container') {
+      const tp = this.house.towContainer.pose;
+      return this.startArmorAutopilotTo(tp.cx, tp.cz, 'dyn_container');
+    }
+    if (kind === 'camper') {
+      const cp = this.house.camper.pose;
+      return this.startArmorAutopilotTo(cp.cx, cp.cz, 'dyn_camper');
+    }
+    return null;
+  }
+
   toggleVehicleHeadlights(force = null, vehicleKey = null) {
     const key = vehicleKey || this.drivingVehicle || 'camper';
-    const veh = key === 'kei' ? this.house.kei : this.house.camper;
+    const veh = this._getVehicleObj(key);
     veh.headlightsOn = force !== null ? force : !veh.headlightsOn;
-    const beamInt = key === 'kei' ? 8.2 : 9.5;
+    const beamInt = key === 'kei' ? 8.2 : (key === 'armor' ? 12.0 : 9.5);
     veh.headlights.forEach((h) => {
       h.intensity = veh.headlightsOn ? beamInt : 0.0;
     });
@@ -426,7 +599,7 @@ export class FirstPersonHouseExplorer {
     if (this.callbacks.onDriveChange && this.drivingVehicle === key) {
       this.callbacks.onDriveChange(true, {
         vehicle: key,
-        badge: key === 'kei' ? 'KEI-340 660cc' : 'CAMPER-75 6×6',
+        badge: key === 'kei' ? 'KEI-340 660cc' : (key === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
         speedKmh: Math.round(Math.abs(veh.speed) * 3.6),
         headlightsOn: veh.headlightsOn,
         colliding: this.vehicleBlockedTimer > 0,
@@ -446,6 +619,10 @@ export class FirstPersonHouseExplorer {
     this.toggleVehicleDrive('kei', force);
   }
 
+  toggleArmorDrive(force = null) {
+    this.toggleVehicleDrive('armor', force);
+  }
+
   toggleVehicleDrive(vehicleKey, force = null) {
     const isDrivingThis = this.drivingVehicle === vehicleKey;
     const next = force !== null ? force : !isDrivingThis;
@@ -453,17 +630,26 @@ export class FirstPersonHouseExplorer {
     if (!next && !this.drivingVehicle) return;
 
     const activeKey = next ? vehicleKey : this.drivingVehicle;
-    const veh = activeKey === 'kei' ? this.house.kei : this.house.camper;
+    const veh = this._getVehicleObj(activeKey);
     this.drivingVehicle = next ? activeKey : null;
     veh.driveProp.isOn = next;
     veh.speed = 0;
+    veh.velX = 0;
+    veh.velZ = 0;
+    veh.slipSpeed = 0;
+
+    if (!next && activeKey === 'armor') {
+      this.cancelAutopilot();
+    }
 
     if (next) {
+      this.inElevator = false;
+      this.inExtElevator = false;
+      this.currentFloor = 1;
+      this.activeFlight = null;
       if (activeKey === 'camper') {
         const dc1 = this.house.interactiveDoors.find((d) => d.id === 'DC-1');
         if (dc1) dc1.isOpen = false;
-        this.currentFloor = 1;
-        this.activeFlight = null;
         this.activeBuilding = 'camper';
         const seatW = this.camperLocalToWorld(0.72, 0.88);
         this.playerPos.set(seatW.x, 0, seatW.z);
@@ -471,13 +657,23 @@ export class FirstPersonHouseExplorer {
         this.eyeHeight = 1.20;
         this.yaw = veh.pose.yaw;
         this.pitch = -0.10;
+      } else if (activeKey === 'armor') {
+        ['DAM-1', 'DAM-R'].forEach((id) => {
+          const d = this.house.interactiveDoors.find((x) => x.id === id);
+          if (d) d.isOpen = false;
+        });
+        this.activeBuilding = 'armor';
+        const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, ARMOR_CAMPER.driverSeatLocal.z);
+        this.playerPos.set(seatW.x, 0, seatW.z);
+        this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
+        this.eyeHeight = 1.28;
+        this.yaw = veh.pose.yaw;
+        this.pitch = -0.09;
       } else {
         ['DK-D', 'DK-L', 'DK-R'].forEach((id) => {
           const d = this.house.interactiveDoors.find((x) => x.id === id);
           if (d) d.isOpen = false;
         });
-        this.currentFloor = 1;
-        this.activeFlight = null;
         this.activeBuilding = 'kei';
         const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, KEI.driverSeatLocal.z);
         this.playerPos.set(seatW.x, 0, seatW.z);
@@ -493,8 +689,13 @@ export class FirstPersonHouseExplorer {
         this.playerPos.set(standW.x, 0, standW.z);
         this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
         this.eyeHeight = 1.54;
+      } else if (activeKey === 'armor') {
+        // Exit smoothly into the open bridge aisle behind the driver seat (100% collision-safe!)
+        const standW = this.armorLocalToWorld(1.55, 2.05);
+        this.playerPos.set(standW.x, 0, standW.z);
+        this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
+        this.eyeHeight = 1.56;
       } else {
-        // Exit smoothly straight into the open walk-in cargo bay (100% collision-safe anywhere!)
         const cargoW = this.keiLocalToWorld(0.68, 1.56);
         this.playerPos.set(cargoW.x, 0, cargoW.z);
         this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
@@ -506,7 +707,7 @@ export class FirstPersonHouseExplorer {
     if (this.callbacks.onDriveChange) {
       this.callbacks.onDriveChange(Boolean(this.drivingVehicle), {
         vehicle: activeKey,
-        badge: activeKey === 'kei' ? 'KEI-340 660cc' : 'CAMPER-75 6×6',
+        badge: activeKey === 'kei' ? 'KEI-340 660cc' : (activeKey === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
         speedKmh: 0,
         headlightsOn: veh.headlightsOn,
         colliding: false,
@@ -514,7 +715,7 @@ export class FirstPersonHouseExplorer {
     }
   }
 
-  _applyVehicleTerrainPose(veh, isKei, stepLift = 0) {
+  _applyVehicleTerrainPose(veh, kind, stepLift = 0) {
     const cx = veh.pose.cx;
     const cz = veh.pose.cz;
     const yaw = veh.pose.yaw;
@@ -523,8 +724,11 @@ export class FirstPersonHouseExplorer {
     let roll = 0;
 
     if (this.terreno) {
-      const halfWB = isKei ? 1.15 : 2.35;
-      const halfTr = isKei ? 0.65 : 1.15;
+      const isKei = kind === true || kind === 'kei';
+      const isArmor = kind === 'armor';
+      const isCont = kind === 'container';
+      const halfWB = isArmor ? 5.60 : (isCont ? 1.55 : (isKei ? 1.15 : 2.35));
+      const halfTr = isArmor ? 1.38 : (isCont ? 0.88 : (isKei ? 0.65 : 1.15));
       const fx = -Math.sin(yaw);
       const fz = -Math.cos(yaw);
       const rx = Math.cos(yaw);
@@ -550,13 +754,45 @@ export class FirstPersonHouseExplorer {
     veh.root.rotation.set(pitch, yaw, roll);
   }
 
+  _updateTowedContainer(movedDist = 0) {
+    const cont = this.house.towContainer;
+    if (!cont || !cont.hitched) return;
+    const armor = this.house.armorCamper;
+    const rearDist = ARMOR_CAMPER.hitchLocalZ - ARMOR_CAMPER.length * 0.5;
+    const hx = armor.pose.cx + Math.sin(armor.pose.yaw) * rearDist;
+    const hz = armor.pose.cz + Math.cos(armor.pose.yaw) * rearDist;
+    const dHitch = TOW_CONTAINER.length * 0.5 + TOW_CONTAINER.drawbarLength;
+
+    const dx = hx - cont.pose.cx;
+    const dz = hz - cont.pose.cz;
+    if (Math.hypot(dx, dz) > 0.01) {
+      const desiredYaw = Math.atan2(-dx, -dz);
+      let delta = desiredYaw - armor.pose.yaw;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      // Clamp articulation angle to ±62° so trailer follows naturally without jackknifing into rear bumper
+      delta = Math.max(-1.08, Math.min(1.08, delta));
+      cont.pose.yaw = armor.pose.yaw + delta;
+    } else {
+      cont.pose.yaw = armor.pose.yaw;
+    }
+
+    cont.pose.cx = hx + Math.sin(cont.pose.yaw) * dHitch;
+    cont.pose.cz = hz + Math.cos(cont.pose.yaw) * dHitch;
+    this._applyVehicleTerrainPose(cont, 'container');
+    if (Math.abs(movedDist) > 0.0001) {
+      const spin = movedDist / TOW_CONTAINER.wheelRadius;
+      cont.wheelMeshes.forEach((w) => { w.rotation.x -= spin; });
+    }
+  }
+
   setCamperPose(cx, cz, yaw = 0, force = false) {
     const camper = this.house.camper;
     if (!force && this._camperCollidesAt(cx, cz, yaw).hit) return false;
     camper.pose.cx = cx;
     camper.pose.cz = cz;
     camper.pose.yaw = yaw;
-    this._applyVehicleTerrainPose(camper, false);
+    this._applyVehicleTerrainPose(camper, 'camper');
     this.adaptive.markShadowsDirty();
     return true;
   }
@@ -567,7 +803,40 @@ export class FirstPersonHouseExplorer {
     kei.pose.cx = cx;
     kei.pose.cz = cz;
     kei.pose.yaw = yaw;
-    this._applyVehicleTerrainPose(kei, true);
+    this._applyVehicleTerrainPose(kei, 'kei');
+    this.adaptive.markShadowsDirty();
+    return true;
+  }
+
+  setArmorPose(cx, cz, yaw = 0, force = false) {
+    const armor = this.house.armorCamper;
+    if (!force && this._armorCollidesAt(cx, cz, yaw).hit) return false;
+    armor.pose.cx = cx;
+    armor.pose.cz = cz;
+    armor.pose.yaw = yaw;
+    this._applyVehicleTerrainPose(armor, 'armor');
+    if (this.house.towContainer && this.house.towContainer.hitched) {
+      const rearDist = ARMOR_CAMPER.hitchLocalZ - ARMOR_CAMPER.length * 0.5;
+      const hx = cx + Math.sin(yaw) * rearDist;
+      const hz = cz + Math.cos(yaw) * rearDist;
+      const dHitch = TOW_CONTAINER.length * 0.5 + TOW_CONTAINER.drawbarLength;
+      this.house.towContainer.pose.yaw = yaw;
+      this.house.towContainer.pose.cx = hx + Math.sin(yaw) * dHitch;
+      this.house.towContainer.pose.cz = hz + Math.cos(yaw) * dHitch;
+      this._applyVehicleTerrainPose(this.house.towContainer, 'container');
+    }
+    this.adaptive.markShadowsDirty();
+    return true;
+  }
+
+  setContainerPose(cx, cz, yaw = 0) {
+    const cont = this.house.towContainer;
+    if (!cont) return false;
+    if (cont.hitched) this.toggleArmorHitch(false);
+    cont.pose.cx = cx;
+    cont.pose.cz = cz;
+    cont.pose.yaw = yaw;
+    this._applyVehicleTerrainPose(cont, 'container');
     this.adaptive.markShadowsDirty();
     return true;
   }
@@ -624,11 +893,12 @@ export class FirstPersonHouseExplorer {
     return true;
   }
 
-  _vehicleCollidesCommon(ncx, ncz, hw, hl, nyaw, otherObb = null, opts = {}) {
+  _vehicleCollidesCommon(ncx, ncz, hw, hl, nyaw, otherObbs = [], opts = {}) {
     const c = Math.cos(nyaw);
     const s = Math.sin(nyaw);
     const maxStepH = opts.maxStepH ?? 0.50;
     const maxFordDepth = opts.maxFordDepth ?? 0.68;
+    const isArmored = Boolean(opts.isArmored);
     const prevCx = opts.prevCx ?? ncx;
     const prevCz = opts.prevCz ?? ncz;
 
@@ -643,45 +913,64 @@ export class FirstPersonHouseExplorer {
       ) return { hit: true, reason: 'bounds', stepLift: 0 };
     }
 
-    // 1b. Directional Deep River Channel Guard (blocks ONLY driving deeper into deep water; never traps or hits dry banks!)
+    // 1b. Directional Deep River & Flash-Flood Guard (accounts for live +7.5m storm flood surge!)
     if (this.terreno) {
       if (this.terreno.ensureCollidersAt) this.terreno.ensureCollidersAt(ncx, ncz);
-      const rv = evalMainRiver(ncz);
-      if (Math.abs(ncx - rv.x) < rv.halfWidth * 0.78) {
-        const nextDepth = rv.waterY - this.terreno.getHeightAt(ncx, ncz);
-        if (nextDepth > maxFordDepth) {
-          const prevRv = evalMainRiver(prevCz);
-          const prevDepth = prevRv.waterY - this.terreno.getHeightAt(prevCx, prevCz);
-          if (nextDepth >= prevDepth - 0.02) {
-            return { hit: true, reason: 'river', stepLift: 0 };
-          }
+      const flood = this.terreno.storm
+        ? this.terreno.storm.getFloodInfoAt(ncx, ncz)
+        : null;
+      const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(ncz).waterY - this.terreno.getHeightAt(ncx, ncz));
+      if (nextDepth > maxFordDepth) {
+        const prevFlood = this.terreno.storm
+          ? this.terreno.storm.getFloodInfoAt(prevCx, prevCz)
+          : null;
+        const prevDepth = prevFlood ? prevFlood.depth : Math.max(0, evalMainRiver(prevCz).waterY - this.terreno.getHeightAt(prevCx, prevCz));
+        if (nextDepth >= prevDepth - 0.02) {
+          return { hit: true, reason: 'river', stepLift: 0 };
         }
       }
     }
 
-    // 2. Exact SAT OBB vs Ground-Level Static Building AABBs (near compound only)
-    if (Math.abs(ncx) < 24 && Math.abs(ncz) < 24) {
+    // 2. Exact SAT OBB vs Ground-Level Static Building & Giant Garage Wall AABBs (near compound only)
+    if (Math.abs(ncx - 6) < 28 && Math.abs(ncz - 4) < 28) {
       for (let i = 0; i < STATIC_VEHICLE_OBSTACLES.length; i++) {
         if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, STATIC_VEHICLE_OBSTACLES[i])) {
           return { hit: true, reason: 'building', stepLift: 0 };
         }
       }
+      const gWalls = this.house.garage ? this.house.garage.vehicleWallObstacles : [];
+      for (let i = 0; i < gWalls.length; i++) {
+        if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, gWalls[i])) {
+          return { hit: true, reason: 'garage', stepLift: 0 };
+        }
+      }
+      // Dynamically block closed Garage Roll-Up Shutters (DG-N / DG-S) until auto-opened!
+      for (let i = 0; i < this.house.interactiveDoors.length; i++) {
+        const d = this.house.interactiveDoors[i];
+        if (d.isGarageGate && d.progress < 0.62) {
+          if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, d.collider)) {
+            return { hit: true, reason: 'shutter', stepLift: 0 };
+          }
+        }
+      }
     }
 
-    // 3. Exact SAT OBB vs Other Movable Vehicle OBB (Camper <-> Kei-Van mutual collision!)
-    if (otherObb && this._obbIntersectsOBB({ cx: ncx, cz: ncz, hw, hl, yaw: nyaw }, otherObb)) {
-      return { hit: true, reason: 'vehicle', stepLift: 0 };
+    // 3. Exact SAT OBB vs Other Movable Vehicles & Unhitched Container
+    for (let i = 0; i < otherObbs.length; i++) {
+      if (otherObbs[i] && this._obbIntersectsOBB({ cx: ncx, cz: ncz, hw, hl, yaw: nyaw }, otherObbs[i])) {
+        return { hit: true, reason: 'vehicle', stepLift: 0 };
+      }
     }
 
-    // 4. Exact OBB vs Circle (Lanterns, Courtyard Boulders, & TERRENO Streamed Trees/Tall Boulders)
-    //    Low rocks/logs <= maxStepH smoothly trigger suspension step-over instead of stopping the car!
+    // 4. Exact OBB vs Circle (Lanterns, Boulders, TERRENO Streamed Trees/Rocks, & Active Landslide Boulders!)
     let stepLift = 0;
     const checkCircles = (arr) => {
       for (let i = 0; i < arr.length; i++) {
         const o = arr[i];
         const dx = o.x - ncx;
         const dz = o.z - ncz;
-        if (dx * dx + dz * dz > 64.0) continue;
+        const maxRange = hl + o.r + 3.0;
+        if (dx * dx + dz * dz > maxRange * maxRange) continue;
         const rx = dx * c - dz * s;
         const rz = dx * s + dz * c;
         const clx = rx < -hw ? -hw : (rx > hw ? hw : rx);
@@ -690,9 +979,15 @@ export class FirstPersonHouseExplorer {
         const ddz = rz - clz;
         const r2 = o.r * o.r;
         if (ddx * ddx + ddz * ddz < r2) {
-          const isLowNatural = (o.kind === 'boulder' || o.kind === 'log') && (o.height !== undefined) && o.height <= maxStepH;
-          if (isLowNatural) {
-            stepLift = Math.max(stepLift, o.height * 0.72);
+          const isNaturalRock = (o.kind === 'boulder' || o.kind === 'log' || o.kind === 'landslide_rock');
+          const effMaxStep = isArmored && o.kind === 'landslide_rock' ? maxStepH * 1.25 : maxStepH;
+          if (isNaturalRock && o.height !== undefined && o.height <= effMaxStep) {
+            stepLift = Math.max(stepLift, o.height * 0.65);
+            continue;
+          }
+          // Heavy steel-armored ARMOR-155 shrugs off slender saplings/brush (r < 0.24m) in deep mountains!
+          if (isArmored && o.kind === 'tree' && o.r < 0.24) {
+            stepLift = Math.max(stepLift, 0.14);
             continue;
           }
           return true;
@@ -701,9 +996,15 @@ export class FirstPersonHouseExplorer {
       return false;
     };
 
-    if (Math.abs(ncx) < 24 && Math.abs(ncz) < 24) {
+    if (Math.abs(ncx) < 26 && Math.abs(ncz) < 26) {
       if (checkCircles(LANTERN_OBSTACLES)) return { hit: true, reason: 'lantern', stepLift: 0 };
       if (checkCircles(this.house.boulderColliders || [])) return { hit: true, reason: 'boulder', stepLift: 0 };
+    }
+    if (this.terreno && this.terreno.storm) {
+      const lsCols = this.terreno.storm.getActiveLandslideColliders();
+      if (lsCols.length > 0 && checkCircles(lsCols)) {
+        return { hit: true, reason: 'landslide', stepLift: 0 };
+      }
     }
     if (this.terreno && checkCircles(this.terreno.getLocalColliders())) {
       return { hit: true, reason: 'forest', stepLift: 0 };
@@ -711,25 +1012,38 @@ export class FirstPersonHouseExplorer {
     return { hit: false, reason: null, stepLift };
   }
 
+  _getOtherVehicleObbs(excludeKey) {
+    const out = [];
+    if (excludeKey !== 'camper' && this.house.camper) {
+      const p = this.house.camper.pose;
+      out.push({ cx: p.cx, cz: p.cz, hw: CAMPER.width * 0.5 + 0.02, hl: CAMPER.length * 0.5 + 0.02, yaw: p.yaw });
+    }
+    if (excludeKey !== 'kei' && this.house.kei) {
+      const p = this.house.kei.pose;
+      out.push({ cx: p.cx, cz: p.cz, hw: KEI.width * 0.5 + 0.01, hl: KEI.length * 0.5 + 0.01, yaw: p.yaw });
+    }
+    if (excludeKey !== 'armor' && this.house.armorCamper) {
+      const p = this.house.armorCamper.pose;
+      out.push({ cx: p.cx, cz: p.cz, hw: ARMOR_CAMPER.width * 0.5 + 0.02, hl: ARMOR_CAMPER.length * 0.5 + 0.02, yaw: p.yaw });
+    }
+    if (this.house.towContainer && !(excludeKey === 'armor' && this.house.towContainer.hitched)) {
+      const p = this.house.towContainer.pose;
+      out.push({ cx: p.cx, cz: p.cz, hw: TOW_CONTAINER.width * 0.5 + 0.02, hl: TOW_CONTAINER.length * 0.5 + 0.02, yaw: p.yaw });
+    }
+    return out;
+  }
+
   _camperCollidesAt(ncx, ncz, nyaw, prevCx = ncx, prevCz = ncz) {
-    const hw = CAMPER.width * 0.5 + 0.02;
-    const hl = CAMPER.length * 0.5 + 0.02;
-    const kp = this.house.kei.pose;
-    const keiObb = { cx: kp.cx, cz: kp.cz, hw: KEI.width * 0.5 + 0.01, hl: KEI.length * 0.5 + 0.01, yaw: kp.yaw };
-    return this._vehicleCollidesCommon(ncx, ncz, hw, hl, nyaw, keiObb, {
+    return this._vehicleCollidesCommon(ncx, ncz, CAMPER.width * 0.5 + 0.02, CAMPER.length * 0.5 + 0.02, nyaw, this._getOtherVehicleObbs('camper'), {
       maxStepH: 0.62,
-      maxFordDepth: 0.82,
+      maxFordDepth: 0.92,
       prevCx,
       prevCz,
     });
   }
 
   _keiCollidesAt(ncx, ncz, nyaw, prevCx = ncx, prevCz = ncz) {
-    const hw = KEI.width * 0.5 + 0.01;
-    const hl = KEI.length * 0.5 + 0.01;
-    const cp = this.house.camper.pose;
-    const camperObb = { cx: cp.cx, cz: cp.cz, hw: CAMPER.width * 0.5 + 0.02, hl: CAMPER.length * 0.5 + 0.02, yaw: cp.yaw };
-    return this._vehicleCollidesCommon(ncx, ncz, hw, hl, nyaw, camperObb, {
+    return this._vehicleCollidesCommon(ncx, ncz, KEI.width * 0.5 + 0.01, KEI.length * 0.5 + 0.01, nyaw, this._getOtherVehicleObbs('kei'), {
       maxStepH: 0.42,
       maxFordDepth: 0.52,
       prevCx,
@@ -737,10 +1051,23 @@ export class FirstPersonHouseExplorer {
     });
   }
 
+  _armorCollidesAt(ncx, ncz, nyaw, prevCx = ncx, prevCz = ncz) {
+    return this._vehicleCollidesCommon(ncx, ncz, ARMOR_CAMPER.width * 0.5 + 0.02, ARMOR_CAMPER.length * 0.5 + 0.02, nyaw, this._getOtherVehicleObbs('armor'), {
+      maxStepH: 0.95,
+      maxFordDepth: 1.95,
+      isArmored: true,
+      prevCx,
+      prevCz,
+    });
+  }
+
   _updateVehicleDriving(dt) {
-    const isKei = this.drivingVehicle === 'kei';
-    const veh = isKei ? this.house.kei : this.house.camper;
+    const vehicleKey = this.drivingVehicle;
+    const isKei = vehicleKey === 'kei';
+    const isArmor = vehicleKey === 'armor';
+    const veh = this._getVehicleObj(vehicleKey);
     if (veh.suspLift === undefined) { veh.suspLift = 0; veh.suspVelY = 0; }
+    if (veh.velX === undefined) { veh.velX = 0; veh.velZ = 0; veh.slipSpeed = 0; }
     if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
     if (this.vehicleBlockedTimer > 0) this.vehicleBlockedTimer -= dt;
 
@@ -756,18 +1083,51 @@ export class FirstPersonHouseExplorer {
     throttle = Math.max(-1, Math.min(1, throttle));
     steerIn = Math.max(-1, Math.min(1, steerIn));
 
-    const maxSteer = isKei ? 0.54 : 0.44;
-    const steerRate = isKei ? 8.2 : 6.5;
+    // Query live storm traction μ (0.96 dry -> 0.18..0.38 storm hydroplaning/mud!) & flood state
+    const grip = this.terreno && this.terreno.storm
+      ? this.terreno.storm.getSurfaceGripAt(veh.pose.cx, veh.pose.cz)
+      : 0.96;
+    const flood = this.terreno && this.terreno.storm
+      ? this.terreno.storm.getFloodInfoAt(veh.pose.cx, veh.pose.cz)
+      : { depth: 0, submerged: false, currentX: 0, currentZ: 0 };
+
+    // On-Board Silent Autopilot for ARMOR-155 (ZERO special HUD/banners/indicators!)
+    let autopilotActive = false;
+    if (isArmor && this.autopilotRoute && this.terreno && this.terreno.autopilot) {
+      if (Math.abs(throttle) > 0.18 || Math.abs(steerIn) > 0.18) {
+        this.cancelAutopilot();
+      } else {
+        const ctrl = this.terreno.autopilot.evaluateDrivingControl(veh.pose, veh.speed, this.autopilotRoute, grip);
+        if (ctrl.arrived) {
+          this.autopilotRoute = null;
+          throttle = 0;
+          steerIn = 0;
+        } else {
+          throttle = ctrl.throttle;
+          steerIn = ctrl.steer;
+          autopilotActive = true;
+        }
+      }
+    }
+
+    const maxSteer = isKei ? 0.54 : (isArmor ? 0.42 : 0.44);
+    const steerRate = isKei ? 8.2 : (isArmor ? 5.6 : 6.5);
     const targetSteer = steerIn * maxSteer;
     veh.steerAngle += (targetSteer - veh.steerAngle) * Math.min(1, dt * steerRate);
-    veh.frontSteerPivots.forEach((p) => { p.rotation.y = veh.steerAngle; });
+    veh.frontSteerPivots.forEach((p, idx) => {
+      // On 8×8 ARMOR-155, second steering axle turns at 58% Ackerman ratio for tight mountain switchbacks!
+      p.rotation.y = isArmor && idx >= 2 ? veh.steerAngle * 0.58 : veh.steerAngle;
+    });
     veh.steerWheelGroup.rotation.z = veh.steerAngle * 2.4;
 
     const distFromCompound = Math.hypot(veh.pose.cx - TERRENO_WORLD.compoundCenterX, veh.pose.cz - TERRENO_WORLD.compoundCenterZ);
-    const openRoad = distFromCompound > 22.0;
-    const accelFwd = isKei ? (openRoad ? 9.4 : 5.6) : (openRoad ? 7.6 : 4.2);
-    const accelRev = isKei ? 5.2 : 4.4;
-    const maxFwd = isKei ? (openRoad ? 19.0 : 7.2) : (openRoad ? 16.0 : 5.8);
+    const openRoad = distFromCompound > 28.0;
+    const towingTrailer = isArmor && this.house.towContainer && this.house.towContainer.hitched;
+    const towMassScale = towingTrailer ? 0.86 : 1.0;
+
+    const accelFwd = (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.4 : 4.6) : (openRoad ? 7.6 : 4.2))) * towMassScale;
+    const accelRev = (isKei ? 5.2 : (isArmor ? 4.0 : 4.4)) * towMassScale;
+    const maxFwd = (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 6.5) : (openRoad ? 16.0 : 5.8))) * (towingTrailer ? 0.90 : 1.0);
     const maxRev = isKei ? 5.0 : 4.2;
 
     // Realistic mountain gravity & steep cliff climbing resistance (smooth macro terrain normal — ZERO invisible walls!)
@@ -782,26 +1142,33 @@ export class FirstPersonHouseExplorer {
         ? this.terreno.getMacroNormalAt(veh.pose.cx, veh.pose.cz, 3.2)
         : this.terreno.getNormalAt(veh.pose.cx, veh.pose.cz, 3.2);
       cliffMacroSlope = macroNormal.slope;
-      // Forward uphill component along vehicle heading (macroNormal.x/z point downhill)
       const fwdUphill = -(fwdX * macroNormal.x + fwdZ * macroNormal.z);
-      // Gravity pulls vehicle downhill along slope; steep cliffs exceed engine torque!
       climbGravAccel = -fwdUphill * 12.8;
     }
 
-    // Realistic grade capability: KEI-340 (~24° max climb), CAMPER-75 (~21° max climb)
-    const maxClimbSlope = isKei ? 0.46 : 0.39;
-    const cliffHardSlope = isKei ? 0.56 : 0.49;
+    // Realistic grade capability: KEI-340 (~24°), CAMPER-75 (~21°), 8×8 ARMOR-155 (~26° heavy torque!)
+    const maxClimbSlope = isArmor ? 0.49 : (isKei ? 0.46 : 0.39);
+    const cliffHardSlope = isArmor ? 0.60 : (isKei ? 0.56 : 0.49);
+
+    // Storm mud/hydroplaning traction multiplier reduces acceleration & lengthens braking distance realistically!
+    const tractionAccelScale = 0.42 + 0.58 * grip;
+    const coastDrag = 1.4 + 2.5 * grip;
 
     if (throttle > 0.02) {
-      veh.speed += throttle * accelFwd * dt;
+      veh.speed += throttle * accelFwd * tractionAccelScale * dt;
     } else if (throttle < -0.02) {
-      veh.speed += throttle * accelRev * dt;
+      veh.speed += throttle * accelRev * tractionAccelScale * dt;
     } else {
-      veh.speed *= Math.max(0, 1 - dt * 3.8);
+      veh.speed *= Math.max(0, 1 - dt * coastDrag);
       if (Math.abs(veh.speed) < 0.03 && Math.abs(climbGravAccel) < 2.2) veh.speed = 0;
     }
 
-    // Apply physical hill gravity drag (only strong when grade > ~10° so gentle forestry roads feel effortless)
+    // Hydrodynamic flood water resistance & drag when driving through flooded valley!
+    if (flood.depth > 0.12) {
+      const waterDrag = Math.min(4.8, flood.depth * (isArmor ? 1.4 : 2.9));
+      veh.speed *= Math.max(0, 1 - waterDrag * dt);
+    }
+
     if (Math.abs(climbGravAccel) > 1.8) {
       const effectiveGrav = Math.sign(climbGravAccel) * (Math.abs(climbGravAccel) - 1.8);
       veh.speed += effectiveGrav * dt;
@@ -809,87 +1176,154 @@ export class FirstPersonHouseExplorer {
 
     veh.speed = Math.max(-maxRev, Math.min(maxFwd, veh.speed));
 
+    // Real 2D Tire Grip / Hydroplaning Velocity Blending (Pacejka-style nonlinear grip² drop in storm mud/rain!)
+    const targetVx = -Math.sin(veh.pose.yaw) * veh.speed;
+    const targetVz = -Math.cos(veh.pose.yaw) * veh.speed;
+    const latResponse = Math.min(1, dt * (0.42 + grip * grip * 12.8));
+    veh.velX += (targetVx - veh.velX) * latResponse;
+    veh.velZ += (targetVz - veh.velZ) * latResponse;
+
+    // Storm hydroplaning outward centrifugal slide & fierce crosswind lateral buffet at speed!
+    if (grip < 0.65 && Math.abs(veh.speed) > 1.5) {
+      const hydroSeverity = (0.65 - grip) / 0.47;
+      const turnSlide = Math.sin(veh.steerAngle) * veh.speed * hydroSeverity * 0.52;
+      const rx = Math.cos(veh.pose.yaw);
+      const rz = -Math.sin(veh.pose.yaw);
+      veh.velX += rx * turnSlide * dt * 2.8;
+      veh.velZ += rz * turnSlide * dt * 2.8;
+      const wind = this.terreno?.storm?.getWind?.();
+      if (wind) {
+        const wScale = (isArmor ? 0.045 : 0.095) * hydroSeverity;
+        veh.velX += wind.x * wScale * dt;
+        veh.velZ += wind.z * wScale * dt;
+      }
+    }
+
+    // Wet side-slope downhill gravity slip when tires lose friction in storm mud/rain!
+    if (grip < 0.72 && macroNormal && macroNormal.slope > 0.06 && openRoad) {
+      const slopeSlip = (0.72 - grip) * 5.2 * (isArmor ? 0.68 : 1.0);
+      veh.velX += macroNormal.x * slopeSlip * dt;
+      veh.velZ += macroNormal.z * slopeSlip * dt;
+    }
+    // River flood flash-torrent lateral current push!
+    if (flood.depth > 0.14) {
+      const currentScale = (isArmor ? 0.32 : (isKei ? 0.92 : 0.62)) * Math.min(1.0, flood.depth / 0.85);
+      veh.velX += flood.currentX * currentScale * dt * 2.4;
+      veh.velZ += flood.currentZ * currentScale * dt * 2.4;
+    }
+
+    // Compute measurable lateral slip velocity (perpendicular to vehicle heading)
+    const rightX = Math.cos(veh.pose.yaw);
+    const rightZ = -Math.sin(veh.pose.yaw);
+    veh.slipSpeed = veh.velX * rightX + veh.velZ * rightZ;
+
     let blocked = false;
     let maxStepLift = 0;
-    if (Math.abs(veh.speed) > 0.005) {
+    const planarSpeed = Math.hypot(veh.velX, veh.velZ);
+
+    if (planarSpeed > 0.005 || Math.abs(veh.speed) > 0.005) {
       const subSteps = 3;
       const subDt = dt / subSteps;
-      const wheelbase = isKei ? 1.98 : 4.55;
-      const wheelRad = isKei ? KEI.wheelRadius : CAMPER.wheelRadius;
+      const wheelbase = isArmor ? 7.80 : (isKei ? 1.98 : 4.55);
+      const wheelRad = isArmor ? ARMOR_CAMPER.wheelRadius : (isKei ? KEI.wheelRadius : CAMPER.wheelRadius);
       let totalMoved = 0;
       let totalDYaw = 0;
 
       for (let sIdx = 0; sIdx < subSteps; sIdx++) {
-        const dist = veh.speed * subDt;
-        const dYaw = (dist / wheelbase) * Math.tan(veh.steerAngle);
+        const distFwd = veh.speed * subDt;
+        // Slippery storm surfaces reduce steering bite slightly & introduce tail-out yaw drift!
+        const steerGripFactor = 0.58 + 0.42 * grip;
+        const dYaw = (distFwd / wheelbase) * Math.tan(veh.steerAngle) * steerGripFactor;
         const nyaw = veh.pose.yaw + dYaw;
-        const ncx = veh.pose.cx - Math.sin(nyaw) * dist;
-        const ncz = veh.pose.cz - Math.cos(nyaw) * dist;
+        const stepX = veh.velX * subDt;
+        const stepZ = veh.velZ * subDt;
+        const ncx = veh.pose.cx + stepX;
+        const ncz = veh.pose.cz + stepZ;
 
-        // Check realistic cliff climb limit ONLY when trying to climb UPHILL (downhill & backing off ALWAYS free!)
         if (this.terreno && openRoad) {
           const curY = this.terreno.getHeightAt(veh.pose.cx, veh.pose.cz);
           const nextY = this.terreno.getHeightAt(ncx, ncz);
-          const stepDist = Math.max(0.02, Math.abs(dist));
+          const stepDist = Math.max(0.02, Math.hypot(stepX, stepZ));
           const stepRise = nextY - curY;
           const nextMacro = this.terreno.getMacroNormalAt
             ? this.terreno.getMacroNormalAt(ncx, ncz, 3.2)
             : this.terreno.getNormalAt(ncx, ncz, 3.2);
-          const travelSign = Math.sign(dist);
-          const moveDirX = -Math.sin(nyaw) * travelSign;
-          const moveDirZ = -Math.cos(nyaw) * travelSign;
+          const moveDirX = stepX / stepDist;
+          const moveDirZ = stepZ / stepDist;
           const uphillDot = -(moveDirX * nextMacro.x + moveDirZ * nextMacro.z);
 
-          // Steep cliff uphill refusal -> realistic hill stall & gentle downhill rollback (NO invisible wall crash!)
           if (uphillDot > 0.14 && nextMacro.slope > cliffHardSlope) {
+            const travelSign = Math.sign(veh.speed) || 1;
             veh.speed = -travelSign * Math.min(2.2, (nextMacro.slope - cliffHardSlope) * 5.0 + 0.65);
+            veh.velX *= 0.25;
+            veh.velZ *= 0.25;
             break;
           }
-          // Steep sustained grade torque exhaustion (cannot climb steep mountain faces effortlessly!)
           if (uphillDot > 0.12 && nextMacro.slope > maxClimbSlope && stepRise > 0) {
             const excess = (nextMacro.slope - maxClimbSlope) / Math.max(0.05, cliffHardSlope - maxClimbSlope);
             veh.speed *= Math.max(0, 1.0 - excess * subDt * 6.5);
           }
-          // Allow realistic sudden terrain step-over up to vehicle clearance (0.42m Kei / 0.62m Camper)!
-          const vehMaxLedge = isKei ? 0.42 : 0.62;
+          const vehMaxLedge = isArmor ? 0.92 : (isKei ? 0.42 : 0.62);
           if (stepRise > 0.08 && stepRise <= vehMaxLedge && stepRise / stepDist > 0.45 && nextMacro.slope <= cliffHardSlope) {
             maxStepLift = Math.max(maxStepLift, stepRise * 0.55);
           }
         }
 
-        const res = isKei
-          ? this._keiCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz)
-          : this._camperCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz);
+        const res = isArmor
+          ? this._armorCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz)
+          : (isKei
+            ? this._keiCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz)
+            : this._camperCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz));
 
         if (!res.hit) {
           veh.pose.cx = ncx;
           veh.pose.cz = ncz;
           veh.pose.yaw = nyaw;
-          totalMoved += dist;
+          totalMoved += distFwd;
           totalDYaw += dYaw;
           if (res.stepLift > maxStepLift) maxStepLift = res.stepLift;
         } else {
-          veh.speed = 0;
+          // If ARMOR-155 autopilot encounters a roadside tree/rock, smoothly nudge yaw around obstacle without freezing!
+          if (autopilotActive && (res.reason === 'forest' || res.reason === 'landslide' || res.reason === 'boulder')) {
+            const prevY = veh.pose.yaw;
+            const altYaw = prevY + (steerIn >= 0 ? 0.09 : -0.09);
+            const altCx = veh.pose.cx - Math.sin(altYaw) * (distFwd * 0.6);
+            const altCz = veh.pose.cz - Math.cos(altYaw) * (distFwd * 0.6);
+            if (!this._armorCollidesAt(altCx, altCz, altYaw, veh.pose.cx, veh.pose.cz).hit) {
+              veh.pose.cx = altCx;
+              veh.pose.cz = altCz;
+              veh.pose.yaw = altYaw;
+              totalMoved += distFwd * 0.6;
+              totalDYaw += (altYaw - prevY);
+              continue;
+            }
+          }
+          // Heavy armored ARMOR-155 absorbs impact safely with damped rebound instead of violent crash!
+          veh.speed = isArmor ? -Math.sign(veh.speed) * Math.min(0.6, Math.abs(veh.speed) * 0.15) : 0;
+          veh.velX *= 0.1;
+          veh.velZ *= 0.1;
           blocked = true;
-          this.vehicleBlockedTimer = 0.65;
+          this.vehicleBlockedTimer = 0.55;
           if (this.bumpCooldown <= 0) {
             this.audio.playBump();
-            if (navigator.vibrate) navigator.vibrate(25);
+            if (navigator.vibrate) navigator.vibrate(isArmor ? 14 : 25);
             this.bumpCooldown = 0.45;
           }
           break;
         }
       }
 
-      // Smooth spring-damper suspension response over rocks, logs, & step-overs!
       const targetSusp = maxStepLift;
-      const springK = isKei ? 58.0 : 42.0;
-      const dampC = isKei ? 11.5 : 9.2;
+      const springK = isKei ? 58.0 : (isArmor ? 36.0 : 42.0);
+      const dampC = isKei ? 11.5 : (isArmor ? 8.8 : 9.2);
       veh.suspVelY += ((targetSusp - veh.suspLift) * springK - veh.suspVelY * dampC) * dt;
-      veh.suspLift = Math.max(-0.08, Math.min(isKei ? 0.45 : 0.65, veh.suspLift + veh.suspVelY * dt));
+      veh.suspLift = Math.max(-0.08, Math.min(isArmor ? 0.85 : (isKei ? 0.45 : 0.65), veh.suspLift + veh.suspVelY * dt));
 
-      if (Math.abs(totalMoved) > 0.0001 || Math.abs(veh.suspLift) > 0.002) {
-        this._applyVehicleTerrainPose(veh, isKei, maxStepLift);
+      if (Math.abs(totalMoved) > 0.0001 || Math.abs(veh.suspLift) > 0.002 || Math.abs(veh.slipSpeed) > 0.02) {
+        this._applyVehicleTerrainPose(veh, vehicleKey, maxStepLift);
+        if (isArmor && this.house.towContainer && this.house.towContainer.hitched) {
+          this._updateTowedContainer(totalMoved);
+        }
         if (Math.abs(totalMoved) > 0.0001) {
           const wheelSpin = totalMoved / wheelRad;
           veh.wheelMeshes.forEach((w) => { w.rotation.x -= wheelSpin; });
@@ -900,7 +1334,7 @@ export class FirstPersonHouseExplorer {
     } else if (Math.abs(veh.suspLift) > 0.002 || Math.abs(veh.suspVelY) > 0.002) {
       veh.suspVelY += (-veh.suspLift * 44.0 - veh.suspVelY * 10.0) * dt;
       veh.suspLift += veh.suspVelY * dt;
-      this._applyVehicleTerrainPose(veh, isKei, 0);
+      this._applyVehicleTerrainPose(veh, vehicleKey, 0);
     }
 
     if (isKei) {
@@ -909,6 +1343,12 @@ export class FirstPersonHouseExplorer {
       this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
       this.eyeHeight += (0.98 - this.eyeHeight) * Math.min(1, dt * 10);
       this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'kei');
+    } else if (isArmor) {
+      const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, ARMOR_CAMPER.driverSeatLocal.z);
+      this.playerPos.set(seatW.x, 0, seatW.z);
+      this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
+      this.eyeHeight += (1.28 - this.eyeHeight) * Math.min(1, dt * 10);
+      this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'diesel');
     } else {
       const seatW = this.camperLocalToWorld(0.72, 0.88);
       this.playerPos.set(seatW.x, 0, seatW.z);
@@ -919,13 +1359,16 @@ export class FirstPersonHouseExplorer {
     this.bobAmount *= 0.85;
 
     if (this.callbacks.onDriveChange) {
+      // Strictly identical payload whether manual OR silent autopilot (ZERO special display!)
       this.callbacks.onDriveChange(true, {
         vehicle: this.drivingVehicle,
-        badge: isKei ? 'KEI-340 660cc' : 'CAMPER-75 6×6',
-        speedKmh: Math.round(Math.abs(veh.speed) * 3.6),
+        badge: isKei ? 'KEI-340 660cc' : (isArmor ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
+        speedKmh: Math.round(Math.hypot(veh.velX, veh.velZ) * 3.6),
         headlightsOn: veh.headlightsOn,
         colliding: blocked || this.vehicleBlockedTimer > 0,
         cliffSlopeDeg: Math.round((Math.atan(cliffMacroSlope) * 180) / Math.PI),
+        grip: Math.round(grip * 100) / 100,
+        slipMs: Math.round(Math.abs(veh.slipSpeed) * 100) / 100,
       });
     }
   }
@@ -954,6 +1397,7 @@ export class FirstPersonHouseExplorer {
         yaw: this.yaw,
         camperPose: this.house.camper.pose,
         keiPose: this.house.kei.pose,
+        armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
       });
       if (firstInit) {
         this.map3d.resetOverview(true);
@@ -966,6 +1410,12 @@ export class FirstPersonHouseExplorer {
     if (floorIdx > 1) return false;
     const C = ELEVATOR.cab;
     return x >= C.minX - 0.14 && x <= C.maxX + 0.08 && z >= C.minZ - 0.06 && z <= C.maxZ + 0.06;
+  }
+
+  _isPointInExtElevatorCab(x, z, floorIdx) {
+    if (floorIdx !== 1 && floorIdx !== 7) return false;
+    const C = EXT_ELEVATOR.cab;
+    return x >= C.minX - 0.14 && x <= C.maxX + 0.14 && z >= C.minZ - 0.06 && z <= C.maxZ + 0.06;
   }
 
   selectElevatorFloor(floor) {
@@ -1009,6 +1459,25 @@ export class FirstPersonHouseExplorer {
     }
   }
 
+  selectExtElevatorFloor(floor) {
+    this.audio.init();
+    if (this.house.extElevator) {
+      this.house.extElevator.selectFloor(floor);
+      this.audio.playElevatorButton();
+    }
+  }
+
+  snapExtElevator(floor, open = true) {
+    if (this.house.extElevator) {
+      this.house.extElevator.snapToFloor(floor, open);
+      if (this.inExtElevator) {
+        this.currentFloor = floor;
+        this.floorY = this.house.extElevator.cabY;
+        this._updateCameraTransform(0);
+      }
+    }
+  }
+
   setPose(x, z, yaw, pitch = -0.04, floorIdx = null) {
     if (floorIdx !== null && floorIdx >= -3 && floorIdx < FLOORS.length) {
       this.currentFloor = floorIdx;
@@ -1017,7 +1486,8 @@ export class FirstPersonHouseExplorer {
     this.playerPos.set(x, 0, z);
     this.activeBuilding = this._getBuildingAt(x, z);
     this.inElevator = this._isPointInElevatorCab(x, z, this.currentFloor);
-    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding, this.inElevator, x, z);
+    this.inExtElevator = this._isPointInExtElevatorCab(x, z, this.currentFloor);
+    if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding, this.inElevator, x, z, this.inExtElevator);
     this.floorY = this._computeFloorY(x, z);
     this.eyeHeight = this._computeDesiredEyeHeight(x, z);
     this.yaw = yaw;
@@ -1036,6 +1506,7 @@ export class FirstPersonHouseExplorer {
         d.progress = 1;
         if (d.kind === 'swing') d.pivot.rotation.y = d.openAngle;
         else if (d.kind === 'liftgate') d.pivot.rotation.x = d.openAngle;
+        else if (d.kind === 'rollup') d.pivot.position.y = d.closedY + d.openLiftY;
         else if (d.axis === 'x') d.pivot.position.x = d.closedPos.x + d.slideDelta;
         else d.pivot.position.z = d.closedPos.z + d.slideDelta;
       }
@@ -1147,9 +1618,20 @@ export class FirstPersonHouseExplorer {
     if (this.house.elevator && (this.inElevator || this.nearElevator)) {
       this.house.elevator.cabGroup.updateMatrixWorld(true);
     }
+    if (this.house.extElevator && (this.inExtElevator || this.nearExtElevator)) {
+      this.house.extElevator.cabGroup.updateMatrixWorld(true);
+    }
+    if (this.house.armorCamper && this.activeBuilding === 'armor') {
+      this.house.armorCamper.root.updateMatrixWorld(true);
+    }
     const targets = [
       ...this.house.interactiveProps
-        .filter((p) => (p.isElevatorBtn && (this.inElevator || this.nearElevator)) || p.floor === this.currentFloor)
+        .filter((p) => (
+          (p.isElevatorBtn && (this.inElevator || this.nearElevator))
+          || (p.isExtElevatorBtn && (this.inExtElevator || this.nearExtElevator))
+          || (p.isExtElevatorCall && p.floor === this.currentFloor)
+          || p.floor === this.currentFloor
+        ))
         .map((p) => p.mesh),
       ...(includeDoors
         ? this.house.interactiveDoors.filter((d) => Math.abs(d.floor - this.currentFloor) <= 1).map((d) => d.mesh)
@@ -1164,8 +1646,12 @@ export class FirstPersonHouseExplorer {
       const prop = this.house.interactiveProps.find((p) => p.id === obj.userData.propId);
       if (prop) {
         let shortPrompt = prop.getLabel();
-        if (prop.id === 'camper_drive' || prop.id === 'kei_drive') shortPrompt = '運転';
-        else if (!prop.isElevatorBtn && !prop.isElevatorCall) shortPrompt = prop.isOn ? '消灯' : '点灯';
+        if (prop.id === 'camper_drive' || prop.id === 'kei_drive' || prop.id === 'armor_drive') shortPrompt = '運転';
+        else if (prop.id === 'armor_shutter') shortPrompt = prop.getLabel();
+        else if (prop.id === 'armor_hitch' || prop.id === 'armor_hitch_cab') shortPrompt = prop.getLabel();
+        else if (!prop.isElevatorBtn && !prop.isElevatorCall && !prop.isExtElevatorBtn && !prop.isExtElevatorCall) {
+          shortPrompt = prop.isOn ? '消灯' : '点灯';
+        }
         return { kind: 'prop', item: prop, prompt: shortPrompt };
       }
     }
@@ -1188,6 +1674,20 @@ export class FirstPersonHouseExplorer {
         this.toggleVehicleDrive('camper');
       } else if (hit.item.id === 'kei_drive') {
         this.toggleVehicleDrive('kei');
+      } else if (hit.item.id === 'armor_drive') {
+        this.toggleVehicleDrive('armor');
+      } else if (hit.item.id === 'armor_shutter') {
+        this.toggleArmorShutters();
+      } else if (hit.item.id === 'armor_hitch' || hit.item.id === 'armor_hitch_cab') {
+        this.toggleArmorHitch();
+      } else if (hit.item.isExtElevatorBtn && this.house.extElevator) {
+        if (hit.item.elvAction === 'open') this.house.extElevator.openDoorsNow();
+        else if (hit.item.elvAction === 'close') this.house.extElevator.closeDoorsNow();
+        else this.house.extElevator.selectFloor(hit.item.targetFloor);
+        this.audio.playElevatorButton();
+      } else if (hit.item.isExtElevatorCall && this.house.extElevator) {
+        this.house.extElevator.callToFloor(hit.item.callFloor);
+        this.audio.playElevatorButton();
       } else if (hit.item.isElevatorBtn || hit.item.isElevatorCall) {
         hit.item.toggle();
       } else {
@@ -1213,10 +1713,19 @@ export class FirstPersonHouseExplorer {
     const inCamperFootprint = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
     const kl = this.worldToKeiLocal(x, z);
     const inKeiFootprint = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
+    const al = this.worldToArmorLocal(x, z);
+    const inArmorFootprint = al.lx >= 0.0 && al.lx <= ARMOR_CAMPER.width && al.lz >= 0.0 && al.lz <= ARMOR_CAMPER.length;
+    const tl = this.worldToContainerLocal(x, z);
+    const inContainerFootprint = tl.lx >= 0.0 && tl.lx <= TOW_CONTAINER.width && tl.lz >= 0.0 && tl.lz <= TOW_CONTAINER.length;
 
     if (this.currentFloor === 1) {
+      if (inArmorFootprint) return 'armor';
+      if (inContainerFootprint) return 'container';
       if (inKeiFootprint) return 'kei';
       if (inCamperFootprint) return 'camper';
+      if (x >= GARAGE.originX && x <= GARAGE.originX + GARAGE.width && z >= GARAGE.originZ && z <= GARAGE.originZ + GARAGE.depth) {
+        return 'garage';
+      }
       if (x >= 0.0 && x <= 5.0 && z >= 0.0 && z <= 10.0) return 'main';
       if (x >= ANNEX.originX && x <= ANNEX.originX + ANNEX.width && z >= ANNEX.originZ && z <= ANNEX.originZ + ANNEX.depth) {
         return 'annex';
@@ -1241,26 +1750,29 @@ export class FirstPersonHouseExplorer {
   _computeDesiredEyeHeight(x, z) {
     if (this.drivingVehicle === 'kei') return 0.98;
     if (this.drivingVehicle === 'camper') return 1.20;
-    if (this.inElevator) return this.crouching ? 1.04 : 1.54;
-    // Daily-Driver Kei-Van interior (CH 1.38m -> authentic crouching walk-in cargo posture 1.04m!)
+    if (this.drivingVehicle === 'armor') return 1.28;
+    if (this.inElevator || this.inExtElevator) return this.crouching ? 1.04 : 1.54;
     if (this.activeBuilding === 'kei' && this.currentFloor === 1) {
       return this.crouching ? 0.88 : 1.04;
     }
-    // Giant Camper 2F Loft (CH 0.98m -> authentic crouched/seated loft posture 0.76m!)
     if (this.activeBuilding === 'camper' && this.currentFloor === 2 && this.activeFlight === null) {
       return 0.76;
     }
     if (this.activeBuilding === 'camper' && this.currentFloor === 1 && !this.crouching) {
       return 1.54;
     }
+    if (this.activeBuilding === 'armor' && !this.crouching) {
+      return 1.56;
+    }
+    if (this.activeBuilding === 'container' && !this.crouching) {
+      return 1.50;
+    }
 
     let desiredEye = this.crouching ? 1.04 : 1.56;
     if (this.crouching) return desiredEye;
 
-    // B2F (CH 3.80m studio) & B3F (CH 2.80m wooden shelter): full standing height!
     if (this.currentFloor < 0) return desiredEye;
 
-    // Low-ceiling 2m×2m Concrete Warehouse (CH 1.92m, door lintels 1.76m)
     if (this.activeBuilding === 'storage') {
       const sx = x - STORAGE.originX;
       const sz = z - STORAGE.originZ;
@@ -1268,16 +1780,15 @@ export class FirstPersonHouseExplorer {
         return 1.44;
       }
     }
-    // B1F subterranean low concrete ceiling (CH 2.02m, door lintels 1.88m)
     if (this.currentFloor === 0) {
       return 1.50;
     }
-    // Main Tower Attic 6寸 gable ceiling ducking near eaves
+    // Main Tower Attic 6寸 gable ceiling ducking near eaves (full standing headroom inside ELV-EXT West Dormer!)
     if (this.currentFloor === HOUSE.atticFloor && this.activeFlight === null) {
+      if (x <= 1.48 && z >= 0.35 && z <= 1.85) return desiredEye;
       const ceilClearance = getAtticCeilingY(x) - HOUSE.atticBaseY - 0.24;
       return Math.min(desiredEye, Math.max(0.95, ceilClearance));
     }
-    // Neighbor Annex Attic 6寸 gable ceiling ducking near eaves
     if (this.currentFloor === 4 && this.activeBuilding === 'annex' && this.activeFlight === null) {
       const ceilClearance = getAnnexAtticCeilingY(x - ANNEX.originX) - ANNEX.atticBaseY - 0.24;
       return Math.min(desiredEye, Math.max(0.95, ceilClearance));
@@ -1288,6 +1799,9 @@ export class FirstPersonHouseExplorer {
   _computeFloorY(x, z) {
     if (this.inElevator && this.house.elevator) {
       return this.house.elevator.cabY;
+    }
+    if (this.inExtElevator && this.house.extElevator) {
+      return this.house.extElevator.cabY;
     }
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2') {
@@ -1341,13 +1855,34 @@ export class FirstPersonHouseExplorer {
     const inCamper = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
     const kl = this.worldToKeiLocal(x, z);
     const inKei = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
+    const al = this.worldToArmorLocal(x, z);
+    const inArmor = al.lx >= 0.0 && al.lx <= ARMOR_CAMPER.width && al.lz >= 0.0 && al.lz <= ARMOR_CAMPER.length;
+    const tl = this.worldToContainerLocal(x, z);
+    const inCont = tl.lx >= 0.0 && tl.lx <= TOW_CONTAINER.width && tl.lz >= 0.0 && tl.lz <= TOW_CONTAINER.length;
+
     const camperBaseY = this.house.camper.pose.y || 0;
     const keiBaseY = this.house.kei.pose.y || 0;
+    const armorBaseY = this.house.armorCamper.pose.y || 0;
+    const contBaseY = this.house.towContainer.pose.y || 0;
 
     const baseY = getFloorByPhysicalIndex(this.currentFloor).baseY;
     if (this.currentFloor === 1) {
+      if (inArmor) return armorBaseY + ARMOR_CAMPER.floorWorldY;
+      // Smooth steel boarding steps up into ARMOR-155 side airlock DAM-1 & rear hatch DAM-R!
+      if (al.lx >= -0.62 && al.lx < 0.0 && al.lz >= 13.75 && al.lz <= 15.05) {
+        const t = Math.max(0, Math.min(1, (al.lx + 0.62) / 0.62));
+        return armorBaseY - 0.32 + (ARMOR_CAMPER.floorWorldY + 0.32) * t;
+      }
+      if (al.lz > ARMOR_CAMPER.length && al.lz <= ARMOR_CAMPER.length + 0.60 && al.lx >= 0.90 && al.lx <= 2.20) {
+        const t = Math.max(0, Math.min(1, (ARMOR_CAMPER.length + 0.60 - al.lz) / 0.60));
+        return armorBaseY - 0.32 + (ARMOR_CAMPER.floorWorldY + 0.32) * t;
+      }
+      if (inCont) return contBaseY + TOW_CONTAINER.floorWorldY;
+      if (tl.lz > TOW_CONTAINER.length && tl.lz <= TOW_CONTAINER.length + 0.55 && tl.lx >= 0.25 && tl.lx <= 1.75) {
+        const t = Math.max(0, Math.min(1, (TOW_CONTAINER.length + 0.55 - tl.lz) / 0.55));
+        return contBaseY - 0.32 + (TOW_CONTAINER.floorWorldY + 0.32) * t;
+      }
       if (inKei) return keiBaseY + KEI.floorWorldY;
-      // Smooth step-in outside Kei-Van Left Sliding Door (DK-L) and Rear Liftgate (DK-R)!
       if (kl.lx >= -0.32 && kl.lx < 0.0 && kl.lz >= 1.20 && kl.lz <= 2.10) {
         const t = Math.max(0, Math.min(1, (kl.lx + 0.32) / 0.32));
         return keiBaseY - 0.18 + (KEI.floorWorldY + 0.18) * t;
@@ -1363,6 +1898,15 @@ export class FirstPersonHouseExplorer {
       if (cl.lx >= -0.36 && cl.lx < 0.0 && cl.lz >= 2.15 && cl.lz <= 2.82) {
         const stepT = Math.max(0, Math.min(1, (cl.lx + 0.36) / 0.36));
         return camperBaseY - 0.18 + (CAMPER.floor1WorldY + 0.18) * stepT;
+      }
+      // Smooth granite landing step leading into Exterior Attic Elevator (ELV-EXT) West door!
+      if (x >= -2.30 && x <= -1.42 && z >= 0.45 && z <= 1.75) {
+        const t = Math.max(0, Math.min(1, (x + 2.30) / 0.88));
+        return -0.18 + 0.18 * t;
+      }
+      // Giant 10×20m Steel Vehicle Warehouse (GARAGE-200) level epoxy floor
+      if (x >= GARAGE.originX && x <= GARAGE.originX + GARAGE.width && z >= GARAGE.originZ && z <= GARAGE.originZ + GARAGE.depth) {
+        return GARAGE.floorY;
       }
       if (x >= 0.0 && x <= 5.0 && z >= 0.0 && z <= 10.0) {
         if (x < 2.15 && z < 1.35) return -0.12;
@@ -1383,7 +1927,9 @@ export class FirstPersonHouseExplorer {
       if (this.terreno) {
         const groundY = this.terreno.getHeightAt(x, z);
         const dComp = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
-        // Exact -0.18m courtyard height right at NARROW-50, smoothly settling onto boots-on-ground across 5km×19km!
+        // Smooth level transition around expanded garage apron too!
+        const nearGarage = x >= 9.5 && x <= 24.5 && z >= -15.5 && z <= 19.5;
+        if (nearGarage) return GARAGE.floorY;
         const yardLift = dComp < 20.0 ? 0.17 : (dComp < 34.0 ? 0.17 - 0.15 * ((dComp - 20.0) / 14.0) : 0.02);
         return groundY + yardLift;
       }
@@ -1409,19 +1955,19 @@ export class FirstPersonHouseExplorer {
       return baseY;
     }
     if (this.currentFloor === 5) {
-      if (x > 3.55 && z > 3.50 && z < 5.95) return baseY - 0.02; // 5R04 Hinoki Sky Bath waterproof drop
-      if (x < 0.05 && z >= 6.15 && z <= 8.85) return baseY - 0.04; // 5R07 West Canopy Spa Deck
+      if (x > 3.55 && z > 3.50 && z < 5.95) return baseY - 0.02;
+      if (x < 0.05 && z >= 6.15 && z <= 8.85) return baseY - 0.04;
       return baseY;
     }
     if (this.currentFloor === 6) {
-      if (z > 9.95) return baseY - 0.04; // 6R07 Full-Width South Sky Observatory Terrace
+      if (z > 9.95) return baseY - 0.04;
       return baseY;
     }
     return baseY;
   }
 
   _getSurfaceMaterial(x, z) {
-    if (this.inElevator) return 'tile';
+    if (this.inElevator || this.inExtElevator) return 'tile';
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2' || this.activeFlight === 'st_b3') return 'tile';
       if (this.activeStairBuilding === 'storage') return 'tile';
@@ -1437,6 +1983,12 @@ export class FirstPersonHouseExplorer {
       if (x >= 3.35 && x <= 6.35 && z >= 3.85 && z <= 5.85) return 'wood';
       if (x > 3.25 || z < 3.60 || z > 16.15 || (x > 1.70 && z >= 8.55 && z <= 12.15)) return 'tile';
       return 'wood';
+    }
+    if (this.activeBuilding === 'garage') return 'tile';
+    if (this.activeBuilding === 'container') return 'wood';
+    if (this.activeBuilding === 'armor') {
+      const al = this.worldToArmorLocal(x, z);
+      return al.lz > 13.45 ? 'tile' : 'wood';
     }
     if (this.activeBuilding === 'kei') return 'tile';
     if (this.activeBuilding === 'camper') {
@@ -1499,15 +2051,15 @@ export class FirstPersonHouseExplorer {
       return 'wood';
     }
     if (this.currentFloor === 5) {
-      if (x < 0.05) return 'wood'; // 5R07 West Spa Cedar Deck
-      if (x < 2.20 && z < 6.00) return 'tile'; // 5R01/5R06 Terrazzo hall & spine
-      if (x > 3.55 && z > 3.50 && z < 5.95) return 'tile'; // 5R04 Granite Sky Bath
-      if (x > 2.55 && z > 6.00) return 'tile'; // 5R05 Emerald Terrazzo Botanical Lab
+      if (x < 0.05) return 'wood';
+      if (x < 2.20 && z < 6.00) return 'tile';
+      if (x > 3.55 && z > 3.50 && z < 5.95) return 'tile';
+      if (x > 2.55 && z > 6.00) return 'tile';
       return 'wood';
     }
     if (this.currentFloor === 6) {
-      if (x > 2.50 && x < 4.60 && z > 0.40 && z < 3.20) return 'tatami'; // 6R02 Starlight Ryukyu Tatami
-      if (x > 2.20 && z > 3.50 && z < 5.95) return 'tile'; // 6R03 Black Marble Powder & 6R04 Stone Cellar
+      if (x > 2.50 && x < 4.60 && z > 0.40 && z < 3.20) return 'tatami';
+      if (x > 2.20 && z > 3.50 && z < 5.95) return 'tile';
       return 'wood';
     }
     if (x > 1.30 && x < 3.70 && z > 6.15 && z < 8.75) return 'tatami';
@@ -1560,6 +2112,52 @@ export class FirstPersonHouseExplorer {
     return false;
   }
 
+  _collidesInArmorLocal(lx, lz) {
+    const r = this.playerRadius;
+    const r2 = r * r;
+    const cols = this.house.armorCamper.localColliders || [];
+    for (let i = 0; i < cols.length; i++) {
+      const b = cols[i];
+      const cx = lx < b.minX ? b.minX : (lx > b.maxX ? b.maxX : lx);
+      const cz = lz < b.minZ ? b.minZ : (lz > b.maxZ ? b.maxZ : lz);
+      if ((lx - cx) * (lx - cx) + (lz - cz) * (lz - cz) < r2) return true;
+    }
+    const doors = this.house.interactiveDoors;
+    for (let i = 0; i < doors.length; i++) {
+      const d = doors[i];
+      if (d.isArmor && d.progress < 0.55) {
+        const b = d.collider;
+        const cx = lx < b.minX ? b.minX : (lx > b.maxX ? b.maxX : lx);
+        const cz = lz < b.minZ ? b.minZ : (lz > b.maxZ ? b.maxZ : lz);
+        if ((lx - cx) * (lx - cx) + (lz - cz) * (lz - cz) < r2) return true;
+      }
+    }
+    return false;
+  }
+
+  _collidesInContainerLocal(lx, lz) {
+    const r = this.playerRadius;
+    const r2 = r * r;
+    const cols = this.house.towContainer.localColliders || [];
+    for (let i = 0; i < cols.length; i++) {
+      const b = cols[i];
+      const cx = lx < b.minX ? b.minX : (lx > b.maxX ? b.maxX : lx);
+      const cz = lz < b.minZ ? b.minZ : (lz > b.maxZ ? b.maxZ : lz);
+      if ((lx - cx) * (lx - cx) + (lz - cz) * (lz - cz) < r2) return true;
+    }
+    const doors = this.house.interactiveDoors;
+    for (let i = 0; i < doors.length; i++) {
+      const d = doors[i];
+      if (d.isContainer && d.progress < 0.55) {
+        const b = d.collider;
+        const cx = lx < b.minX ? b.minX : (lx > b.maxX ? b.maxX : lx);
+        const cz = lz < b.minZ ? b.minZ : (lz > b.maxZ ? b.maxZ : lz);
+        if ((lx - cx) * (lx - cx) + (lz - cz) * (lz - cz) < r2) return true;
+      }
+    }
+    return false;
+  }
+
   _collidesAt(x, z) {
     const r = this.playerRadius;
     const r2 = r * r;
@@ -1596,7 +2194,6 @@ export class FirstPersonHouseExplorer {
         const cx = x < bx1 ? bx1 : (x > bx2 ? bx2 : x);
         const cz = z < bz1 ? bz1 : (z > bz2 ? bz2 : z);
         if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) {
-          // Real Infrared Light-Curtain Safety Re-Open if player approaches closing door!
           if (elv.currentStopFloor === this.currentFloor && elv.phase === 'DOOR_CLOSING' && elv.doorProgress > 0.15) {
             elv.triggerSafetyReopen();
           }
@@ -1611,8 +2208,33 @@ export class FirstPersonHouseExplorer {
       }
     }
 
+    // Dynamic Safety Door Interlock for Exterior Attic Express Elevator (ELV-EXT: 1F West <-> RF East!)
+    if ((this.currentFloor === 1 || this.currentFloor === 7) && this.house.extElevator) {
+      const ext = this.house.extElevator;
+      const extDoorPassable = ext.currentStopFloor === this.currentFloor && ext.phase !== 'RUNNING' && ext.doorProgress > 0.60;
+      const C = EXT_ELEVATOR.cab;
+      if (!extDoorPassable) {
+        const bx1 = this.currentFloor === 1 ? -1.58 : -0.14;
+        const bx2 = this.currentFloor === 1 ? -1.40 : 0.06;
+        const bz1 = 0.62; const bz2 = 1.58;
+        const cx = x < bx1 ? bx1 : (x > bx2 ? bx2 : x);
+        const cz = z < bz1 ? bz1 : (z > bz2 ? bz2 : z);
+        if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) return true;
+      }
+      if (this.inExtElevator) {
+        if (z < C.minZ + r || z > C.maxZ - r) return true;
+        const inDoorZ = z >= 0.65 + r * 0.5 && z <= 1.55 - r * 0.5;
+        if (this.currentFloor === 1) {
+          if (x > C.maxX - r) return true;
+          if (x < C.minX + r && (!extDoorPassable || !inDoorZ)) return true;
+        } else {
+          if (x < C.minX + r) return true;
+          if (x > C.maxX - r && (!extDoorPassable || !inDoorZ)) return true;
+        }
+      }
+    }
+
     if (this.currentFloor === -3) {
-      // Strictly enclosed 2.70m×15.50m B4F Secret Lab (plus ELV-1 cab when inside!)
       if (x < 0.55 + r * 0.5 || x > 4.75 || z < 0.85 + r * 0.5 || z > 16.35 - r * 0.5) return true;
     } else if (this.currentFloor === -2) {
       if (x < -3.25 || x > 11.70 || z < 0.85 || z > 29.55) return true;
@@ -1625,15 +2247,25 @@ export class FirstPersonHouseExplorer {
         x < TERRENO_WORLD.playMinX || x > TERRENO_WORLD.playMaxX ||
         z < TERRENO_WORLD.playMinZ || z > TERRENO_WORLD.playMaxZ
       ) return true;
-      // Strict Movable Giant Camper 1F exterior shell + 14-room + widened 560mm corridor collision!
+      // Strict Movable Giant Camper 1F collision
       const cl = this.worldToCamperLocal(x, z);
       if (cl.lx >= -r - 0.16 && cl.lx <= CAMPER.width + r + 0.16 && cl.lz >= -r - 0.18 && cl.lz <= CAMPER.length + r + 0.18) {
         if (this._collidesInCamperLocal(cl.lx, cl.lz, 1)) return true;
       }
-      // Strict Movable Daily-Driver Kei-Van exterior shell + walk-in cargo hold collision!
+      // Strict Movable Daily-Driver Kei-Van collision
       const kl = this.worldToKeiLocal(x, z);
       if (kl.lx >= -r - 0.12 && kl.lx <= KEI.width + r + 0.12 && kl.lz >= -r - 0.12 && kl.lz <= KEI.length + r + 0.12) {
         if (this._collidesInKeiLocal(kl.lx, kl.lz)) return true;
+      }
+      // Strict Movable Armored Camper (ARMOR-155) collision
+      const al = this.worldToArmorLocal(x, z);
+      if (al.lx >= -r - 0.16 && al.lx <= ARMOR_CAMPER.width + r + 0.16 && al.lz >= -r - 0.18 && al.lz <= ARMOR_CAMPER.length + r + 0.18) {
+        if (this._collidesInArmorLocal(al.lx, al.lz)) return true;
+      }
+      // Strict Movable Towable Container (CON-24) collision
+      const tl = this.worldToContainerLocal(x, z);
+      if (tl.lx >= -r - 0.14 && tl.lx <= TOW_CONTAINER.width + r + 0.14 && tl.lz >= -r - 0.14 && tl.lz <= TOW_CONTAINER.length + r + 0.14) {
+        if (this._collidesInContainerLocal(tl.lx, tl.lz)) return true;
       }
     } else if (this.currentFloor === 2) {
       const cl = this.worldToCamperLocal(x, z);
@@ -1705,7 +2337,11 @@ export class FirstPersonHouseExplorer {
       const inInterior = x >= 0.15 + r && x <= 4.85 - r && z >= 0.15 + r && z <= 9.85 - r;
       if (!inInterior && !onBalcony6) return true;
     } else {
-      if (x < 0.15 + r || x > 4.85 - r || z < 0.15 + r || z > 9.85 - r) return true;
+      // RF Attic (floor 7): allow passing straight into ELV-EXT West Dormer Cab (X = -1.43..0.15, Z = 0.47..1.73)!
+      const C = EXT_ELEVATOR.cab;
+      const inAtticInt = x >= 0.15 + r && x <= 4.85 - r && z >= 0.15 + r && z <= 9.85 - r;
+      const inExtCabZone = x >= C.minX + r && x <= 0.40 && z >= C.minZ + r && z <= C.maxZ - r;
+      if (!inAtticInt && !inExtCabZone) return true;
     }
 
     const statics = this.house.collidersByFloor[this.currentFloor] || [];
@@ -1719,7 +2355,7 @@ export class FirstPersonHouseExplorer {
     const doors = this.house.interactiveDoors;
     for (let i = 0; i < doors.length; i++) {
       const d = doors[i];
-      if (!d.isCamper && !d.isKei && d.floor === this.currentFloor && d.progress < 0.55) {
+      if (!d.isCamper && !d.isKei && !d.isArmor && !d.isContainer && d.floor === this.currentFloor && d.progress < 0.55) {
         const b = d.collider;
         const cx = x < b.minX ? b.minX : (x > b.maxX ? b.maxX : x);
         const cz = z < b.minZ ? b.minZ : (z > b.maxZ ? b.maxZ : z);
@@ -1749,7 +2385,6 @@ export class FirstPersonHouseExplorer {
           const dx = x - t.x;
           const dz = z - t.z;
           if (dx * dx + dz * dz < md * md) {
-            // Natural low boulders & fallen logs <= 0.76m can be vaulted cleanly via auto-jump!
             if ((t.kind === 'boulder' || t.kind === 'log') && t.height !== undefined && t.height <= 0.76) {
               this._lastStepOverH = Math.max(this._lastStepOverH || 0, t.height);
               continue;
@@ -1757,18 +2392,14 @@ export class FirstPersonHouseExplorer {
             return true;
           }
         }
-        // Outside compound buildings: directional deep-river guard (blocks wading deeper into deep rapids, never traps!)
         const dComp = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
         if (dComp > 22.0) {
-          const rv = evalMainRiver(z);
-          if (Math.abs(x - rv.x) < rv.halfWidth * 0.85) {
-            const gY = this.terreno.getHeightAt(x, z);
-            const nextDepth = rv.waterY - gY;
-            if (nextDepth > 1.15) {
-              const curRv = evalMainRiver(this.playerPos.z);
-              const curDepth = curRv.waterY - this.terreno.getHeightAt(this.playerPos.x, this.playerPos.z);
-              if (nextDepth >= curDepth - 0.02) return true;
-            }
+          const flood = this.terreno.storm ? this.terreno.storm.getFloodInfoAt(x, z) : null;
+          const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(z).waterY - this.terreno.getHeightAt(x, z));
+          if (nextDepth > 1.15) {
+            const curFlood = this.terreno.storm ? this.terreno.storm.getFloodInfoAt(this.playerPos.x, this.playerPos.z) : null;
+            const curDepth = curFlood ? curFlood.depth : Math.max(0, evalMainRiver(this.playerPos.z).waterY - this.terreno.getHeightAt(this.playerPos.x, this.playerPos.z));
+            if (nextDepth >= curDepth - 0.02) return true;
           }
         }
       }
@@ -1972,11 +2603,23 @@ export class FirstPersonHouseExplorer {
     const prevGroundY = this._computeFloorY(prevX, prevZ);
     this._lastStepOverH = 0;
 
-    if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') {
-      const isKei = this.activeBuilding === 'kei';
-      const pose = isKei ? this.house.kei.pose : this.house.camper.pose;
-      const toLocal = (wx, wz) => (isKei ? this.worldToKeiLocal(wx, wz) : this.worldToCamperLocal(wx, wz));
-      const toWorld = (lx, lz) => (isKei ? this.keiLocalToWorld(lx, lz) : this.camperLocalToWorld(lx, lz));
+    if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei' || this.activeBuilding === 'armor' || this.activeBuilding === 'container') {
+      const bld = this.activeBuilding;
+      const pose = bld === 'kei'
+        ? this.house.kei.pose
+        : (bld === 'armor'
+          ? this.house.armorCamper.pose
+          : (bld === 'container' ? this.house.towContainer.pose : this.house.camper.pose));
+      const toLocal = (wx, wz) => (bld === 'kei'
+        ? this.worldToKeiLocal(wx, wz)
+        : (bld === 'armor'
+          ? this.worldToArmorLocal(wx, wz)
+          : (bld === 'container' ? this.worldToContainerLocal(wx, wz) : this.worldToCamperLocal(wx, wz))));
+      const toWorld = (lx, lz) => (bld === 'kei'
+        ? this.keiLocalToWorld(lx, lz)
+        : (bld === 'armor'
+          ? this.armorLocalToWorld(lx, lz)
+          : (bld === 'container' ? this.containerLocalToWorld(lx, lz) : this.camperLocalToWorld(lx, lz))));
       const c = Math.cos(pose.yaw);
       const s = Math.sin(pose.yaw);
       const curL = toLocal(this.playerPos.x, this.playerPos.z);
@@ -1997,7 +2640,6 @@ export class FirstPersonHouseExplorer {
     } else {
       const nextX = this.playerPos.x + this.playerVel.x * dt;
       if (!this._collidesAt(nextX, this.playerPos.z)) {
-        // Guard against stepping straight onto a > 37° cliff wall uphill
         let cliffBlockX = false;
         if (outdoorHike && this.terreno) {
           const nmX = this.terreno.getMacroNormalAt ? this.terreno.getMacroNormalAt(nextX, this.playerPos.z, 2.2) : cliffNrm;
@@ -2021,7 +2663,7 @@ export class FirstPersonHouseExplorer {
     this._updateStairTransitions(prevX, prevZ);
     this.activeBuilding = this._getBuildingAt(this.playerPos.x, this.playerPos.z);
 
-    // Update Elevator Cab Presence & Proximity
+    // Update Interior Elevator (ELV-1) Presence & Proximity
     const elv = this.house.elevator;
     if (elv && this.currentFloor <= 1 && this.activeBuilding === 'main') {
       const inFootprint = this._isPointInElevatorCab(this.playerPos.x, this.playerPos.z, this.currentFloor);
@@ -2038,8 +2680,29 @@ export class FirstPersonHouseExplorer {
       this.nearElevator = false;
     }
 
+    // Update Exterior Attic Express Elevator (ELV-EXT) Presence & Proximity
+    const extElv = this.house.extElevator;
+    if (extElv && (this.currentFloor === 1 || this.currentFloor === 7)) {
+      const inExtFootprint = this._isPointInExtElevatorCab(this.playerPos.x, this.playerPos.z, this.currentFloor);
+      if (inExtFootprint && (this.inExtElevator || Math.abs(this.floorY - extElv.cabY) < 1.35)) {
+        this.inExtElevator = true;
+      } else if (!inExtFootprint) {
+        this.inExtElevator = false;
+      }
+      this.nearExtElevator = !this.inExtElevator
+        && this.playerPos.x >= -3.10 && this.playerPos.x <= 1.20
+        && this.playerPos.z >= -0.20 && this.playerPos.z <= 2.60;
+    } else {
+      this.inExtElevator = false;
+      this.nearExtElevator = false;
+    }
+
     if (this.inElevator && elv) {
       this.floorY = elv.cabY;
+      this.jumpOffset = 0;
+      this.jumpVelY = 0;
+    } else if (this.inExtElevator && extElv) {
+      this.floorY = extElv.cabY;
       this.jumpOffset = 0;
       this.jumpVelY = 0;
     } else {
@@ -2047,7 +2710,6 @@ export class FirstPersonHouseExplorer {
       const lerpRate = this.activeFlight !== null ? 18 : 11;
       this.floorY += (targetFloorY - this.floorY) * Math.min(1, dt * lerpRate);
 
-      // Natural Terrain Auto-Jump over realistic rocks, fallen logs, & step ledges while running outdoors!
       const horizSpeed = Math.hypot(this.playerVel.x, this.playerVel.z);
       const inNature = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && this.activeFlight === null;
       if (inNature && this.jumpOffset <= 0.02 && this.autoJumpCooldown <= 0 && horizSpeed > 1.35) {
@@ -2122,17 +2784,22 @@ export class FirstPersonHouseExplorer {
 
   _updateAutomaticDoors(dt) {
     if (this.autoDoorsReadyTimer > 0) this.autoDoorsReadyTimer = Math.max(0, this.autoDoorsReadyTimer - dt);
-    if (this.drivingVehicle) return;
 
     const px = this.playerPos.x;
     const pz = this.playerPos.z;
     const cl = this.worldToCamperLocal(px, pz);
     const kl = this.worldToKeiLocal(px, pz);
+    const al = this.worldToArmorLocal(px, pz);
+    const tl = this.worldToContainerLocal(px, pz);
     const lookX = -Math.sin(this.yaw);
     const lookZ = -Math.cos(this.yaw);
     const cp = this.house.camper.pose;
     const camLookX = lookX * Math.cos(cp.yaw) - lookZ * Math.sin(cp.yaw);
     const camLookZ = lookX * Math.sin(cp.yaw) + lookZ * Math.cos(cp.yaw);
+
+    // Active driven vehicle nose/center/rear coordinates so Giant Garage Roll-Up Shutters (DG-N / DG-S) auto-open smoothly!
+    const driveVeh = this.drivingVehicle ? this._getVehicleObj(this.drivingVehicle) : null;
+    const driveHalfLen = this.drivingVehicle === 'armor' ? ARMOR_CAMPER.length * 0.5 : (this.drivingVehicle === 'kei' ? KEI.length * 0.5 : CAMPER.length * 0.5);
 
     for (const d of this.house.interactiveDoors) {
       if (d.forceOpen) continue;
@@ -2140,6 +2807,52 @@ export class FirstPersonHouseExplorer {
 
       const b = d.collider;
       if (!b) continue;
+
+      // Special Vehicle-Friendly Wide-Range Auto Roll-Up Garage Gates (DG-N / DG-S) — work BOTH walking AND driving!
+      if (d.isGarageGate) {
+        let minDist = Infinity;
+        if (this.currentFloor === 1) {
+          const cxP = px < b.minX ? b.minX : (px > b.maxX ? b.maxX : px);
+          const czP = pz < b.minZ ? b.minZ : (pz > b.maxZ ? b.maxZ : pz);
+          minDist = Math.min(minDist, Math.hypot(px - cxP, pz - czP));
+        }
+        if (driveVeh) {
+          const vp = driveVeh.pose;
+          const fx = -Math.sin(vp.yaw);
+          const fz = -Math.cos(vp.yaw);
+          const pts = [
+            [vp.cx, vp.cz],
+            [vp.cx + fx * driveHalfLen, vp.cz + fz * driveHalfLen],
+            [vp.cx - fx * driveHalfLen, vp.cz - fz * driveHalfLen],
+          ];
+          if (this.drivingVehicle === 'armor' && this.house.towContainer && this.house.towContainer.hitched) {
+            pts.push([this.house.towContainer.pose.cx, this.house.towContainer.pose.cz]);
+          }
+          for (const [vx, vz] of pts) {
+            const cxV = vx < b.minX ? b.minX : (vx > b.maxX ? b.maxX : vx);
+            const czV = vz < b.minZ ? b.minZ : (vz > b.maxZ ? b.maxZ : vz);
+            minDist = Math.min(minDist, Math.hypot(vx - cxV, vz - czV));
+          }
+        }
+        const gateOpenDist = driveVeh ? 6.2 : 2.6;
+        const gateCloseDist = driveVeh ? 8.8 : 4.2;
+        if (!d.isOpen && minDist < gateOpenDist) {
+          d.isOpen = true;
+          d.autoHoldTimer = 1.2;
+          if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(false);
+          this.adaptive.markShadowsDirty();
+        } else if (d.isOpen) {
+          if (minDist < gateOpenDist + 0.5) d.autoHoldTimer = 1.0;
+          else if (minDist > gateCloseDist && d.autoHoldTimer <= 0) {
+            d.isOpen = false;
+            if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(true);
+            this.adaptive.markShadowsDirty();
+          }
+        }
+        continue;
+      }
+
+      if (this.drivingVehicle) continue;
 
       let sameFloor = false;
       let tx = px;
@@ -2164,6 +2877,18 @@ export class FirstPersonHouseExplorer {
         tz = kl.lz;
         openDist = 0.98;
         closeDist = 1.55;
+      } else if (d.isArmor) {
+        sameFloor = this.currentFloor === 1;
+        tx = al.lx;
+        tz = al.lz;
+        openDist = (d.id === 'DAM-1' || d.id === 'DAM-R') ? 1.35 : 1.05;
+        closeDist = (d.id === 'DAM-1' || d.id === 'DAM-R') ? 2.05 : 1.60;
+      } else if (d.isContainer) {
+        sameFloor = this.currentFloor === 1;
+        tx = tl.lx;
+        tz = tl.lz;
+        openDist = 1.30;
+        closeDist = 2.00;
       } else {
         sameFloor = (d.floor === this.currentFloor)
           || (this.activeFlight !== null && Math.abs(d.floor - this.currentFloor) <= 1);
@@ -2182,7 +2907,6 @@ export class FirstPersonHouseExplorer {
 
       if (!d.isOpen) {
         let shouldOpen = dist < openDist;
-        // In the narrow Camper corridor, only open interior side-doors when facing/approaching them!
         if (shouldOpen && d.isCamper && d.id !== 'DC-1' && dist > 0.36) {
           const dmx = (b.minX + b.maxX) * 0.5 - tx;
           const dmz = (b.minZ + b.maxZ) * 0.5 - tz;
@@ -2218,16 +2942,26 @@ export class FirstPersonHouseExplorer {
       const target = d.isOpen ? 1 : 0;
       if (Math.abs(d.progress - target) > 0.002) {
         anyDoorAnimating = true;
-        d.progress += (target - d.progress) * Math.min(1, dt * 8.2);
+        const speed = d.kind === 'rollup' ? 3.8 : 8.2;
+        d.progress += (target - d.progress) * Math.min(1, dt * speed);
         const eased = d.progress * d.progress * (3 - 2 * d.progress);
         if (d.kind === 'swing') d.pivot.rotation.y = d.openAngle * eased;
         else if (d.kind === 'liftgate') d.pivot.rotation.x = d.openAngle * eased;
+        else if (d.kind === 'rollup') d.pivot.position.y = d.closedY + d.openLiftY * eased;
         else if (d.axis === 'x') d.pivot.position.x = d.closedPos.x + d.slideDelta * eased;
         else d.pivot.position.z = d.closedPos.z + d.slideDelta * eased;
       }
     }
 
-    // Real-Time Mark II MRL Traction Elevator 7-Phase Physics, Mechanical Audio Cues & Rider Sync!
+    // Update ARMOR-155 Motorized Iron Storm Shutters!
+    if (this.house.armorCamper && this.house.armorCamper.shutters) {
+      const sh = this.house.armorCamper.shutters;
+      const prevP = sh.shutterProgress;
+      sh.updateShutters(dt);
+      if (Math.abs(sh.shutterProgress - prevP) > 0.0005) anyDoorAnimating = true;
+    }
+
+    // Real-Time Mark II MRL Traction Elevator (ELV-1: B4F..1F)
     const elv = this.house.elevator;
     if (elv) {
       elv.update(dt);
@@ -2274,11 +3008,31 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // Animate B4F Clandestine Research Core Containment Pod when player is on B4F!
+    // Exterior Panoramic Attic Express Elevator (ELV-EXT: 1F Courtyard <-> RF Attic 16.10m!)
+    const extElv = this.house.extElevator;
+    if (extElv) {
+      const prevPhase = extElv.phase;
+      extElv.update(dt);
+      if (extElv.phase !== 'IDLE_OPEN') anyDoorAnimating = true;
+      if (prevPhase === 'RUNNING' && extElv.phase === 'DOOR_OPENING') {
+        this.audio.playElevatorChime(extElv.currentStopFloor === 7 ? 1 : -1);
+        this.audio.playElevatorDoor(true);
+      } else if (prevPhase !== 'DOOR_CLOSING' && extElv.phase === 'DOOR_CLOSING') {
+        this.audio.playElevatorDoor(false);
+      }
+      if (this.inExtElevator) {
+        this.floorY = extElv.cabY;
+        if (extElv.phase === 'DOOR_OPENING' || extElv.phase === 'IDLE_OPEN') {
+          this.currentFloor = extElv.currentStopFloor;
+        } else if (extElv.phase === 'RUNNING') {
+          this.currentFloor = extElv.cabY > 8.05 ? 7 : 1;
+        }
+      }
+    }
+
     if (this.house.b4Lab && this.currentFloor === -3) {
       this.house.b4Lab.update(dt, elapsed);
     }
-    // Animate B3F Thermal Wing (Löyly steam, laminar forest-breeze fan, ember glow, bath water shimmer)!
     if (this.house.b3Thermal && this.currentFloor === -2) {
       this.house.b3Thermal.update(dt, elapsed);
     }
@@ -2294,8 +3048,10 @@ export class FirstPersonHouseExplorer {
       }
       this.terreno.update(this.camera.position, elapsed, flashState);
 
-      // Keep main directional sun/moon shadow camera centered on player outdoors & aligned to active sky!
       const tod = this.terreno.getTimeOfDay();
+      const stormInt = this.terreno.storm ? this.terreno.storm.getIntensity() : 0;
+      const lightning = this.terreno.storm ? this.terreno.storm.getLightningFlash() : 0;
+
       if (tod && this.moonLight) {
         const sd = this.terreno.atmoUniforms.uSunDir.value;
         const nearComp = Math.hypot(this.playerPos.x - 1.5, this.playerPos.z - 4.5) < 35.0;
@@ -2305,7 +3061,36 @@ export class FirstPersonHouseExplorer {
         this.moonLight.target.position.set(tx, ty, tz);
         this.moonLight.position.set(tx + sd.x * 46.0, ty + sd.y * 46.0, tz + sd.z * 46.0);
         this.moonLight.target.updateMatrixWorld();
+
+        // Real-time severe storm darkening + volumetric lightning illumination on Three.js scene lights!
+        this.moonLight.intensity = tod.sunIntensity * (1.0 - stormInt * 0.72) + lightning * 3.8;
+        this.hemiLight.intensity = tod.hemiIntensity * (1.0 - stormInt * 0.45) + lightning * 1.4;
+        if (this.scene.background) {
+          const sh = this.terreno.atmoUniforms.uSkyHorizon.value;
+          const sr = sh.r ?? sh.x ?? 0.5;
+          const sg = sh.g ?? sh.y ?? 0.6;
+          const sb = sh.b ?? sh.z ?? 0.7;
+          this.scene.background.setRGB(
+            Math.min(1, sr + lightning * 0.42),
+            Math.min(1, sg + lightning * 0.46),
+            Math.min(1, sb + lightning * 0.52),
+          );
+        }
+        if (this.scene.fog) {
+          const af = this.terreno.atmoUniforms.uAerialFogColor.value;
+          this.scene.fog.color.setRGB(af.r ?? af.x ?? 0.5, af.g ?? af.y ?? 0.6, af.b ?? af.z ?? 0.7);
+        }
       }
+
+      // Spatial Storm Rain & Wind Howl Audio with realistic acoustic shelter muffling!
+      let stormMuffle = 1.0;
+      if (this.currentFloor <= 0) stormMuffle = 0.02;
+      else if (this.activeBuilding === 'armor') {
+        const shClosed = this.house.armorCamper?.shutters?.shuttersClosed;
+        stormMuffle = shClosed ? 0.08 : 0.24;
+      } else if (this.activeBuilding === 'garage' || this.activeBuilding === 'container') stormMuffle = 0.34;
+      else if (this.activeBuilding !== 'courtyard') stormMuffle = 0.22;
+      this.audio.updateStorm(stormInt, stormMuffle);
     }
     this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
 
@@ -2318,6 +3103,7 @@ export class FirstPersonHouseExplorer {
       ['Annex_Cafe_Lamp', propStates.lamp_annex_cafe, 0.04, 0.02],
       ['5F_Conservatory_Lamp', propStates.lamp_5f_conservatory, 0.04, 0.018],
       ['6F_Hearth_Fire', propStates.fireplace_6f, 0.14, 0.08],
+      ['Armor_Lounge_Fire', true, 0.12, 0.06],
     ];
     for (const [lname, isOn, a1, a2] of flickerCfg) {
       const entry = this.house.interiorLights.find((l) => l.name === lname);
@@ -2339,9 +3125,18 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all 5 units + 11-Level Main Tower (B4F..6F+RF)
+    // Acoustic occlusion across all compound units
     if (this.currentFloor <= 0) {
       this.audio.updateOcclusion(0.015);
+    } else if (this.activeBuilding === 'armor') {
+      const shClosed = this.house.armorCamper?.shutters?.shuttersClosed;
+      const doorOpen = doorOpenMap['DAM-1'] || doorOpenMap['DAM-R'];
+      this.audio.updateOcclusion(doorOpen ? 0.58 : (shClosed ? 0.06 : 0.16));
+    } else if (this.activeBuilding === 'container') {
+      this.audio.updateOcclusion(doorOpenMap['DCT-1'] ? 0.60 : 0.12);
+    } else if (this.activeBuilding === 'garage') {
+      const gateOpen = doorOpenMap['DG-N'] || doorOpenMap['DG-S'] || doorOpenMap['DG-W'];
+      this.audio.updateOcclusion(gateOpen ? 0.72 : 0.25);
     } else if (this.activeBuilding === 'kei') {
       const keiOpen = doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D'];
       this.audio.updateOcclusion(keiOpen ? 0.72 : 0.22);
@@ -2392,6 +3187,9 @@ export class FirstPersonHouseExplorer {
   _detectCurrentRoom() {
     const x = this.playerPos.x;
     const z = this.playerPos.z;
+    if (this.inExtElevator && this.house.extElevator) {
+      return { id: 'ext_elevator', code: 'ELV-EXT', floor: this.currentFloor, building: 'main', nameJp: '外部屋根裏直通エレベーター' };
+    }
     if (this.inElevator && this.house.elevator) {
       const st = this.house.elevator.getState();
       const targetCode = ELEVATOR.stops.find((s) => s.floor === st.targetFloor)?.code || '1F';
@@ -2403,43 +3201,55 @@ export class FirstPersonHouseExplorer {
     }
     if (this.drivingVehicle === 'kei') {
       const kmh = Math.round(Math.abs(this.house.kei.speed) * 3.6);
-      const tag = this.vehicleBlockedTimer > 0 ? ' [衝突停止]' : '';
-      return { id: 'kei_driving', code: '軽運転', floor: 1, building: 'kei', nameJp: `日常使い軽バン走行中 (${kmh} km/h)${tag}` };
+      return { id: 'kei_driving', code: '軽運転', floor: 1, building: 'kei', nameJp: `軽バン走行 (${kmh} km/h)` };
+    }
+    if (this.drivingVehicle === 'armor') {
+      const kmh = Math.round(Math.hypot(this.house.armorCamper.velX || 0, this.house.armorCamper.velZ || 0) * 3.6);
+      return { id: 'armor_driving', code: '装甲RV', floor: 1, building: 'armor', nameJp: `ARMOR-155 (${kmh} km/h)` };
     }
     if (this.drivingVehicle === 'camper') {
       const kmh = Math.round(Math.abs(this.house.camper.speed) * 3.6);
-      const tag = this.vehicleBlockedTimer > 0 ? ' [衝突停止]' : '';
-      return { id: 'camper_driving', code: '運転中', floor: 1, building: 'camper', nameJp: `巨大キャンピングカー走行中 (${kmh} km/h)${tag}` };
+      return { id: 'camper_driving', code: '運転中', floor: 1, building: 'camper', nameJp: `キャンピングカー走行 (${kmh} km/h)` };
     }
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2') {
-        return { id: 'stair_b2', code: 'ST_B2', floor: this.currentFloor, building: 'main', nameJp: 'B1F↔B2F スタジオ直通コンクリート階段' };
+        return { id: 'stair_b2', code: 'ST_B2', floor: this.currentFloor, building: 'main', nameJp: 'B1F↔B2F 階段' };
       }
       if (this.activeFlight === 'st_b3') {
-        return { id: 'stair_b3', code: 'ST_B3', floor: this.currentFloor, building: 'main', nameJp: 'B2F↔B3F シェルター直通コンクリート階段' };
+        return { id: 'stair_b3', code: 'ST_B3', floor: this.currentFloor, building: 'main', nameJp: 'B2F↔B3F 階段' };
       }
       if (this.activeStairBuilding === 'camper') {
-        return { id: 'camper_stair', code: 'STC1', floor: this.currentFloor, building: 'camper', nameJp: 'キャンピングカー 1F↔2Fロフト階段' };
+        return { id: 'camper_stair', code: 'STC1', floor: this.currentFloor, building: 'camper', nameJp: 'キャンピングカー 階段' };
       }
       if (this.activeStairBuilding === 'storage') {
-        return { id: 'storage_stair', code: 'STS1', floor: this.currentFloor, building: 'storage', nameJp: 'コンクリート倉庫 1F↔2F 外鉄骨階段' };
+        return { id: 'storage_stair', code: 'STS1', floor: this.currentFloor, building: 'storage', nameJp: '倉庫 外階段' };
       }
       if (this.activeStairBuilding === 'annex') {
-        const aNames = { 1: '隣棟 1F↔2F 階段', 2: '隣棟 2F↔3F 階段', 3: '隣棟 3F↔屋根裏 階段' };
-        return { id: 'annex_stair', code: `STA${this.activeFlight}`, floor: this.currentFloor, building: 'annex', nameJp: aNames[this.activeFlight] || '隣棟 階段' };
+        return { id: 'annex_stair', code: `STA${this.activeFlight}`, floor: this.currentFloor, building: 'annex', nameJp: '隣棟 階段' };
       }
-      const fNames = [
-        'B1F↔1F 地下コンクリート階段',
-        '1F↔2F 階段',
-        '2F↔3F 階段',
-        '3F↔4F 階段',
-        '4F↔5F 階段',
-        '5F↔6F 階段',
-        '6F↔屋根裏 階段',
-      ];
-      return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, building: 'main', nameJp: fNames[this.activeFlight] || '母屋 階段' };
+      return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, building: 'main', nameJp: '母屋 階段' };
     }
 
+    if (this.activeBuilding === 'armor') {
+      const al = this.worldToArmorLocal(x, z);
+      for (let i = ARMOR_CAMPER_PLAN.rooms.length - 1; i >= 0; i--) {
+        const r = ARMOR_CAMPER_PLAN.rooms[i];
+        if (al.lx >= r.x && al.lx <= r.x + r.w && al.lz >= r.z && al.lz <= r.z + r.d) return r;
+      }
+      return ARMOR_CAMPER_PLAN.rooms[0];
+    }
+    if (this.activeBuilding === 'container') {
+      return TOW_CONTAINER_PLAN.rooms[0];
+    }
+    if (this.activeBuilding === 'garage') {
+      const gx = x - GARAGE.originX;
+      const gz = z - GARAGE.originZ;
+      for (let i = GARAGE_PLAN.rooms.length - 1; i >= 0; i--) {
+        const r = GARAGE_PLAN.rooms[i];
+        if (gx >= r.x && gx <= r.x + r.w && gz >= r.z && gz <= r.z + r.d) return r;
+      }
+      return GARAGE_PLAN.rooms[0];
+    }
     if (this.activeBuilding === 'kei') {
       const kl = this.worldToKeiLocal(x, z);
       for (let i = KEI_PLAN.rooms.length - 1; i >= 0; i--) {
@@ -2448,7 +3258,6 @@ export class FirstPersonHouseExplorer {
       }
       return KEI_PLAN.rooms[2] || KEI_PLAN.rooms[0];
     }
-
     if (this.activeBuilding === 'camper') {
       const cl = this.worldToCamperLocal(x, z);
       const cFloor = CAMPER_SHEETS[this.currentFloor === 2 ? 1 : 0];
@@ -2458,10 +3267,9 @@ export class FirstPersonHouseExplorer {
       }
       return cFloor.rooms[0] || null;
     }
-
     if (this.activeBuilding === 'storage') {
       if (this.currentFloor === 2 && z < STORAGE.originZ + 0.02) {
-        return { id: 'storage_landing', code: 'S2LD', floor: 2, building: 'storage', nameJp: '倉庫棟2F 鋼製踊場（外階段）' };
+        return { id: 'storage_landing', code: 'S2LD', floor: 2, building: 'storage', nameJp: '倉庫棟2F 鋼製踊場' };
       }
       const sx = x - STORAGE.originX;
       const sz = z - STORAGE.originZ;
@@ -2472,7 +3280,6 @@ export class FirstPersonHouseExplorer {
       }
       return sFloor.rooms[0] || null;
     }
-
     if (this.activeBuilding === 'annex') {
       const lx = x - ANNEX.originX;
       const lz = z - ANNEX.originZ;
@@ -2486,39 +3293,25 @@ export class FirstPersonHouseExplorer {
     }
 
     if (this.currentFloor === 1 && this.activeBuilding === 'courtyard') {
-      if (x > 2.2 && x < 5.0 && z > -6.0 && z < -1.2) {
-        return { id: 'exterior', code: '軽駐車', floor: 1, building: 'courtyard', nameJp: '日常使い軽バン駐車スペース（玄関前）' };
-      }
-      if (x > 5.0 && x < 10.6 && z >= 1.5 && z < 10.2) {
-        return { id: 'exterior', code: 'RV駐車帯', floor: 1, building: 'courtyard', nameJp: '巨大キャンピングカー駐車帯（母屋東隣）' };
-      }
-      if (x > 5.0 && x < 10.2 && z > -2.5 && z < 1.5) {
-        return { id: 'exterior', code: '東歩道', floor: 1, building: 'courtyard', nameJp: '東アプローチ（母屋↔コンクリート倉庫棟）' };
-      }
-      if (x > -3.1 && x < 0.25 && z > -2.0 && z < 10.2) {
-        return { id: 'exterior', code: '中庭', floor: 1, building: 'courtyard', nameJp: '石灯籠の苔中庭（母屋↔隣棟）' };
-      }
       const distBase = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
-      if (this.terreno && distBase > 22.0) {
+      if (this.terreno && distBase > 28.0) {
         const b = this.terreno.getBiomeInfoAt(x, z);
-        const dirNS = z < 0 ? '北' : '南';
-        const distLabel = distBase >= 1000 ? `${(distBase / 1000).toFixed(2)}km` : `${Math.round(distBase)}m`;
         return {
           id: 'exterior_mountain',
           code: `EL+${Math.round(b.asl)}m`,
           floor: 1,
           building: 'courtyard',
-          nameJp: `${b.zoneJp}（母屋より${dirNS} ${distLabel}）`,
+          nameJp: b.zoneJp,
         };
       }
-      return { id: 'exterior', code: 'EXT', floor: 1, building: 'courtyard', nameJp: '深い森・苔石アプローチ（標高 +520m）' };
+      return { id: 'exterior', code: 'EXT', floor: 1, building: 'courtyard', nameJp: '中庭・森' };
     }
 
     if (this.currentFloor === -1 && x < 0.0) {
-      return { id: 'b2_stair_landing', code: 'ST_B2', floor: -1, building: 'main', nameJp: 'B2F 階段踊場（スタジオ正面扉前）' };
+      return { id: 'b2_stair_landing', code: 'ST_B2', floor: -1, building: 'main', nameJp: 'B2F 階段踊場' };
     }
     if (this.currentFloor === -2 && x < 0.0 && z > 12.20) {
-      return { id: 'b3_stair_landing', code: 'ST_B3', floor: -2, building: 'main', nameJp: 'B3F 階段踊場（木造シェルター連絡口）' };
+      return { id: 'b3_stair_landing', code: 'ST_B3', floor: -2, building: 'main', nameJp: 'B3F 階段踊場' };
     }
 
     const floorRooms = getFloorByPhysicalIndex(this.currentFloor).rooms;
@@ -2546,6 +3339,7 @@ export class FirstPersonHouseExplorer {
           yaw: this.yaw,
           camperPose: this.house.camper.pose,
           keiPose: this.house.kei.pose,
+          armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
         });
         this.map3d.render(this.renderer, dt, elapsed);
         if (this.callbacks.onAimChange) this.callbacks.onAimChange(null);
@@ -2568,21 +3362,24 @@ export class FirstPersonHouseExplorer {
 
       this.adaptive.update(rawDtMs, dt, {
         anyDoorAnimating,
-        flashlightOn: this.flashlightOn || this.house.camper.headlightsOn || this.house.kei.headlightsOn,
+        flashlightOn: this.flashlightOn || this.house.camper.headlightsOn || this.house.kei.headlightsOn || this.house.armorCamper.headlightsOn,
         cameraMoved,
         currentFloor: this.currentFloor,
         activeFlight: this.activeFlight,
         activeBuilding: this.activeBuilding,
         inElevator: this.inElevator,
+        inExtElevator: this.inExtElevator,
         doorOpenMap,
         propStates,
         playerX: this.playerPos.x,
         playerZ: this.playerPos.z,
       });
 
-      // Keep underground crystal clear and standard meshes smoothly harmonized with TERRENO's 19km atmosphere!
       if (this.scene.fog) {
-        const targetFog = this.currentFloor < 0 || this.inElevator ? 0.0035 : 0.00018;
+        const stormInt = this.terreno && this.terreno.storm ? this.terreno.storm.getIntensity() : 0;
+        const targetFog = this.currentFloor < 0 || this.inElevator
+          ? 0.0035
+          : (0.00018 + stormInt * 0.0018);
         this.scene.fog.density += (targetFog - this.scene.fog.density) * Math.min(1, dt * 8);
       }
 
@@ -2590,20 +3387,17 @@ export class FirstPersonHouseExplorer {
       const outdoorExp = todPreset ? todPreset.exposure : 1.12;
       let targetExposure = 1.15;
       if (this.flashlightOn) targetExposure = 1.06;
-      else if (this.inElevator) targetExposure = 1.18;
+      else if (this.inElevator || this.inExtElevator) targetExposure = 1.18;
       else if (this.currentFloor === -3) targetExposure = 1.18;
       else if (this.currentFloor === -1) targetExposure = 1.14;
       else if (this.currentFloor === -2) targetExposure = 1.16;
       else if (this.currentFloor === 0) targetExposure = 1.02;
-      else if (this.activeBuilding === 'storage') targetExposure = 1.08;
-      else if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') targetExposure = this.currentTodId === 'night' ? 1.18 : outdoorExp;
-      else if (room && (room.id === 'exterior_mountain' || room.id === 'exterior')) {
-        targetExposure = this.currentTodId === 'night' ? 1.20 : outdoorExp;
-      } else if (room && (room.id.includes('passage') || room.id.includes('gallery') || room.id.includes('stair'))) {
-        targetExposure = 1.24;
-      } else if (this.currentTodId !== 'night') {
-        targetExposure = outdoorExp;
-      }
+      else if (this.activeBuilding === 'storage' || this.activeBuilding === 'garage') targetExposure = 1.12;
+      else if (this.activeBuilding === 'armor' || this.activeBuilding === 'container') targetExposure = 1.16;
+      else if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') targetExposure = outdoorExp;
+      else if (room && (room.id === 'exterior_mountain' || room.id === 'exterior')) targetExposure = outdoorExp;
+      else if (room && (room.id.includes('passage') || room.id.includes('gallery') || room.id.includes('stair'))) targetExposure = 1.24;
+      else targetExposure = outdoorExp;
       this.postfx.render(this.scene, this.camera, elapsed, targetExposure);
 
       const aim = this.mapOpen ? null : this._raycastInteractable();
@@ -2613,24 +3407,55 @@ export class FirstPersonHouseExplorer {
         this.camera.getWorldDirection(_lookDir);
         const inKei = this.activeBuilding === 'kei';
         const inCamper = this.activeBuilding === 'camper';
+        const inArmor = this.activeBuilding === 'armor';
+        const inContainer = this.activeBuilding === 'container';
+        const inGarage = this.activeBuilding === 'garage';
         const inAnnex = this.activeBuilding === 'annex';
         const inStorage = this.activeBuilding === 'storage';
         const distFromComp = Math.hypot(this.playerPos.x - TERRENO_WORLD.compoundCenterX, this.playerPos.z - TERRENO_WORLD.compoundCenterZ);
-        const farOutdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && distFromComp > 22.0;
+        const farOutdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && distFromComp > 28.0;
 
-        let sheetIndex = farOutdoors ? 20 : (this.currentFloor + 3); // 0..19 CAD sheets, 20 = TERRENO 5×19km Topo Map!
+        // 0..22 = CAD Blueprints, 30 = 3D Map, 31 = 2D Authentic Autopilot Map
+        let sheetIndex = farOutdoors ? 30 : (this.currentFloor + 3);
         let floorCode = farOutdoors
           ? '山岳'
           : (this.activeBuilding === 'courtyard'
             ? '中庭'
-            : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code));
+            : (this.inExtElevator ? 'ELV-EXT' : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code)));
         let localX = this.playerPos.x;
         let localZ = this.playerPos.z;
         let localDx = _lookDir.x;
         let localDz = _lookDir.z;
 
-        if (inKei) {
-          sheetIndex = distFromComp > 26.0 ? 20 : SHEET_OFFSETS.kei;
+        if (inArmor) {
+          sheetIndex = distFromComp > 30.0 ? 31 : SHEET_OFFSETS.armor;
+          floorCode = '装甲RV';
+          const al = this.worldToArmorLocal(this.playerPos.x, this.playerPos.z);
+          localX = al.lx;
+          localZ = al.lz;
+          const ap = this.house.armorCamper.pose;
+          const c = Math.cos(ap.yaw);
+          const s = Math.sin(ap.yaw);
+          localDx = _lookDir.x * c - _lookDir.z * s;
+          localDz = _lookDir.x * s + _lookDir.z * c;
+        } else if (inContainer) {
+          sheetIndex = distFromComp > 30.0 ? 31 : SHEET_OFFSETS.container;
+          floorCode = 'コンテナ';
+          const tl = this.worldToContainerLocal(this.playerPos.x, this.playerPos.z);
+          localX = tl.lx;
+          localZ = tl.lz;
+          const tp = this.house.towContainer.pose;
+          const c = Math.cos(tp.yaw);
+          const s = Math.sin(tp.yaw);
+          localDx = _lookDir.x * c - _lookDir.z * s;
+          localDz = _lookDir.x * s + _lookDir.z * c;
+        } else if (inGarage) {
+          sheetIndex = SHEET_OFFSETS.garage;
+          floorCode = '車庫';
+          localX = this.playerPos.x - GARAGE.originX;
+          localZ = this.playerPos.z - GARAGE.originZ;
+        } else if (inKei) {
+          sheetIndex = distFromComp > 30.0 ? 30 : SHEET_OFFSETS.kei;
           floorCode = this.drivingVehicle === 'kei' ? '軽運転' : '軽バン';
           const kl = this.worldToKeiLocal(this.playerPos.x, this.playerPos.z);
           localX = kl.lx;
@@ -2641,7 +3466,7 @@ export class FirstPersonHouseExplorer {
           localDx = _lookDir.x * c - _lookDir.z * s;
           localDz = _lookDir.x * s + _lookDir.z * c;
         } else if (inCamper) {
-          sheetIndex = distFromComp > 26.0 ? 20 : (SHEET_OFFSETS.camper + (this.currentFloor === 2 ? 1 : 0));
+          sheetIndex = distFromComp > 30.0 ? 30 : (SHEET_OFFSETS.camper + (this.currentFloor === 2 ? 1 : 0));
           floorCode = this.drivingVehicle === 'camper' ? 'RV運転' : (this.currentFloor === 2 ? 'RV 2F' : 'RV 1F');
           const cl = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
           localX = cl.lx;
@@ -2664,6 +3489,7 @@ export class FirstPersonHouseExplorer {
           localZ = this.playerPos.z - ANNEX.originZ;
         }
 
+        const storm = this.terreno ? this.terreno.storm : null;
         this.callbacks.onPoseUpdate({
           x: this.playerPos.x,
           z: this.playerPos.z,
@@ -2680,6 +3506,13 @@ export class FirstPersonHouseExplorer {
           room,
           camperPose: this.house.camper.pose,
           keiPose: this.house.kei.pose,
+          armorPose: this.house.armorCamper.pose,
+          containerPose: this.house.towContainer.pose,
+          containerHitched: this.house.towContainer.hitched,
+          floodRise: storm ? storm.getFloodRise() : 0,
+          activeLandslides: storm ? storm.landslides.filter((l) => l.progress > 0.25) : [],
+          autopilotRoute: this.autopilotRoute ? this.autopilotRoute.points : null,
+          autopilotTargetId: this.autopilotRoute ? this.autopilotRoute.targetId : null,
         });
       }
 

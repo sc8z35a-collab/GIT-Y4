@@ -26,6 +26,8 @@ precision highp float;
 attribute vec4 aWaterMeta; // x: flowDist(m), y: crossT(-1..+1), z: depth(m), w: slope
 
 uniform float uTime;
+uniform float uFloodRise;
+uniform float uFloodMud;
 
 varying vec3 vWorldPos;
 varying vec4 vWaterMeta;
@@ -33,14 +35,19 @@ varying vec3 vFlowTangent;
 
 void main() {
   vec3 pos = position;
+  vec3 ft = normalize(normal);
+  vec3 bankDir = normalize(vec3(-ft.z, 0.0, ft.x));
   float midFactor = 1.0 - abs(aWaterMeta.y);
-  float heave = sin(aWaterMeta.x * 0.42 - uTime * 3.8) * 0.048
-              + cos(aWaterMeta.x * 0.95 + aWaterMeta.y * 5.2 - uTime * 5.1) * 0.022;
-  pos.y += heave * midFactor * clamp(aWaterMeta.z * 0.5, 0.0, 1.0);
+  float floodWave = 1.0 + uFloodMud * 2.4;
+  float heave = sin(aWaterMeta.x * 0.42 - uTime * (3.8 + uFloodMud * 2.8)) * 0.048 * floodWave
+              + cos(aWaterMeta.x * 0.95 + aWaterMeta.y * 5.2 - uTime * 5.1) * 0.022 * floodWave;
+  pos.y += uFloodRise + heave * midFactor * clamp((aWaterMeta.z + uFloodRise) * 0.5, 0.0, 1.4);
+  // Massive flood bank spillover across low-lying valley terraces & roads during severe storms!
+  pos.xz += bankDir.xz * (aWaterMeta.y * uFloodRise * 10.5);
 
   vWorldPos = pos;
   vWaterMeta = aWaterMeta;
-  vFlowTangent = normalize(normal);
+  vFlowTangent = ft;
   gl_Position = projectionMatrix * viewMatrix * vec4(pos, 1.0);
 }
 `;
@@ -49,6 +56,8 @@ const WATER_FRAGMENT_SHADER = /* glsl */ `
 precision highp float;
 
 uniform sampler2D uGeoMap;
+uniform float uFloodRise;
+uniform float uFloodMud;
 
 ${TERRENO_ATMO_UNIFORMS_GLSL}
 
@@ -165,12 +174,12 @@ void main() {
   float crossT = vWaterMeta.y;
   float localSlope = vWaterMeta.w;
 
-  // Per-pixel smooth riverbed depth (eliminates coarse ribbon triangle edges!)
+  // Per-pixel smooth riverbed depth (eliminates coarse ribbon triangle edges & follows terrain contours when flooded!)
   float geoBedY = sampleBedMacro(vWorldPos.xz);
   float pixelDepth = max(0.0, vWorldPos.y - geoBedY);
-  float depth = mix(vWaterMeta.z, pixelDepth, 0.65);
+  float depth = mix(mix(vWaterMeta.z, pixelDepth, 0.65), pixelDepth, clamp(uFloodMud * 1.2, 0.0, 1.0));
 
-  float shoreAlpha = smoothstep(0.02, 0.30, depth) * (1.0 - smoothstep(0.84, 1.0, abs(crossT)));
+  float shoreAlpha = smoothstep(0.02, 0.30, depth) * (1.0 - smoothstep(0.88, 1.0, abs(crossT)));
   if (shoreAlpha <= 0.01) discard;
 
   vec3 toCam = cameraPosition - vWorldPos;
@@ -188,8 +197,8 @@ void main() {
   vec3 T = normalize(vec3(vFlowTangent.x, 0.0, vFlowTangent.z));
   vec3 B = normalize(vec3(-T.z, 0.0, T.x));
 
-  // 1. CRISP ISOTROPIC WORLD-SPACE ALPINE STREAM RIPPLES (せせらぎ — 3 Rotated Wave Trains!)
-  float flowSpeed = 1.65 + clamp(localSlope * 26.0, 0.0, 5.2);
+  // 1. CRISP ISOTROPIC WORLD-SPACE ALPINE STREAM RIPPLES (raging velocity when flooded!)
+  float flowSpeed = (1.65 + clamp(localSlope * 26.0, 0.0, 5.2)) * (1.0 + uFloodMud * 1.65);
   vec2 pMetric = vec2(dot(vWorldPos.xz, B.xz), dot(vWorldPos.xz, T.xz));
   float adv1 = uTime * flowSpeed * 0.62;
   float adv2 = uTime * flowSpeed * 1.02;
@@ -218,24 +227,21 @@ void main() {
   vec2 g3 = rotW3T * d3.yz * (0.085 * microFade);
   vec2 gradBT = g1 + g2 + g3;
 
-  float turbBoost = 1.0 + clamp(localSlope * 16.0, 0.0, 1.35) + smoothstep(0.60, 0.05, depth) * 0.38;
+  float turbBoost = (1.0 + clamp(localSlope * 16.0, 0.0, 1.35) + smoothstep(0.60, 0.05, depth) * 0.38) * (1.0 + uFloodMud * 0.85);
   vec3 N = normalize(vec3(0.0, 1.0, 0.0) - B * (gradBT.x * turbBoost) - T * (gradBT.y * turbBoost));
 
-  float roughness = mix(0.058, 0.21, 1.0 - microFade * 0.72) + clamp(localSlope * 1.8, 0.0, 0.12);
+  float roughness = mix(0.058, 0.21, 1.0 - microFade * 0.72) + clamp(localSlope * 1.8, 0.0, 0.12) + uFloodMud * 0.14;
 
   // 2. ROUNDED ORGANIC KAMIKOCHI RIVER COBBLES + DOMAIN-WARPED UNDERWATER CAUSTICS!
-  //    (Zero flat Voronoi polygon edges — rounded stones emerge cleanly out of dark gravel silt!)
   vec3 ambient = mix(uHemiGroundColor, uHemiSkyColor, 0.72) * (uHemiIntensity * (0.48 + 0.52 * skyViewAO));
   vec3 bedColor = vec3(0.018, 0.034, 0.028);
-  float bedFade = 1.0 - smoothstep(42.0, 155.0, camDist);
+  float bedFade = (1.0 - smoothstep(42.0, 155.0, camDist)) * (1.0 - uFloodMud * 0.88);
 
   if (bedFade > 0.01 && depth < 4.4) {
     vec2 refrXZ = vWorldPos.xz + N.xz * clamp(depth * 0.42, 0.03, 0.95);
-    // Silt & submerged mossy sand continuous substrate
     float siltN = wFbm(refrXZ * 1.35);
     vec3 substrate = mix(vec3(0.024, 0.030, 0.026), vec3(0.032, 0.056, 0.030), smoothstep(0.35, 0.78, siltN));
 
-    // Rounded river cobbles (~20cm) + fine gravel pebbles (~8cm): mask drops to 0.0 BEFORE Voronoi cell border!
     vec2 cobBig = wVoronoi(refrXZ * 4.6 + vec2(siltN * 0.35));
     vec2 cobSm  = wVoronoi(refrXZ * 10.8 + vec2(11.3, -7.2));
     float stoneMaskBig = smoothstep(0.42, 0.14, cobBig.x);
@@ -246,7 +252,6 @@ void main() {
     vec3 pebbleBase = mix(substrate, colSmStone, stoneMaskSm * 0.72);
     pebbleBase = mix(pebbleBase, colBigStone, stoneMaskBig * 0.82);
 
-    // Organically domain-warped dual-layer sunlight refraction caustics (水底コースティクス)!
     vec2 cWarp = vec2(wNoise(pMetric * 1.45), wNoise(pMetric * 1.45 + vec2(9.2, -6.7))) * 0.58;
     vec2 cUV1 = (pMetric - vec2(0.0, adv1 * 0.75)) * 1.25 + cWarp + N.xz * 0.55;
     vec2 cUV2 = rotW2 * (pMetric - vec2(0.0, adv2 * 0.55)) * 1.85 - cWarp * 0.7 - N.xz * 0.40;
@@ -261,14 +266,17 @@ void main() {
     bedColor *= (uSunColor * (uSunIntensity * horizonShadow * 0.35) + ambient);
   }
 
-  // 3. TRUE PHYSICAL BEER-LAMBERT SPECTRAL EXTINCTION (Kamikochi Crystal Emerald-Jade!)
+  // 3. PHYSICAL BEER-LAMBERT SPECTRAL EXTINCTION (Emerald-Jade calm -> Turbid Muddy Ochre Flash-Flood!)
   float cosViewUp = clamp(V.y, 0.28, 1.0);
   float opticalPath = depth / cosViewUp;
-  vec3 transmittance = exp(-vec3(0.86, 0.21, 0.26) * opticalPath);
+  vec3 extCoeff = mix(vec3(0.86, 0.21, 0.26), vec3(1.65, 1.85, 2.35), uFloodMud);
+  vec3 transmittance = exp(-extCoeff * opticalPath);
 
   float ndl = max(0.0, dot(N, sunDir));
-  vec3 waterScatterAlbedo = vec3(0.006, 0.064, 0.058);
-  vec3 volumeScatter = waterScatterAlbedo * (uSunColor * (uSunIntensity * horizonShadow * (0.28 + 0.58 * ndl)) + ambient * 1.05);
+  vec3 calmScatter = vec3(0.006, 0.064, 0.058);
+  vec3 floodScatter = vec3(0.088, 0.066, 0.042);
+  vec3 waterScatterAlbedo = mix(calmScatter, floodScatter, uFloodMud);
+  vec3 volumeScatter = waterScatterAlbedo * (uSunColor * (uSunIntensity * horizonShadow * (0.28 + 0.58 * ndl)) + ambient * 1.25);
   vec3 refractedCol = bedColor * transmittance + volumeScatter * (1.0 - transmittance);
 
   // 4. TRUE F0=0.02 SCHLICK FRESNEL + DEEP GORGE FOREST CANOPY & SKY REFLECTION
@@ -283,23 +291,23 @@ void main() {
   float wallMask = 1.0 - smoothstep(0.14, 0.42, reflY + (1.0 - abs(crossT)) * 0.12);
   vec3 envRefl = mix(skyRefl, gorgeCanopyRefl, wallMask * 0.82);
 
-  vec3 col = mix(refractedCol, envRefl, clamp(fresnel * 0.86, 0.02, 0.84));
+  vec3 col = mix(refractedCol, envRefl, clamp(fresnel * (0.86 - uFloodMud * 0.34), 0.02, 0.84));
 
   // 5. Crisp GGX Solar / Lunar Diamond Water Sparkle across flowing wavelets!
   float specGgx = ggxSpec(N, V, sunDir, roughness);
-  col += uSunColor * (uSunIntensity * horizonShadow * specGgx * 0.92);
+  col += uSunColor * (uSunIntensity * horizonShadow * specGgx * (0.92 - uFloodMud * 0.45));
 
-  // 6. ISOTROPIC ORGANIC AERATED WHITEWATER FOAM (Lacy Rocky Shore & Riffle Patches)
+  // 6. ISOTROPIC ORGANIC AERATED WHITEWATER FOAM (Raging Silt Foam during Flood!)
   vec2 foamUV1 = rotW1 * (pMetric - vec2(0.0, adv1 * 0.9)) * 0.72;
   vec2 foamUV2 = rotW2 * (pMetric - vec2(0.0, adv2 * 0.7)) * 1.85;
   float foamCell = wFbm(foamUV1) * 0.65 + wNoise(foamUV2) * 0.35;
   float shoreEdge = smoothstep(0.42, 0.04, depth) * smoothstep(0.48, 0.80, foamCell);
-  float rapidPatch = smoothstep(0.015, 0.062, localSlope) * smoothstep(0.46, 0.80, foamCell * 0.72 + d2.x * 0.28);
-  float crestCap   = smoothstep(0.74, 0.94, d1.x * 0.5 + d2.x * 0.5) * clamp(localSlope * 18.0, 0.0, 0.55);
-  float foamMask   = clamp(max(shoreEdge * 0.70, max(rapidPatch * 0.82, crestCap)), 0.0, 0.86);
+  float rapidPatch = smoothstep(0.015, 0.062, localSlope + uFloodMud * 0.03) * smoothstep(0.42, 0.78, foamCell * 0.72 + d2.x * 0.28);
+  float crestCap   = smoothstep(0.70, 0.92, d1.x * 0.5 + d2.x * 0.5) * clamp((localSlope * 18.0) + uFloodMud * 0.65, 0.0, 0.75);
+  float foamMask   = clamp(max(shoreEdge * 0.75, max(rapidPatch * 0.88, crestCap)), 0.0, 0.90);
 
-  vec3 foamLit = (uSunColor * (uSunIntensity * horizonShadow * (0.38 + 0.46 * ndl)) + uHemiSkyColor * (uHemiIntensity * 0.84))
-               * vec3(0.68, 0.73, 0.75);
+  vec3 foamTint = mix(vec3(0.68, 0.73, 0.75), vec3(0.76, 0.70, 0.58), uFloodMud);
+  vec3 foamLit = (uSunColor * (uSunIntensity * horizonShadow * (0.38 + 0.46 * ndl)) + uHemiSkyColor * (uHemiIntensity * 0.88)) * foamTint;
   col = mix(col, foamLit, foamMask);
 
   col += evalTerrenoFlashlight(vWorldPos, N, mix(vec3(0.18, 0.34, 0.30), vec3(0.85, 0.90, 0.92), foamMask));
@@ -477,6 +485,8 @@ export function createTerrenoWater(geomorph, atmoUniforms) {
     uniforms: {
       ...atmoUniforms,
       uGeoMap: { value: geomorph.geoTexture },
+      uFloodRise: { value: 0.0 },
+      uFloodMud: { value: 0.0 },
     },
     vertexShader: WATER_VERTEX_SHADER,
     fragmentShader: WATER_FRAGMENT_SHADER,
@@ -500,8 +510,14 @@ export function createTerrenoWater(geomorph, atmoUniforms) {
     group.add(tribMesh);
   });
 
+  function setFlood(riseMeters, mudMix) {
+    waterMat.uniforms.uFloodRise.value = Math.max(0, riseMeters);
+    waterMat.uniforms.uFloodMud.value = Math.max(0, Math.min(1, mudMix));
+  }
+
   return {
     group,
     material: waterMat,
+    setFlood,
   };
 }
