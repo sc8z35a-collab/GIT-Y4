@@ -594,6 +594,10 @@ html, body {
   background: transparent;
 }
 
+.map-modal.mode-2d {
+  background: #070d14;
+}
+
 .map3d-gesture-layer {
   position: absolute;
   inset: 0;
@@ -606,7 +610,55 @@ html, body {
   cursor: grabbing;
 }
 
-/* Full-Bleed CAD Architectural Paper Stage */
+/* Full-Bleed Authentic 2D Topographic & 30-Waypoint Autopilot Map Stage */
+.terreno-2d-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: #070d14;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.terreno-2d-fullscreen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.terreno-2d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.terreno-2d-canvas:active {
+  cursor: grabbing;
+}
+
+.map2d-dyn-bar {
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.map2d-dyn-btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+  background: rgba(8, 14, 22, 0.78) !important;
+  border-color: rgba(125, 211, 252, 0.42) !important;
+  color: #e0f2fe !important;
+}
+
+/* Full-Bleed CAD Architectural Paper Stage (Smooth GPU 2-Finger Pinch Zoom Out/In & Omnidirectional Pan) */
 .cad-fullscreen {
   position: absolute;
   inset: 0;
@@ -614,13 +666,17 @@ html, body {
   background: #ebe6db;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .blueprint-viewport {
   width: 100%;
   height: 100%;
-  overflow: auto;
-  touch-action: pan-x pan-y pinch-zoom;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -628,13 +684,19 @@ html, body {
   background: #ebe6db;
 }
 
+.blueprint-viewport:active {
+  cursor: grabbing;
+}
+
 .blueprint-mount {
   transform-origin: center center;
+  will-change: transform;
   width: 100%;
   max-width: 1180px;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 
 .blueprint-svg {
@@ -642,6 +704,7 @@ html, body {
   height: auto;
   max-height: calc(100dvh - 50px);
   display: block;
+  pointer-events: none;
 }
 
 /* Floating Whisper-Minimal Corner Controls */
@@ -727,7 +790,7 @@ html, body {
   color: #ffffff !important;
 }
 
-/* Slim Floating Bottom Floor / 3D Switcher Pill Bar */
+/* Slim Floating Bottom Floor / 3D / 2D Switcher Pill Bar */
 .floor-pill-bar {
   position: absolute;
   left: 0;
@@ -787,6 +850,15 @@ html, body {
   color: #ffffff;
 }
 
+.floor-tab-2d {
+  color: #6ee7b7;
+}
+
+.floor-tab-2d.active {
+  background: #10b981;
+  color: #ffffff;
+}
+
 .floor-tab-classified.active {
   background: #dc2626;
   color: #ffffff;
@@ -800,4 +872,31 @@ html, body {
 .floor-tab-kei.active {
   background: #eab308;
   color: #11151c;
+}
+
+.floor-tab-garage {
+  color: #93c5fd;
+}
+
+.floor-tab-garage.active {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.floor-tab-armor {
+  color: #6ee7b7;
+}
+
+.floor-tab-armor.active {
+  background: #059669;
+  color: #ffffff;
+}
+
+.floor-tab-cont {
+  color: #fcd34d;
+}
+
+.floor-tab-cont.active {
+  background: #d97706;
+  color: #ffffff;
 }

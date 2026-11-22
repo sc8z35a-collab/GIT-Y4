@@ -1036,10 +1036,10 @@ function createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, opts) {
 }
 
 function isInsideCompoundClearing(x, z, extraMargin = 0.0) {
-  if (x > -12.5 - extraMargin && x < 14.5 + extraMargin && z > -15.5 - extraMargin && z < 15.5 + extraMargin) {
+  if (x > -12.5 - extraMargin && x < 26.5 + extraMargin && z > -16.5 - extraMargin && z < 20.5 + extraMargin) {
     return true;
   }
-  if (x > -6.0 - extraMargin && x < 8.0 + extraMargin && z > -28.0 - extraMargin && z <= -14.0) {
+  if (x > -6.0 - extraMargin && x < 23.0 + extraMargin && z > -28.0 - extraMargin && z <= -15.5) {
     return true;
   }
   if (isInsideVillageClearing(x, z, extraMargin)) {
@@ -1050,9 +1050,10 @@ function isInsideCompoundClearing(x, z, extraMargin = 0.0) {
 
 // Keep ONLY actual building footprints, vehicle pads, & stone walkways clear — let soft grass frame boulders & yard edges!
 function isInsideCompoundPaving(x, z) {
-  // Main Tower + Annex + Storage + Camper-75 footprints
-  if (x > -9.6 && x < 11.4 && z > -5.5 && z < 12.2) return true;
-  // Front entry walkway + Kei-340 concrete pad + approach path
+  // Main Tower + Annex + Storage + Camper-75 + Giant Vehicle Warehouse (GARAGE-200) footprints & aprons
+  if (x > -9.6 && x < 23.4 && z > -11.5 && z < 16.5) return true;
+  // Front entry walkway + Kei-340 concrete pad + Garage north concrete apron
+  if (x > -4.6 && x < 19.8 && z > -16.5 && z <= -11.0) return true;
   if (x > -4.6 && x < 5.6 && z > -12.8 && z <= -5.0) return true;
   // Suginosato 5-house village interiors, porches, stone plaza, lane & garden
   if (isInsideVillagePaving(x, z)) return true;

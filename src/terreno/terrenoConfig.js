@@ -21,8 +21,8 @@ export const TERRENO_WORLD = {
   baseElevationASL: 520.35,
   compoundCenterX: 1.5,
   compoundCenterZ: 3.5,
-  compoundFlatRadius: 26.0,
-  compoundBlendRadius: 175.0,
+  compoundFlatRadius: 36.0,
+  compoundBlendRadius: 195.0,
   // Suginosato 5-House Mountain Village Terrace Lock (exact CPU-GPU parity!)
   villageCenterX: VILLAGE.centerX,
   villageCenterZ: VILLAGE.centerZ,

@@ -55,7 +55,215 @@ const NORMAL_STRENGTH = {
   forest_mulch_ground: 2.0,
   green_wall: 2.0,
   wood_lattice_dark: 1.9,
+  warehouse_corrugated_steel: 2.8,
+  warehouse_epoxy_floor: 1.1,
+  armor_steel_plate: 2.4,
+  iron_shutter_slat: 2.9,
+  container_corrugated: 2.9,
+  secret_cedar_plank: 1.85,
 };
+
+function buildProceduralTextureCanvas(name) {
+  if (typeof document === 'undefined') return null;
+  const S = 512;
+  const c = document.createElement('canvas');
+  c.width = S;
+  c.height = S;
+  const ctx = c.getContext('2d');
+  // Deterministic micro-RNG for reproducible industrial & wood grain
+  let seed = 1337;
+  for (let i = 0; i < name.length; i++) seed = (seed * 31 + name.charCodeAt(i)) >>> 0;
+  const rng = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return seed / 4294967296.0;
+  };
+
+  if (name === 'warehouse_corrugated_steel') {
+    // Authentic galvanized trapezoidal warehouse steel cladding
+    const ribs = 16;
+    const ribW = S / ribs;
+    for (let x = 0; x < S; x++) {
+      const p = (x % ribW) / ribW;
+      let shade = 0.72;
+      if (p < 0.16) shade = 0.56 + (p / 0.16) * 0.28;
+      else if (p < 0.48) shade = 0.86 - ((p - 0.16) / 0.32) * 0.06;
+      else if (p < 0.64) shade = 0.80 - ((p - 0.48) / 0.16) * 0.34;
+      else shade = 0.46 + ((p - 0.64) / 0.36) * 0.10;
+      const g = Math.round(shade * 168);
+      ctx.fillStyle = `rgb(${g - 4},${g},${g + 6})`;
+      ctx.fillRect(x, 0, 1, S);
+    }
+    // Subtle zinc spangle & weathering streaks
+    for (let i = 0; i < 420; i++) {
+      const x = rng() * S, y = rng() * S;
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(20,28,36,0.045)';
+      ctx.fillRect(x, y, 2 + rng() * 5, 16 + rng() * 64);
+    }
+    // Horizontal lap seam & hex fastener rows
+    [128, 384].forEach((y) => {
+      ctx.fillStyle = 'rgba(18,22,28,0.38)';
+      ctx.fillRect(0, y, S, 3);
+      ctx.fillStyle = 'rgba(220,232,245,0.22)';
+      ctx.fillRect(0, y + 3, S, 2);
+      for (let r = 0; r < ribs; r++) {
+        ctx.fillStyle = '#333b44';
+        ctx.beginPath();
+        ctx.arc(r * ribW + ribW * 0.32, y - 6, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+    return c;
+  }
+
+  if (name === 'warehouse_epoxy_floor') {
+    ctx.fillStyle = '#6f757c';
+    ctx.fillRect(0, 0, S, S);
+    // Trowel cloud mottling + industrial epoxy speckles
+    for (let i = 0; i < 1600; i++) {
+      const x = rng() * S, y = rng() * S, rad = 1 + rng() * 14;
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(225,232,240,0.035)' : 'rgba(32,38,45,0.045)';
+      ctx.beginPath();
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Saw-cut concrete expansion joint grid
+    ctx.strokeStyle = 'rgba(24,28,34,0.48)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, S - 3, S - 3);
+    ctx.beginPath();
+    ctx.moveTo(S / 2, 0); ctx.lineTo(S / 2, S);
+    ctx.moveTo(0, S / 2); ctx.lineTo(S, S / 2);
+    ctx.stroke();
+    return c;
+  }
+
+  if (name === 'armor_steel_plate') {
+    // Heavy bolted gunmetal ballistic armor plate (crisp welded seams & hex bolts)
+    ctx.fillStyle = '#4e5966';
+    ctx.fillRect(0, 0, S, S);
+    // Directional brushed steel micro-grain
+    for (let i = 0; i < 1200; i++) {
+      const x = rng() * S, y = rng() * S;
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(210,224,238,0.065)' : 'rgba(18,24,30,0.075)';
+      ctx.fillRect(x, y, 22 + rng() * 90, 1 + rng() * 2);
+    }
+    // Welded armor plate subdivisions (2×2 heavy slabs)
+    const cells = [0, 256];
+    cells.forEach((cx) => {
+      cells.forEach((cy) => {
+        ctx.strokeStyle = 'rgba(16,21,27,0.82)';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(cx + 3, cy + 3, 250, 250);
+        ctx.strokeStyle = 'rgba(186,202,220,0.32)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(cx + 7, cy + 7, 242, 242);
+        // Heavy recessed corner & edge armor hex bolts
+        const offsets = [22, 128, 234];
+        offsets.forEach((ox) => {
+          [22, 234].forEach((oy) => {
+            ctx.fillStyle = '#20262e';
+            ctx.beginPath();
+            ctx.arc(cx + ox, cy + oy, 5.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#8b99aa';
+            ctx.beginPath();
+            ctx.arc(cx + ox - 1.2, cy + oy - 1.2, 3.1, 0, Math.PI * 2);
+            ctx.fill();
+          });
+        });
+      });
+    });
+    return c;
+  }
+
+  if (name === 'iron_shutter_slat') {
+    // Heavy interlocking ribbed gunmetal-iron rolling storm shutter slats
+    const slats = 16;
+    const h = S / slats;
+    for (let y = 0; y < S; y++) {
+      const p = (y % h) / h;
+      let v = 86;
+      if (p < 0.14) v = 34;
+      else if (p < 0.32) v = 114;
+      else if (p < 0.78) v = 82 + (1 - p) * 20;
+      else v = 48;
+      ctx.fillStyle = `rgb(${Math.round(v)},${Math.round(v + 5)},${Math.round(v + 11)})`;
+      ctx.fillRect(0, y, S, 1);
+    }
+    for (let i = 0; i < 400; i++) {
+      ctx.fillStyle = 'rgba(220,232,245,0.045)';
+      ctx.fillRect(rng() * S, rng() * S, 30 + rng() * 90, 1.5);
+    }
+    return c;
+  }
+
+  if (name === 'container_corrugated') {
+    // Heavy olive-steel ISO corrugated cargo container walls
+    const ribs = 12;
+    const ribW = S / ribs;
+    for (let x = 0; x < S; x++) {
+      const p = (x % ribW) / ribW;
+      let s = 0.65;
+      if (p < 0.18) s = 0.42 + (p / 0.18) * 0.46;
+      else if (p < 0.52) s = 0.88 - ((p - 0.18) / 0.34) * 0.08;
+      else if (p < 0.70) s = 0.80 - ((p - 0.52) / 0.18) * 0.42;
+      else s = 0.38 + ((p - 0.70) / 0.30) * 0.08;
+      ctx.fillStyle = `rgb(${Math.round(78 * s)},${Math.round(92 * s)},${Math.round(80 * s)})`;
+      ctx.fillRect(x, 0, 1, S);
+    }
+    // Top & bottom welded ISO frame rails
+    ctx.fillStyle = '#333d35';
+    ctx.fillRect(0, 0, S, 26);
+    ctx.fillRect(0, S - 26, S, 26);
+    for (let i = 0; i < 320; i++) {
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(15,20,16,0.05)';
+      ctx.fillRect(rng() * S, rng() * S, 4 + rng() * 8, 20 + rng() * 60);
+    }
+    return c;
+  }
+
+  if (name === 'secret_cedar_plank') {
+    // Warm honey-amber tongue-and-groove knotty cedar planks for secret-base warmth
+    const planks = 8;
+    const pH = S / planks;
+    for (let i = 0; i < planks; i++) {
+      const y0 = Math.round(i * pH);
+      const tone = 0.88 + rng() * 0.22;
+      const r = Math.min(255, Math.round(168 * tone));
+      const g = Math.min(255, Math.round(112 * tone));
+      const b = Math.min(255, Math.round(64 * tone));
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(0, y0, S, Math.ceil(pH));
+      // Warm longitudinal wood grain streaks
+      for (let k = 0; k < 28; k++) {
+        const gy = y0 + rng() * pH;
+        ctx.fillStyle = rng() > 0.45 ? 'rgba(92,48,18,0.14)' : 'rgba(235,186,125,0.12)';
+        ctx.fillRect(0, gy, S, 1 + rng() * 2.4);
+      }
+      // Natural wood knots
+      if (rng() > 0.35) {
+        const kx = 40 + rng() * (S - 80);
+        const ky = y0 + 12 + rng() * (pH - 24);
+        ctx.fillStyle = 'rgba(72,36,14,0.34)';
+        ctx.beginPath();
+        ctx.ellipse(kx, ky, 10 + rng() * 8, 4 + rng() * 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Crisp beveled plank groove shadow
+      ctx.fillStyle = 'rgba(42,20,8,0.62)';
+      ctx.fillRect(0, y0, S, 2.5);
+      ctx.fillStyle = 'rgba(240,198,142,0.18)';
+      ctx.fillRect(0, y0 + 2.5, S, 1.5);
+      // Staggered vertical plank butt joint
+      const jx = Math.round(((i * 193 + 77) % 420) + 46);
+      ctx.fillStyle = 'rgba(42,20,8,0.48)';
+      ctx.fillRect(jx, y0, 2, Math.ceil(pH));
+    }
+    return c;
+  }
+
+  return null;
+}
 
 function buildNormalFromImage(img, strength = 1.5) {
   const size = 256;
@@ -113,6 +321,22 @@ const pendingNormalCallbacks = new Map();
 function ensureBaseTextures(name) {
   let base = baseCache.get(name);
   if (!base) {
+    const procCanvas = buildProceduralTextureCanvas(name);
+    if (procCanvas) {
+      base = new THREE.CanvasTexture(procCanvas);
+      base.colorSpace = THREE.SRGBColorSpace;
+      base.minFilter = THREE.LinearMipmapLinearFilter;
+      base.anisotropy = 4;
+      base.needsUpdate = true;
+      baseCache.set(name, base);
+      if (NORMAL_STRENGTH[name]) {
+        try {
+          const nBase = buildNormalFromImage(procCanvas, NORMAL_STRENGTH[name]);
+          normalBaseCache.set(name, nBase);
+        } catch (_) {}
+      }
+      return base;
+    }
     const url = `./textures/${name}.png`;
     base = loader.load(url, (loadedTex) => {
       if (NORMAL_STRENGTH[name] && loadedTex.image) {
@@ -269,6 +493,12 @@ export const TILE_SCALE = {
   burlap_sack: 0.75,
   exterior_louver: 0.75,
   exterior_siding_grey: 1.50,
+  warehouse_corrugated_steel: 1.85,
+  warehouse_epoxy_floor: 2.80,
+  armor_steel_plate: 1.65,
+  iron_shutter_slat: 1.20,
+  container_corrugated: 1.60,
+  secret_cedar_plank: 1.40,
 };
 
 export const MAT_PRESETS = {
@@ -316,6 +546,12 @@ export const MAT_PRESETS = {
   crate_wood: { roughness: 0.85, metalness: 0.01 },
   paver_moss_stones: { roughness: 0.78, metalness: 0.02 },
   forest_mulch_ground: { roughness: 0.95, metalness: 0.0 },
+  warehouse_corrugated_steel: { roughness: 0.44, metalness: 0.68 },
+  warehouse_epoxy_floor: { roughness: 0.36, metalness: 0.08 },
+  armor_steel_plate: { roughness: 0.42, metalness: 0.50 },
+  iron_shutter_slat: { roughness: 0.44, metalness: 0.52 },
+  container_corrugated: { roughness: 0.50, metalness: 0.62 },
+  secret_cedar_plank: { roughness: 0.46, metalness: 0.02 },
 };
 
 export function makeSurfaceMat(texName, wMeters, hMeters, extra = {}) {

@@ -9,6 +9,9 @@ import { buildCamper3D } from './buildCamper3d.js';
 import { buildKeiCar3D } from './buildKeiCar3d.js';
 import { buildElevator3D } from './buildElevator3d.js';
 import { buildDeepBasement3D } from './buildDeepBasement3d.js';
+import { buildGarage3D } from './buildGarage3d.js';
+import { buildArmorCamperAndContainer3D } from './buildArmorCamper3d.js';
+import { buildExtElevator3D } from './buildExtElevator3d.js';
 import { createTerrenoEngine } from './terreno/terrenoEngine.js';
 import { buildVillage3D } from './buildVillage3d.js';
 
@@ -699,9 +702,12 @@ export function buildHouse3D(scene) {
   const eaveY = HOUSE.atticEaveY;     // 17.52
   const ridgeY = HOUSE.atticRidgeY;   // 18.93
 
-  addWallBox(staticGroup, 0.15, kneeH, 9.70, 0.075, attY + kneeH / 2, 5.0, 'yakisugi_deep', 'wainscot_rustic', 'v');
+  // West knee wall split around ELV-EXT Attic Express Dormer doorway (Z = 0.65..1.55 open!)
+  addWallBox(staticGroup, 0.15, kneeH, 0.50, 0.075, attY + kneeH / 2, 0.40, 'yakisugi_deep', 'wainscot_rustic', 'v');
+  addWallBox(staticGroup, 0.15, kneeH, 8.30, 0.075, attY + kneeH / 2, 5.70, 'yakisugi_deep', 'wainscot_rustic', 'v');
   addWallBox(staticGroup, 0.15, kneeH, 9.70, 4.925, attY + kneeH / 2, 5.0, 'wainscot_rustic', 'yakisugi_deep', 'v');
-  addCollider(attFloorIdx, 0.0, 0.0, 0.16, 10.0);
+  addCollider(attFloorIdx, 0.0, 0.0, 0.16, 0.65);
+  addCollider(attFloorIdx, 0.0, 1.55, 0.16, 10.0);
   addCollider(attFloorIdx, 4.84, 0.0, 5.0, 10.0);
 
   function buildGableEndWall(z1, z2, isNorth, winOp, intTex) {
@@ -767,7 +773,9 @@ export function buildHouse3D(scene) {
   const slateRoofMat = makeSurfaceMat('slate_charcoal', extSlopeLen, roofDepth, { roughness: 0.64 });
   const plywoodCeilMat = makeSurfaceMat('plywood_attic', 2.85, 9.70, { roughness: 0.78 });
 
-  [-1, 1].forEach((side) => {
+  // East roof slope (continuous full length)
+  {
+    const side = 1;
     const rMesh = new THREE.Mesh(new THREE.BoxGeometry(extSlopeLen, 0.12, roofDepth), slateRoofMat);
     rMesh.position.set(2.5 + side * (extRun / 2), ridgeY + 0.10 - (extRun / 2) * HOUSE.atticSlope, 5.0);
     rMesh.rotation.z = -side * roofAngle;
@@ -782,7 +790,34 @@ export function buildHouse3D(scene) {
     cMesh.rotation.z = -side * roofAngle;
     cMesh.receiveShadow = true;
     staticGroup.add(cMesh);
-  });
+  }
+  // West roof slope notched cleanly around ELV-EXT Attic Dormer (Z = 0.35..1.85, X = -0.50..1.38)
+  {
+    const side = -1;
+    const addWestRoofStrip = (z1, z2, runLen, isInt = false) => {
+      const lenZ = z2 - z1;
+      const cz = (z1 + z2) * 0.5;
+      const sLen = runLen / Math.cos(roofAngle);
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(sLen, isInt ? 0.04 : 0.12, lenZ),
+        isInt ? plywoodCeilMat : slateRoofMat,
+      );
+      m.position.set(2.5 - runLen * 0.5, (isInt ? ridgeY - 0.02 : ridgeY + 0.10) - (runLen * 0.5) * HOUSE.atticSlope, cz);
+      m.rotation.z = -side * roofAngle;
+      m.castShadow = !isInt;
+      m.receiveShadow = true;
+      staticGroup.add(m);
+    };
+    // North of dormer (-0.45..0.35) & South of dormer (1.85..10.45) full slope
+    addWestRoofStrip(-0.45, 0.35, extRun, false);
+    addWestRoofStrip(1.85, 10.45, extRun, false);
+    // Upper ridge section directly above dormer (X = 1.38..2.50 -> run = 1.12m, height > 2.16m!)
+    addWestRoofStrip(0.35, 1.85, 1.12, false);
+    // Matching interior plywood ceiling strips
+    addWestRoofStrip(0.14, 0.35, 2.40, true);
+    addWestRoofStrip(1.85, 9.86, 2.40, true);
+    addWestRoofStrip(0.35, 1.85, 1.12, true);
+  }
 
   // Rooftop Architectural Ridge Cap, Ventilation Louvers, & 6-Story Lightning Protection / Anemometer Mast (Y=18.93..20.42m)
   addBox(staticGroup, 0.24, 0.10, roofDepth + 0.04, mat.darkIron, 2.50, ridgeY + 0.18, 5.0, false);
@@ -804,6 +839,8 @@ export function buildHouse3D(scene) {
   addBox(staticGroup, 0.14, 0.22, 9.75, mat.walnut, 2.50, ridgeY - 0.14, 5.0, true);
   for (let rz = 0.65; rz <= 9.55; rz += 1.25) {
     [-1, 1].forEach((side) => {
+      // Skip West rafter inside ELV-EXT dormer opening (Z=0.35..1.85) so full headroom is clear!
+      if (side === -1 && rz >= 0.35 && rz <= 1.85) return;
       const rafter = new THREE.Mesh(new THREE.BoxGeometry(2.74, 0.11, 0.08), mat.walnut);
       rafter.position.set(2.5 + side * 1.18, ridgeY - 0.10 - 1.18 * HOUSE.atticSlope, rz);
       rafter.rotation.z = -side * roofAngle;
@@ -2062,13 +2099,13 @@ export function buildHouse3D(scene) {
   addBox(exteriorGroup, 0.14, 2.10, 1.30, makeSurfaceMat('wood_lattice_dark', 1.30, 2.10), 0.08, 0.95, 10.68, true);
   addBox(exteriorGroup, 0.34, 0.62, 0.78, makeFrontMat('prop_ac_outdoor'), 5.20, 0.02, 2.65, true);
 
-  // Mossy Courtyard Accent Boulders (positioned safely outside all 3 buildings AND vehicle bays!)
+  // Mossy Courtyard Accent Boulders (positioned safely outside all buildings, GARAGE-200 X=12..22 Z=-6..14, AND vehicle bays!)
   const rockGeo = new THREE.DodecahedronGeometry(1.0, 1);
   const rockMossMat = makeSurfaceMat('rock_mossy_cliff', 2.5, 2.5, { roughness: 0.88 });
   const rockWetMat = makeSurfaceMat('rock_wet_black', 2.0, 2.0, { roughness: 0.34 });
   [
-    [-5.8, -2.5, 0.95, 0.55], [12.4, -2.6, 1.15, 0.65], [-10.2, 4.8, 1.25, 0.72],
-    [13.4, 6.8, 1.15, 0.64], [-2.6, 12.6, 1.05, 0.58], [12.5, 13.0, 1.30, 0.78],
+    [-5.8, -2.5, 0.95, 0.55], [23.6, -3.0, 1.15, 0.65], [-10.2, 4.8, 1.25, 0.72],
+    [24.0, 7.2, 1.15, 0.64], [-2.6, 12.6, 1.05, 0.58], [23.4, 15.2, 1.30, 0.78],
     [2.8, 14.0, 0.88, 0.45], [-9.2, 11.0, 1.40, 0.82],
   ].forEach(([bx, bz, sx, sy], i) => {
     const rMesh = new THREE.Mesh(rockGeo, i % 2 === 0 ? rockMossMat : rockWetMat);
@@ -2234,7 +2271,54 @@ export function buildHouse3D(scene) {
   });
 
   // =========================================================================
-  // 10e. SUGINOSATO 5-HOUSE MOUNTAIN VILLAGE (杉ノ郷集落 — X=820, Z=1280, EL +514m)
+  // 10e. GIANT 10×20×4.5m VEHICLE WAREHOUSE (GARAGE-200)
+  // =========================================================================
+  const garage = buildGarage3D({
+    scene,
+    exteriorGroup,
+    mat,
+    addCollider,
+    interactiveDoors,
+    interiorLights,
+  });
+
+  // =========================================================================
+  // 10f. 15.5×3.1×4.0m ARMORED SECRET-BASE CAMPER (ARMOR-155) + 2×4×3m TOWABLE CONTAINER (CON-24)
+  // =========================================================================
+  const { armorCamper, towContainer } = buildArmorCamperAndContainer3D({
+    scene,
+    mat,
+    interactiveDoors,
+    interactiveProps,
+    interiorLights,
+  });
+
+  // =========================================================================
+  // 10g. EXTERIOR PANORAMIC ATTIC EXPRESS ELEVATOR (ELV-EXT: 1F Ground <-> RF Attic)
+  // =========================================================================
+  const extElevator = buildExtElevator3D({
+    scene,
+    interactiveProps,
+    interiorLights,
+  });
+
+  // Exterior Elevator Shaft Colliders at 1F (West door Z=0.65..1.55 dynamic) & RF (East door Z=0.65..1.55 dynamic)
+  [1, 7].forEach((fl) => {
+    addCollider(fl, -1.58, 0.30, 0.02, 0.47);   // North glass shaft wall
+    addCollider(fl, -1.58, 1.73, 0.02, 1.90);   // South glass shaft wall
+    if (fl === 1) {
+      addCollider(fl, -0.14, 0.35, 0.02, 1.85); // East solid wall on 1F
+      addCollider(fl, -1.58, 0.35, -1.43, 0.65); // West N jamb on 1F
+      addCollider(fl, -1.58, 1.55, -1.43, 1.85); // West S jamb on 1F
+    } else {
+      addCollider(fl, -1.58, 0.35, -1.43, 1.85); // West solid wall at RF Attic!
+      addCollider(fl, -0.14, 0.35, 0.02, 0.65);  // East N jamb at RF
+      addCollider(fl, -0.14, 1.55, 0.02, 1.85);  // East S jamb at RF
+    }
+  });
+
+  // =========================================================================
+  // 10h. SUGINOSATO 5-HOUSE MOUNTAIN VILLAGE (杉ノ郷集落 — X=820, Z=1280, EL +514m)
   // =========================================================================
   const village = buildVillage3D({
     scene,
@@ -2255,16 +2339,24 @@ export function buildHouse3D(scene) {
   );
   root.add(batchedGroup);
 
-  // Combine batching stats across static buildings + deep basement + elevator + camper + kei-van + 5-house village
+  // Combine batching stats across static buildings + deep basement + elevators + garage + vehicles + 5-house village
   const combinedBefore = batchStats.beforeMeshes
     + deepBasement.batchStats.beforeMeshes
     + elevator.batchStats.beforeMeshes
+    + extElevator.batchStats.beforeMeshes
+    + garage.batchStats.beforeMeshes
+    + armorCamper.batchStats.beforeMeshes
+    + towContainer.batchStats.beforeMeshes
     + camper.batchStats.beforeMeshes
     + kei.batchStats.beforeMeshes
     + village.batchStats.beforeMeshes;
   const combinedAfter = batchStats.afterDrawCalls
     + deepBasement.batchStats.afterDrawCalls
     + elevator.batchStats.afterDrawCalls
+    + extElevator.batchStats.afterDrawCalls
+    + garage.batchStats.afterDrawCalls
+    + armorCamper.batchStats.afterDrawCalls
+    + towContainer.batchStats.afterDrawCalls
     + camper.batchStats.afterDrawCalls
     + kei.batchStats.afterDrawCalls
     + village.batchStats.afterDrawCalls;
@@ -2275,6 +2367,10 @@ export function buildHouse3D(scene) {
     totalTriangles: batchStats.totalTriangles
       + deepBasement.batchStats.totalTriangles
       + elevator.batchStats.totalTriangles
+      + extElevator.batchStats.totalTriangles
+      + garage.batchStats.totalTriangles
+      + armorCamper.batchStats.totalTriangles
+      + towContainer.batchStats.totalTriangles
       + camper.batchStats.totalTriangles
       + kei.batchStats.totalTriangles
       + village.batchStats.totalTriangles,
@@ -2293,7 +2389,11 @@ export function buildHouse3D(scene) {
     windTimeUniform,
     camper,
     kei,
+    garage,
+    armorCamper,
+    towContainer,
     elevator,
+    extElevator,
     village,
     b3Thermal: deepBasement.b3Thermal,
     b4Lab: deepBasement.b4Lab,

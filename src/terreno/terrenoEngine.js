@@ -16,15 +16,17 @@ import { createTerrenoWater } from './terrenoWater.js';
 import { createTerrenoForest } from './terrenoForest.js';
 import { createTerrenoMap2D } from './terrenoMap2d.js';
 import { createTerrenoMap3D } from './terrenoMap3d.js';
+import { createTerrenoStorm } from './terrenoStorm.js';
+import { createTerrenoAutopilot } from './terrenoAutopilot.js';
 
 /**
  * TERRENO 1.1 Engine — Unified 15 km × 40 km (600.0 km²) Ultra-Precision Mountain & Deep-Forest World Controller.
  * Coordinates:
  *   1. Hydro-Tectonic + Phacelle + D8 Stream-Power Geomorphology & Dual-Azimuth Horizon Atlas
  *   2. 13-Ring Crack-Free GPU Geomorphing Clipmaps + Seamless PBR + Triplanar Granite + 52km Sky Dome
- *   3. Slope-Conforming 40 km Main Gorge River (黒杉川) & 16 Cascading Tributaries
- *   4. Deterministic Zero-GC Ecological Japanese Forest Streamer + 6,800 Mid-Distance Canopy Impostors
- *   5. Interactive Real-Time 3D Topographic Map, 2D Contour Survey & 8-Landmark Console (incl. Suginosato 5-House Village)
+ *   3. Slope-Conforming 40 km Main Gorge River (黒杉川), 16 Cascading Tributaries & +7.5m Flash-Flooding
+ *   4. Deterministic Zero-GC Ecological Forest Streamer, Extreme Storm/Landslides & 30-Waypoint Safe A* Autopilot
+ *   5. Interactive Real-Time 3D Topographic Map, Full-Screen 2D GSI Map & Suginosato 5-House Mountain Village
  */
 export function createTerrenoEngine(scene, initialTodId = 'day') {
   const root = new THREE.Group();
@@ -33,27 +35,28 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   // 1. Bake 15km × 40km physical watershed & dual-azimuth horizon shadow atlas
   const geomorph = buildTerrenoGeomorphology();
 
-  // 2. Shared Atmosphere Uniforms (including uAtmoHorizonMap for volumetric Sea-of-Clouds & God-Rays!)
   let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'day';
   const atmoUniforms = createSharedAtmosphereUniforms(currentTodId, geomorph);
 
-  // 3. Instantiate visual & ecological subsystems
   const clipmap = createTerrenoClipmap(geomorph, atmoUniforms);
   const water = createTerrenoWater(geomorph, atmoUniforms);
   const forest = createTerrenoForest(geomorph, atmoUniforms);
+  const storm = createTerrenoStorm(geomorph, water, atmoUniforms);
+  const autopilot = createTerrenoAutopilot(geomorph, storm);
 
   root.add(clipmap.group);
   root.add(water.group);
   root.add(forest.group);
+  root.add(storm.group);
   scene.add(root);
 
-  // Prime initial camera-centered tiles right around NARROW-50 compound!
   const initPos = new THREE.Vector3(TERRENO_WORLD.compoundCenterX, 1.5, TERRENO_WORLD.compoundCenterZ);
   clipmap.update(initPos);
   forest.update(initPos);
 
   let map2dInstance = null;
   let map3dInstance = null;
+  let prevElapsed = 0;
 
   function setTimeOfDay(presetId) {
     if (!ATMOSPHERE_PRESETS[presetId]) return ATMOSPHERE_PRESETS[currentTodId];
@@ -62,7 +65,6 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   }
 
   function cycleTimeOfDay() {
-    // Locked — time of day is fixed
     return ATMOSPHERE_PRESETS[currentTodId];
   }
 
@@ -80,6 +82,8 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   }
 
   function update(cameraPos, elapsed, flashlightState = null) {
+    const dt = Math.max(0.001, Math.min(0.05, elapsed - prevElapsed));
+    prevElapsed = elapsed;
     atmoUniforms.uTime.value = elapsed;
 
     if (flashlightState && flashlightState.enabled) {
@@ -90,9 +94,15 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
       atmoUniforms.uFlashIntensity.value = 0.0;
     }
 
+    storm.update(cameraPos, dt, elapsed);
+
     if (!root.visible) return;
     clipmap.update(cameraPos);
     forest.update(cameraPos);
+  }
+
+  function getHeightAtWithLandslides(wx, wz) {
+    return geomorph.getHeightAt(wx, wz) + storm.getLandslideInfoAt(wx, wz).heightAdd;
   }
 
   function getOrCreateMap2D(callbacks) {
@@ -122,6 +132,8 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
       maxElevationASL: Math.round(TERRENO_WORLD.baseElevationASL + geomorph.maxElev),
       clipmapRings: clipmap.rings.length,
       timeOfDay: currentTodId,
+      stormIntensity: Math.round(storm.getIntensity() * 100) / 100,
+      floodRiseM: Math.round(storm.getFloodRise() * 10) / 10,
       forest: fStats,
       localColliderCount: forest.getLocalColliders().length,
     };
@@ -137,8 +149,11 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     clipmap,
     water,
     forest,
+    storm,
+    autopilot,
     evalMainRiver,
-    getHeightAt: geomorph.getHeightAt,
+    getHeightAt: getHeightAtWithLandslides,
+    getRawHeightAt: geomorph.getHeightAt,
     getNormalAt: geomorph.getNormalAt,
     getMacroNormalAt: geomorph.getMacroNormalAt,
     sampleGeoBilinear: geomorph.sampleGeoBilinear,

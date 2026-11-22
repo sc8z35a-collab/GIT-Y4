@@ -1,22 +1,19 @@
 import {
   TERRENO_WORLD,
   MOUNTAIN_PEAKS,
-  TERRENO_LANDMARKS,
   evalMainRiver,
 } from './terrenoConfig.js';
+import { AUTOPILOT_WAYPOINTS, DYNAMIC_TARGETS } from './terrenoAutopilot.js';
+import { VILLAGE } from '../villageData.js';
 
 /**
- * TERRENO Engine — Breakthrough 9 (TR-SURVEY):
- * Interactive GSI-Style (国土地理院風) 2D Topographic Contour Map & Elevation Cross-Section
- * for the full 5,000m × 19,000m (95.0 km²) Mountain Watershed.
- *
- * Features:
- *   - Hypsometric elevation tinting + NW directional 3D hillshade + Sky-View gorge AO
- *   - Crisp 50m minor (主曲線) & 200m major (計曲線) topographic contour lines
- *   - 19 km Main River (黒杉川), 7 tributaries, & 19 km Graded Forestry Road (奥山林道)
- *   - 1 km UTM-style metric grid, named mountain peaks (▲), & 6 scenic landmarks
- *   - Live Player GPS dot + view-heading cone + Longitudinal 19km Elevation Profile
- *   - Click ANYWHERE on the 5km × 19km map (or any landmark card) to teleport immediately!
+ * TERRENO Full-Screen Edge-to-Edge Authentic GSI 2D Topographic Map & 30-Waypoint Autonomous Route Selector (15km × 40km).
+ *   - Oriented horizontally (North Left -> South Right) to fill 100% of widescreen POCO F7 landscape displays!
+ *   - Hypsometric elevation tinting + NW hillshade + Sky-View gorge AO + crisp 50m/200m contour lines
+ *   - Live 40km river (expands dynamically during storm flash-floods!), 40km forestry road, Suginosato village & active landslide rings
+ *   - 30 numbered safe destination pins (01..30) + 4 live asset pins (自宅 / 軽 / 箱 / RV)
+ *   - Live glowing A* safe route path + smooth 1/2-finger pan & pinch zoom (0.85x..6.0x)
+ *   - Zero sidebars, zero telemetry boxes, zero verbose text!
  */
 
 function hypsometricColor(asl) {
@@ -47,11 +44,11 @@ function hypsometricColor(asl) {
 }
 
 /**
- * Bake the 512×1536 relief + hillshade + 50m/200m contours + river bitmap once (<40ms).
+ * Pre-bake landscape-rotated 1536×512 (North Left -> South Right, West Top -> East Bottom) GSI Relief Bitmap once (<40ms).
  */
-function bakeReliefBitmap(geomorph) {
-  const W = geomorph.W;
-  const H = geomorph.H;
+function bakeLandscapeReliefBitmap(geomorph) {
+  const W = geomorph.W; // 512 (X: West..East -> Vertical Y on landscape map)
+  const H = geomorph.H; // 1536 (Z: North..South -> Horizontal X on landscape map!)
   const heights = geomorph.heights;
   const geoRGBA = geomorph.geoRGBA;
   const horizonRGBA = geomorph.horizonRGBA;
@@ -59,13 +56,12 @@ function bakeReliefBitmap(geomorph) {
   const cellZ = TERRENO_WORLD.depth / (H - 1);
 
   const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = H;
+  canvas.height = W;
   const ctx = canvas.getContext('2d');
-  const img = ctx.createImageData(W, H);
+  const img = ctx.createImageData(H, W);
   const d = img.data;
 
-  // Classic NW cartographic light direction (-0.65, 0.58, -0.49)
   const lx = -0.64, ly = 0.60, lz = -0.48;
 
   for (let iz = 0; iz < H; iz++) {
@@ -77,7 +73,6 @@ function bakeReliefBitmap(geomorph) {
       const h = heights[idx];
       const asl = TERRENO_WORLD.baseElevationASL + h;
 
-      // Hillshade normal
       const ixL = Math.max(0, ix - 1), ixR = Math.min(W - 1, ix + 1);
       const izU = Math.max(0, iz - 1), izD = Math.min(H - 1, iz + 1);
       const gx = (heights[iz * W + ixR] - heights[iz * W + ixL]) / (2.0 * cellX);
@@ -92,397 +87,512 @@ function bakeReliefBitmap(geomorph) {
       g *= shade * skyAO;
       b *= shade * skyAO;
 
-      // Topographic Contour Detection (50m minor & 200m bold major isolines!)
-      const hR = heights[iz * W + ixR];
-      const hD = heights[izD * W + ix];
-      const aslR = TERRENO_WORLD.baseElevationASL + hR;
-      const aslD = TERRENO_WORLD.baseElevationASL + hD;
-
+      // Crisp 50m minor & 200m major GSI topographic contours
+      const aslR = TERRENO_WORLD.baseElevationASL + heights[iz * W + ixR];
+      const aslD = TERRENO_WORLD.baseElevationASL + heights[izD * W + ix];
       const maj0 = Math.floor(asl / 200.0);
       const isMajor = Math.floor(aslR / 200.0) !== maj0 || Math.floor(aslD / 200.0) !== maj0;
       const min0 = Math.floor(asl / 50.0);
       const isMinor = !isMajor && (Math.floor(aslR / 50.0) !== min0 || Math.floor(aslD / 50.0) !== min0);
 
       if (isMajor) {
-        r = r * 0.42 + 44;
-        g = g * 0.42 + 30;
-        b = b * 0.42 + 18;
+        r = r * 0.45 + 48;
+        g = g * 0.45 + 34;
+        b = b * 0.45 + 20;
       } else if (isMinor) {
-        r = r * 0.72 + 24;
-        g = g * 0.72 + 18;
-        b = b * 0.72 + 12;
+        r = r * 0.74 + 22;
+        g = g * 0.74 + 16;
+        b = b * 0.74 + 10;
       }
 
-      // River & High-Flow Blue Streams
       const distRiv = Math.abs(wx - rv.x);
       const wetness = geoRGBA[idx * 4 + 1];
       if (distRiv < rv.halfWidth * 1.15) {
         r = 34; g = 148; b = 198;
       } else if (wetness > 0.78 && asl < 1260) {
-        r = r * 0.45 + 32;
-        g = g * 0.45 + 110;
-        b = b * 0.45 + 148;
+        r = r * 0.48 + 30;
+        g = g * 0.48 + 108;
+        b = b * 0.48 + 148;
       }
 
-      const o = idx * 4;
+      // Write rotated: horizontal px = iz (0..H-1), vertical py = ix (0..W-1)
+      const o = (ix * H + iz) * 4;
       d[o] = Math.max(0, Math.min(255, Math.round(r)));
       d[o + 1] = Math.max(0, Math.min(255, Math.round(g)));
       d[o + 2] = Math.max(0, Math.min(255, Math.round(b)));
       d[o + 3] = 255;
     }
   }
-
   ctx.putImageData(img, 0, 0);
   return canvas;
 }
 
-/**
- * Mount the interactive TERRENO 5km × 19km GSI Topographic Survey Map into a container DOM element.
- */
 export function createTerrenoMap2D(geomorph, callbacks = {}) {
-  const reliefCanvas = bakeReliefBitmap(geomorph);
+  const reliefCanvas = bakeLandscapeReliefBitmap(geomorph);
 
-  // Precompute 19km longitudinal profile (river bed vs max ridge elevation per Z slice)
-  const profBins = 160;
-  const profRiver = new Float32Array(profBins);
-  const profPeak = new Float32Array(profBins);
-  const profRoad = new Float32Array(profBins);
-  for (let b = 0; b < profBins; b++) {
-    const z = TERRENO_WORLD.minZ + (b / (profBins - 1)) * TERRENO_WORLD.depth;
-    const iz = Math.round((b / (profBins - 1)) * (geomorph.H - 1));
-    let maxH = -9999;
-    for (let ix = 0; ix < geomorph.W; ix += 4) {
-      const h = geomorph.heights[iz * geomorph.W + ix];
-      if (h > maxH) maxH = h;
+  let canvas = null;
+  let containerEl = null;
+  let lastState = null;
+
+  // Interactive smooth pan & 2-finger pinch zoom state (normalized canvas view)
+  let zoom = 1.0;
+  let panX = 0;
+  let panY = 0;
+  let baseRect = { x: 0, y: 0, w: 1, h: 1 };
+
+  function updateBaseRect() {
+    if (!canvas) return;
+    const CW = canvas.width;
+    const CH = canvas.height;
+    // Slight vertical visual stretch (1.42×) so the 5km × 19km relief fills POCO F7 widescreen edge-to-edge cleanly!
+    const padX = 16;
+    const padY = 44;
+    const availW = CW - padX * 2;
+    const availH = CH - padY * 2;
+    const targetAspect = (40 / 15) * 0.85; // ~2.27 landscape aspect matching 15km×40km on POCO F7!
+    let w = availW;
+    let h = w / targetAspect;
+    if (h > availH) {
+      h = availH;
+      w = h * targetAspect;
     }
-    profPeak[b] = TERRENO_WORLD.baseElevationASL + maxH;
-    profRiver[b] = TERRENO_WORLD.baseElevationASL + evalMainRiver(z).waterY;
-    profRoad[b] = TERRENO_WORLD.baseElevationASL + geomorph.getHeightAt(evalMainRiver(z).x - 280, z);
-  }
-
-  let mapCanvas = null;
-  let profileCanvas = null;
-  let telemetryEl = null;
-  let mapRect = { x: 0, y: 0, w: 1, h: 1 };
-
-  function worldToMapPx(wx, wz) {
-    const u = (wx - TERRENO_WORLD.minX) / TERRENO_WORLD.width;
-    const v = (wz - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth;
-    return {
-      px: mapRect.x + u * mapRect.w,
-      py: mapRect.y + v * mapRect.h,
+    baseRect = {
+      x: (CW - w) * 0.5,
+      y: (CH - h) * 0.5,
+      w,
+      h,
     };
   }
 
-  function mapPxToWorld(px, py) {
-    const u = (px - mapRect.x) / mapRect.w;
-    const v = (py - mapRect.y) / mapRect.h;
-    if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+  // World (wx, wz) -> Canvas pixel (px, py) with current pan & zoom
+  function worldToPx(wx, wz) {
+    const u = (wz - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth; // North (left 0) -> South (right 1)
+    const v = (wx - TERRENO_WORLD.minX) / TERRENO_WORLD.width; // West (top 0) -> East (bottom 1)
+    const bx = baseRect.x + u * baseRect.w;
+    const by = baseRect.y + v * baseRect.h;
+    const cx = canvas.width * 0.5;
+    const cy = canvas.height * 0.5;
     return {
-      x: Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, TERRENO_WORLD.minX + u * TERRENO_WORLD.width)),
-      z: Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, TERRENO_WORLD.minZ + v * TERRENO_WORLD.depth)),
+      px: cx + (bx - cx) * zoom + panX,
+      py: cy + (by - cy) * zoom + panY,
     };
   }
 
-  function mount(containerEl) {
+  function pxToWorld(px, py) {
+    const cx = canvas.width * 0.5;
+    const cy = canvas.height * 0.5;
+    const bx = cx + (px - cx - panX) / zoom;
+    const by = cy + (py - cy - panY) / zoom;
+    const u = (bx - baseRect.x) / baseRect.w;
+    const v = (by - baseRect.y) / baseRect.h;
+    if (u < -0.02 || u > 1.02 || v < -0.02 || v > 1.02) return null;
+    return {
+      x: Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, TERRENO_WORLD.minX + v * TERRENO_WORLD.width)),
+      z: Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, TERRENO_WORLD.minZ + u * TERRENO_WORLD.depth)),
+    };
+  }
+
+  function clampView() {
+    zoom = Math.max(0.85, Math.min(6.0, zoom));
+    if (!canvas) return;
+    const maxPanX = canvas.width * 0.48 * zoom;
+    const maxPanY = canvas.height * 0.48 * zoom;
+    panX = Math.max(-maxPanX, Math.min(maxPanX, panX));
+    panY = Math.max(-maxPanY, Math.min(maxPanY, panY));
+  }
+
+  function resetView() {
+    zoom = 1.0;
+    panX = 0;
+    panY = 0;
+    if (lastState) render(lastState);
+  }
+
+  function getDynamicAssetCoords(state) {
+    return [
+      { id: 'dyn_home', code: '自宅', kind: 'home', x: 15.6, z: -15.0, color: '#38bdf8' },
+      { id: 'dyn_kei', code: '軽', kind: 'kei', x: state?.keiPose?.cx ?? 3.55, z: state?.keiPose?.cz ?? -3.80, color: '#facc15' },
+      { id: 'dyn_container', code: '箱', kind: 'container', x: state?.containerPose?.cx ?? 19.85, z: state?.containerPose?.cz ?? 6.50, color: '#a3e635' },
+      { id: 'dyn_camper', code: 'RV', kind: 'camper', x: state?.camperPose?.cx ?? 7.75, z: state?.camperPose?.cz ?? 5.75, color: '#fb923c' },
+    ];
+  }
+
+  function mount(hostEl) {
+    containerEl = hostEl;
     containerEl.innerHTML = '';
-    const root = document.createElement('div');
-    root.className = 'terreno-survey-root';
 
-    root.innerHTML = `
-      <div class="terreno-survey-left">
-        <canvas class="terreno-map-canvas" width="460" height="820"></canvas>
-      </div>
-      <div class="terreno-survey-right">
-        <div class="terreno-telemetry-strip" id="terreno-telemetry-grid"></div>
-        <div class="terreno-landmarks-grid" id="terreno-landmarks-grid"></div>
-        <div class="terreno-profile-wrap">
-          <canvas class="terreno-profile-canvas" width="560" height="126"></canvas>
-        </div>
-      </div>
-    `;
-    containerEl.appendChild(root);
+    const wrap = document.createElement('div');
+    wrap.className = 'terreno-2d-fullscreen';
 
-    mapCanvas = root.querySelector('.terreno-map-canvas');
-    profileCanvas = root.querySelector('.terreno-profile-canvas');
-    telemetryEl = root.querySelector('#terreno-telemetry-grid');
+    canvas = document.createElement('canvas');
+    canvas.className = 'terreno-2d-canvas';
+    wrap.appendChild(canvas);
 
-    // Minimalist Landmark Teleport Grid (NO verbose descriptions, NO Time-of-Day switcher!)
-    const lmGrid = root.querySelector('#terreno-landmarks-grid');
-    TERRENO_LANDMARKS.forEach((lm) => {
-      const y = geomorph.getHeightAt(lm.x, lm.z);
-      const asl = Math.round(TERRENO_WORLD.baseElevationASL + y);
-      const shortName = lm.nameJp.split('・')[0].replace('母屋 ', '').replace(' 拠点', '');
+    // Compact minimalist top-left floating 4 dynamic asset chips (自宅 / 軽 / 箱 / RV)
+    const dynBar = document.createElement('div');
+    dynBar.className = 'map2d-dyn-bar';
+    DYNAMIC_TARGETS.forEach((dt) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'terreno-lm-btn';
-      btn.innerHTML = `
-        <span class="terreno-lm-code">${lm.code}</span>
-        <span class="terreno-lm-name">${shortName}</span>
-        <span class="terreno-lm-asl">+${asl}m</span>
-      `;
-      btn.addEventListener('click', () => {
-        if (callbacks.onTeleportLandmark) callbacks.onTeleportLandmark(lm.id);
+      btn.className = 'map-pill-btn map2d-dyn-btn';
+      btn.dataset.dynKind = dt.kind;
+      btn.textContent = dt.code;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (callbacks.onSelectDynamicTarget) {
+          callbacks.onSelectDynamicTarget(dt.kind);
+        }
       });
-      lmGrid.appendChild(btn);
+      dynBar.appendChild(btn);
     });
+    wrap.appendChild(dynBar);
+    containerEl.appendChild(wrap);
 
-    // Tap anywhere on 5×19km map to teleport
-    mapCanvas.addEventListener('click', (ev) => {
-      const rect = mapCanvas.getBoundingClientRect();
-      const scaleX = mapCanvas.width / rect.width;
-      const scaleY = mapCanvas.height / rect.height;
-      const px = (ev.clientX - rect.left) * scaleX;
-      const py = (ev.clientY - rect.top) * scaleY;
-      const world = mapPxToWorld(px, py);
-      if (world && callbacks.onTeleportWorld) {
-        callbacks.onTeleportWorld(world.x, world.z);
+    const syncSize = () => {
+      const r = wrap.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.max(320, Math.round((r.width || window.innerWidth) * dpr));
+      canvas.height = Math.max(200, Math.round((r.height || window.innerHeight) * dpr));
+      updateBaseRect();
+      if (lastState) render(lastState);
+    };
+    syncSize();
+    const ro = new ResizeObserver(syncSize);
+    ro.observe(wrap);
+
+    // Smooth Multi-Touch 2-Finger Pinch Zoom + 1/2-Finger Pan + Tap Pin Selection!
+    const ptrs = new Map();
+    let singleMoved = 0;
+    let hadMulti = false;
+    let prevDist = 0;
+    let prevMid = { x: 0, y: 0 };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) {
+        singleMoved = 0;
+        hadMulti = false;
+      } else if (ptrs.size === 2) {
+        hadMulti = true;
+        const pts = Array.from(ptrs.values());
+        prevDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        prevMid = { x: (pts[0].x + pts[1].x) * 0.5, y: (pts[0].y + pts[1].y) * 0.5 };
       }
     });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!ptrs.has(e.pointerId)) return;
+      const prev = ptrs.get(e.pointerId);
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width / Math.max(1, rect.width);
+      const sy = canvas.height / Math.max(1, rect.height);
+
+      if (ptrs.size === 1 && !hadMulti) {
+        singleMoved += Math.hypot(dx, dy);
+        panX += dx * sx;
+        panY += dy * sy;
+        clampView();
+        if (lastState) render(lastState);
+      } else if (ptrs.size === 2) {
+        const pts = Array.from(ptrs.values());
+        const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        const mid = { x: (pts[0].x + pts[1].x) * 0.5, y: (pts[0].y + pts[1].y) * 0.5 };
+        if (prevDist > 8 && dist > 8) {
+          const factor = dist / prevDist;
+          const oldZoom = zoom;
+          zoom = Math.max(0.85, Math.min(6.0, zoom * factor));
+          const ratio = zoom / oldZoom;
+          const mx = (mid.x - rect.left) * sx - canvas.width * 0.5;
+          const my = (mid.y - rect.top) * sy - canvas.height * 0.5;
+          panX = mx - (mx - panX) * ratio + (mid.x - prevMid.x) * sx;
+          panY = my - (my - panY) * ratio + (mid.y - prevMid.y) * sy;
+          clampView();
+          if (lastState) render(lastState);
+        }
+        prevDist = dist;
+        prevMid = mid;
+      }
+    });
+
+    const onUp = (e) => {
+      if (!ptrs.has(e.pointerId)) return;
+      const isTap = ptrs.size === 1 && !hadMulti && singleMoved < 10;
+      ptrs.delete(e.pointerId);
+      if (ptrs.size === 0) hadMulti = false;
+
+      if (isTap) {
+        const rect = canvas.getBoundingClientRect();
+        const px = ((e.clientX - rect.left) / Math.max(1, rect.width)) * canvas.width;
+        const py = ((e.clientY - rect.top) / Math.max(1, rect.height)) * canvas.height;
+        const dpr = canvas.width / Math.max(1, rect.width);
+        const hitRad = 22 * dpr;
+
+        // 1. Check 4 Dynamic Asset Pins first
+        const assets = getDynamicAssetCoords(lastState);
+        for (let i = 0; i < assets.length; i++) {
+          const ap = worldToPx(assets[i].x, assets[i].z);
+          if (Math.hypot(px - ap.px, py - ap.py) <= hitRad) {
+            if (callbacks.onSelectDynamicTarget) callbacks.onSelectDynamicTarget(assets[i].kind);
+            return;
+          }
+        }
+
+        // 2. Check 30 Numbered Safe Waypoints (01..30)
+        let bestWp = null;
+        let bestD = hitRad;
+        for (let i = 0; i < AUTOPILOT_WAYPOINTS.length; i++) {
+          const wp = AUTOPILOT_WAYPOINTS[i];
+          const p = worldToPx(wp.x, wp.z);
+          const d = Math.hypot(px - p.px, py - p.py);
+          if (d < bestD) {
+            bestD = d;
+            bestWp = wp;
+          }
+        }
+        if (bestWp) {
+          if (callbacks.onSelectWaypoint) callbacks.onSelectWaypoint(bestWp);
+          return;
+        }
+
+        // 3. Tap anywhere else on the 2D topographic map -> route/teleport to exact world point!
+        const w = pxToWorld(px, py);
+        if (w && callbacks.onSelectWorldPoint) {
+          callbacks.onSelectWorldPoint(w.x, w.z);
+        }
+      }
+    };
+    canvas.addEventListener('pointerup', onUp);
+    canvas.addEventListener('pointercancel', onUp);
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const sx = canvas.width / Math.max(1, rect.width);
+      const sy = canvas.height / Math.max(1, rect.height);
+      const oldZoom = zoom;
+      zoom = Math.max(0.85, Math.min(6.0, zoom * (e.deltaY > 0 ? 0.88 : 1.14)));
+      const ratio = zoom / oldZoom;
+      const mx = (e.clientX - rect.left) * sx - canvas.width * 0.5;
+      const my = (e.clientY - rect.top) * sy - canvas.height * 0.5;
+      panX = mx - (mx - panX) * ratio;
+      panY = my - (my - panY) * ratio;
+      clampView();
+      if (lastState) render(lastState);
+    }, { passive: false });
   }
 
-  function render(playerState) {
-    if (!mapCanvas || !profileCanvas) return;
+  function render(state) {
+    lastState = state;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const CW = canvas.width;
+    const CH = canvas.height;
+    const dpr = CW / Math.max(320, canvas.clientWidth || 924);
 
-    const ctx = mapCanvas.getContext('2d');
-    const CW = mapCanvas.width;
-    const CH = mapCanvas.height;
-
-    ctx.fillStyle = '#091017';
+    ctx.fillStyle = '#070d14';
     ctx.fillRect(0, 0, CW, CH);
 
-    // Frame the 5km × 19km map with neat GSI cartographic margin for km labels
-    const padL = 46, padR = 16, padT = 24, padB = 28;
-    const availW = CW - padL - padR;
-    const availH = CH - padT - padB;
-    // Aspect ratio 5:19 (~0.263) -> fill height and center nicely, slightly wider readability (0.40) so peaks/roads read super clearly!
-    const drawH = availH;
-    const drawW = Math.min(availW, Math.round(drawH * 0.44));
-    const ox = padL + Math.round((availW - drawW) * 0.5);
-    const oy = padT;
-    mapRect = { x: ox, y: oy, w: drawW, h: drawH };
+    const tl = worldToPx(TERRENO_WORLD.minX, TERRENO_WORLD.minZ);
+    const br = worldToPx(TERRENO_WORLD.maxX, TERRENO_WORLD.maxZ);
+    const dw = br.px - tl.px;
+    const dh = br.py - tl.py;
 
-    // 1. Draw pre-baked Hypsometric + Hillshade + 50m/200m Contour Bitmap
+    // 1. Shaded GSI Hypsometric + Hillshade + 50m/200m Contour Bitmap
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(reliefCanvas, ox, oy, drawW, drawH);
+    ctx.drawImage(reliefCanvas, tl.px, tl.py, dw, dh);
 
-    // 2. 2 km / 4 km Metric Grid Lines & Labels for 15km × 40km
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 0.8;
-    ctx.fillStyle = '#9db4c8';
-    ctx.font = '10px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    for (let x = -6000; x <= 6000; x += 3000) {
-      const p = worldToMapPx(x, TERRENO_WORLD.minZ);
+    // 2. Dynamic Storm Flash-Flood River Inundation & Active Landslide Hazard Rings
+    const floodRise = state?.floodRise || 0;
+    if (floodRise > 0.3) {
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(p.px, oy);
-      ctx.lineTo(p.px, oy + drawH);
+      for (let z = TERRENO_WORLD.minZ; z <= TERRENO_WORLD.maxZ; z += 260) {
+        const rv = evalMainRiver(z);
+        const p = worldToPx(rv.x, z);
+        if (z === TERRENO_WORLD.minZ) ctx.moveTo(p.px, p.py);
+        else ctx.lineTo(p.px, p.py);
+      }
+      ctx.strokeStyle = `rgba(180, 128, 62, ${Math.min(0.68, 0.25 + floodRise * 0.06)})`;
+      ctx.lineWidth = Math.max(3, (6 + floodRise * 2.2) * dpr * Math.sqrt(zoom));
       ctx.stroke();
-      ctx.fillText(`${x >= 0 ? '+' : ''}${x / 1000}k`, p.px, oy + drawH + 14);
+      ctx.restore();
     }
-    ctx.textAlign = 'right';
+    if (state?.activeLandslides && state.activeLandslides.length > 0) {
+      ctx.save();
+      state.activeLandslides.forEach((ls) => {
+        const p = worldToPx(ls.x, ls.z);
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.42)';
+        ctx.strokeStyle = 'rgba(248, 113, 113, 0.9)';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath();
+        ctx.arc(p.px, p.py, 5.5 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    // 3. Subtle 3 km × 4 km Metric Grid across 15 km × 40 km
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 0.8 * dpr;
+    for (let x = -6000; x <= 6000; x += 3000) {
+      const a = worldToPx(x, TERRENO_WORLD.minZ);
+      const b = worldToPx(x, TERRENO_WORLD.maxZ);
+      ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+    }
     for (let z = -12000; z <= 24000; z += 4000) {
-      const p = worldToMapPx(TERRENO_WORLD.minX, z);
-      ctx.beginPath();
-      ctx.moveTo(ox, p.py);
-      ctx.lineTo(ox + drawW, p.py);
-      ctx.stroke();
-      ctx.fillText(`${z >= 0 ? '+' : ''}${z / 1000}km`, ox - 5, p.py + 3);
+      const a = worldToPx(TERRENO_WORLD.minX, z);
+      const b = worldToPx(TERRENO_WORLD.maxX, z);
+      ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
     }
     ctx.restore();
 
-    // 3. Draw 40 km Graded Forestry Road (奥山林道) dashed line
+    // 4. 40 km Graded Forestry Road (奥山林道)
     ctx.save();
     ctx.beginPath();
     const rd = geomorph.roadDense;
     for (let i = 0; i < rd.length; i++) {
-      const p = worldToMapPx(rd[i][0], rd[i][1]);
+      const p = worldToPx(rd[i][0], rd[i][1]);
       if (i === 0) ctx.moveTo(p.px, p.py);
       else ctx.lineTo(p.px, p.py);
     }
-    ctx.strokeStyle = 'rgba(255, 224, 150, 0.90)';
-    ctx.lineWidth = 2.0;
-    ctx.setLineDash([5, 3]);
+    ctx.strokeStyle = 'rgba(253, 224, 138, 0.85)';
+    ctx.lineWidth = 1.8 * dpr;
     ctx.stroke();
-    ctx.setLineDash([]);
     ctx.restore();
 
-    // 4. Draw Named Mountain Peaks (▲)
-    ctx.save();
-    ctx.font = 'bold 9.5px sans-serif';
-    MOUNTAIN_PEAKS.forEach((pk) => {
-      const p = worldToMapPx(pk.x, pk.z);
-      const asl = Math.round(TERRENO_WORLD.baseElevationASL + geomorph.getHeightAt(pk.x, pk.z));
-      ctx.fillStyle = '#ffe9b8';
+    // 5. Active Computed Safe A* Autonomous Route Path (Crisp Glowing Cyan Ribbon!)
+    if (state?.autopilotRoute && state.autopilotRoute.length >= 2) {
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(p.px, p.py - 4.5);
-      ctx.lineTo(p.px - 4.0, p.py + 3.0);
-      ctx.lineTo(p.px + 4.0, p.py + 3.0);
+      for (let i = 0; i < state.autopilotRoute.length; i++) {
+        const pt = state.autopilotRoute[i];
+        const p = worldToPx(pt[0], pt[1]);
+        if (i === 0) ctx.moveTo(p.px, p.py);
+        else ctx.lineTo(p.px, p.py);
+      }
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 3.2 * dpr;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 6. Subtle Mountain Peak Triangles (▲) & Suginosato 5-House Village Marker
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 243, 214, 0.72)';
+    MOUNTAIN_PEAKS.forEach((pk) => {
+      const p = worldToPx(pk.x, pk.z);
+      const r = 3.5 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(p.px, p.py - r);
+      ctx.lineTo(p.px - r * 0.9, p.py + r * 0.7);
+      ctx.lineTo(p.px + r * 0.9, p.py + r * 0.7);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = '#1b1610';
-      ctx.lineWidth = 1.0;
-      ctx.stroke();
-
-      ctx.textAlign = pk.x > 0 ? 'right' : 'left';
-      const tx = pk.x > 0 ? p.px - 6 : p.px + 6;
-      ctx.fillStyle = 'rgba(7,12,18,0.75)';
-      ctx.fillText(`${pk.nameJp} ${asl}m`, tx + 1, p.py + 4);
-      ctx.fillStyle = '#fff3d6';
-      ctx.fillText(`${pk.nameJp} ${asl}m`, tx, p.py + 3);
     });
-    ctx.restore();
-
-    // 5. Draw 8 Curated Landmarks (including Suginosato 5-House Village!)
-    ctx.save();
-    TERRENO_LANDMARKS.forEach((lm) => {
-      const p = worldToMapPx(lm.x, lm.z);
-      const isBase = lm.id === 'compound';
-      const isVillage = lm.id === 'village';
-      ctx.fillStyle = isBase ? '#38bdf8' : (isVillage ? '#34d399' : '#f59e0b');
-      ctx.strokeStyle = '#071018';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(p.px, p.py, isBase || isVillage ? 5.2 : 3.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.font = 'bold 9.5px "JetBrains Mono", monospace';
-      ctx.textAlign = lm.x > 1200 ? 'right' : 'left';
-      const offX = lm.x > 1200 ? -7 : 7;
-      ctx.fillStyle = '#071018';
-      ctx.fillText(lm.code, p.px + offX + 1, p.py + 3);
-      ctx.fillStyle = isBase ? '#7dd3fc' : (isVillage ? '#6ee7b7' : '#fde68a');
-      ctx.fillText(lm.code, p.px + offX, p.py + 2);
-    });
-    ctx.restore();
-
-    // 6. Live Player GPS Marker + View Cone
-    const pxW = playerState?.x ?? 1.5;
-    const pzW = playerState?.z ?? 3.5;
-    const pYaw = playerState?.yaw ?? 0;
-    const pp = worldToMapPx(pxW, pzW);
-    ctx.save();
-    const dirX = -Math.sin(pYaw);
-    const dirY = -Math.cos(pYaw);
-    const ang = Math.atan2(dirY, dirX);
-    ctx.fillStyle = 'rgba(248, 113, 113, 0.34)';
+    const vp = worldToPx(VILLAGE.centerX, VILLAGE.centerZ);
+    ctx.fillStyle = 'rgba(52, 211, 153, 0.35)';
+    ctx.strokeStyle = '#34d399';
+    ctx.lineWidth = 1.5 * dpr;
     ctx.beginPath();
-    ctx.moveTo(pp.px, pp.py);
-    ctx.arc(pp.px, pp.py, 22, ang - 0.42, ang + 0.42);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#ef4444';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.arc(pp.px, pp.py, 5.0, 0, Math.PI * 2);
+    ctx.arc(vp.px, vp.py, 10.5 * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    // Map border + minimal North marker
-    ctx.strokeStyle = 'rgba(148, 184, 214, 0.55)';
-    ctx.lineWidth = 1.4;
-    ctx.strokeRect(ox, oy, drawW, drawH);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('N ▲', ox, oy - 7);
-    ctx.textAlign = 'right';
-    ctx.fillText('15×40km', ox + drawW, oy - 7);
+    // 7. 30 Numbered Selectable Waypoint Pins (01..30 across full 40km road incl. Suginosato Village!)
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.round(8.5 * dpr)}px ui-monospace, monospace`;
+    const activeWpId = state?.autopilotTargetId || null;
+    AUTOPILOT_WAYPOINTS.forEach((wp) => {
+      const p = worldToPx(wp.x, wp.z);
+      const isActive = activeWpId === wp.id;
+      const rad = (isActive ? 9.5 : 7.8) * dpr;
+      ctx.fillStyle = isActive ? '#0ea5e9' : 'rgba(9, 15, 22, 0.82)';
+      ctx.strokeStyle = isActive ? '#ffffff' : 'rgba(245, 198, 92, 0.85)';
+      ctx.lineWidth = (isActive ? 2.0 : 1.2) * dpr;
+      ctx.beginPath();
+      ctx.arc(p.px, p.py, rad, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = isActive ? '#ffffff' : '#fde68a';
+      ctx.fillText(wp.num, p.px, p.py + 0.5 * dpr);
+    });
+    ctx.restore();
 
-    // ---- Render 40 km Longitudinal Elevation Profile ----
-    const pCtx = profileCanvas.getContext('2d');
-    const PW = profileCanvas.width;
-    const PH = profileCanvas.height;
-    pCtx.fillStyle = '#0b131c';
-    pCtx.fillRect(0, 0, PW, PH);
-
-    const pL = 42, pR = 12, pT = 10, pB = 18;
-    const gW = PW - pL - pR;
-    const gH = PH - pT - pB;
-    const elevMin = 250, elevMax = 2350;
-    const eToY = (e) => pT + gH * (1.0 - (e - elevMin) / (elevMax - elevMin));
-
-    pCtx.strokeStyle = 'rgba(148, 184, 214, 0.16)';
-    pCtx.fillStyle = '#8fa9bf';
-    pCtx.font = '10px "JetBrains Mono", monospace';
-    pCtx.textAlign = 'right';
-    [400, 1000, 1600, 2200].forEach((e) => {
-      const y = eToY(e);
-      pCtx.beginPath();
-      pCtx.moveTo(pL, y);
-      pCtx.lineTo(pL + gW, y);
-      pCtx.stroke();
-      pCtx.fillText(`${e}m`, pL - 5, y + 3);
+    // 8. 4 Live Dynamic Asset Pins (自宅 / 軽 / 箱 / RV) + ARMOR-155 Emerald Pin
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.round(8.5 * dpr)}px sans-serif`;
+    const assets = getDynamicAssetCoords(state);
+    assets.forEach((a) => {
+      const p = worldToPx(a.x, a.z);
+      ctx.fillStyle = a.color;
+      ctx.strokeStyle = '#071018';
+      ctx.lineWidth = 1.6 * dpr;
+      ctx.beginPath();
+      ctx.arc(p.px, p.py, 5.2 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
     });
 
-    pCtx.beginPath();
-    pCtx.moveTo(pL, pT + gH);
-    for (let b = 0; b < profBins; b++) {
-      const x = pL + (b / (profBins - 1)) * gW;
-      pCtx.lineTo(x, eToY(profPeak[b]));
+    if (state?.armorPose) {
+      const ap = worldToPx(state.armorPose.cx, state.armorPose.cz);
+      ctx.fillStyle = '#10b981';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8 * dpr;
+      ctx.beginPath();
+      ctx.arc(ap.px, ap.py, 5.8 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
     }
-    pCtx.lineTo(pL + gW, pT + gH);
-    pCtx.closePath();
-    const grad = pCtx.createLinearGradient(0, pT, 0, pT + gH);
-    grad.addColorStop(0, 'rgba(198, 178, 138, 0.52)');
-    grad.addColorStop(0.55, 'rgba(72, 132, 82, 0.45)');
-    grad.addColorStop(1, 'rgba(26, 62, 54, 0.35)');
-    pCtx.fillStyle = grad;
-    pCtx.fill();
-    pCtx.strokeStyle = '#d4c298';
-    pCtx.lineWidth = 1.4;
-    pCtx.stroke();
+    ctx.restore();
 
-    pCtx.beginPath();
-    for (let b = 0; b < profBins; b++) {
-      const x = pL + (b / (profBins - 1)) * gW;
-      const y = eToY(profRiver[b]);
-      if (b === 0) pCtx.moveTo(x, y);
-      else pCtx.lineTo(x, y);
-    }
-    pCtx.strokeStyle = '#38bdf8';
-    pCtx.lineWidth = 1.8;
-    pCtx.stroke();
+    // 9. Live Player GPS Dot & Heading Cone (Note: North = Left -X, West = Up -Y!)
+    const pxW = state?.x ?? 1.5;
+    const pzW = state?.z ?? 3.5;
+    const pYaw = state?.yaw ?? 0;
+    const pp = worldToPx(pxW, pzW);
+    ctx.save();
+    // Forward world (-sin(yaw), -cos(yaw)): map X = +Z -> -cos(yaw), map Y = +X -> -sin(yaw)
+    const dirPx = -Math.cos(pYaw);
+    const dirPy = -Math.sin(pYaw);
+    const ang = Math.atan2(dirPy, dirPx);
+    ctx.fillStyle = 'rgba(248, 113, 113, 0.36)';
+    ctx.beginPath();
+    ctx.moveTo(pp.px, pp.py);
+    ctx.arc(pp.px, pp.py, 19 * dpr, ang - 0.42, ang + 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ef4444';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.8 * dpr;
+    ctx.beginPath();
+    ctx.arc(pp.px, pp.py, 4.8 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
 
-    const playerBiome = geomorph.getBiomeInfoAt(pxW, pzW);
-    const ptX = pL + ((pzW - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth) * gW;
-    const ptY = eToY(playerBiome.asl);
-    pCtx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
-    pCtx.lineWidth = 1;
-    pCtx.beginPath();
-    pCtx.moveTo(ptX, pT);
-    pCtx.lineTo(ptX, pT + gH);
-    pCtx.stroke();
-    pCtx.fillStyle = '#ef4444';
-    pCtx.beginPath();
-    pCtx.arc(ptX, ptY, 4.2, 0, Math.PI * 2);
-    pCtx.fill();
-
-    pCtx.fillStyle = '#9db4c8';
-    pCtx.textAlign = 'center';
-    pCtx.fillText('-14km', pL + 22, PH - 4);
-    pCtx.fillText('BASE', pL + ((0 - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth) * gW, PH - 4);
-    pCtx.fillText('+26km', pL + gW - 24, PH - 4);
-
-    if (telemetryEl) {
-      const distBaseKm = (Math.hypot(pxW - TERRENO_WORLD.compoundCenterX, pzW - TERRENO_WORLD.compoundCenterZ) / 1000).toFixed(2);
-      const slopeDeg = Math.round((Math.atan(playerBiome.slope) * 180) / Math.PI);
-      telemetryEl.innerHTML = `
-        <div><span>標高</span><strong>+${Math.round(playerBiome.asl)}m</strong></div>
-        <div><span>勾配</span><strong>${slopeDeg}°</strong></div>
-        <div><span>距離</span><strong>${distBaseKm}km</strong></div>
-        <div><span>植生</span><strong>${playerBiome.zoneJp}</strong></div>
-      `;
-    }
+    // Minimalist hairline frame
+    ctx.strokeStyle = 'rgba(148, 184, 214, 0.40)';
+    ctx.lineWidth = 1.1 * dpr;
+    ctx.strokeRect(tl.px, tl.py, dw, dh);
   }
 
   return {
     mount,
     render,
+    resetView,
     reliefCanvas,
   };
 }

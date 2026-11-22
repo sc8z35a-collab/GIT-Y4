@@ -1131,7 +1131,12 @@ const FLOOR_RF = {
         { id: 'WRF-2', type: 'window', pos: 1.70, width: 1.60, height: 1.45, sill: 0.60, label: 'WRF-2 南切妻展望窓' },
       ],
     },
-    { id: 'WRF_W', axis: 'v', x1: 0, z1: 0.15, x2: 0.15, z2: 9.85, kind: 'ext_knee', extTex: 'yakisugi_deep', intTex: 'wainscot_rustic', openings: [] },
+    {
+      id: 'WRF_W', axis: 'v', x1: 0, z1: 0.15, x2: 0.15, z2: 9.85, kind: 'ext_knee', extTex: 'yakisugi_deep', intTex: 'wainscot_rustic',
+      openings: [
+        { id: 'OP-EXT-ELV', type: 'opening', pos: 0.65, width: 0.90, height: 2.04, sill: 0, label: '外部ELV-EXT 屋根裏直通乗場開口' },
+      ],
+    },
     { id: 'WRF_E', axis: 'v', x1: 4.85, z1: 0.15, x2: 5.0, z2: 9.85, kind: 'ext_knee', extTex: 'yakisugi_deep', intTex: 'wainscot_rustic', openings: [] },
     { id: 'WRF_RAIL_E', axis: 'v', x1: 1.15, z1: 2.45, x2: 1.24, z2: 5.24, kind: 'railing', openings: [] },
     { id: 'WRF_RAIL_S', axis: 'h', x1: 0.15, z1: 5.15, x2: 1.24, z2: 5.24, kind: 'railing', openings: [] },
@@ -1949,7 +1954,17 @@ const STORAGE_2F = {
 import { CAMPER, CAMPER_SHEETS } from './camperData.js';
 import { KEI, KEI_PLAN } from './keiData.js';
 import { ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F } from './deepBasementData.js';
-export { CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F };
+import {
+  GARAGE, GARAGE_PLAN,
+  ARMOR_CAMPER, ARMOR_CAMPER_PLAN,
+  TOW_CONTAINER, TOW_CONTAINER_PLAN,
+  EXT_ELEVATOR,
+} from './warehouseAndArmorData.js';
+export {
+  CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN,
+  ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F,
+  GARAGE, GARAGE_PLAN, ARMOR_CAMPER, ARMOR_CAMPER_PLAN, TOW_CONTAINER, TOW_CONTAINER_PLAN, EXT_ELEVATOR,
+};
 
 export const FLOORS = [FLOOR_B1F, FLOOR_1F, FLOOR_2F, FLOOR_3F, FLOOR_4F, FLOOR_5F, FLOOR_6F, FLOOR_RF];
 export const ANNEX_FLOORS = [ANNEX_1F, ANNEX_2F, ANNEX_3F, ANNEX_ATTIC];
@@ -1961,6 +1976,9 @@ export const SHEET_OFFSETS = {
   storage: 3 + FLOORS.length + ANNEX_FLOORS.length,
   camper: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length,
   kei: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length,
+  garage: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 1,
+  armor: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 2,
+  container: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 3,
 };
 
 export function getFloorByPhysicalIndex(f) {
@@ -1970,7 +1988,7 @@ export function getFloorByPhysicalIndex(f) {
   return FLOORS[f] || FLOORS[HOUSE.spawnFloor];
 }
 
-// 20 Comprehensive JIS CAD Blueprint Sheets (0=B4F, 1=B3F, 2=B2F, 3=B1F, 4=1F..9=6F, 10=RF, 11..14=Annex, 15..16=Storage, 17..18=Camper, 19=Kei)
+// 23 Comprehensive JIS CAD Blueprint Sheets (0..19 Existing + 20=Garage 10x20x4.5m, 21=Armor Camper 15.5x3.1x4m, 22=Tow Container 2x4x3m)
 export const BLUEPRINT_SHEETS = [
   FLOOR_B4F,
   FLOOR_B3F,
@@ -1980,6 +1998,9 @@ export const BLUEPRINT_SHEETS = [
   ...STORAGE_FLOORS,
   ...CAMPER_SHEETS,
   KEI_PLAN,
+  GARAGE_PLAN,
+  ARMOR_CAMPER_PLAN,
+  TOW_CONTAINER_PLAN,
 ];
 BLUEPRINT_SHEETS.forEach((s, i) => {
   s.sheetIndex = i;

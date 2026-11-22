@@ -1,5 +1,6 @@
 import {
   HOUSE, ANNEX, STORAGE, CAMPER, KEI, ELEVATOR, STAIR_B1_B2, STAIR_B2_B3,
+  GARAGE, ARMOR_CAMPER, TOW_CONTAINER, EXT_ELEVATOR,
   BLUEPRINT_SHEETS, GRID_AXES, COLUMNS,
 } from './planData.js';
 
@@ -18,7 +19,7 @@ export class ArchitecturalBlueprint2D {
   constructor(container, callbacks = {}) {
     this.container = container;
     this.callbacks = callbacks;
-    this.activeFloor = 4; // Default Main 1F (Sheet Index 4 of 20)
+    this.activeFloor = 4; // Default Main 1F (Sheet Index 4 of 23)
     this.lastPose = null;
     this.scale = 100;
     this.padL = 175;
@@ -141,12 +142,12 @@ export class ArchitecturalBlueprint2D {
   }
 
   /**
-   * Export ALL 20 house/vehicle architectural CAD sheets combined into a single standalone vector SVG
-   * (4-column × 5-row print-ready architectural portfolio with collision-free namespaced IDs).
+   * Export ALL 23 house/garage/vehicle architectural CAD sheets combined into a single standalone vector SVG
+   * (5-column × 5-row print-ready architectural portfolio with collision-free namespaced IDs).
    */
   exportAllSheetsCombinedSVG() {
     const sheets = this._renderAllSheetsOffscreen();
-    const cols = 4;
+    const cols = 5;
     const cellW = 1120;
     const cellH = 1520;
     const gap = 36;
@@ -283,13 +284,45 @@ export class ArchitecturalBlueprint2D {
     const isStorageSheet = floor.building === 'storage';
     const isCamperSheet = floor.building === 'camper';
     const isKeiSheet = floor.building === 'kei';
+    const isGarageSheet = floor.building === 'garage';
+    const isArmorSheet = floor.building === 'armor';
+    const isContainerSheet = floor.building === 'container';
     const poseSheet = pose.sheetIndex !== undefined ? pose.sheetIndex : (pose.floor + 3);
     const sameSheet = poseSheet === this.activeFloor;
     this.camGroup.setAttribute('opacity', sameSheet ? '1' : '0.24');
 
     let mapX = pose.x;
     let mapZ = pose.z;
-    if (isKeiSheet) {
+    if (isGarageSheet) {
+      mapX = pose.x - GARAGE.originX;
+      mapZ = pose.z - GARAGE.originZ;
+    } else if (isArmorSheet) {
+      if (pose.building === 'armor' && pose.localX !== undefined) {
+        mapX = pose.localX;
+        mapZ = pose.localZ;
+      } else if (pose.armorPose) {
+        const ap = pose.armorPose;
+        const dx = pose.x - ap.cx;
+        const dz = pose.z - ap.cz;
+        const c = Math.cos(ap.yaw);
+        const s = Math.sin(ap.yaw);
+        mapX = dx * c - dz * s + ARMOR_CAMPER.width * 0.5;
+        mapZ = dx * s + dz * c + ARMOR_CAMPER.length * 0.5;
+      }
+    } else if (isContainerSheet) {
+      if (pose.building === 'container' && pose.localX !== undefined) {
+        mapX = pose.localX;
+        mapZ = pose.localZ;
+      } else if (pose.containerPose) {
+        const tp = pose.containerPose;
+        const dx = pose.x - tp.cx;
+        const dz = pose.z - tp.cz;
+        const c = Math.cos(tp.yaw);
+        const s = Math.sin(tp.yaw);
+        mapX = dx * c - dz * s + TOW_CONTAINER.width * 0.5;
+        mapZ = dx * s + dz * c + TOW_CONTAINER.length * 0.5;
+      }
+    } else if (isKeiSheet) {
       if (pose.building === 'kei' && pose.localX !== undefined) {
         mapX = pose.localX;
         mapZ = pose.localZ;
@@ -325,8 +358,8 @@ export class ArchitecturalBlueprint2D {
 
     const maxW = floor.isDeepB4 ? 4.95 : (floor.width || HOUSE.width);
     const maxD = floor.isDeepB4 ? 16.65 : (floor.depth || HOUSE.depth);
-    const cx = this.px(Math.max(-1.2, Math.min(maxW + 1.0, mapX)));
-    const cz = this.pz(Math.max(-1.0, Math.min(maxD + 1.0, mapZ)));
+    const cx = this.px(Math.max(-1.6, Math.min(maxW + 1.0, mapX)));
+    const cz = this.pz(Math.max(-1.2, Math.min(maxD + 1.0, mapZ)));
     const ang = (Math.atan2(pose.dz, pose.dx) * 180) / Math.PI;
     this.camDot.setAttribute('cx', cx);
     this.camDot.setAttribute('cy', cz);
@@ -339,13 +372,37 @@ export class ArchitecturalBlueprint2D {
     const isStorage = floor.building === 'storage';
     const isCamper = floor.building === 'camper';
     const isKei = floor.building === 'kei';
+    const isGarage = floor.building === 'garage';
+    const isArmor = floor.building === 'armor';
+    const isContainer = floor.building === 'container';
     const isDeepB4 = Boolean(floor.isDeepB4);
     const isDeepB3 = Boolean(floor.isDeepB3);
     const isDeepB2 = Boolean(floor.isDeepB2);
     const bWidth = isDeepB4 ? 4.95 : (isDeepB3 ? 12.20 : (floor.width || HOUSE.width));
     const bDepth = isDeepB4 ? 16.65 : (floor.depth || HOUSE.depth);
 
-    if (isDeepB4) {
+    if (isGarage) {
+      // Sheet 20: Giant Vehicle Warehouse (10.0m × 20.0m × H4.5m) + Right Structural Portal Section & North Shutter Elevation
+      this.scale = 42;
+      this.padL = 135;
+      this.padR = 475;
+      this.padT = 155;
+      this.padB = 260;
+    } else if (isArmor) {
+      // Sheet 21: Armored Secret-Base Camper ARMOR-155 (3.1m × 15.5m × H4.0m) + Right 8x8 Side Cutaway & Section
+      this.scale = 56;
+      this.padL = 135;
+      this.padR = 580;
+      this.padT = 148;
+      this.padB = 265;
+    } else if (isContainer) {
+      // Sheet 22: Towable Steel Cargo Container CON-24 (2.0m × 4.0m × H3.0m) + Right Elevation & Cross-Section
+      this.scale = 142;
+      this.padL = 165;
+      this.padR = 490;
+      this.padT = 278;
+      this.padB = 270;
+    } else if (isDeepB4) {
       // Sheet 0: B4F Left Plan (ELV-1 Only Access + 2.70×15.50m High-Ceiling Clandestine Gang Research Lab)
       // + Right Column: Longitudinal Section A-A', Transverse Vault Section B-B' (CH 3.55m), & Spec Schedule!
       this.scale = 52;
@@ -405,6 +462,13 @@ export class ArchitecturalBlueprint2D {
       this.padR = 165;
       this.padT = 245;
       this.padB = 385;
+    } else if (floor.sheetIndex === 4 || floor.sheetIndex === 10) {
+      // Extra West margin on 1F & RF to cleanly showcase Exterior Attic Express Elevator ELV-EXT!
+      this.scale = 100;
+      this.padL = 225;
+      this.padR = 165;
+      this.padT = 245;
+      this.padB = 345;
     } else {
       this.scale = 100;
       this.padL = 175;
@@ -500,7 +564,9 @@ export class ArchitecturalBlueprint2D {
     this._drawExteriorContext(this.layerGroups.exterior, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
     this._drawRoomFloors(this.layerGroups.materials, floor, isAnnex, isStorage, isCamper, isKei);
     this._drawGridAxes(this.layerGroups.grid, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
-    if (!isKei) this._drawStairwellSymbol(this.layerGroups.furniture, floor, isAnnex, isStorage, isCamper);
+    if (!isKei && !isGarage && !isArmor && !isContainer) {
+      this._drawStairwellSymbol(this.layerGroups.furniture, floor, isAnnex, isStorage, isCamper);
+    }
     this._drawFurniturePlan(this.layerGroups.furniture, floor);
     this._drawWallsAndColumns(this.layerGroups.walls, floor, isAnnex, isStorage, isCamper, isKei);
     this._drawOpenings(this.layerGroups.openings, floor);
@@ -510,10 +576,13 @@ export class ArchitecturalBlueprint2D {
     this._drawFlowPaths(this.layerGroups.flow, floor);
     this._drawRoomLabels(this.layerGroups.labels, floor, isStorage, isCamper, isKei);
     this._drawDimensions(this.layerGroups.dimensions, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth);
-    this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage, isCamper, isKei);
+    this._drawCameraMarker(this.layerGroups.camera, isAnnex, isStorage, isCamper, isKei, floor);
     if (isDeepB4) this._drawB4LabEngineeringView(svg, VW, VH);
     if (isDeepB3) this._drawElevatorEngineeringView(svg, VW, VH);
     if (isKei) this._drawKeiEngineeringViews(svg, VW, VH);
+    if (isGarage) this._drawGarageEngineeringView(svg, VW, VH);
+    if (isArmor) this._drawArmorEngineeringView(svg, VW, VH);
+    if (isContainer) this._drawContainerEngineeringView(svg, VW, VH);
     this._drawTitleBlockAndSection(svg, floor, VW, VH, isCamper, isKei);
 
     this.container.appendChild(svg);
@@ -522,32 +591,47 @@ export class ArchitecturalBlueprint2D {
 
   _drawSheetHeader(svg, floor, bWidth, bDepth, VW, isStorage, isCamper, isKei) {
     const g = el('g');
-    const sizeTxt = isKei
-      ? '3,400×1,480×H1,800mm'
-      : (isCamper
-        ? '2,700×7,500×H3,400mm'
-        : (floor.isDeepB4
-          ? 'ELV-1専用・内法 2,700×15,500 (CH3,550 / B3F直下4m)'
-          : (floor.isDeepB3
-            ? '総141.26m²・第二食料備蓄庫2×7m＋3サウナ＆檜水風呂＋防音ワーク室3×4m'
-            : (floor.isDeepB2
-              ? 'スタジオ 10,000×10,000 (CH3,800) ＋ 4,000×6,000×2室'
-              : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`))));
-    const scaleTag = isKei
-      ? '1/20 三面精密設計'
-      : (floor.isDeepB4
-        ? '1/85 平面＋縦横断面'
-        : (floor.isDeepB3 ? '1/100 拡張平面＋5停止ELV縦断面' : (floor.isDeepB2 ? '1/100 大空間スタジオ' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50')))));
-    g.appendChild(el('text', { x: 28, y: 42, 'font-size': (floor.isDeepB4 || floor.isDeepB3) ? 8.3 : ((isCamper || isKei || floor.isDeepB2) ? 9.6 : 11.2), 'font-weight': 700, fill: floor.isDeepB4 ? '#7f1d1d' : '#1c1e22', 'letter-spacing': 0.15 },
+    const isGarage = floor.building === 'garage';
+    const isArmor = floor.building === 'armor';
+    const isContainer = floor.building === 'container';
+    const sizeTxt = isGarage
+      ? 'W10,000 × L20,000 × H4,500 mm（鉄骨H形鋼門型フレーム）'
+      : (isArmor
+        ? 'W3,100 × L15,500 × H4,000 mm（1階建8×8重装甲・木製秘密基地）'
+        : (isContainer
+          ? 'W2,000 × L4,000 × H3,000 mm（ISO波型鋼板・けん引式）'
+          : (isKei
+            ? '3,400×1,480×H1,800mm'
+            : (isCamper
+              ? '2,700×7,500×H3,400mm'
+              : (floor.isDeepB4
+                ? 'ELV-1専用・内法 2,700×15,500 (CH3,550 / B3F直下4m)'
+                : (floor.isDeepB3
+                  ? '総141.26m²・第二食料備蓄庫2×7m＋3サウナ＆檜水風呂＋防音ワーク室3×4m'
+                  : (floor.isDeepB2
+                    ? 'スタジオ 10,000×10,000 (CH3,800) ＋ 4,000×6,000×2室'
+                    : `${Math.round(bWidth * 1000).toLocaleString()} × ${Math.round(bDepth * 1000).toLocaleString()} mm`)))))));
+    const scaleTag = isGarage
+      ? '1/100 平面＋門型断面・北立面'
+      : (isArmor
+        ? '1/75 平面＋8×8縦横断面'
+        : (isContainer
+          ? '1/28 三面精密設計'
+          : (isKei
+            ? '1/20 三面精密設計'
+            : (floor.isDeepB4
+              ? '1/85 平面＋縦横断面'
+              : (floor.isDeepB3 ? '1/100 拡張平面＋5停止ELV縦断面' : (floor.isDeepB2 ? '1/100 大空間スタジオ' : (isCamper ? '1/34' : (isStorage ? '1/28 拡大詳細' : '1/50'))))))));
+    g.appendChild(el('text', { x: 28, y: 42, 'font-size': (floor.isDeepB4 || floor.isDeepB3 || isArmor || isGarage) ? 8.8 : ((isCamper || isKei || isContainer || floor.isDeepB2) ? 9.6 : 11.2), 'font-weight': 700, fill: floor.isDeepB4 ? '#7f1d1d' : '#1c1e22', 'letter-spacing': 0.15 },
       `実施設計 ${floor.titleJp} (${scaleTag}) — ${sizeTxt}`));
-    g.appendChild(el('text', { x: 28, y: 59, 'font-size': (isCamper || isKei || floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2) ? 8.0 : 8.5, fill: '#5b5852' },
+    g.appendChild(el('text', { x: 28, y: 59, 'font-size': (isCamper || isKei || isGarage || isArmor || isContainer || floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2) ? 8.0 : 8.5, fill: '#5b5852' },
       `${floor.subtitle}  |  基準床 ${floor.floorLabel}`));
 
     const nc = el('g', { transform: `translate(${VW - 56}, 52)` });
     nc.appendChild(el('circle', { cx: 0, cy: 0, r: 17, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1 }));
     nc.appendChild(el('polygon', { points: '0,-14 -4.5,3 0,-2 4.5,3', fill: '#1c1e22' }));
     nc.appendChild(el('polygon', { points: '0,14 -3.5,3 0,6 3.5,3', fill: 'none', stroke: '#1c1e22', 'stroke-width': 0.8 }));
-    nc.appendChild(el('text', { x: 0, y: -20, 'text-anchor': 'middle', 'font-size': 9.2, 'font-weight': 700, fill: '#1c1e22' }, (isCamper || isKei) ? '前(N)' : 'N'));
+    nc.appendChild(el('text', { x: 0, y: -20, 'text-anchor': 'middle', 'font-size': 9.2, 'font-weight': 700, fill: '#1c1e22' }, (isCamper || isKei || isArmor || isContainer) ? '前(N)' : 'N'));
     g.appendChild(nc);
     svg.appendChild(g);
   }
@@ -570,8 +654,102 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.34 + 18.5, 'text-anchor': 'middle', 'font-size': 5.8, 'font-family': 'monospace', fill: '#059669', 'font-weight': 700 }, 'B4F↔1F(14.2m)'));
   }
 
+  _drawExtElevatorPlanSymbol(g, isAtticLevel = false) {
+    const sc = this.scale;
+    const S = EXT_ELEVATOR.shaft;
+    const x = this.px(S.minX);
+    const y = this.pz(S.minZ);
+    const w = (S.maxX - S.minX) * sc;
+    const h = (S.maxZ - S.minZ) * sc;
+    g.appendChild(el('rect', { x, y, width: w, height: h, fill: isAtticLevel ? '#e0f2fe' : '#e6f4ea', stroke: '#0284c7', 'stroke-width': 2.1 }));
+    g.appendChild(el('line', { x1: x, y1: y, x2: x + w, y2: y + h, stroke: '#0284c7', 'stroke-width': 0.85, 'stroke-dasharray': '4 2' }));
+    g.appendChild(el('line', { x1: x + w, y1: y, x2: x, y2: y + h, stroke: '#0284c7', 'stroke-width': 0.85, 'stroke-dasharray': '4 2' }));
+    // Active Door highlight (West face on 1F Ground; East face entering Attic Dormer on RF!)
+    const doorX = isAtticLevel ? (x + w) : x;
+    g.appendChild(el('line', { x1: doorX, y1: this.pz(0.65), x2: doorX, y2: this.pz(1.55), stroke: '#059669', 'stroke-width': 3.6 }));
+    g.appendChild(el('rect', { x: x + w * 0.08, y: y + h * 0.30, width: w * 0.84, height: 28, rx: 3, fill: 'rgba(255,255,255,0.95)', stroke: '#0284c7', 'stroke-width': 0.85 }));
+    g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.30 + 11, 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 800, fill: '#0369a1' }, 'ELV-EXT 外部'));
+    g.appendChild(el('text', { x: x + w / 2, y: y + h * 0.30 + 21, 'text-anchor': 'middle', 'font-size': 5.8, 'font-family': 'monospace', 'font-weight': 700, fill: '#059669' }, isAtticLevel ? '屋根裏直結(+16.1m)' : '1F屋外↔RF直通'));
+  }
+
   _drawExteriorContext(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
     const sc = this.scale;
+
+    if (floor.building === 'garage') {
+      // Sheet 20: Giant Vehicle Warehouse 10×20×4.5m Exterior Aprons, Roll-up Shutter Zones & Drive-Through Axis
+      g.appendChild(el('rect', { x: this.px(0.45), y: this.pz(-1.25), width: 6.60 * sc, height: 1.25 * sc, fill: '#e2e6e9', stroke: '#64748b', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
+      g.appendChild(el('text', { x: this.px(3.75), y: this.pz(-0.62), 'text-anchor': 'middle', 'font-size': 8.2, 'font-weight': 700, fill: '#334155' }, '北側 貫通コンクリートエプロン（林道・母屋広場直結）'));
+      g.appendChild(el('rect', { x: this.px(0.45), y: this.pz(20.00), width: 6.60 * sc, height: 1.15 * sc, fill: '#e2e6e9', stroke: '#64748b', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
+      g.appendChild(el('text', { x: this.px(3.75), y: this.pz(20.66), 'text-anchor': 'middle', 'font-size': 8.0, 'font-weight': 700, fill: '#334155' }, '南側 貫通出庫エプロン（15.5m装甲車＋けん引コンテナ貫通対応）'));
+      // Safety Bollards flanking North & South gates
+      [[0.70, -0.35], [6.80, -0.35], [0.70, 20.35], [6.80, 20.35]].forEach(([bx, bz]) => {
+        g.appendChild(el('circle', { cx: this.px(bx), cy: this.pz(bz), r: 4.0, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 1.0 }));
+      });
+      // Overhead 3t Monorail Steel Crane Track Projection along Bay 1 Centerline (X = 3.60)
+      g.appendChild(el('line', { x1: this.px(3.60), y1: this.pz(0.40), x2: this.px(3.60), y2: this.pz(19.60), stroke: '#d97706', 'stroke-width': 1.5, 'stroke-dasharray': '9 4' }));
+      // Steel Portal Truss Frame Dashed Lines (5m pitch: Z = 5, 10, 15m)
+      [5.0, 10.0, 15.0].forEach((tz) => {
+        g.appendChild(el('line', { x1: this.px(0.24), y1: this.pz(tz), x2: this.px(9.76), y2: this.pz(tz), stroke: '#475569', 'stroke-width': 0.75, 'stroke-dasharray': '6 4', opacity: 0.65 }));
+      });
+      g.appendChild(el('text', { x: this.px(-0.60), y: this.pz(8.00), 'text-anchor': 'middle', 'font-size': 7.5, 'font-weight': 700, fill: '#475569', transform: `rotate(-90 ${this.px(-0.60)} ${this.pz(8.00)})` }, '← 西側：母屋・RC倉庫・既存RV広場'));
+      return;
+    }
+
+    if (floor.building === 'armor') {
+      // Sheet 21: ARMOR-155 (3.1×15.5×H4.0m) 8×8 Heavy Steel Exterior, Bullbar, Tow Pintle & Iron Shutter Callouts
+      g.appendChild(el('rect', { x: this.px(0.04), y: this.pz(-0.26), width: 3.02 * sc, height: 0.24 * sc, rx: 3, fill: '#2c3138', stroke: '#0f172a', 'stroke-width': 1.3 }));
+      g.appendChild(el('text', { x: this.px(1.55), y: this.pz(-0.10), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#fff' }, 'HEAVY STEEL BULLBAR / WINCH'));
+      // Side armored mirrors
+      g.appendChild(el('rect', { x: this.px(-0.22), y: this.pz(0.45), width: 0.18 * sc, height: 0.28 * sc, rx: 2, fill: '#1e293b' }));
+      g.appendChild(el('rect', { x: this.px(3.14), y: this.pz(0.45), width: 0.18 * sc, height: 0.28 * sc, rx: 2, fill: '#1e293b' }));
+      // Rear Armored Bumper + Tow Pintle Hitch (Z = 15.85m) + Container Articulation Cone!
+      g.appendChild(el('rect', { x: this.px(0.04), y: this.pz(15.50), width: 3.02 * sc, height: 0.18 * sc, rx: 2, fill: '#2c3138', stroke: '#0f172a', 'stroke-width': 1.2 }));
+      g.appendChild(el('circle', { cx: this.px(1.55), cy: this.pz(15.85), r: 5.5, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 1.2 }));
+      g.appendChild(el('path', {
+        d: `M ${this.px(1.55)} ${this.pz(15.85)} L ${this.px(0.75)} ${this.pz(16.65)} L ${this.px(2.35)} ${this.pz(16.65)} Z`,
+        fill: 'rgba(245,158,11,0.12)', stroke: '#b45309', 'stroke-width': 0.9, 'stroke-dasharray': '4 2',
+      }));
+      g.appendChild(el('text', { x: this.px(1.55), y: this.pz(16.92), 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 700, fill: '#b45309' }, '後部けん引ピントル (CON-24 最大1台連結)'));
+      // 8×8 Heavy Off-Road Axles & Tires (Ø1,120mm)
+      const axLbl = ['FA1', 'FA2', 'RA1', 'RA2'];
+      ARMOR_CAMPER.axlesZ.forEach((az, i) => {
+        g.appendChild(el('line', { x1: this.px(-0.28), y1: this.pz(az), x2: this.px(3.38), y2: this.pz(az), stroke: '#2563eb', 'stroke-width': 0.85, 'stroke-dasharray': '9 3 2 3', opacity: 0.72 }));
+        g.appendChild(el('text', { x: this.px(3.42), y: this.pz(az) + 2.6, 'font-size': 6.4, 'font-weight': 700, fill: '#1d4ed8', 'font-family': 'monospace' }, axLbl[i]));
+        [-0.04, 2.78].forEach((tx) => {
+          g.appendChild(el('rect', {
+            x: this.px(tx), y: this.pz(az - 0.54), width: 0.36 * sc, height: 1.08 * sc, rx: 4,
+            fill: 'rgba(30, 58, 138, 0.14)', stroke: '#1d4ed8', 'stroke-width': 0.9, 'stroke-dasharray': '4 2',
+          }));
+        });
+      });
+      // Retractable Airlock Entry Steps on West Airlock Door (Z=13.95..14.87)
+      g.appendChild(el('rect', { x: this.px(-0.36), y: this.pz(13.95), width: 0.36 * sc, height: 0.92 * sc, fill: 'url(#pat-grate)', stroke: '#1c1e22', 'stroke-width': 1.1 }));
+      return;
+    }
+
+    if (floor.building === 'container') {
+      // Sheet 22: CON-24 (2.0×4.0×H3.0m) A-Frame Drawbar Tongue, Pintle Ring, Jockey Leg & Tandem Off-Road Axles
+      g.appendChild(el('polygon', {
+        points: `${this.px(0.32)},${this.pz(0)} ${this.px(1.68)},${this.pz(0)} ${this.px(1.00)},${this.pz(-1.25)}`,
+        fill: 'rgba(71,85,105,0.12)', stroke: '#1e293b', 'stroke-width': 2.0,
+      }));
+      g.appendChild(el('circle', { cx: this.px(1.00), cy: this.pz(-1.25), r: 6.5, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 1.4 }));
+      g.appendChild(el('circle', { cx: this.px(1.00), cy: this.pz(-0.62), r: 4.0, fill: '#94a3b8', stroke: '#334155', 'stroke-width': 1.0 }));
+      g.appendChild(el('text', { x: this.px(1.00), y: this.pz(-1.38), 'text-anchor': 'middle', 'font-size': 7.4, 'font-weight': 700, fill: '#b45309' }, 'Aフレーム牽引棒 L1,250（ARMOR-155 後部連結リング）'));
+      // Tandem Off-Road Axles (Z = 1.95m, 2.95m)
+      TOW_CONTAINER.axlesZ.forEach((az, i) => {
+        g.appendChild(el('line', { x1: this.px(-0.24), y1: this.pz(az), x2: this.px(2.24), y2: this.pz(az), stroke: '#2563eb', 'stroke-width': 0.9, 'stroke-dasharray': '10 3 2 3', opacity: 0.78 }));
+        g.appendChild(el('text', { x: this.px(2.28), y: this.pz(az) + 3, 'font-size': 7.0, 'font-weight': 700, fill: '#1d4ed8', 'font-family': 'monospace' }, `TA${i + 1}`));
+        [-0.08, 1.82].forEach((tx) => {
+          g.appendChild(el('rect', {
+            x: this.px(tx), y: this.pz(az - 0.42), width: 0.26 * sc, height: 0.84 * sc, rx: 3.5,
+            fill: 'rgba(30, 58, 138, 0.14)', stroke: '#1d4ed8', 'stroke-width': 1.0,
+          }));
+        });
+      });
+      g.appendChild(el('text', { x: this.px(1.00), y: this.pz(4.78), 'text-anchor': 'middle', 'font-size': 7.4, 'font-weight': 700, fill: '#475569' }, '後部コンテナ両開鉄扉 DCT-1（進入可能・単独切離し配置可）'));
+      return;
+    }
 
     if (floor.isDeepB4) {
       // Deep Subterranean Granite Bedrock Enclosure framing B4F (B4FL -14,200 mm, 4.00m below B3F — ZERO STAIRS!)
@@ -800,10 +978,13 @@ export class ArchitecturalBlueprint2D {
     } else if (floor.sheetIndex === 4) {
       g.appendChild(el('rect', { x: this.px(0.10), y: this.pz(-1.20), width: 210, height: 120, fill: '#dde2db', stroke: '#8c9689', 'stroke-width': 0.9 }));
       g.appendChild(el('text', { x: this.px(1.15), y: this.pz(-0.55), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#4c5749', 'font-weight': 600 }, '玄関ポーチ・苔石森道'));
-      g.appendChild(el('text', { x: this.px(-0.36), y: this.pz(5.0), 'text-anchor': 'middle', 'font-size': 8.4, fill: '#3d523a', 'font-weight': 700, transform: `rotate(-90 ${this.px(-0.36)} ${this.pz(5.0)})` }, '← 西2.6m 隣棟「森の離れ」(5×8m 3F+屋根裏)'));
+      // Exterior Panoramic Attic Express Elevator (ELV-EXT) on Outside West Facade!
+      this._drawExtElevatorPlanSymbol(g, false);
+      g.appendChild(el('text', { x: this.px(-0.36), y: this.pz(5.8), 'text-anchor': 'middle', 'font-size': 8.2, fill: '#3d523a', 'font-weight': 700, transform: `rotate(-90 ${this.px(-0.36)} ${this.pz(5.8)})` }, '← 西2.6m 隣棟「森の離れ」'));
       g.appendChild(el('text', { x: this.px(5.32), y: this.pz(0.45), 'text-anchor': 'start', 'font-size': 7.8, fill: '#4f555c', 'font-weight': 700 }, '東1.6m→RC倉庫'));
       g.appendChild(el('text', { x: this.px(5.32), y: this.pz(5.20), 'text-anchor': 'start', 'font-size': 7.8, fill: '#9c4722', 'font-weight': 700 }, '東1.4m→巨大RV'));
-      g.appendChild(el('text', { x: this.px(5.32), y: this.pz(5.55), 'text-anchor': 'start', 'font-size': 7.2, fill: '#646c75' }, '(W560拡幅廊下)'));
+      g.appendChild(el('text', { x: this.px(5.32), y: this.pz(5.65), 'text-anchor': 'start', 'font-size': 7.5, fill: '#0369a1', 'font-weight': 700 }, '東7.0m→巨大車倉庫'));
+      g.appendChild(el('text', { x: this.px(5.32), y: this.pz(5.98), 'text-anchor': 'start', 'font-size': 6.9, fill: '#646c75' }, '(10×20×H4.5m)'));
       g.appendChild(el('rect', { x: this.px(0.05), y: this.pz(10.0), width: 490, height: 120, fill: 'url(#pat-deck)', stroke: '#8d6e4a', 'stroke-width': 1 }));
       g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.68), 'text-anchor': 'middle', 'font-size': 10, fill: '#6b4f31', 'font-weight': 600 }, '南 縁側ウッドデッキ (W4,900×D1,350)  —  深い老杉の森'));
     } else if (floor.hasBalcony) {
@@ -855,7 +1036,9 @@ export class ArchitecturalBlueprint2D {
         x: this.px(-0.50), y: this.pz(-0.45), width: (HOUSE.width + 1.0) * sc, height: (HOUSE.depth + 0.90) * sc,
         fill: 'none', stroke: '#7a756b', 'stroke-width': 0.9, 'stroke-dasharray': '7 4',
       }));
-      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.58), 'text-anchor': 'middle', 'font-size': 8.6, fill: '#6b655c' }, '切妻屋根 軒先ライン (6寸勾配・RFL+16,100〜棟+18,930＋避雷針+20,420)'));
+      // Exterior Attic Express Elevator Dormer Connection on West Roof Slope!
+      this._drawExtElevatorPlanSymbol(g, true);
+      g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.58), 'text-anchor': 'middle', 'font-size': 8.6, fill: '#6b655c' }, '切妻屋根 軒先ライン (6寸勾配・RFL+16,100〜棟+18,930＋西側ELV-EXT屋根裏直通ドーマー)'));
     } else {
       g.appendChild(el('text', { x: this.px(2.50), y: this.pz(-0.32), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#5b6b59' }, `北面：老杉の森（樹高22〜34m・${floor.code}樹冠ビュー）`));
       g.appendChild(el('text', { x: this.px(2.50), y: this.pz(10.45), 'text-anchor': 'middle', 'font-size': 9.2, fill: '#5b6b59' }, `南面：月光の杉林・${floor.code}パノラマ樹冠展望`));
@@ -1051,16 +1234,25 @@ export class ArchitecturalBlueprint2D {
 
   _drawGridAxes(g, floor, isAnnex, isStorage, isCamper, isKei, bWidth, bDepth) {
     const isDeep = Boolean(floor.isDeepB2 || floor.isDeepB3 || floor.isDeepB4);
-    const hasWestBal = floor.hasAnnexBalconies || floor.hasBalcony5F;
-    const axes = isDeep
-      ? this._getDeepAxes(floor)
-      : (isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES))));
-    const topOff = floor.isDeepB4 ? -0.75 : (isDeep ? -0.80 : (isKei ? -0.50 : (isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15)))));
-    const topLineOff = floor.isDeepB4 ? -0.30 : (isDeep ? -0.40 : (isKei ? -0.36 : (isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95)))));
-    const leftOff = floor.isDeepB4 ? -1.05 : (isDeep ? -1.85 : (isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (hasWestBal ? -1.42 : -1.15)))));
-    const leftLineOff = floor.isDeepB4 ? -0.62 : (isDeep ? -1.45 : (isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (hasWestBal ? -1.24 : -0.95)))));
-    const rightEnd = isDeep ? bWidth + 0.35 : (isKei ? bWidth + 0.16 : (isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85)));
-    const botEnd = isDeep ? bDepth + 0.30 : (isKei ? bDepth + 0.22 : (isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies || floor.hasBalcony6F ? bDepth + 1.18 : bDepth + 0.85))));
+    const isGarage = floor.building === 'garage';
+    const isArmor = floor.building === 'armor';
+    const isContainer = floor.building === 'container';
+    const hasWestBal = floor.hasAnnexBalconies || floor.hasBalcony5F || floor.sheetIndex === 4 || floor.sheetIndex === 10;
+    const axes = isGarage
+      ? GARAGE.gridAxes
+      : (isArmor
+        ? ARMOR_CAMPER.gridAxes
+        : (isContainer
+          ? TOW_CONTAINER.gridAxes
+          : (isDeep
+            ? this._getDeepAxes(floor)
+            : (isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES)))))));
+    const topOff = isGarage ? -1.45 : (isArmor ? -1.00 : (isContainer ? -0.95 : (floor.isDeepB4 ? -0.75 : (isDeep ? -0.80 : (isKei ? -0.50 : (isCamper ? -0.68 : (isStorage ? -0.96 : (floor.hasAnnexBalconies ? -1.36 : -1.15))))))));
+    const topLineOff = isGarage ? -0.95 : (isArmor ? -0.62 : (isContainer ? -0.62 : (floor.isDeepB4 ? -0.30 : (isDeep ? -0.40 : (isKei ? -0.36 : (isCamper ? -0.50 : (isStorage ? -0.82 : (floor.hasAnnexBalconies ? -1.18 : -0.95))))))));
+    const leftOff = isGarage ? -1.45 : (isArmor ? -1.12 : (isContainer ? -0.64 : (floor.isDeepB4 ? -1.05 : (isDeep ? -1.85 : (isKei ? -0.58 : (isCamper ? -0.82 : (isStorage ? -0.68 : (hasWestBal ? -1.68 : -1.15))))))));
+    const leftLineOff = isGarage ? -0.95 : (isArmor ? -0.70 : (isContainer ? -0.46 : (floor.isDeepB4 ? -0.62 : (isDeep ? -1.45 : (isKei ? -0.44 : (isCamper ? -0.64 : (isStorage ? -0.52 : (hasWestBal ? -1.48 : -0.95))))))));
+    const rightEnd = isGarage ? bWidth + 0.45 : (isArmor ? bWidth + 0.35 : (isContainer ? bWidth + 0.20 : (isDeep ? bWidth + 0.35 : (isKei ? bWidth + 0.16 : (isCamper ? bWidth + 0.45 : (isStorage ? bWidth + 1.05 : bWidth + 0.85))))));
+    const botEnd = isGarage ? bDepth + 0.55 : (isArmor ? bDepth + 0.38 : (isContainer ? bDepth + 0.28 : (isDeep ? bDepth + 0.30 : (isKei ? bDepth + 0.22 : (isCamper ? bDepth + 0.35 : (isStorage ? bDepth + 0.42 : (floor.hasAnnexBalconies || floor.hasBalcony6F ? bDepth + 1.18 : bDepth + 0.85)))))));
 
     axes.x.forEach((ax) => {
       const x = this.px(ax.pos);
@@ -1142,9 +1334,79 @@ export class ArchitecturalBlueprint2D {
     const box = (x, z, w, d, label, fill = '#fffdf8') => {
       g.appendChild(el('rect', { x: this.px(x), y: this.pz(z), width: w * sc, height: d * sc, fill, stroke: '#5c5348', 'stroke-width': 0.85, rx: 1.5 }));
       if (label) {
-        g.appendChild(el('text', { x: this.px(x + w / 2), y: this.pz(z + d / 2) + 2.4, 'text-anchor': 'middle', 'font-size': (floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2) ? 6.0 : 6.9, fill: '#3d3832', 'font-weight': 600 }, label));
+        g.appendChild(el('text', { x: this.px(x + w / 2), y: this.pz(z + d / 2) + 2.4, 'text-anchor': 'middle', 'font-size': (floor.isDeepB4 || floor.isDeepB3 || floor.isDeepB2 || floor.building === 'garage' || floor.building === 'armor') ? 6.0 : 6.9, fill: '#3d3832', 'font-weight': 600 }, label));
       }
     };
+
+    if (floor.building === 'garage') {
+      // SHEET 20: GIANT VEHICLE WAREHOUSE (10×20×4.5m) EQUIPMENT, BAY STRIPES & PARKED VEHICLE FOOTPRINTS
+      // Yellow safety lane divider stripes separating Bay 1 & Bay 2
+      g.appendChild(el('rect', { x: this.px(5.72), y: this.pz(0.45), width: 0.14 * sc, height: 19.10 * sc, fill: '#f59e0b', opacity: 0.78 }));
+      g.appendChild(el('rect', { x: this.px(5.85), y: this.pz(5.92), width: 3.85 * sc, height: 0.14 * sc, fill: '#f59e0b', opacity: 0.78 }));
+      // Central floor oil/wash drainage trench along Bay 1 (X = 3.00)
+      g.appendChild(el('rect', { x: this.px(2.85), y: this.pz(1.40), width: 0.30 * sc, height: 17.20 * sc, fill: 'url(#pat-grate)', stroke: '#64748b', 'stroke-width': 0.75 }));
+      // Dashed Parking Envelope for ARMOR-155 (3.1×15.5m) in Bay 1 (Local X = 2.05..5.15, Z = 1.45..16.95)
+      g.appendChild(el('rect', { x: this.px(2.05), y: this.pz(1.45), width: 3.10 * sc, height: 15.50 * sc, rx: 4, fill: 'rgba(16,185,129,0.09)', stroke: '#059669', 'stroke-width': 1.2, 'stroke-dasharray': '7 3' }));
+      g.appendChild(el('text', { x: this.px(3.60), y: this.pz(5.10), 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#065f46' }, 'ARMOR-155 格納位置 (3.1×15.5m)'));
+      // Dashed Parking Envelope for CON-24 (2.0×4.0m) in Bay 2 (Local X = 6.85..8.85, Z = 10.50..14.50)
+      g.appendChild(el('rect', { x: this.px(6.85), y: this.pz(10.50), width: 2.00 * sc, height: 4.00 * sc, rx: 3, fill: 'rgba(245,158,11,0.11)', stroke: '#b45309', 'stroke-width': 1.1, 'stroke-dasharray': '6 3' }));
+      g.appendChild(el('text', { x: this.px(7.85), y: this.pz(11.65), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#92400e' }, 'CON-24 待機'));
+      // Mechanic Workshop (NE Corner G03)
+      box(8.85, 0.55, 0.85, 3.80, '鋼製作業台', '#d9e0e7');
+      box(6.20, 0.45, 2.30, 0.72, '赤ツール箱', '#fecaca');
+      box(8.85, 4.70, 0.85, 1.10, '圧縮機', '#dbeafe');
+      // Heavy 4-tier Pallet Racks, Oil Drums & Off-Road Spare Tire Rack along East Wall
+      box(8.92, 6.40, 0.78, 3.20, '重量棚4段', '#e2e8f0');
+      box(8.92, 15.20, 0.78, 2.60, '予備タイヤ棚', '#e5e7eb');
+      [18.25, 18.85, 19.35].forEach((dz) => {
+        g.appendChild(el('circle', { cx: this.px(9.20), cy: this.pz(dz), r: 0.24 * sc, fill: '#93c5fd', stroke: '#1d4ed8', 'stroke-width': 0.9 }));
+      });
+      g.appendChild(el('text', { x: this.px(8.42), y: this.pz(18.85), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#1d4ed8' }, '燃料ドラム'));
+      return;
+    }
+
+    if (floor.building === 'armor') {
+      // SHEET 21: ARMOR-155 (3.1×15.5m) 6 COMPLETELY ORIGINAL WARM WOODEN SECRET-BASE ZONES!
+      // ① Bridge: Nav Console, Steering Seat, Co-Pilot Autonav Terminal
+      box(0.20, 0.22, 2.70, 0.58, '自律航法コンソール(A*)', '#cbd5e1');
+      box(0.45, 1.02, 0.72, 0.72, '運転席[E]', '#e2d7c5');
+      box(1.92, 1.02, 0.72, 0.72, '航法席', '#e2d7c5');
+      // ② Windowless Secret-Base Lounge: Cast-Iron Wood Stove + U-Pit Leather Sofa + Map Table
+      g.appendChild(el('circle', { cx: this.px(1.55), cy: this.pz(4.80), r: 0.34 * sc, fill: '#334155', stroke: '#b45309', 'stroke-width': 1.4 }));
+      g.appendChild(el('circle', { cx: this.px(1.55), cy: this.pz(4.80), r: 0.14 * sc, fill: '#fb923c' }));
+      g.appendChild(el('text', { x: this.px(1.55), y: this.pz(5.32), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#b45309' }, '薪ストーブ'));
+      box(0.18, 2.72, 0.68, 2.65, 'U字革ソファ', '#d6b692');
+      box(2.24, 2.72, 0.68, 2.65, 'U字革ソファ', '#d6b692');
+      box(0.98, 2.95, 1.14, 1.10, '秘密地図卓', '#efe0c6');
+      // ③ Timber Galley: Walnut Butcher Block Counter + Copper Sink + Pantry & Fridge
+      box(2.14, 5.96, 0.80, 2.48, '栗調理台＆銅ｼﾝｸ', '#ebd4b0');
+      box(0.18, 6.00, 0.64, 1.25, '大型保冷庫', '#dce6ee');
+      box(0.18, 7.36, 0.64, 1.08, '杉食料棚', '#ead8be');
+      // ④ Hinoki Wet Pod (East side Z=8.60..10.60, leaving West W1,280 offset hallway!)
+      box(1.56, 8.74, 1.32, 0.96, '深型檜浴槽', '#e0cfa9');
+      box(2.22, 9.82, 0.66, 0.66, '船舶WC', '#eef2f5');
+      box(1.54, 9.88, 0.56, 0.56, '真鍮洗面', '#f1f5f9');
+      // ⑤ Vaulted King Bunk Cave (Z=10.60..13.50): Arched Cedar King Bunk + Fold-down Chart Study Desk
+      box(0.20, 11.45, 2.02, 1.88, 'アーチ木製キング寝台', '#e6d2b5');
+      box(2.34, 10.85, 0.58, 1.35, '海図書斎卓', '#efe2cd');
+      // ⑥ Rear Blast Airlock (Z=13.50..15.38): Gear Lockers + Container Hitch Switch Panel
+      box(2.32, 13.72, 0.60, 1.48, '雨具防寒棚', '#cfd7df');
+      box(0.20, 13.66, 0.44, 0.44, '連結盤', '#fde68a');
+      return;
+    }
+
+    if (floor.building === 'container') {
+      // SHEET 22: CON-24 (2.0×4.0m) WALKABLE CARGO AISLE + HEAVY RACKS + GENERATOR + CRATES
+      box(0.10, 0.14, 0.52, 2.85, '左3段耐震棚', '#dce3e8');
+      box(1.38, 0.14, 0.52, 2.85, '右3段耐震棚', '#dce3e8');
+      box(0.70, 0.16, 0.60, 0.68, '非常発電機', '#fde68a');
+      box(0.12, 3.12, 0.46, 0.62, '燃料缶', '#fecaca');
+      box(1.42, 3.12, 0.46, 0.62, '資材箱', '#e5dccb');
+      // Center Walkable Cargo Aisle Highlight (W760)
+      g.appendChild(el('rect', { x: this.px(0.64), y: this.pz(0.92), width: 0.72 * sc, height: 2.94 * sc, fill: 'rgba(16,185,129,0.08)', stroke: '#059669', 'stroke-width': 0.9, 'stroke-dasharray': '5 3' }));
+      g.appendChild(el('text', { x: this.px(1.00), y: this.pz(2.80), 'text-anchor': 'middle', 'font-size': 7.0, 'font-weight': 700, fill: '#065f46', 'font-family': 'monospace' }, '進入通路 W760'));
+      return;
+    }
 
     if (floor.isDeepB4) {
       // SHEET 0: B4F CLANDESTINE GANG RESEARCH LABORATORY (2.70m × 15.50m × CH 3.55m, 5 SEQUENTIAL ZONES!)
@@ -1581,12 +1843,13 @@ export class ArchitecturalBlueprint2D {
       drawSeg(cur, end);
     }
 
-    if (isCamper || isKei || floor.isDeepB2 || floor.isDeepB3 || floor.isDeepB4) return;
-    const cols = isStorage ? STORAGE.columns : (isAnnex ? ANNEX.columns : COLUMNS);
-    const colSz = isStorage ? 14 : 11;
+    if (isCamper || isKei || floor.building === 'armor' || floor.building === 'container' || floor.isDeepB2 || floor.isDeepB3 || floor.isDeepB4) return;
+    const isGarage = floor.building === 'garage';
+    const cols = isGarage ? GARAGE.columns : (isStorage ? STORAGE.columns : (isAnnex ? ANNEX.columns : COLUMNS));
+    const colSz = isGarage ? 12 : (isStorage ? 14 : 11);
     cols.forEach(([cx, cz]) => {
       if (floor.isBasement && cz < 2.40) return;
-      g.appendChild(el('rect', { x: this.px(cx) - colSz / 2, y: this.pz(cz) - colSz / 2, width: colSz, height: colSz, fill: '#1c1e22' }));
+      g.appendChild(el('rect', { x: this.px(cx) - colSz / 2, y: this.pz(cz) - colSz / 2, width: colSz, height: colSz, fill: isGarage ? '#0f4c81' : '#1c1e22' }));
     });
   }
 
@@ -1610,9 +1873,26 @@ export class ArchitecturalBlueprint2D {
           if (isH) {
             g.appendChild(el('rect', { x: this.px(op.pos), y: this.pz(w.z1), width: len, height: (w.z2 - w.z1) * sc, fill: '#eef7fc', stroke: '#1d7a8c', 'stroke-width': 1 }));
             g.appendChild(el('line', { x1: this.px(op.pos), y1: midOrtho, x2: this.px(op.pos + op.width), y2: midOrtho, stroke: '#1d7a8c', 'stroke-width': 1.2 }));
+            if (op.hasIronShutter) {
+              // Motorized Armored Iron Shutter outer track callout
+              g.appendChild(el('line', { x1: this.px(op.pos) - 2, y1: this.pz(w.z1) - 3.5, x2: this.px(op.pos + op.width) + 2, y2: this.pz(w.z1) - 3.5, stroke: '#1e293b', 'stroke-width': 2.2, 'stroke-dasharray': '5 2' }));
+            }
           } else {
             g.appendChild(el('rect', { x: this.px(w.x1), y: this.pz(op.pos), width: (w.x2 - w.x1) * sc, height: len, fill: '#eef7fc', stroke: '#1d7a8c', 'stroke-width': 1 }));
             g.appendChild(el('line', { x1: midOrtho, y1: this.pz(op.pos), x2: midOrtho, y2: this.pz(op.pos + op.width), stroke: '#1d7a8c', 'stroke-width': 1.2 }));
+            if (op.hasIronShutter) {
+              const sx = w.x1 < 1.0 ? this.px(w.x1) - 3.5 : this.px(w.x2) + 3.5;
+              g.appendChild(el('line', { x1: sx, y1: this.pz(op.pos) - 2, x2: sx, y2: this.pz(op.pos + op.width) + 2, stroke: '#1e293b', 'stroke-width': 2.2, 'stroke-dasharray': '5 2' }));
+            }
+          }
+        } else if (op.type === 'door_rollup') {
+          // Industrial Motorized Roll-Up Steel Shutter Symbol (double rail + corrugated slat line + drum box)
+          if (isH) {
+            g.appendChild(el('rect', { x: this.px(op.pos), y: midOrtho - 4.5, width: len, height: 9, fill: '#dbeafe', stroke: '#0f4c81', 'stroke-width': 1.3 }));
+            g.appendChild(el('line', { x1: this.px(op.pos), y1: midOrtho, x2: this.px(op.pos + op.width), y2: midOrtho, stroke: '#0f4c81', 'stroke-width': 1.8, 'stroke-dasharray': '6 3' }));
+          } else {
+            g.appendChild(el('rect', { x: midOrtho - 4.5, y: this.pz(op.pos), width: 9, height: len, fill: '#dbeafe', stroke: '#0f4c81', 'stroke-width': 1.3 }));
+            g.appendChild(el('line', { x1: midOrtho, y1: this.pz(op.pos), x2: midOrtho, y2: this.pz(op.pos + op.width), stroke: '#0f4c81', 'stroke-width': 1.8, 'stroke-dasharray': '6 3' }));
           }
         } else if (op.type === 'door_swing') {
           const dir = op.swingDir || 1;
@@ -1642,9 +1922,9 @@ export class ArchitecturalBlueprint2D {
           });
         }
 
-        const tx = isH ? this.px(op.pos + op.width / 2) : (midOrtho + (w.x1 > 1.2 && (floor.isCamper || floor.isKei) ? -18 : 16));
+        const tx = isH ? this.px(op.pos + op.width / 2) : (midOrtho + (w.x1 > 1.2 && (floor.isCamper || floor.isKei || floor.building === 'armor') ? -18 : 16));
         const ty = isH ? midOrtho - 9 : this.pz(op.pos + op.width / 2) + 3;
-        g.appendChild(el('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 6.9, 'font-weight': 700, fill: op.type.startsWith('window') || op.type === 'door_liftgate' ? '#1d7a8c' : '#9c4722' }, op.id));
+        g.appendChild(el('text', { x: tx, y: ty, 'text-anchor': 'middle', 'font-size': 6.9, 'font-weight': 700, fill: op.type === 'door_rollup' ? '#0f4c81' : (op.type.startsWith('window') || op.type === 'door_liftgate' ? '#1d7a8c' : '#9c4722') }, op.hasIronShutter ? `${op.id}[鉄ｼｬｯﾀ]` : op.id));
       }
     }
   }
@@ -1785,6 +2065,39 @@ export class ArchitecturalBlueprint2D {
         continue;
       }
 
+      if (floor.building === 'armor') {
+        const bw = r.code === 'A04' ? 84 : 138;
+        const bh = 25;
+        const grp = el('g', { style: 'pointer-events:none' });
+        grp.appendChild(el('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: 3, fill: 'rgba(255,255,255,0.92)', stroke: '#7c5a38', 'stroke-width': 0.8 }));
+        grp.appendChild(el('text', { x: cx, y: cy - 2, 'text-anchor': 'middle', 'font-size': r.code === 'A04' ? 5.6 : 6.4, 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp.replace(/^[①-⑥]\s*/, '').split('（')[0]}`));
+        grp.appendChild(el('text', { x: cx, y: cy + 7, 'text-anchor': 'middle', 'font-size': 5.6, fill: '#7a4b25', 'font-family': 'monospace' }, `${r.area.toFixed(1)}m² · ${r.ch}`));
+        g.appendChild(grp);
+        continue;
+      }
+
+      if (floor.building === 'garage') {
+        const bw = r.code === 'G01' ? 168 : 136;
+        const bh = 32;
+        const grp = el('g', { style: 'pointer-events:none' });
+        grp.appendChild(el('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: 3.2, fill: 'rgba(255,255,255,0.93)', stroke: '#0f4c81', 'stroke-width': 0.85 }));
+        grp.appendChild(el('text', { x: cx, y: cy - 3.5, 'text-anchor': 'middle', 'font-size': 7.1, 'font-weight': 700, fill: '#0f4c81' }, `${r.code} ${r.nameJp.split(' (')[0]}`));
+        grp.appendChild(el('text', { x: cx, y: cy + 6.5, 'text-anchor': 'middle', 'font-size': 6.4, fill: '#334155', 'font-family': 'monospace' }, `${r.area.toFixed(1)}m² · ${r.ch}`));
+        g.appendChild(grp);
+        continue;
+      }
+
+      if (floor.building === 'container') {
+        const bw = 152;
+        const bh = 30;
+        const grp = el('g', { style: 'pointer-events:none' });
+        grp.appendChild(el('rect', { x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh, rx: 3, fill: 'rgba(255,255,255,0.93)', stroke: '#1e293b', 'stroke-width': 0.8 }));
+        grp.appendChild(el('text', { x: cx, y: cy - 2.5, 'text-anchor': 'middle', 'font-size': 7.2, 'font-weight': 700, fill: '#1c1e22' }, `${r.code} ${r.nameJp}`));
+        grp.appendChild(el('text', { x: cx, y: cy + 7.5, 'text-anchor': 'middle', 'font-size': 6.4, fill: '#475569', 'font-family': 'monospace' }, `1,840×3,840 (${r.area.toFixed(2)}m²) · ${r.ch}`));
+        g.appendChild(grp);
+        continue;
+      }
+
       const isNarrow = r.w <= 1.32 && !isStorage && !isCamper;
       const titleStr = `${r.code} ${r.nameJp}`;
       const maxRoomW = Math.max(76, Math.round(r.w * this.scale - 6));
@@ -1855,12 +2168,21 @@ export class ArchitecturalBlueprint2D {
       return;
     }
 
-    const axes = isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES)));
-    const hasWestBal = floor.hasAnnexBalconies || floor.hasBalcony5F;
-    const dimHOuterY = isKei ? this.pz(-0.66) : (isCamper ? this.pz(-0.92) : (isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55))));
-    const dimHInnerY = isKei ? this.pz(-0.34) : (isCamper ? this.pz(-0.46) : (isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78))));
-    const dimVOuterX = isKei ? this.px(-0.74) : (isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (hasWestBal ? this.px(-1.78) : this.px(-1.52))));
-    const dimVInnerX = isKei ? this.px(-0.42) : (isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (hasWestBal ? this.px(-1.54) : this.px(-0.78))));
+    const isGarage = floor.building === 'garage';
+    const isArmor = floor.building === 'armor';
+    const isContainer = floor.building === 'container';
+    const axes = isGarage
+      ? GARAGE.gridAxes
+      : (isArmor
+        ? ARMOR_CAMPER.gridAxes
+        : (isContainer
+          ? TOW_CONTAINER.gridAxes
+          : (isKei ? KEI.gridAxes : (isCamper ? CAMPER.gridAxes : (isStorage ? STORAGE.gridAxes : (isAnnex ? ANNEX.gridAxes : GRID_AXES))))));
+    const hasWestBal = floor.hasAnnexBalconies || floor.hasBalcony5F || floor.sheetIndex === 4 || floor.sheetIndex === 10;
+    const dimHOuterY = isGarage ? this.pz(-1.82) : (isArmor ? this.pz(-1.32) : (isContainer ? this.pz(-0.74) : (isKei ? this.pz(-0.66) : (isCamper ? this.pz(-0.92) : (isStorage ? this.pz(-1.16) : (floor.hasAnnexBalconies ? this.pz(-1.78) : this.pz(-1.55)))))));
+    const dimHInnerY = isGarage ? this.pz(-1.05) : (isArmor ? this.pz(-0.68) : (isContainer ? this.pz(-0.42) : (isKei ? this.pz(-0.34) : (isCamper ? this.pz(-0.46) : (isStorage ? this.pz(-0.84) : (floor.hasAnnexBalconies ? this.pz(-1.52) : this.pz(-0.78)))))));
+    const dimVOuterX = isGarage ? this.px(-2.05) : (isArmor ? this.px(-1.62) : (isContainer ? this.px(-0.84) : (isKei ? this.px(-0.74) : (isCamper ? this.px(-1.08) : (isStorage ? this.px(-0.92) : (hasWestBal ? this.px(-1.95) : this.px(-1.52)))))));
+    const dimVInnerX = isGarage ? this.px(-1.05) : (isArmor ? this.px(-0.82) : (isContainer ? this.px(-0.46) : (isKei ? this.px(-0.42) : (isCamper ? this.px(-0.62) : (isStorage ? this.px(-0.48) : (hasWestBal ? this.px(-1.72) : this.px(-0.78)))))));
 
     dimH(0, bWidth, dimHOuterY, Math.round(bWidth * 1000).toLocaleString());
     const xs = axes.x;
@@ -1875,9 +2197,12 @@ export class ArchitecturalBlueprint2D {
     }
   }
 
-  _drawCameraMarker(g, isAnnex, isStorage, isCamper, isKei = false) {
-    const sx = isKei ? 0.74 : (isCamper ? 1.35 : (isStorage ? 0.65 : (isAnnex ? 2.50 : 1.62)));
-    const sz = isKei ? 1.72 : (isCamper ? 2.49 : (isStorage ? 0.53 : (isAnnex ? 5.80 : 6.25)));
+  _drawCameraMarker(g, isAnnex, isStorage, isCamper, isKei = false, floor = null) {
+    const isGarage = floor?.building === 'garage';
+    const isArmor = floor?.building === 'armor';
+    const isContainer = floor?.building === 'container';
+    const sx = isGarage ? 3.50 : (isArmor ? 1.55 : (isContainer ? 1.00 : (isKei ? 0.74 : (isCamper ? 1.35 : (isStorage ? 0.65 : (isAnnex ? 2.50 : 1.62))))));
+    const sz = isGarage ? 10.00 : (isArmor ? 4.15 : (isContainer ? 2.20 : (isKei ? 1.72 : (isCamper ? 2.49 : (isStorage ? 0.53 : (isAnnex ? 5.80 : 6.25))))));
     this.camGroup = el('g', { id: 'cam-marker' });
     this.camCone = el('g', { transform: `translate(${this.px(sx)}, ${this.pz(sz)}) rotate(90)` });
     this.camCone.appendChild(el('path', { d: 'M 0 0 L 42 -20 A 46 46 0 0 1 42 20 Z', fill: 'rgba(217, 70, 38, 0.24)', stroke: '#d94626', 'stroke-width': 0.9 }));
@@ -2393,9 +2718,381 @@ export class ArchitecturalBlueprint2D {
   }
 
   /**
-   * Bottom Engineering Section + JIS Title Block (All 18 Sheets):
-   * - On Camper Sheets (15 & 16): Draws 1/65 Longitudinal Section (L7,500 × H3,400mm)
-   * - On Building Sheets (0..14) & Kei Sheet (17): Draws 5-Unit + 9-Level Main Tower (B4F..RF) + 5-Stop ELV-1 Elevation!
+   * Dedicated Right-Column Pro Architectural Engineering Suite for Sheet 20 (GARAGE-200: 10×20×4.5m):
+   * 1) Transverse Steel Portal Cross-Section (W 10,000 × H 4,500 mm, H-beam trusses, 3t Crane, ARMOR-155 & CON-24 clearances)
+   * 2) North Industrial Facade Elevation (Galvalume corrugated siding, W5,800×H4,220 Motorized Roll-up Shutter DG-N)
+   * 3) Structural & Industrial MEP Specification Schedule
+   */
+  _drawGarageEngineeringView(svg, VW, VH) {
+    const g = el('g');
+    const colX = 592;
+    const colW = VW - colX - 28; // ~410px
+
+    // --- PANEL 1: TRANSVERSE STEEL PORTAL CROSS-SECTION (1/32, W 10,000 × H 4,500 mm) ---
+    const p1Y = 82;
+    const p1H = 290;
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: p1H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 23, fill: '#e6eef5', stroke: '#0f4c81', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: colX + 10, y: p1Y + 15, 'font-size': 8.2, 'font-weight': 700, fill: '#0f4c81' },
+      '① 鉄骨門型ラーメン 横断面図 — W 10,000 × H 4,500 mm（格納車両クリアランス検証）'));
+
+    const scX = 33.5; // 10.0m -> 335px
+    const scY = 38.0; // 4.50m -> 171px
+    const gx0 = colX + 34;
+    const glY = p1Y + 242;
+    const vx = (m) => gx0 + m * scX;
+    const vy = (m) => glY - m * scY;
+
+    // Ground & Reinforced 220mm Epoxy Concrete Slab
+    g.appendChild(el('rect', { x: gx0 - 12, y: glY, width: 10.0 * scX + 24, height: 10, fill: 'url(#hatch-ext)', stroke: '#1c1e22', 'stroke-width': 1.0 }));
+    g.appendChild(el('line', { x1: colX + 12, y1: glY, x2: colX + colW - 12, y2: glY, stroke: '#5a6354', 'stroke-width': 1.4 }));
+    // Outer Galvalume Steel Shell & Portal H-Beam Columns
+    g.appendChild(el('rect', { x: vx(0), y: vy(4.50), width: 10.0 * scX, height: 4.50 * scY, fill: '#f6f8fa', stroke: '#1c1e22', 'stroke-width': 1.6 }));
+    g.appendChild(el('rect', { x: vx(0), y: vy(4.50), width: 0.24 * scX, height: 4.50 * scY, fill: '#334155' }));
+    g.appendChild(el('rect', { x: vx(9.76), y: vy(4.50), width: 0.24 * scX, height: 4.50 * scY, fill: '#334155' }));
+    // Roof Steel Warren Truss (H = 4.28..4.50m -> Clear H = 4,280mm)
+    g.appendChild(el('rect', { x: vx(0.24), y: vy(4.50), width: 9.52 * scX, height: 0.22 * scY, fill: '#cbd5e1', stroke: '#0f4c81', 'stroke-width': 0.9 }));
+    for (let tx = 0.24; tx < 9.5; tx += 0.95) {
+      g.appendChild(el('line', { x1: vx(tx), y1: vy(4.28), x2: vx(tx + 0.475), y2: vy(4.50), stroke: '#0f4c81', 'stroke-width': 0.7 }));
+      g.appendChild(el('line', { x1: vx(tx + 0.475), y1: vy(4.50), x2: vx(tx + 0.95), y2: vy(4.28), stroke: '#0f4c81', 'stroke-width': 0.7 }));
+    }
+    // Overhead 3t Monorail Crane I-Beam & Trolley above Bay 1 (X = 3.60m)
+    g.appendChild(el('rect', { x: vx(3.35), y: vy(4.28), width: 0.50 * scX, height: 0.16 * scY, fill: '#f59e0b', stroke: '#92400e', 'stroke-width': 0.9 }));
+    // ARMOR-155 (W 3.10m × H 4.00m) Parked in Bay 1 (X = 2.05..5.15)
+    g.appendChild(el('rect', { x: vx(2.05), y: vy(4.00), width: 3.10 * scX, height: 3.06 * scY, rx: 3, fill: '#d6e3dc', stroke: '#065f46', 'stroke-width': 1.3 }));
+    g.appendChild(el('rect', { x: vx(2.05), y: vy(1.12), width: 0.36 * scX, height: 1.12 * scY, rx: 2, fill: '#1f2937' }));
+    g.appendChild(el('rect', { x: vx(4.79), y: vy(1.12), width: 0.36 * scX, height: 1.12 * scY, rx: 2, fill: '#1f2937' }));
+    g.appendChild(el('text', { x: vx(3.60), y: vy(2.55), 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 700, fill: '#065f46' }, 'ARMOR-155'));
+    g.appendChild(el('text', { x: vx(3.60), y: vy(2.10), 'text-anchor': 'middle', 'font-size': 5.8, 'font-family': 'monospace', fill: '#047857' }, 'W3100×H4000'));
+    // CON-24 (W 2.00m × H 3.00m) Parked in Bay 2 (X = 6.85..8.85)
+    g.appendChild(el('rect', { x: vx(6.85), y: vy(3.00), width: 2.00 * scX, height: 2.26 * scY, fill: '#e5e7eb', stroke: '#92400e', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: vx(6.78), y: vy(0.84), width: 0.26 * scX, height: 0.84 * scY, rx: 2, fill: '#1f2937' }));
+    g.appendChild(el('rect', { x: vx(8.66), y: vy(0.84), width: 0.26 * scX, height: 0.84 * scY, rx: 2, fill: '#1f2937' }));
+    g.appendChild(el('text', { x: vx(7.85), y: vy(1.90), 'text-anchor': 'middle', 'font-size': 6.2, 'font-weight': 700, fill: '#92400e' }, 'CON-24'));
+    g.appendChild(el('text', { x: vx(7.85), y: vy(1.48), 'text-anchor': 'middle', 'font-size': 5.5, 'font-family': 'monospace', fill: '#78350f' }, '2000×3000'));
+    // Clerestory High Windows on West & East Walls (H = 3.30..3.95m)
+    g.appendChild(el('rect', { x: vx(0.02), y: vy(3.95), width: 0.20 * scX, height: 0.65 * scY, fill: '#bae6fd', stroke: '#0284c7', 'stroke-width': 0.8 }));
+    g.appendChild(el('rect', { x: vx(9.78), y: vy(3.95), width: 0.20 * scX, height: 0.65 * scY, fill: '#bae6fd', stroke: '#0284c7', 'stroke-width': 0.8 }));
+    // Right Height Dimension
+    g.appendChild(el('line', { x1: vx(10.35), y1: vy(0), x2: vx(10.35), y2: vy(4.50), stroke: '#9c4722', 'stroke-width': 1.0 }));
+    g.appendChild(el('text', { x: vx(10.42), y: vy(4.42), 'font-size': 5.8, 'font-family': 'monospace', 'font-weight': 700, fill: '#9c4722' }, '+4500'));
+    g.appendChild(el('text', { x: vx(10.42), y: vy(2.20), 'font-size': 5.6, 'font-family': 'monospace', fill: '#0f4c81' }, 'CH4280'));
+    g.appendChild(el('text', { x: vx(5.00), y: glY + 26, 'text-anchor': 'middle', 'font-size': 6.8, 'font-family': 'monospace', 'font-weight': 700, fill: '#1c1e22' }, '全幅 W = 10,000 mm（第1格納 5,550 ｜ 第2整備 3,950）'));
+
+    // --- PANEL 2: NORTH FACADE ELEVATION (MOTORIZED ROLL-UP SHUTTER DG-N) ---
+    const p2Y = p1Y + p1H + 14;
+    const p2H = 264;
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 23, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p2Y + 15, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '② 北側外観立面図 — 角波ガルバリウム鋼板＋電動大型シャッター DG-N'));
+
+    const gl2 = p2Y + 224;
+    const vy2 = (m) => gl2 - m * 36.0;
+    g.appendChild(el('line', { x1: colX + 14, y1: gl2, x2: colX + colW - 14, y2: gl2, stroke: '#5a6354', 'stroke-width': 1.4 }));
+    g.appendChild(el('rect', { x: vx(0), y: vy2(4.50), width: 10.0 * scX, height: 4.50 * 36.0, fill: '#cfd6dd', stroke: '#1c1e22', 'stroke-width': 1.6 }));
+    // Corrugated vertical steel rib lines
+    for (let rx = 0.4; rx < 10.0; rx += 0.4) {
+      g.appendChild(el('line', { x1: vx(rx), y1: vy2(4.50), x2: vx(rx), y2: gl2, stroke: '#94a3b8', 'stroke-width': 0.5 }));
+    }
+    // Parapet Dark Steel Fascia
+    g.appendChild(el('rect', { x: vx(0), y: vy2(4.50), width: 10.0 * scX, height: 0.28 * 36.0, fill: '#1e293b' }));
+    // Giant Motorized Roll-up Shutter DG-N (X = 0.85..6.65 -> W 5,800 × H 4,220 mm)
+    g.appendChild(el('rect', { x: vx(0.85), y: vy2(4.22), width: 5.80 * scX, height: 4.22 * 36.0, fill: '#e2e8f0', stroke: '#0f4c81', 'stroke-width': 1.5 }));
+    for (let sy = 0.25; sy < 4.20; sy += 0.28) {
+      g.appendChild(el('line', { x1: vx(0.85), y1: vy2(sy), x2: vx(6.65), y2: vy2(sy), stroke: '#64748b', 'stroke-width': 0.65 }));
+    }
+    g.appendChild(el('rect', { x: vx(0.80), y: vy2(4.42), width: 5.90 * scX, height: 0.22 * 36.0, fill: '#334155' }));
+    g.appendChild(el('rect', { x: vx(2.45), y: vy2(2.45), width: 2.60 * scX, height: 24, rx: 3, fill: 'rgba(255,255,255,0.92)', stroke: '#0f4c81', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: vx(3.75), y: vy2(2.45) + 10.5, 'text-anchor': 'middle', 'font-size': 6.6, 'font-weight': 800, fill: '#0f4c81' }, 'DG-N 自動電動シャッター'));
+    g.appendChild(el('text', { x: vx(3.75), y: vy2(2.45) + 19.5, 'text-anchor': 'middle', 'font-size': 5.8, 'font-family': 'monospace', fill: '#334155' }, 'W 5,800 × H 4,220 mm'));
+    // Yellow Safety Bollards & Garage Signage Plate
+    g.appendChild(el('rect', { x: vx(0.62), y: vy2(1.00), width: 0.14 * scX, height: 1.00 * 36.0, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: vx(6.74), y: vy2(1.00), width: 0.14 * scX, height: 1.00 * 36.0, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 0.7 }));
+    g.appendChild(el('rect', { x: vx(7.25), y: vy2(3.60), width: 2.20 * scX, height: 0.62 * 36.0, fill: '#1e293b', stroke: '#f59e0b', 'stroke-width': 1.0 }));
+    g.appendChild(el('text', { x: vx(8.35), y: vy2(3.22), 'text-anchor': 'middle', 'font-size': 6.8, 'font-weight': 800, fill: '#fde68a', 'font-family': 'monospace' }, 'GARAGE-200'));
+    g.appendChild(el('text', { x: vx(5.00), y: gl2 + 18, 'text-anchor': 'middle', 'font-size': 6.6, 'font-family': 'monospace', fill: '#475569' }, '車両接近自動センサー連動・貫通式前後ツイン電動シャッター'));
+
+    // --- PANEL 3: GARAGE-200 STRUCTURAL & MEP SPECIFICATION SCHEDULE ---
+    const p3Y = p2Y + p2H + 14;
+    const p3H = Math.max(190, VH - 234 - p3Y);
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: p3H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p3Y + 14.5, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '③ GARAGE-200 巨大車倉庫 構造・設備仕様表'));
+
+    const specs = [
+      ['建築外法・面積', 'W 10,000 × L 20,000 × H 4,500 mm（延床 200.00 m²）'],
+      ['主体構造', 'S造 H形鋼門型ラーメン（5.0mピッチ×5構面）＋鋼製トラス梁'],
+      ['外壁・屋根仕上', '耐候角波ガルバリウム鋼板（チャコールグレー）＋高窓採光帯'],
+      ['床・排水設備', '220mm耐荷重RC土間＋防塵エポキシ塗装＋中央油水分離溝'],
+      ['大型シャッター', '前後貫通2基 DG-N / DG-S（W5,800×H4,220 車両接近自動開閉）'],
+      ['荷役・整備設備', '天井3tモノレールクレーン・鋼製作業台・圧縮機・重量4段棚'],
+      ['格納収容能力', '15.5m装甲キャンパー ARMOR-155 ＋ 2×4×3m けん引コンテナ CON-24'],
+    ];
+    const rowH = Math.min(28, (p3H - 26) / specs.length);
+    specs.forEach(([k, v], i) => {
+      const ry = p3Y + 22 + i * rowH;
+      if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
+      g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.68, 'font-size': 6.7, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 94, y: ry + rowH * 0.68, 'font-size': 6.4, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+    });
+
+    svg.appendChild(g);
+  }
+
+  /**
+   * Dedicated Right-Column Pro Engineering Suite for Sheet 21 (ARMOR-155: 15.5×3.1×4.0m 1-Story Armored Camper):
+   * 1) 1/40 Longitudinal 8×8 Side Cutaway & Armored Elevation (L 15,500 × H 4,000 mm, Iron Shutters, Wood Secret Base, Rear Tow Hitch!)
+   * 2) 1/26 Transverse Cross-Section (W 3,100 × H 4,000 mm, Steel Armor Shell + Cedar Vault CH 2,760 + Sunken U-Pit!)
+   * 3) Armored Expedition Camper, Autonomous A* Navigation & Towing Specification Schedule
+   */
+  _drawArmorEngineeringView(svg, VW, VH) {
+    const g = el('g');
+    const colX = 372;
+    const colW = VW - colX - 28; // ~489px
+
+    // --- PANEL 1: 1/40 LONGITUDINAL 8×8 SIDE CUTAWAY (L 15,500 × H 4,000 mm) ---
+    const p1Y = 82;
+    const p1H = 278;
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: p1H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 23, fill: '#e8ecea', stroke: '#1e293b', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: colX + 10, y: p1Y + 15, 'font-size': 8.2, 'font-weight': 700, fill: '#1e293b' },
+      '① 側面縦断面・8×8重装甲立面図 — 全長 15,500 × 全高 4,000 mm（1階建・電動鉄シャッター）'));
+
+    const scL = 26.8; // 15.5m -> 415px
+    const scV = 42.0; // 4.00m -> 168px
+    const lx0 = colX + 26;
+    const glY = p1Y + 236;
+    const vx = (m) => lx0 + m * scL;
+    const vy = (m) => glY - m * scV;
+
+    g.appendChild(el('line', { x1: colX + 12, y1: glY, x2: colX + colW - 12, y2: glY, stroke: '#5a6354', 'stroke-width': 1.4 }));
+    // Heavy Bolted Steel Exterior Shell (y = 0.94..4.00m) + Warm Cedar Vaulted Interior (y = 0.94..3.70m -> CH2,760)
+    g.appendChild(el('rect', { x: vx(0), y: vy(4.00), width: 15.50 * scL, height: 3.06 * scV, rx: 3, fill: '#475569', stroke: '#0f172a', 'stroke-width': 1.8 }));
+    g.appendChild(el('rect', { x: vx(0.14), y: vy(3.70), width: 15.22 * scL, height: 2.76 * scV, fill: '#f3e5cf', stroke: '#7c5a38', 'stroke-width': 1.0 }));
+    // Heavy Steel Chassis Ladder Frame Rail + Front Bullbar + Rear Tow Pintle
+    g.appendChild(el('rect', { x: vx(-0.26), y: vy(1.60), width: 0.28 * scL, height: 0.72 * scV, fill: '#1e293b' }));
+    g.appendChild(el('rect', { x: vx(0.40), y: vy(0.94), width: 14.80 * scL, height: 0.24 * scV, fill: '#334155' }));
+    g.appendChild(el('circle', { cx: vx(15.85), cy: vy(0.84), r: 4.5, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 1.0 }));
+    // 4 Axles / 8×8 Giant Off-Road Tires (Ø1,120mm -> r = 0.56m)
+    ARMOR_CAMPER.axlesZ.forEach((az) => {
+      g.appendChild(el('circle', { cx: vx(az), cy: vy(0.56), r: 0.56 * scV * 0.78, fill: '#1f2428', stroke: '#475569', 'stroke-width': 1.4 }));
+      g.appendChild(el('circle', { cx: vx(az), cy: vy(0.56), r: 0.26 * scV * 0.78, fill: '#94a3b8' }));
+    });
+    // Minimal Ballistic Slit Windows + Motorized Iron Shutter Housings (3 small slits on side!)
+    [[0.70, 0.90, 1.32, 0.56], [6.75, 0.78, 1.58, 0.36], [11.45, 0.85, 1.56, 0.36]].forEach(([wz, ww, sill, wh]) => {
+      g.appendChild(el('rect', { x: vx(wz), y: vy(0.94 + sill + wh), width: ww * scL, height: wh * scV, fill: '#bae6fd', stroke: '#0f172a', 'stroke-width': 1.2 }));
+      g.appendChild(el('rect', { x: vx(wz) - 1, y: vy(0.94 + sill + wh + 0.16), width: ww * scL + 2, height: 0.16 * scV, fill: '#1e293b' }));
+    });
+    // Interior Zone Dividers & Key Secret-Base Features (Wood Stove + Chimney, Galley, Hinoki Pod, Bunk Cave, Airlock)
+    [2.50, 5.80, 8.60, 10.60, 13.50].forEach((dz, idx) => {
+      g.appendChild(el('line', { x1: vx(dz), y1: vy(3.70), x2: vx(dz), y2: vy(0.94), stroke: idx === 4 ? '#1e293b' : '#7c5a38', 'stroke-width': idx === 4 ? 1.8 : 0.9, 'stroke-dasharray': idx === 1 || idx === 2 ? '4 2' : 'none' }));
+    });
+    // Wood Stove & Roof Flue Chimney in Windowless Cedar Lounge (Z = 4.80m)
+    g.appendChild(el('rect', { x: vx(4.55), y: vy(1.90), width: 0.50 * scL, height: 0.96 * scV, fill: '#1e293b', stroke: '#b45309', 'stroke-width': 0.9 }));
+    g.appendChild(el('circle', { cx: vx(4.80), cy: vy(1.42), r: 4, fill: '#fb923c' }));
+    g.appendChild(el('rect', { x: vx(4.72), y: vy(4.32), width: 0.16 * scL, height: 2.42 * scV, fill: '#334155' }));
+    // Airlock Steel Entry Door (Z = 13.95..14.87)
+    g.appendChild(el('rect', { x: vx(13.95), y: vy(3.02), width: 0.92 * scL, height: 2.08 * scV, fill: '#cbd5e1', stroke: '#0f172a', 'stroke-width': 1.1 }));
+    // Zone Labels
+    [
+      [1.30, '①操縦'],
+      [4.15, '②薪ﾗｳﾝｼﾞ'],
+      [7.20, '③栗ｷｯﾁﾝ'],
+      [9.60, '④檜浴'],
+      [12.05, '⑤秘密寝室'],
+      [14.44, '⑥隔壁'],
+    ].forEach(([zm, lbl]) => {
+      g.appendChild(el('text', { x: vx(zm), y: vy(3.38), 'text-anchor': 'middle', 'font-size': 5.8, 'font-weight': 700, fill: '#4a3219' }, lbl));
+    });
+    // Right Height Scale
+    g.appendChild(el('text', { x: vx(15.70), y: vy(3.96), 'font-size': 5.6, 'font-family': 'monospace', 'font-weight': 700, fill: '#9c4722' }, '+4000'));
+    g.appendChild(el('text', { x: vx(15.70), y: vy(2.30), 'font-size': 5.4, 'font-family': 'monospace', fill: '#7c5a38' }, 'CH2760'));
+    g.appendChild(el('text', { x: vx(15.70), y: vy(0.94), 'font-size': 5.4, 'font-family': 'monospace', fill: '#334155' }, '+940'));
+    g.appendChild(el('text', { x: colX + colW / 2, y: glY + 24, 'text-anchor': 'middle', 'font-size': 6.6, 'font-family': 'monospace', fill: '#1c1e22' }, '全長 L = 15,500 mm（8×8 四軸駆動・重鉄外装・無窓中心の温もり木製秘密基地）'));
+
+    // --- PANEL 2: TRANSVERSE ARMORED SECTION (1/26, W 3,100 × H 4,000 mm) ---
+    const p2Y = p1Y + p1H + 14;
+    const p2H = 264;
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 23, fill: '#f5ece0', stroke: '#7c5a38', 'stroke-width': 0.8 }));
+    g.appendChild(el('text', { x: colX + 10, y: p2Y + 15, 'font-size': 8.2, 'font-weight': 700, fill: '#7c5a38' },
+      '② 装甲シェル＆木製秘密基地 横断面図 — W 3,100 × H 4,000 mm'));
+
+    const scBX = 50; // 3.10m -> 155px
+    const scBY = 48; // 4.00m -> 192px
+    const bx0 = colX + 46;
+    const gl2 = p2Y + 234;
+    const bvx = (m) => bx0 + m * scBX;
+    const bvy = (m) => gl2 - m * scBY;
+    g.appendChild(el('line', { x1: colX + 18, y1: gl2, x2: bx0 + 195, y2: gl2, stroke: '#5a6354', 'stroke-width': 1.3 }));
+    // Tires + Chassis + Steel Armor Outer Shell + Cedar Vaulted Timber Interior
+    g.appendChild(el('rect', { x: bvx(0.02), y: bvy(1.12), width: 0.36 * scBX, height: 1.12 * scBY, rx: 3, fill: '#1f2428' }));
+    g.appendChild(el('rect', { x: bvx(2.72), y: bvy(1.12), width: 0.36 * scBX, height: 1.12 * scBY, rx: 3, fill: '#1f2428' }));
+    g.appendChild(el('rect', { x: bvx(0), y: bvy(4.00), width: 3.10 * scBX, height: 3.06 * scBY, rx: 4, fill: '#475569', stroke: '#0f172a', 'stroke-width': 1.8 }));
+    g.appendChild(el('rect', { x: bvx(0.14), y: bvy(3.70), width: 2.82 * scBX, height: 2.76 * scBY, rx: 3, fill: '#f3e5cf', stroke: '#7c5a38', 'stroke-width': 1.2 }));
+    // Arched Cedar Vault Ribs
+    g.appendChild(el('path', {
+      d: `M ${bvx(0.14)} ${bvy(3.70)} L ${bvx(2.96)} ${bvy(3.70)} L ${bvx(2.96)} ${bvy(3.05)} Q ${bvx(1.55)} ${bvy(3.62)} ${bvx(0.14)} ${bvy(3.05)} Z`,
+      fill: '#d6b48c', stroke: '#7c5a38', 'stroke-width': 0.85,
+    }));
+    // Left & Right Leather U-Pit Sofas + Center Map Table + Standing Protagonist
+    g.appendChild(el('rect', { x: bvx(0.18), y: bvy(1.80), width: 0.68 * scBX, height: 0.86 * scBY, fill: '#b08968', stroke: '#5c4028', 'stroke-width': 0.8 }));
+    g.appendChild(el('rect', { x: bvx(2.24), y: bvy(1.80), width: 0.68 * scBX, height: 0.86 * scBY, fill: '#b08968', stroke: '#5c4028', 'stroke-width': 0.8 }));
+    g.appendChild(el('circle', { cx: bvx(1.55), cy: bvy(2.48), r: 5.5, fill: 'rgba(156,71,34,0.18)', stroke: '#9c4722', 'stroke-width': 1.0 }));
+    g.appendChild(el('rect', { x: bvx(1.37), y: bvy(2.38), width: 0.36 * scBX, height: 0.60 * scBY, rx: 4, fill: 'rgba(156,71,34,0.15)', stroke: '#9c4722', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: bvx(1.55), y: gl2 + 16, 'text-anchor': 'middle', 'font-size': 6.8, 'font-family': 'monospace', 'font-weight': 700, fill: '#1c1e22' }, '全幅 W = 3,100 mm (内幅 2,820)'));
+
+    // Right-Side Armor Callouts inside Panel 2
+    const c2X = bvx(3.38);
+    [
+      [bvy(3.85), '外装：高張力リベット鋼板装甲（耐衝撃・落石保護）', '#1e293b'],
+      [bvy(3.38), '内装：蜜蝋杉アーチ梁＋断熱木製秘密基地', '#7c5a38'],
+      [bvy(2.85), '電動鉄シャッター（全5スリット窓を一括完全閉鎖）', '#0f4c81'],
+      [bvy(2.30), '無窓ラウンジ＋鋳鉄薪ストーブ＋U字革ピット', '#b45309'],
+      [bvy(1.70), '既存RVと構造・間取り0%重複の完全独自1階設計', '#059669'],
+      [bvy(1.05), '最低地上高 +940mm（渡河・嵐・土砂崩れ走破）', '#475569'],
+    ].forEach(([cy, txt, col]) => {
+      g.appendChild(el('line', { x1: bvx(3.12), y1: cy, x2: c2X - 4, y2: cy, stroke: col, 'stroke-width': 0.8, 'stroke-dasharray': '2 2' }));
+      g.appendChild(el('text', { x: c2X, y: cy + 2.8, 'font-size': 6.6, 'font-weight': 700, fill: col }, txt));
+    });
+
+    // --- PANEL 3: ARMOR-155 SPECIFICATION SCHEDULE ---
+    const p3Y = p2Y + p2H + 14;
+    const p3H = Math.max(210, VH - 234 - p3Y);
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: p3H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p3Y + 14.5, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '③ ARMOR-155 重装甲秘密基地キャンパー 諸元＆自律航法仕様'));
+
+    const specs = [
+      ['車体寸法・階数', 'W 3,100 × L 15,500 × H 4,000 mm（完全1階建・天井高 CH 2,760mm）'],
+      ['外装・耐衝撃性', '全周リベット鋼板装甲・極少スリット窓＋一括電動鉄シャッター'],
+      ['内装・秘密基地', '6区画（操縦／無窓薪ラウンジ／栗厨房／檜浴ポッド／洞窟寝室／隔壁）'],
+      ['駆動・走破性能', '8×8 四軸駆動・Ø1,120mmオフロードタイヤ・嵐スリップ＆氾濫対応'],
+      ['コンテナけん引', '後部ピントルフックに 2×4×3m 倉庫コンテナ CON-24 を最大1台連結'],
+      ['内蔵A*自律航法', '2D本格地図より30地点＋自宅/軽/コンテナ/RVへ安全経路自動探索＆静粛自動運転'],
+    ];
+    const rowH = Math.min(34, (p3H - 26) / specs.length);
+    specs.forEach(([k, v], i) => {
+      const ry = p3Y + 22 + i * rowH;
+      if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
+      g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.66, 'font-size': 6.9, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 104, y: ry + rowH * 0.66, 'font-size': 6.5, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+    });
+
+    svg.appendChild(g);
+  }
+
+  /**
+   * Dedicated Right-Column Pro Engineering Suite for Sheet 22 (CON-24: 2.0×4.0×3.0m Towable Steel Container):
+   * 1) 1/32 Side Elevation & Drawbar Hitch Assembly (L 4,000 + Drawbar 1,250 × H 3,000 mm)
+   * 2) 1/26 Rear Cargo Cross-Section (W 2,000 × H 3,000 mm, Left/Right 3-Tier Racks + W760 Walkable Aisle)
+   * 3) Container Trailer Specification Schedule
+   */
+  _drawContainerEngineeringView(svg, VW, VH) {
+    const g = el('g');
+    const colX = 528;
+    const colW = VW - colX - 28; // ~409px
+
+    // --- PANEL 1: 1/32 SIDE ELEVATION & A-FRAME DRAWBAR ---
+    const p1Y = 82;
+    const p1H = 260;
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: p1H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p1Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p1Y + 14.5, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '① 側面立面図 (1/32) — 本体 L 4,000 (+牽引棒 1,250) × 全高 3,000 mm'));
+
+    const scS = 54; // 5.25m -> 283px
+    const sx0 = colX + 86;
+    const glY = p1Y + 216;
+    const vx = (m) => sx0 + m * scS;
+    const vy = (m) => glY - m * scS;
+
+    g.appendChild(el('line', { x1: colX + 14, y1: glY, x2: colX + colW - 14, y2: glY, stroke: '#5a6354', 'stroke-width': 1.4 }));
+    // Drawbar A-frame + Lunette Ring + Retractable Jockey Leg
+    g.appendChild(el('line', { x1: vx(-1.25), y1: vy(0.82), x2: vx(0), y2: vy(0.74), stroke: '#1e293b', 'stroke-width': 2.6 }));
+    g.appendChild(el('circle', { cx: vx(-1.25), cy: vy(0.82), r: 4.5, fill: '#f59e0b', stroke: '#1c1e22', 'stroke-width': 1.1 }));
+    g.appendChild(el('line', { x1: vx(-0.62), y1: vy(0.76), x2: vx(-0.62), y2: vy(0.05), stroke: '#64748b', 'stroke-width': 2.0, 'stroke-dasharray': '3 2' }));
+    // ISO Corrugated Container Box (y = 0.74..3.00m) + Chassis Frame
+    g.appendChild(el('rect', { x: vx(0), y: vy(3.00), width: 4.00 * scS, height: 2.26 * scS, fill: '#cbd5d0', stroke: '#1e293b', 'stroke-width': 1.7 }));
+    for (let cx = 0.25; cx < 4.00; cx += 0.25) {
+      g.appendChild(el('line', { x1: vx(cx), y1: vy(2.94), x2: vx(cx), y2: vy(0.80), stroke: '#8c9993', 'stroke-width': 0.7 }));
+    }
+    g.appendChild(el('rect', { x: vx(-0.04), y: vy(0.74), width: 4.08 * scS, height: 0.16 * scS, fill: '#334155' }));
+    // Tandem Off-Road Wheels (Ø840mm)
+    TOW_CONTAINER.axlesZ.forEach((az) => {
+      g.appendChild(el('circle', { cx: vx(az), cy: vy(0.42), r: 0.42 * scS, fill: '#1f2428', stroke: '#475569', 'stroke-width': 1.3 }));
+      g.appendChild(el('circle', { cx: vx(az), cy: vy(0.42), r: 0.20 * scS, fill: '#94a3b8' }));
+    });
+    g.appendChild(el('text', { x: vx(2.00), y: vy(1.90), 'text-anchor': 'middle', 'font-size': 7.4, 'font-weight': 800, fill: '#1e293b', 'font-family': 'monospace' }, 'CON-24 ISO STEEL'));
+    g.appendChild(el('text', { x: vx(4.12), y: vy(2.96), 'font-size': 6.0, 'font-family': 'monospace', 'font-weight': 700, fill: '#9c4722' }, '+3,000'));
+    g.appendChild(el('text', { x: vx(4.12), y: vy(0.74), 'font-size': 5.8, 'font-family': 'monospace', fill: '#334155' }, '+740'));
+    g.appendChild(el('text', { x: colX + colW / 2, y: glY + 22, 'text-anchor': 'middle', 'font-size': 6.6, 'font-family': 'monospace', fill: '#1c1e22' }, '牽引棒 1,250 ＋ コンテナ本体 4,000 ＝ 総長 5,250 mm'));
+
+    // --- PANEL 2: REAR CARGO CROSS-SECTION (W 2,000 × H 3,000 mm) ---
+    const p2Y = p1Y + p1H + 14;
+    const p2H = 240;
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: p2H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p2Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p2Y + 14.5, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '② 後部横断面図 (1/26) — W 2,000 × H 3,000 mm（進入通路＋3段棚）'));
+
+    const scR = 58; // 2.0m -> 116px, 3.0m -> 174px
+    const rx0 = colX + 146;
+    const gl2 = p2Y + 210;
+    const rvx = (m) => rx0 + m * scR;
+    const rvy = (m) => gl2 - m * scR;
+    g.appendChild(el('line', { x1: colX + 24, y1: gl2, x2: colX + colW - 24, y2: gl2, stroke: '#5a6354', 'stroke-width': 1.3 }));
+    g.appendChild(el('rect', { x: rvx(-0.08), y: rvy(0.84), width: 0.26 * scR, height: 0.84 * scR, rx: 2, fill: '#1f2428' }));
+    g.appendChild(el('rect', { x: rvx(1.82), y: rvy(0.84), width: 0.26 * scR, height: 0.84 * scR, rx: 2, fill: '#1f2428' }));
+    g.appendChild(el('rect', { x: rvx(0), y: rvy(3.00), width: 2.00 * scR, height: 2.26 * scR, fill: '#cbd5d0', stroke: '#1e293b', 'stroke-width': 1.6 }));
+    g.appendChild(el('rect', { x: rvx(0.08), y: rvy(2.92), width: 1.84 * scR, height: 2.18 * scR, fill: '#f8faf8', stroke: '#475569', 'stroke-width': 0.8 }));
+    // Left & Right 3-Tier Cargo Shelves
+    [1.30, 1.85, 2.40].forEach((sy) => {
+      g.appendChild(el('rect', { x: rvx(0.10), y: rvy(sy), width: 0.52 * scR, height: 3, fill: '#475569' }));
+      g.appendChild(el('rect', { x: rvx(1.38), y: rvy(sy), width: 0.52 * scR, height: 3, fill: '#475569' }));
+    });
+    // Center W760 Walkable Aisle + Standing Protagonist
+    g.appendChild(el('rect', { x: rvx(0.62), y: rvy(2.92), width: 0.76 * scR, height: 2.18 * scR, fill: 'rgba(16,185,129,0.08)', stroke: '#059669', 'stroke-width': 0.8, 'stroke-dasharray': '3 2' }));
+    g.appendChild(el('circle', { cx: rvx(1.00), cy: rvy(2.26), r: 5.5, fill: 'rgba(156,71,34,0.18)', stroke: '#9c4722', 'stroke-width': 1.0 }));
+    g.appendChild(el('rect', { x: rvx(0.82), y: rvy(2.14), width: 0.36 * scR, height: 0.62 * scR, rx: 4, fill: 'rgba(156,71,34,0.15)', stroke: '#9c4722', 'stroke-width': 0.9 }));
+    g.appendChild(el('text', { x: rvx(1.00), y: gl2 + 18, 'text-anchor': 'middle', 'font-size': 6.8, 'font-family': 'monospace', 'font-weight': 700, fill: '#1c1e22' }, '全幅 W = 2,000 mm（中央通路 W760 × CH2,180）'));
+
+    // --- PANEL 3: CON-24 SPECIFICATION SCHEDULE ---
+    const p3Y = p2Y + p2H + 14;
+    const p3H = Math.max(150, VH - 234 - p3Y);
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: p3H, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1.2 }));
+    g.appendChild(el('rect', { x: colX, y: p3Y, width: colW, height: 22, fill: '#efebe2', stroke: '#2c2f36', 'stroke-width': 0.75 }));
+    g.appendChild(el('text', { x: colX + 10, y: p3Y + 14.5, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' },
+      '③ CON-24 けん引式倉庫コンテナ 主要諸元表'));
+
+    const specs = [
+      ['本体寸法・内法', 'W 2,000 × L 4,000 × H 3,000 mm（内法 1,840×3,840×CH 2,180）'],
+      ['けん引構造', 'ARMOR-155 後部ピントル最大1台連結・Aフレーム＋可動ジャッキ脚'],
+      ['車軸・タイヤ', 'タンデム2軸オフロードサスペンション（Ø840mm）'],
+      ['内装・用途', 'アピトン合板床・左右3段耐震棚・非常発電機・燃料/食料備蓄'],
+      ['自律帰還目標', '山奥の任意地点に切離し配置可能・2D地図から自動帰還対象に指定可'],
+    ];
+    const rowH = Math.min(28, (p3H - 26) / specs.length);
+    specs.forEach(([k, v], i) => {
+      const ry = p3Y + 22 + i * rowH;
+      if (i % 2 === 1) g.appendChild(el('rect', { x: colX + 1, y: ry, width: colW - 2, height: rowH, fill: '#faf7f1' }));
+      g.appendChild(el('line', { x1: colX, y1: ry + rowH, x2: colX + colW, y2: ry + rowH, stroke: 'rgba(28,30,34,0.14)', 'stroke-width': 0.6 }));
+      g.appendChild(el('text', { x: colX + 8, y: ry + rowH * 0.68, 'font-size': 6.7, 'font-weight': 700, fill: '#4a4640' }, k));
+      g.appendChild(el('text', { x: colX + 92, y: ry + rowH * 0.68, 'font-size': 6.3, 'font-family': 'monospace', fill: '#1c1e22' }, v));
+    });
+
+    svg.appendChild(g);
+  }
+
+  /**
+   * Bottom Engineering Section + JIS Title Block (All 23 Sheets):
+   * - On Camper Sheets (17 & 18): Draws 1/65 Longitudinal Section (L7,500 × H3,400mm)
+   * - On Building/Garage/Armor/Container/Kei Sheets: Draws Compound Elevation (Annex | ELV-EXT | Main Tower 11L | Kei | RC Storage | RV | Garage-200)!
    */
   _drawTitleBlockAndSection(svg, floor, VW, VH, isCamper, isKei = false) {
     const baseTop = VH - 218;
@@ -2445,14 +3142,14 @@ export class ArchitecturalBlueprint2D {
       g.appendChild(el('text', { x: dxR + 5, y: vy(0.30), 'font-size': 6.2, 'font-family': 'monospace', fill: '#444' }, '+300'));
       g.appendChild(el('text', { x: vx(3.75), y: glY + 14, 'text-anchor': 'middle', 'font-size': 7.0, 'font-family': 'monospace', fill: '#1c1e22' }, '全長 L = 7,500 ｜ 全幅 W = 2,700 ｜ 拡幅廊下 W = 560 mm'));
     } else {
-      g.appendChild(el('text', { x: secX + 10, y: secY + 14, 'font-size': 7.4, 'font-weight': 700, fill: '#1c1e22' },
-        '全5拠点 断面比較（隣棟｜母屋11層 B4F極秘研〜6F+RF＋5停止ELV｜軽｜倉庫｜RV）'));
+      g.appendChild(el('text', { x: secX + 10, y: secY + 14, 'font-size': 7.1, 'font-weight': 700, fill: '#1c1e22' },
+        '全拠点 断面比較（隣棟｜ELV-EXT｜母屋11層+ELV Mk2｜倉庫｜巨大車倉庫10×20×4.5m）'));
 
-      const sx = (m) => secX + 100 + m * 9.4;
-      const sy = (m) => secY + 109 - m * 4.12; // Cleanly fits +20.42m lightning mast down to -15.60m ELV Pit!
+      const sx = (m) => secX + 82 + m * 7.6;
+      const sy = (m) => secY + 109 - m * 4.12;
 
       g.appendChild(el('line', { x1: secX + 10, y1: sy(0), x2: secX + secW - 10, y2: sy(0), stroke: '#5a6354', 'stroke-width': 1.4 }));
-      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 6.0, fill: '#5a6354' }, 'GL'));
+      g.appendChild(el('text', { x: secX + 12, y: sy(0) - 3, 'font-size': 5.8, fill: '#5a6354' }, 'GL'));
 
       // 1. Neighbor Annex (-7.6 .. -2.6, sheets 11..14)
       [
@@ -2462,19 +3159,26 @@ export class ArchitecturalBlueprint2D {
       ].forEach((b) => {
         const act = floor.sheetIndex === b.sIdx;
         g.appendChild(el('rect', {
-          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 9.4, height: sy(b.y0) - sy(b.y1),
+          x: sx(-7.6), y: sy(b.y1), width: 5.0 * 7.6, height: sy(b.y0) - sy(b.y1),
           fill: act ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
         }));
-        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 1.8, 'text-anchor': 'middle', 'font-size': 4.8, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
+        g.appendChild(el('text', { x: sx(-5.1), y: (sy(b.y0) + sy(b.y1)) / 2 + 1.8, 'text-anchor': 'middle', 'font-size': 4.6, 'font-weight': act ? 700 : 500, fill: act ? '#b9381c' : '#444' }, b.txt));
       });
       const arAct = floor.sheetIndex === 14;
       g.appendChild(el('polygon', {
         points: `${sx(-7.6)},${sy(8.15)} ${sx(-7.6)},${sy(9.55)} ${sx(-5.1)},${sy(10.95)} ${sx(-2.6)},${sy(9.55)} ${sx(-2.6)},${sy(8.15)}`,
         fill: arAct ? 'rgba(217, 70, 38, 0.25)' : '#f5f2eb', stroke: '#2c2f36', 'stroke-width': arAct ? 1.5 : 0.85,
       }));
-      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.05), 'text-anchor': 'middle', 'font-size': 4.6, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏'));
+      g.appendChild(el('text', { x: sx(-5.1), y: sy(9.05), 'text-anchor': 'middle', 'font-size': 4.4, 'font-weight': arAct ? 700 : 500, fill: arAct ? '#b9381c' : '#444' }, '屋根裏'));
 
-      // 2. Main Tower — ALL 11 LEVELS (B4F -14.2m -> B3F -10.2m -> B2F -6.6m -> B1F -2.4m -> 1F..6F -> RF +18.93m + Mast +20.42m)!
+      // 1b. Exterior Panoramic Attic Express Elevator Shaft ELV-EXT on West Facade (-1.55 .. 0.00, Y = -0.60 .. +19.35m)!
+      g.appendChild(el('rect', {
+        x: sx(-1.55), y: sy(19.35), width: 1.55 * 7.6, height: sy(-0.60) - sy(19.35),
+        fill: 'rgba(14, 165, 233, 0.22)', stroke: '#0284c7', 'stroke-width': 1.1,
+      }));
+      g.appendChild(el('text', { x: sx(-0.78), y: sy(8.5), 'text-anchor': 'middle', 'font-size': 4.2, 'font-weight': 700, fill: '#0369a1', transform: `rotate(-90 ${sx(-0.78)} ${sy(8.5)})` }, 'ELV-EXT (1F↔RF)'));
+
+      // 2. Main Tower — ALL 11 LEVELS (B4F -14.2m -> 6F -> RF +18.93m + Mast +20.42m)
       [
         { sIdx: 0, x0: 0.4, w: 3.1, y0: -14.20, y1: -10.65, txt: 'B4 極秘研', tx: 1.90 },
         { sIdx: 1, x0: -2.0, w: 11.2, y0: -10.20, y1: -6.60, txt: 'B3F 避難/ｻｳﾅ', tx: 6.40 },
@@ -2484,31 +3188,25 @@ export class ArchitecturalBlueprint2D {
         { sIdx: 5, x0: 0.0, w: 5.0, y0: 2.75, y1: 5.50, txt: '2F', tx: 2.50 },
         { sIdx: 6, x0: 0.0, w: 5.0, y0: 5.50, y1: 8.15, txt: '3F', tx: 2.50 },
         { sIdx: 7, x0: 0.0, w: 5.0, y0: 8.15, y1: 10.50, txt: '4F', tx: 2.50 },
-        { sIdx: 8, x0: 0.0, w: 5.0, y0: 10.50, y1: 13.25, txt: '5F スパ', tx: 2.50 },
-        { sIdx: 9, x0: 0.0, w: 5.0, y0: 13.25, y1: 16.10, txt: '6F 天文', tx: 2.50 },
+        { sIdx: 8, x0: 0.0, w: 5.0, y0: 10.50, y1: 13.25, txt: '5F', tx: 2.50 },
+        { sIdx: 9, x0: 0.0, w: 5.0, y0: 13.25, y1: 16.10, txt: '6F', tx: 2.50 },
       ].forEach((b) => {
         const act = b.sIdx === floor.sheetIndex;
         const fill = act
           ? (b.sIdx === 0 ? 'rgba(185, 28, 28, 0.32)' : 'rgba(217, 70, 38, 0.28)')
           : (b.sIdx === 0 ? '#f4d9dc' : (b.sIdx === 1 ? '#eadbc5' : (b.sIdx <= 3 ? '#dcdde0' : (b.sIdx >= 8 ? '#f4efe4' : '#f8f5ef'))));
         g.appendChild(el('rect', {
-          x: sx(b.x0), y: sy(b.y1), width: b.w * 9.4, height: sy(b.y0) - sy(b.y1),
+          x: sx(b.x0), y: sy(b.y1), width: b.w * 7.6, height: sy(b.y0) - sy(b.y1),
           fill, stroke: b.sIdx === 0 ? '#991b1b' : '#2c2f36', 'stroke-width': act ? 1.5 : 0.8,
         }));
-        g.appendChild(el('text', { x: sx(b.tx), y: (sy(b.y0) + sy(b.y1)) / 2 + 1.8, 'text-anchor': 'middle', 'font-size': 4.6, 'font-weight': (act || b.sIdx === 0) ? 700 : 500, fill: (act || b.sIdx === 0) ? '#991b1b' : '#3a3732' }, b.txt));
+        g.appendChild(el('text', { x: sx(b.tx), y: (sy(b.y0) + sy(b.y1)) / 2 + 1.8, 'text-anchor': 'middle', 'font-size': 4.4, 'font-weight': (act || b.sIdx === 0) ? 700 : 500, fill: (act || b.sIdx === 0) ? '#991b1b' : '#3a3732' }, b.txt));
       });
       // Vertical 5-Stop ELV-1 Mk2 Direct-to-Ground Shaft (B4F Pit -15.60m -> 1F +2.72m)!
       g.appendChild(el('rect', {
-        x: sx(3.45), y: sy(2.72), width: 1.45 * 9.4, height: sy(-15.60) - sy(2.72),
-        fill: 'rgba(16, 185, 129, 0.28)', stroke: '#059669', 'stroke-width': 1.2,
+        x: sx(3.45), y: sy(2.72), width: 1.45 * 7.6, height: sy(-15.60) - sy(2.72),
+        fill: 'rgba(16, 185, 129, 0.28)', stroke: '#059669', 'stroke-width': 1.1,
       }));
-      g.appendChild(el('text', { x: sx(4.18), y: sy(-6.2), 'text-anchor': 'middle', 'font-size': 4.6, 'font-weight': 700, fill: '#065f46', transform: `rotate(-90 ${sx(4.18)} ${sy(-6.2)})` }, 'ELV-1 Mk2 (5停止)'));
-
-      // Cantilevered 5F West Spa Deck silhouette (clearly clearing Neighbor Annex roof!)
-      g.appendChild(el('rect', {
-        x: sx(-1.00), y: sy(11.55), width: 1.00 * 9.4, height: sy(10.50) - sy(11.55),
-        fill: floor.sheetIndex === 8 ? 'rgba(217, 70, 38, 0.28)' : 'rgba(156,71,34,0.14)', stroke: '#9c4722', 'stroke-width': 0.8,
-      }));
+      g.appendChild(el('text', { x: sx(4.18), y: sy(-6.2), 'text-anchor': 'middle', 'font-size': 4.2, 'font-weight': 700, fill: '#065f46', transform: `rotate(-90 ${sx(4.18)} ${sy(-6.2)})` }, 'ELV-1 Mk2'));
 
       // Main Tower Gable Attic RF (sheet 10, +16.10..18.93m) + Rooftop Lightning Mast (+20.42m)
       const mAttAct = floor.sheetIndex === 10;
@@ -2516,43 +3214,37 @@ export class ArchitecturalBlueprint2D {
         points: `${sx(0)},${sy(16.10)} ${sx(0)},${sy(17.52)} ${sx(2.5)},${sy(18.93)} ${sx(5)},${sy(17.52)} ${sx(5)},${sy(16.10)}`,
         fill: mAttAct ? 'rgba(217, 70, 38, 0.25)' : '#f8f5ef', stroke: '#2c2f36', 'stroke-width': mAttAct ? 1.5 : 0.85,
       }));
-      g.appendChild(el('text', { x: sx(2.5), y: sy(16.95), 'text-anchor': 'middle', 'font-size': 4.6, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, 'RF'));
+      g.appendChild(el('text', { x: sx(2.5), y: sy(16.95), 'text-anchor': 'middle', 'font-size': 4.5, 'font-weight': mAttAct ? 700 : 500, fill: mAttAct ? '#b9381c' : '#444' }, 'RF'));
       g.appendChild(el('line', { x1: sx(2.5), y1: sy(18.93), x2: sx(2.5), y2: sy(20.42), stroke: '#9c4722', 'stroke-width': 1.0 }));
       g.appendChild(el('circle', { cx: sx(2.5), cy: sy(20.42), r: 1.5, fill: '#9c4722' }));
 
-      // 3. Daily Kei-Van (5.6..7.15, sheet 19)
-      g.appendChild(el('rect', { x: sx(5.6), y: sy(1.80), width: 1.55 * 9.4, height: sy(0.30) - sy(1.80), fill: isKei ? 'rgba(217,70,38,0.32)' : '#e6ece8', stroke: isKei ? '#b9381c' : '#1d7a8c', 'stroke-width': isKei ? 1.5 : 1.0 }));
-      g.appendChild(el('text', { x: sx(6.38), y: sy(2.85), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: isKei ? '#b9381c' : '#1d7a8c' }, '軽'));
+      // 3. Daily Kei-Van & Concrete Warehouse & RV
+      g.appendChild(el('rect', { x: sx(5.6), y: sy(1.80), width: 1.5 * 7.6, height: sy(0.30) - sy(1.80), fill: isKei ? 'rgba(217,70,38,0.32)' : '#e6ece8', stroke: isKei ? '#b9381c' : '#1d7a8c', 'stroke-width': isKei ? 1.5 : 0.9 }));
+      g.appendChild(el('rect', { x: sx(7.6), y: sy(4.28), width: 2.0 * 7.6, height: sy(0) - sy(4.28), fill: (floor.sheetIndex === 15 || floor.sheetIndex === 16) ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': 0.85 }));
+      // 4. Giant Steel Vehicle Garage GARAGE-200 (12.0..22.0, H4.5m, housing ARMOR-155 & CON-24!)
+      const isGarAct = floor.building === 'garage' || floor.building === 'armor' || floor.building === 'container';
+      g.appendChild(el('rect', { x: sx(12.0), y: sy(4.50), width: 10.0 * 7.6, height: sy(0) - sy(4.50), fill: isGarAct ? 'rgba(14,165,233,0.24)' : '#dce3ea', stroke: isGarAct ? '#0284c7' : '#334155', 'stroke-width': isGarAct ? 1.6 : 1.0 }));
+      g.appendChild(el('rect', { x: sx(14.0), y: sy(4.00), width: 3.1 * 7.6, height: sy(0.40) - sy(4.00), fill: floor.building === 'armor' ? 'rgba(16,185,129,0.45)' : 'rgba(16,185,129,0.22)', stroke: '#059669', 'stroke-width': 0.8 }));
+      g.appendChild(el('rect', { x: sx(18.8), y: sy(3.00), width: 2.0 * 7.6, height: sy(0.40) - sy(3.00), fill: floor.building === 'container' ? 'rgba(245,158,11,0.48)' : 'rgba(245,158,11,0.22)', stroke: '#b45309', 'stroke-width': 0.8 }));
+      g.appendChild(el('text', { x: sx(17.0), y: sy(5.65), 'text-anchor': 'middle', 'font-size': 4.9, 'font-weight': 700, fill: '#0f4c81' }, '巨大車倉庫 10×20×4.5m'));
 
-      // 4. Concrete Warehouse (7.8..9.8, sheets 15..16)
-      const s1Act = floor.sheetIndex === 15;
-      const s2Act = floor.sheetIndex === 16;
-      g.appendChild(el('rect', { x: sx(7.8), y: sy(2.12), width: 2.0 * 9.4, height: sy(0) - sy(2.12), fill: s1Act ? 'rgba(217,70,38,0.28)' : '#cfd4d9', stroke: '#2c2f36', 'stroke-width': s1Act ? 1.5 : 0.85 }));
-      g.appendChild(el('rect', { x: sx(7.8), y: sy(4.28), width: 2.0 * 9.4, height: sy(2.12) - sy(4.28), fill: s2Act ? 'rgba(217,70,38,0.28)' : '#c5cbd1', stroke: '#2c2f36', 'stroke-width': s2Act ? 1.5 : 0.85 }));
-      g.appendChild(el('text', { x: sx(8.8), y: sy(5.15), 'text-anchor': 'middle', 'font-size': 5.0, fill: '#3a3f46', 'font-weight': 600 }, '倉庫'));
-
-      // 5. Movable Giant Camper (10.6..13.3, sheets 17..18)
-      g.appendChild(el('rect', { x: sx(10.6), y: sy(3.40), width: 2.7 * 9.4, height: sy(0.30) - sy(3.40), fill: '#e5e9ee', stroke: '#9c4722', 'stroke-width': 1.0 }));
-      g.appendChild(el('text', { x: sx(11.95), y: sy(1.65), 'text-anchor': 'middle', 'font-size': 5.0, 'font-weight': 700, fill: '#9c4722' }, '巨大RV'));
-
-      g.appendChild(el('text', { x: sx(-5.1), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.3, 'font-weight': 700, fill: '#3d523a' }, '隣棟5×8m'));
-      g.appendChild(el('text', { x: sx(2.5), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.3, 'font-weight': 700, fill: '#1c1e22' }, '母屋11層(B4〜6F)'));
-      g.appendChild(el('text', { x: sx(10.6), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.1, 'font-weight': 700, fill: '#4f555c' }, '軽・RC倉庫・RV'));
+      g.appendChild(el('text', { x: sx(-5.1), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.1, 'font-weight': 700, fill: '#3d523a' }, '隣棟'));
+      g.appendChild(el('text', { x: sx(2.5), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.1, 'font-weight': 700, fill: '#1c1e22' }, '母屋11層+外部ELV'));
+      g.appendChild(el('text', { x: sx(17.0), y: secY + 184, 'text-anchor': 'middle', 'font-size': 5.1, 'font-weight': 700, fill: '#0f4c81' }, '車庫・装甲RV・コンテナ'));
 
       [
         [18.93, '+18.9m 棟'],
-        [13.25, '+13.3m 6F'],
-        [10.50, '+10.5m 5F'],
+        [16.10, '+16.1m RF'],
+        [4.50, '+4.5m 車庫'],
         [0.00, '±0.0m GL'],
-        [-6.60, '-6.6m B2'],
         [-10.20, '-10.2m B3'],
         [-14.20, '-14.2m B4'],
       ].forEach(([m, txt]) => {
-        g.appendChild(el('text', { x: secX + 266, y: m === 0 ? sy(m) - 2.0 : sy(m) + 1.8, 'font-size': 5.3, fill: m < -12 ? '#991b1b' : '#5b5852', 'font-weight': m < -12 ? 700 : 400, 'font-family': 'monospace' }, txt));
+        g.appendChild(el('text', { x: secX + 278, y: m === 0 ? sy(m) - 2.0 : sy(m) + 1.8, 'font-size': 5.1, fill: m < -12 ? '#991b1b' : '#5b5852', 'font-weight': m < -12 ? 700 : 400, 'font-family': 'monospace' }, txt));
       });
     }
 
-    // --- JIS Title Block (All 20 Sheets!) ---
+    // --- JIS Title Block (All 23 Sheets!) ---
     const tbX = 394;
     const tbW = VW - tbX - 28;
     g.appendChild(el('rect', { x: tbX, y: baseTop, width: tbW, height: secH, fill: '#fff', stroke: '#2c2f36', 'stroke-width': 1 }));
@@ -2560,14 +3252,14 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 8.2, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 (地下4層極秘研+B3Fサーマル＆食料拡張+地上6階+ELV Mk2) ｜ 隣棟 ｜ 倉庫 ｜ RV ｜ 軽'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.1, 'font-weight': 700, fill: floor.isDeepB4 ? '#991b1b' : '#9c4722' }, `図面名称 : ${floor.titleJp}`));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.3, fill: '#5b5852' }, '全20図面 : 母屋11層(B4極秘研〜6F+RF) ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 巨大RV ｜ 軽バン(1/20)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.2, fill: '#991b1b', 'font-weight': 700 }, 'B4F 極秘研究所 : B3F直下4.0m (-14.2m)・ELV専用(階段なし)・2.7×15.5m CH3.55m 5区画'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.2, fill: '#0f4c81', 'font-weight': 700 }, 'ELV-1 Mk2 & 地上6階 : 5停止(1F〜B4)・14.2m行程・7相S字・可動ブレーキ ｜ 5Fサウナ温室・6F天文サロン(H18.93m)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.2, fill: '#1d7a8c' }, 'B3F拡張141m² : 第1/第2食料備蓄庫(2×6m+2×7m)・防音ワーク室(3×4m)・準備室・3サウナ(4×5/2×3/3×4m)・檜＆14℃水風呂'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.2, fill: '#1c1e22' }, floor.isDeepB4 ? '縮尺 : B4F平面 1/85 ｜ 縦断面A-A\' 1/55 ｜ 横断面B-B\' 1/20 ｜ 唯一到達 ELV-1' : (floor.isDeepB3 ? '縮尺 : B3F拡張平面 1/125 ｜ ELV-1 Mk2機構縦断面 1/42 ｜ 5停止昇降行程 14,200 mm' : (isKei ? '縮尺 : 平面 1/20 ｜ 側面断面 1/30 ｜ 後部断面 1/26 ｜ 2D SAT 厳格衝突判定' : '縮尺 : S = 1/50〜1/100 (倉庫 1/28・RV 1/34・軽 1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 7.1, fill: '#6c665d' }, '母屋B4F極秘研〜6F+RF＋B3Fサーマル＆食料大拡張＋超精密5停止ELV・隣棟・RC倉庫・巨大RV・軽バン 全20図面＆一人称探索'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 7.8, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 (母屋11層+外部ELV-EXT+車倉庫10×20×4.5m+装甲RV15.5m+コンテナ+隣棟+軽)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.0, 'font-weight': 700, fill: floor.isDeepB4 ? '#991b1b' : '#9c4722' }, `図面名称 : ${floor.titleJp}`));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.1, fill: '#5b5852' }, '全23図面 : 母屋11層 ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 既存RV2層 ｜ 軽 ｜ 巨大車倉庫 ｜ 装甲RV ｜ けん引コンテナ'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.0, fill: '#0f4c81', 'font-weight': 700 }, 'GARAGE-200 & ELV-EXT : 10×20×4.5m鉄骨車倉庫(自動シャッター2基) ｜ 母屋西外壁 屋根裏直通外部ELV(+16.1m)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.0, fill: '#065f46', 'font-weight': 700 }, 'ARMOR-155 & CON-24 : 15.5×3.1×4.0m 重鉄外装・電動鉄シャッター・木製秘密基地6室＋2×4×3m けん引コンテナ'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.0, fill: '#1d7a8c' }, 'TERRENO 5×19km & A*自律走行 : 2D本格地図より30地点＋自宅/軽/コンテナ/RVへ自律航法・激しい嵐/河川氾濫/土砂崩れ対応'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.0, fill: '#1c1e22' }, floor.building === 'garage' ? '縮尺 : 車庫平面 1/100 ｜ 門型横断面 1/60 ｜ 北立面 1/65 ｜ 単位 : mm' : (floor.building === 'armor' ? '縮尺 : 装甲RV平面 1/75 ｜ 8×8縦断面 1/40 ｜ 横断面 1/26 ｜ 単位 : mm' : (floor.building === 'container' ? '縮尺 : コンテナ平面 1/28 ｜ 側面立面 1/32 ｜ 後部断面 1/26 ｜ 単位 : mm' : '縮尺 : S = 1/50〜1/100 (車庫1/100・装甲RV1/75・コンテナ1/28・軽1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 6.9, fill: '#6c665d' }, 'NARROW-50 全23図面・2本指自由ズーム/パン＆一括SVG/ZIP出力対応'));
 
     svg.appendChild(g);
   }
