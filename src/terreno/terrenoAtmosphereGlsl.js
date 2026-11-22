@@ -198,7 +198,7 @@ vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   float avgSunVis = 0.72;
 
   if (volWeight > 0.01) {
-    float marchDist = min(dist, 9500.0);
+    float marchDist = min(dist, 16500.0);
     float dStep = marchDist / 5.0;
     // Screen-space interleaved gradient dither removes any 5-step banding cleanly
     float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -244,8 +244,8 @@ vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   // Layer 3D billowing volumetric Sea-of-Clouds wisps & god-rays seamlessly on top!
   col = mix(col, col * volTrans + volScatter, volWeight * 0.88);
 
-  // Distant ridges shift gently toward sky horizon near the silhouette for seamless atmospheric blend
-  float horizonBlend = smoothstep(4200.0, 17500.0, dist);
+  // Distant ridges shift gently toward sky horizon near the silhouette for seamless 40 km atmospheric blend
+  float horizonBlend = smoothstep(7500.0, 34000.0, dist);
   vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.54) + mieTint * 0.74;
   col = mix(col, aerialCol, aerialFog);
 
@@ -292,7 +292,7 @@ vec3 applyTerrenoAtmosphereFast(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   vec3 valleyCol = mix(shadowedValley, sunlitValley, sunVis);
 
   vec3 col = mix(surfaceCol, valleyCol, valleyFog * 0.92);
-  float horizonBlend = smoothstep(4200.0, 17500.0, dist);
+  float horizonBlend = smoothstep(7500.0, 34000.0, dist);
   vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.54) + mieTint * 0.74;
   col = mix(col, aerialCol, aerialFog);
   return col;

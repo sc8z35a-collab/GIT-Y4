@@ -4,26 +4,28 @@ import {
   evalMainRiver,
 } from './terrenoConfig.js';
 import { AUTOPILOT_WAYPOINTS, DYNAMIC_TARGETS } from './terrenoAutopilot.js';
+import { VILLAGE } from '../villageData.js';
 
 /**
- * TERRENO Full-Screen Edge-to-Edge Authentic GSI 2D Topographic Map & 30-Waypoint Autonomous Route Selector.
+ * TERRENO Full-Screen Edge-to-Edge Authentic GSI 2D Topographic Map & 30-Waypoint Autonomous Route Selector (15km × 40km).
  *   - Oriented horizontally (North Left -> South Right) to fill 100% of widescreen POCO F7 landscape displays!
  *   - Hypsometric elevation tinting + NW hillshade + Sky-View gorge AO + crisp 50m/200m contour lines
- *   - Live 19km river (expands dynamically during storm flash-floods!), 19km forestry road, active landslide rings
+ *   - Live 40km river (expands dynamically during storm flash-floods!), 40km forestry road, Suginosato village & active landslide rings
  *   - 30 numbered safe destination pins (01..30) + 4 live asset pins (自宅 / 軽 / 箱 / RV)
- *   - Live glowing A* safe route path + smooth 1/2-finger pan & pinch zoom (0.8x..6.0x)
+ *   - Live glowing A* safe route path + smooth 1/2-finger pan & pinch zoom (0.85x..6.0x)
  *   - Zero sidebars, zero telemetry boxes, zero verbose text!
  */
 
 function hypsometricColor(asl) {
+  // Authentic Japanese GSI topographic hypsometric ramp (EL +260m .. +2,260m ASL)
   const stops = [
-    [320,  32,  66,  50],
+    [280,  34,  68,  52],
     [520,  46,  92,  60],
-    [760,  72, 118,  66],
-    [1020, 118, 138,  76],
-    [1260, 164, 146,  98],
-    [1440, 198, 178, 144],
-    [1680, 234, 228, 218],
+    [820,  72, 118,  66],
+    [1160, 118, 138,  76],
+    [1480, 164, 146,  98],
+    [1820, 198, 178, 144],
+    [2260, 238, 234, 226],
   ];
   if (asl <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
   for (let i = 0; i < stops.length - 1; i++) {
@@ -147,7 +149,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     const padY = 44;
     const availW = CW - padX * 2;
     const availH = CH - padY * 2;
-    const targetAspect = (19 / 5) * 0.62; // ~2.35 landscape aspect matching POCO F7!
+    const targetAspect = (40 / 15) * 0.85; // ~2.27 landscape aspect matching 15km×40km on POCO F7!
     let w = availW;
     let h = w / targetAspect;
     if (h > availH) {
@@ -408,7 +410,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     if (floodRise > 0.3) {
       ctx.save();
       ctx.beginPath();
-      for (let z = TERRENO_WORLD.minZ; z <= TERRENO_WORLD.maxZ; z += 180) {
+      for (let z = TERRENO_WORLD.minZ; z <= TERRENO_WORLD.maxZ; z += 260) {
         const rv = evalMainRiver(z);
         const p = worldToPx(rv.x, z);
         if (z === TERRENO_WORLD.minZ) ctx.moveTo(p.px, p.py);
@@ -434,23 +436,23 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       ctx.restore();
     }
 
-    // 3. Subtle 2 km Metric Grid
+    // 3. Subtle 3 km × 4 km Metric Grid across 15 km × 40 km
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.lineWidth = 0.8 * dpr;
-    for (let x = -2000; x <= 2000; x += 1000) {
+    for (let x = -6000; x <= 6000; x += 3000) {
       const a = worldToPx(x, TERRENO_WORLD.minZ);
       const b = worldToPx(x, TERRENO_WORLD.maxZ);
       ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
     }
-    for (let z = -6000; z <= 12000; z += 2000) {
+    for (let z = -12000; z <= 24000; z += 4000) {
       const a = worldToPx(TERRENO_WORLD.minX, z);
       const b = worldToPx(TERRENO_WORLD.maxX, z);
       ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
     }
     ctx.restore();
 
-    // 4. 19 km Graded Forestry Road (奥山林道)
+    // 4. 40 km Graded Forestry Road (奥山林道)
     ctx.save();
     ctx.beginPath();
     const rd = geomorph.roadDense;
@@ -482,7 +484,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       ctx.restore();
     }
 
-    // 6. Subtle Mountain Peak Triangles (▲ — geometry only, zero text bloat)
+    // 6. Subtle Mountain Peak Triangles (▲) & Suginosato 5-House Village Marker
     ctx.save();
     ctx.fillStyle = 'rgba(255, 243, 214, 0.72)';
     MOUNTAIN_PEAKS.forEach((pk) => {
@@ -495,9 +497,17 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       ctx.closePath();
       ctx.fill();
     });
+    const vp = worldToPx(VILLAGE.centerX, VILLAGE.centerZ);
+    ctx.fillStyle = 'rgba(52, 211, 153, 0.35)';
+    ctx.strokeStyle = '#34d399';
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.beginPath();
+    ctx.arc(vp.px, vp.py, 10.5 * dpr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
     ctx.restore();
 
-    // 7. 30 Numbered Selectable Waypoint Pins (01..30)
+    // 7. 30 Numbered Selectable Waypoint Pins (01..30 across full 40km road incl. Suginosato Village!)
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -573,7 +583,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     ctx.stroke();
     ctx.restore();
 
-    // Minimalist hairline frame + tiny North indicator (◄ N)
+    // Minimalist hairline frame
     ctx.strokeStyle = 'rgba(148, 184, 214, 0.40)';
     ctx.lineWidth = 1.1 * dpr;
     ctx.strokeRect(tl.px, tl.py, dw, dh);

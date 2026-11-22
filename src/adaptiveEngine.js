@@ -3,6 +3,8 @@
  * Demand-Driven Shadow Scheduler, and 6-Level Spatial Portal Light-Budget Culler (B1F..RF).
  */
 
+import { VILLAGE } from './villageData.js';
+
 const DRS_STEPS = [0.85, 1.0, 1.25, 1.5, 1.75, 2.0];
 
 export class AdaptiveMobileEngine {
@@ -73,14 +75,36 @@ export class AdaptiveMobileEngine {
     return new Set(b3Lights.slice(0, maxCount).map((e) => e.name));
   }
 
+  _getNearestVillageLightSet(px, pz, maxCount = 5) {
+    const vLights = [];
+    for (const entry of this.house.interiorLights) {
+      if ((entry.light.userData.building || 'main') === 'village') {
+        const dx = entry.light.position.x - px;
+        const dz = entry.light.position.z - pz;
+        vLights.push({ name: entry.name, d2: dx * dx + dz * dz });
+      }
+    }
+    vLights.sort((a, b) => a.d2 - b.d2);
+    return new Set(vLights.slice(0, maxCount).map((e) => e.name));
+  }
+
   snapFloorLights(floorIdx, activeBuilding = 'main', inElevator = false, playerX = 1.6, playerZ = 5.8, inExtElevator = false) {
     const elvStop = this.house.elevator ? this.house.elevator.currentStopFloor : -2;
+    const nearCompound = Math.hypot(playerX - 1.5, playerZ - 4.5) < 85.0;
+    const nearVillage = floorIdx === 1 && !inElevator && Math.hypot(playerX - VILLAGE.centerX, playerZ - VILLAGE.centerZ) < 95.0;
     const b3NearSet = (floorIdx === -2 && activeBuilding === 'main' && !inElevator)
       ? this._getNearestB3LightSet(playerX, playerZ, 5)
       : null;
+    const villageNearSet = nearVillage ? this._getNearestVillageLightSet(playerX, playerZ, 5) : null;
     for (const entry of this.house.interiorLights) {
       const b = entry.light.userData.building
         || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' ? entry.zone : 'main');
+      if (b === 'village') {
+        const activeV = Boolean(villageNearSet && villageNearSet.has(entry.name));
+        entry.light.intensity = activeV ? entry.baseInt : 0;
+        entry.light.visible = activeV;
+        continue;
+      }
       if (b === 'elevator') {
         const activeElv = inElevator || (activeBuilding === 'main' && floorIdx <= 1 && (floorIdx === elvStop));
         entry.light.intensity = activeElv ? entry.baseInt : 0;
@@ -99,11 +123,11 @@ export class AdaptiveMobileEngine {
         entry.light.visible = activeNear;
         continue;
       }
-      const sameBuilding = b === 'both'
+      const sameBuilding = (b === 'both' && nearCompound)
         || b === activeBuilding
         || (activeBuilding === 'garage' && b === 'garage')
         || (activeBuilding === 'container' && b === 'garage')
-        || (activeBuilding === 'courtyard' && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard' || b === 'garage'));
+        || (activeBuilding === 'courtyard' && nearCompound && (b === 'both' || entry.zone === 'exterior' || entry.zone === 'courtyard' || b === 'garage'));
       let active = entry.floor === floorIdx && sameBuilding;
       if (active && b3NearSet && b === 'main' && entry.floor === -2) {
         active = b3NearSet.has(entry.name);
@@ -174,9 +198,12 @@ export class AdaptiveMobileEngine {
     const elv = this.house.elevator;
     const elvStop = elv ? elv.currentStopFloor : -2;
     const elvOpenHere = Boolean(elv && elv.currentStopFloor === currentFloor && elv.doorProgress > 0.15);
+    const nearCompound = Math.hypot(playerX - 1.5, playerZ - 4.5) < 85.0;
+    const nearVillage = currentFloor === 1 && !inElevator && Math.hypot(playerX - VILLAGE.centerX, playerZ - VILLAGE.centerZ) < 95.0;
     const b3NearSet = (currentFloor === -2 && activeBuilding === 'main' && !inElevator)
       ? this._getNearestB3LightSet(playerX, playerZ, 5)
       : null;
+    const villageNearSet = nearVillage ? this._getNearestVillageLightSet(playerX, playerZ, 5) : null;
 
     for (const entry of this.house.interiorLights) {
       if (entry.name === 'Tatami_Lantern' && !propStates.lantern_1f) {
@@ -219,7 +246,12 @@ export class AdaptiveMobileEngine {
         || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' ? entry.zone : 'main');
       let weight = 0.0;
 
-      if (b === 'elevator') {
+      if (b === 'village') {
+        if (villageNearSet && villageNearSet.has(entry.name)) {
+          weight = 1.0;
+        }
+      } else if (b === 'elevator') {
+        // Elevator cab interior LED ceiling light: glows whenever player is inside cab OR doors are open on player's floor!
         if (inElevator) weight = 1.0;
         else if (activeBuilding === 'main' && currentFloor <= 1 && (elvOpenHere || currentFloor === elvStop)) weight = 0.85;
       } else if (b === 'ext_elv') {
@@ -237,14 +269,14 @@ export class AdaptiveMobileEngine {
           weight = elvOpenHere ? 0.95 : 0.35;
         }
       } else if (b === 'both') {
-        weight = currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0);
+        weight = nearCompound ? (currentFloor === 1 ? 1.0 : (currentFloor === 2 ? 0.35 : 0.0)) : 0.0;
       } else if (activeBuilding === 'courtyard') {
         const keiDoorOpen = Boolean(doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D']);
         if (b === 'kei' && keiDoorOpen) {
-          weight = 0.90;
-        } else if (entry.floor === 1 && entry.zone === 'exterior') {
+          weight = 0.90; // Authentic automatic dome light when opening Kei-Van cargo doors!
+        } else if (nearCompound && entry.floor === 1 && entry.zone === 'exterior') {
           weight = 1.0;
-        } else if (!keiDoorOpen && entry.floor === 1 && b === 'main' && entry.zone === 'ldk') {
+        } else if (nearCompound && !keiDoorOpen && entry.floor === 1 && b === 'main' && entry.zone === 'ldk') {
           weight = 0.42;
         }
       } else if (b === activeBuilding) {
@@ -267,7 +299,7 @@ export class AdaptiveMobileEngine {
         } else if (currentFloor > 0 && entry.floor > 0 && Math.abs(entry.floor - currentFloor) === 1 && entry.zone === 'north') {
           weight = 0.20;
         }
-      } else if (currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage' && b !== 'camper' && b !== 'kei') {
+      } else if (nearCompound && currentFloor === 1 && entry.floor === 1 && entry.zone === 'exterior' && b !== 'storage' && b !== 'camper' && b !== 'kei') {
         weight = 0.55;
       }
 

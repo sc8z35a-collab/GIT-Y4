@@ -325,7 +325,7 @@ void main() {
 `;
 
 function buildMainRiverGeometry(geomorph) {
-  const segsZ = 820;
+  const segsZ = 1600;
   const segsX = 16;
   const zMin = TERRENO_WORLD.minZ + 20;
   const zMax = TERRENO_WORLD.maxZ - 20;
@@ -398,7 +398,7 @@ function buildMainRiverGeometry(geomorph) {
 }
 
 function buildTributaryGeometry(geomorph, tr, ti) {
-  const segs = 46;
+  const segs = 72;
   const segsX = 4;
   const rv0 = evalMainRiver(tr.z0);
   const startLen = tr.len * 0.72;
@@ -408,7 +408,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
   for (let i = 0; i <= segs; i++) {
     const u = 1.0 - i / segs;
     const along = u * startLen;
-    const meander = Math.sin(along * 0.0045 + ti * 2.1) * 52.0 + Math.cos(along * 0.011) * 18.0;
+    const meander = Math.sin(along * 0.0028 + ti * 2.1) * 95.0 + Math.cos(along * 0.0072) * 32.0;
     const perpX = -tr.dirZ;
     const perpZ = tr.dirX;
     const wx = rv0.x + tr.dirX * along + perpX * meander;
@@ -417,8 +417,8 @@ function buildTributaryGeometry(geomorph, tr, ti) {
     if (i > 0) {
       accumDist += Math.hypot(wx - pts[i - 1].x, wz - pts[i - 1].z);
     }
-    const hw = Math.max(4.5, tr.width * 0.22 * (1.2 - 0.65 * u));
-    pts.push({ x: wx, z: wz, y: terrainY + 0.68, hw, flowDist: accumDist });
+    const hw = Math.max(5.5, tr.width * 0.22 * (1.25 - 0.60 * u));
+    pts.push({ x: wx, z: wz, y: terrainY + 0.72, hw, flowDist: accumDist });
   }
   for (let i = 1; i < pts.length; i++) {
     if (pts[i].y > pts[i - 1].y - 0.1) {
@@ -479,7 +479,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
 
 export function createTerrenoWater(geomorph, atmoUniforms) {
   const group = new THREE.Group();
-  group.name = 'TERRENO_Hydrology_19km';
+  group.name = 'TERRENO_Hydrology_40km';
 
   const waterMat = new THREE.ShaderMaterial({
     uniforms: {

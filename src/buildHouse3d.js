@@ -13,6 +13,7 @@ import { buildGarage3D } from './buildGarage3d.js';
 import { buildArmorCamperAndContainer3D } from './buildArmorCamper3d.js';
 import { buildExtElevator3D } from './buildExtElevator3d.js';
 import { createTerrenoEngine } from './terreno/terrenoEngine.js';
+import { buildVillage3D } from './buildVillage3d.js';
 
 export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
@@ -96,7 +97,7 @@ export function buildHouse3D(scene) {
     return light;
   }
 
-  function addInteractiveDoor(floorIdx, op, wall, baseY) {
+  function addInteractiveDoor(floorIdx, op, wall, baseY, jambParent = staticGroup) {
     const isH = wall.axis === 'h';
     const thick = isH ? wall.z2 - wall.z1 : wall.x2 - wall.x1;
     const centerOrtho = isH ? (wall.z1 + wall.z2) / 2 : (wall.x1 + wall.x2) / 2;
@@ -109,13 +110,13 @@ export function buildHouse3D(scene) {
       : (op.tex === 'door_white' ? mat.creamTrim : mat.walnut);
     const jambT = 0.032;
     if (isH) {
-      addBox(staticGroup, jambT, doorH, thick + 0.014, frameMat, op.pos + jambT / 2, sillY + doorH / 2, centerOrtho, false);
-      addBox(staticGroup, jambT, doorH, thick + 0.014, frameMat, op.pos + doorW - jambT / 2, sillY + doorH / 2, centerOrtho, false);
-      addBox(staticGroup, doorW, jambT, thick + 0.016, frameMat, op.pos + doorW / 2, sillY + doorH - jambT / 2, centerOrtho, false);
+      addBox(jambParent, jambT, doorH, thick + 0.014, frameMat, op.pos + jambT / 2, sillY + doorH / 2, centerOrtho, false);
+      addBox(jambParent, jambT, doorH, thick + 0.014, frameMat, op.pos + doorW - jambT / 2, sillY + doorH / 2, centerOrtho, false);
+      addBox(jambParent, doorW, jambT, thick + 0.016, frameMat, op.pos + doorW / 2, sillY + doorH - jambT / 2, centerOrtho, false);
     } else {
-      addBox(staticGroup, thick + 0.014, doorH, jambT, frameMat, centerOrtho, sillY + doorH / 2, op.pos + jambT / 2, false);
-      addBox(staticGroup, thick + 0.014, doorH, jambT, frameMat, centerOrtho, sillY + doorH / 2, op.pos + doorW - jambT / 2, false);
-      addBox(staticGroup, thick + 0.016, jambT, doorW, frameMat, centerOrtho, sillY + doorH - jambT / 2, op.pos + doorW / 2, false);
+      addBox(jambParent, thick + 0.014, doorH, jambT, frameMat, centerOrtho, sillY + doorH / 2, op.pos + jambT / 2, false);
+      addBox(jambParent, thick + 0.014, doorH, jambT, frameMat, centerOrtho, sillY + doorH / 2, op.pos + doorW - jambT / 2, false);
+      addBox(jambParent, thick + 0.016, jambT, doorW, frameMat, centerOrtho, sillY + doorH - jambT / 2, op.pos + doorW / 2, false);
     }
 
     const panelW = doorW - 0.05;
@@ -2317,6 +2318,19 @@ export function buildHouse3D(scene) {
   });
 
   // =========================================================================
+  // 10h. SUGINOSATO 5-HOUSE MOUNTAIN VILLAGE (杉ノ郷集落 — X=820, Z=1280, EL +514m)
+  // =========================================================================
+  const village = buildVillage3D({
+    scene,
+    dynamicGroup,
+    mat,
+    addCollider,
+    addLight,
+    addInteractiveDoor,
+    excludeBatch,
+  });
+
+  // =========================================================================
   // 11. POCO F7 (ADRENO 825) UV-BAKED CANONICAL STATIC GEOMETRY BATCHING
   // =========================================================================
   const { batchedGroup, stats: batchStats } = batchStaticGroups(
@@ -2325,6 +2339,7 @@ export function buildHouse3D(scene) {
   );
   root.add(batchedGroup);
 
+  // Combine batching stats across static buildings + deep basement + elevators + garage + vehicles + 5-house village
   const combinedBefore = batchStats.beforeMeshes
     + deepBasement.batchStats.beforeMeshes
     + elevator.batchStats.beforeMeshes
@@ -2333,7 +2348,8 @@ export function buildHouse3D(scene) {
     + armorCamper.batchStats.beforeMeshes
     + towContainer.batchStats.beforeMeshes
     + camper.batchStats.beforeMeshes
-    + kei.batchStats.beforeMeshes;
+    + kei.batchStats.beforeMeshes
+    + village.batchStats.beforeMeshes;
   const combinedAfter = batchStats.afterDrawCalls
     + deepBasement.batchStats.afterDrawCalls
     + elevator.batchStats.afterDrawCalls
@@ -2342,7 +2358,8 @@ export function buildHouse3D(scene) {
     + armorCamper.batchStats.afterDrawCalls
     + towContainer.batchStats.afterDrawCalls
     + camper.batchStats.afterDrawCalls
-    + kei.batchStats.afterDrawCalls;
+    + kei.batchStats.afterDrawCalls
+    + village.batchStats.afterDrawCalls;
   const combinedBatchStats = {
     beforeMeshes: combinedBefore,
     afterDrawCalls: combinedAfter,
@@ -2355,7 +2372,8 @@ export function buildHouse3D(scene) {
       + armorCamper.batchStats.totalTriangles
       + towContainer.batchStats.totalTriangles
       + camper.batchStats.totalTriangles
-      + kei.batchStats.totalTriangles,
+      + kei.batchStats.totalTriangles
+      + village.batchStats.totalTriangles,
   };
 
   return {
@@ -2376,6 +2394,7 @@ export function buildHouse3D(scene) {
     towContainer,
     elevator,
     extElevator,
+    village,
     b3Thermal: deepBasement.b3Thermal,
     b4Lab: deepBasement.b4Lab,
     terreno,

@@ -13,6 +13,9 @@ import {
 } from './planData.js';
 import { TERRENO_WORLD, TERRENO_LANDMARKS, evalMainRiver } from './terreno/terrenoConfig.js';
 import { AUTOPILOT_WAYPOINTS } from './terreno/terrenoAutopilot.js';
+import {
+  VILLAGE, VILLAGE_VEHICLE_OBSTACLES, isInsideVillagePaving, queryVillageHouseAt, isInVillagePrecinct,
+} from './villageData.js';
 
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -126,7 +129,9 @@ export class FirstPersonHouseExplorer {
     // Locked daylight alpine/deep-forest atmosphere (時間帯変更不可)
     this.currentTodId = 'day';
     this.lastNear = 0.14;
-    this.lastFar = 26000;
+    this.lastFar = 52000;
+    this._lastShadowTargetX = 0.5;
+    this._lastShadowTargetZ = 4.5;
     this._applyTimeOfDayLighting(this.terreno.getTimeOfDay());
 
     this._initEvents();
@@ -163,7 +168,7 @@ export class FirstPersonHouseExplorer {
 
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.14, 26000);
+    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.14, 52000);
     this.scene.add(this.camera);
   }
 
@@ -271,7 +276,7 @@ export class FirstPersonHouseExplorer {
     const underground = this.currentFloor <= 0;
     const outdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && !this.drivingVehicle;
     const targetNear = underground ? 0.06 : (outdoors ? 0.24 : 0.14);
-    const targetFar = underground ? 140 : 26000;
+    const targetFar = underground ? 140 : 52000;
     if (this.terreno) {
       this.terreno.setVisible(!underground);
     }
@@ -300,6 +305,9 @@ export class FirstPersonHouseExplorer {
       this._syncCameraFrustum();
       this.terreno.update(this.camera.position, 0, null);
     }
+    this._lastShadowTargetX = Number.NaN;
+    this._lastShadowTargetZ = Number.NaN;
+    if (this.adaptive) this.adaptive.markShadowsDirty();
   }
 
   teleportToLandmark(id) {
@@ -902,7 +910,7 @@ export class FirstPersonHouseExplorer {
     const prevCx = opts.prevCx ?? ncx;
     const prevCz = opts.prevCz ?? ncz;
 
-    // 1. Strict 5 km × 19 km TERRENO World Perimeter Check on all 4 OBB corners
+    // 1. Strict 15 km × 40 km TERRENO World Perimeter Check on all 4 OBB corners
     const corners = [[-hw, -hl], [hw, -hl], [-hw, hl], [hw, hl]];
     for (let i = 0; i < 4; i++) {
       const wx = ncx + corners[i][0] * c + corners[i][1] * s;
@@ -931,7 +939,7 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // 2. Exact SAT OBB vs Ground-Level Static Building & Giant Garage Wall AABBs (near compound only)
+    // 2. Exact SAT OBB vs Ground-Level Static Building, Giant Garage & Suginosato Village AABBs
     if (Math.abs(ncx - 6) < 28 && Math.abs(ncz - 4) < 28) {
       for (let i = 0; i < STATIC_VEHICLE_OBSTACLES.length; i++) {
         if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, STATIC_VEHICLE_OBSTACLES[i])) {
@@ -951,6 +959,12 @@ export class FirstPersonHouseExplorer {
           if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, d.collider)) {
             return { hit: true, reason: 'shutter', stepLift: 0 };
           }
+        }
+      }
+    } else if (Math.hypot(ncx - VILLAGE.centerX, ncz - VILLAGE.centerZ) < 70.0) {
+      for (let i = 0; i < VILLAGE_VEHICLE_OBSTACLES.length; i++) {
+        if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, VILLAGE_VEHICLE_OBSTACLES[i])) {
+          return { hit: true, reason: 'building', stepLift: 0 };
         }
       }
     }
@@ -1733,6 +1747,8 @@ export class FirstPersonHouseExplorer {
       if (x >= STORAGE.originX && x <= STORAGE.originX + STORAGE.width && z >= STORAGE.originZ && z <= STORAGE.originZ + STORAGE.depth) {
         return 'storage';
       }
+      const vh = queryVillageHouseAt(x, z);
+      if (vh && !vh.onPorch) return 'village';
       return 'courtyard';
     }
     if (this.currentFloor === 2) {
@@ -1924,12 +1940,18 @@ export class FirstPersonHouseExplorer {
       if (sx >= 0.0 && sx <= STORAGE.width && sz >= 0.0 && sz <= STORAGE.depth) {
         return 0.0;
       }
+      const vh = queryVillageHouseAt(x, z);
+      if (vh) return vh.floorY;
       if (this.terreno) {
         const groundY = this.terreno.getHeightAt(x, z);
+        if (isInsideVillagePaving(x, z)) {
+          return groundY + 0.05;
+        }
         const dComp = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
         // Smooth level transition around expanded garage apron too!
         const nearGarage = x >= 9.5 && x <= 24.5 && z >= -15.5 && z <= 19.5;
         if (nearGarage) return GARAGE.floorY;
+        // Exact -0.18m courtyard height right at NARROW-50, smoothly settling onto boots-on-ground across 15km×40km!
         const yardLift = dComp < 20.0 ? 0.17 : (dComp < 34.0 ? 0.17 - 0.15 * ((dComp - 20.0) / 14.0) : 0.02);
         return groundY + yardLift;
       }
@@ -2015,6 +2037,9 @@ export class FirstPersonHouseExplorer {
       if (sx >= 0.0 && sx <= STORAGE.width && sz >= 0.0 && sz <= STORAGE.depth) {
         return 'tile';
       }
+      const vh = queryVillageHouseAt(x, z);
+      if (vh) return vh.surface;
+      if (isInVillagePrecinct(x, z) && isInsideVillagePaving(x, z)) return 'tile';
       return 'earth';
     }
     if (this.currentFloor === 2) {
@@ -3061,7 +3086,6 @@ export class FirstPersonHouseExplorer {
         this.moonLight.target.position.set(tx, ty, tz);
         this.moonLight.position.set(tx + sd.x * 46.0, ty + sd.y * 46.0, tz + sd.z * 46.0);
         this.moonLight.target.updateMatrixWorld();
-
         // Real-time severe storm darkening + volumetric lightning illumination on Three.js scene lights!
         this.moonLight.intensity = tod.sunIntensity * (1.0 - stormInt * 0.72) + lightning * 3.8;
         this.hemiLight.intensity = tod.hemiIntensity * (1.0 - stormInt * 0.45) + lightning * 1.4;
@@ -3079,6 +3103,14 @@ export class FirstPersonHouseExplorer {
         if (this.scene.fog) {
           const af = this.terreno.atmoUniforms.uAerialFogColor.value;
           this.scene.fog.color.setRGB(af.r ?? af.x ?? 0.5, af.g ?? af.y ?? 0.6, af.b ?? af.z ?? 0.7);
+        }
+        if (
+          !Number.isFinite(this._lastShadowTargetX) ||
+          Math.hypot(tx - this._lastShadowTargetX, tz - this._lastShadowTargetZ) > 9.0
+        ) {
+          this._lastShadowTargetX = tx;
+          this._lastShadowTargetZ = tz;
+          if (this.adaptive) this.adaptive.markShadowsDirty();
         }
       }
 
@@ -3125,7 +3157,7 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all compound units
+    // Acoustic occlusion across all compound units, vehicles, garage & Suginosato 5-House Village
     if (this.currentFloor <= 0) {
       this.audio.updateOcclusion(0.015);
     } else if (this.activeBuilding === 'armor') {
@@ -3137,6 +3169,9 @@ export class FirstPersonHouseExplorer {
     } else if (this.activeBuilding === 'garage') {
       const gateOpen = doorOpenMap['DG-N'] || doorOpenMap['DG-S'] || doorOpenMap['DG-W'];
       this.audio.updateOcclusion(gateOpen ? 0.72 : 0.25);
+    } else if (this.activeBuilding === 'village') {
+      const vDoorOpen = doorOpenMap['DV1-1'] || doorOpenMap['DV2-1'] || doorOpenMap['DV3-1'] || doorOpenMap['DV4-1'] || doorOpenMap['DV5-1'];
+      this.audio.updateOcclusion(vDoorOpen ? 0.72 : 0.28);
     } else if (this.activeBuilding === 'kei') {
       const keiOpen = doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D'];
       this.audio.updateOcclusion(keiOpen ? 0.72 : 0.22);
@@ -3292,7 +3327,22 @@ export class FirstPersonHouseExplorer {
       return aFloor.rooms[0] || null;
     }
 
+    if (this.activeBuilding === 'village') {
+      const vh = queryVillageHouseAt(x, z);
+      if (vh) {
+        return { id: vh.room.id, code: vh.room.code, floor: 1, building: 'village', nameJp: vh.room.nameJp };
+      }
+      return { id: 'village_house', code: '杉ノ郷', floor: 1, building: 'village', nameJp: '杉ノ郷集落 民家' };
+    }
+
     if (this.currentFloor === 1 && this.activeBuilding === 'courtyard') {
+      const vhPorch = queryVillageHouseAt(x, z);
+      if (vhPorch) {
+        return { id: vhPorch.room.id, code: vhPorch.room.code, floor: 1, building: 'courtyard', nameJp: vhPorch.room.nameJp };
+      }
+      if (isInVillagePrecinct(x, z)) {
+        return { id: 'village_plaza', code: '杉ノ郷', floor: 1, building: 'courtyard', nameJp: '杉ノ郷集落・石畳広場（標高 +514m・全5棟）' };
+      }
       const distBase = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
       if (this.terreno && distBase > 28.0) {
         const b = this.terreno.getBiomeInfoAt(x, z);

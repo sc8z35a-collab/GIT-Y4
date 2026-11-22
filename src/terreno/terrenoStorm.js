@@ -11,14 +11,14 @@ import { TERRENO_WORLD, evalMainRiver } from './terrenoConfig.js';
  */
 
 export const LANDSLIDE_SITES = [
-  { id: 'ls_1', x: -102, z: -660,  radius: 13.5, peakH: 1.55, slopeDirX: 0.85,  slopeDirZ: 0.25 },
-  { id: 'ls_2', x: -275, z: -1480, radius: 14.5, peakH: 1.75, slopeDirX: 0.88,  slopeDirZ: -0.20 },
-  { id: 'ls_3', x: -338, z: -2910, radius: 15.0, peakH: 1.80, slopeDirX: 0.76,  slopeDirZ: 0.42 },
-  { id: 'ls_4', x: 405,  z: -4510, radius: 14.0, peakH: 1.70, slopeDirX: -0.82, slopeDirZ: 0.30 },
-  { id: 'ls_5', x: -176, z: 540,   radius: 13.5, peakH: 1.60, slopeDirX: 0.90,  slopeDirZ: 0.15 },
-  { id: 'ls_6', x: -252, z: 1310,  radius: 14.5, peakH: 1.75, slopeDirX: 0.86,  slopeDirZ: 0.22 },
-  { id: 'ls_7', x: -432, z: 2390,  radius: 15.0, peakH: 1.85, slopeDirX: 0.80,  slopeDirZ: -0.32 },
-  { id: 'ls_8', x: -670, z: 4920,  radius: 16.0, peakH: 1.95, slopeDirX: 0.84,  slopeDirZ: 0.28 },
+  { id: 'ls_1', x:  -88, z:  -590,  radius: 13.5, peakH: 1.55, slopeDirX: 0.85,  slopeDirZ: 0.25 },
+  { id: 'ls_2', x: -215, z: -1580,  radius: 14.5, peakH: 1.75, slopeDirX: 0.88,  slopeDirZ: -0.20 },
+  { id: 'ls_3', x: -745, z: -4180,  radius: 15.0, peakH: 1.80, slopeDirX: 0.76,  slopeDirZ: 0.42 },
+  { id: 'ls_4', x:  905, z: -9420,  radius: 14.0, peakH: 1.70, slopeDirX: -0.82, slopeDirZ: 0.30 },
+  { id: 'ls_5', x:  432, z:   860,  radius: 13.5, peakH: 1.60, slopeDirX: 0.90,  slopeDirZ: 0.15 },
+  { id: 'ls_6', x:  290, z:  2680,  radius: 14.5, peakH: 1.75, slopeDirX: 0.86,  slopeDirZ: 0.22 },
+  { id: 'ls_7', x: -550, z:  5490,  radius: 15.0, peakH: 1.85, slopeDirX: 0.80,  slopeDirZ: -0.32 },
+  { id: 'ls_8', x: -1610, z: 9290,  radius: 16.0, peakH: 1.95, slopeDirX: 0.84,  slopeDirZ: 0.28 },
 ];
 
 const RAIN_VERT = /* glsl */ `

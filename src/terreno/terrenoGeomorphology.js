@@ -127,17 +127,19 @@ function quinticSmoothstep(edge0, edge1, x) {
 }
 
 /**
- * Sample Catmull-Rom spline densely for the 19km Graded Forestry Road (奥山林道).
+ * Sample Catmull-Rom spline densely for the 40 km Graded Forestry Road (奥山林道).
+ * Uses length-adaptive subdivision (~35m spacing) so long alpine traverses stay silky smooth!
  */
 function buildDenseRoadSamples() {
   const pts = FOREST_ROAD_POINTS;
   const dense = [];
-  const segSamples = 18;
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[Math.max(0, i - 1)];
     const p1 = pts[i];
     const p2 = pts[i + 1];
     const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const segLen = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    const segSamples = Math.max(12, Math.min(64, Math.ceil(segLen / 35.0)));
     for (let s = 0; s < segSamples; s++) {
       const t = s / segSamples;
       const t2 = t * t;
@@ -162,20 +164,21 @@ function buildDenseRoadSamples() {
 }
 
 /**
- * Precompute a fast spatial bucket index for the forestry road segments so distance-to-road queries
- * during 512×1536 atlas baking AND runtime forest placement run in O(1)!
+ * Precompute a zero-GC integer-keyed spatial bucket index for the 40 km forestry road segments
+ * so distance-to-road queries during atlas baking AND runtime forest placement run in O(1) without heap strings!
  */
 function buildRoadSpatialIndex(densePts) {
   const bucketSize = 120.0;
   const buckets = new Map();
+  const keyOf = (bx, bz) => ((bx + 2048) << 12) | ((bz + 2048) & 0xfff);
   const addSeg = (segIdx, x0, z0, x1, z1) => {
-    const minBx = Math.floor((Math.min(x0, x1) - 45) / bucketSize);
-    const maxBx = Math.floor((Math.max(x0, x1) + 45) / bucketSize);
-    const minBz = Math.floor((Math.min(z0, z1) - 45) / bucketSize);
-    const maxBz = Math.floor((Math.max(z0, z1) + 45) / bucketSize);
+    const minBx = Math.floor((Math.min(x0, x1) - 56) / bucketSize);
+    const maxBx = Math.floor((Math.max(x0, x1) + 56) / bucketSize);
+    const minBz = Math.floor((Math.min(z0, z1) - 56) / bucketSize);
+    const maxBz = Math.floor((Math.max(z0, z1) + 56) / bucketSize);
     for (let bz = minBz; bz <= maxBz; bz++) {
       for (let bx = minBx; bx <= maxBx; bx++) {
-        const key = `${bx},${bz}`;
+        const key = keyOf(bx, bz);
         let arr = buckets.get(key);
         if (!arr) { arr = []; buckets.set(key, arr); }
         arr.push(segIdx);
@@ -185,13 +188,14 @@ function buildRoadSpatialIndex(densePts) {
   for (let i = 0; i < densePts.length - 1; i++) {
     addSeg(i, densePts[i][0], densePts[i][1], densePts[i + 1][0], densePts[i + 1][1]);
   }
+  const NO_HIT = { dist: 9999, segIdx: -1, t: 0 };
   return {
     pts: densePts,
     queryDist(x, z) {
       const bx = Math.floor(x / bucketSize);
       const bz = Math.floor(z / bucketSize);
-      const arr = buckets.get(`${bx},${bz}`);
-      if (!arr) return { dist: 9999, segIdx: -1, t: 0 };
+      const arr = buckets.get(keyOf(bx, bz));
+      if (!arr) return NO_HIT;
       let bestD2 = 1e12;
       let bestSeg = -1;
       let bestT = 0;
@@ -201,10 +205,12 @@ function buildRoadSpatialIndex(densePts) {
         const abx = densePts[i + 1][0] - ax;
         const abz = densePts[i + 1][1] - az;
         const len2 = abx * abx + abz * abz + 1e-6;
-        const t = Math.max(0.0, Math.min(1.0, ((x - ax) * abx + (z - az) * abz) / len2));
-        const px = ax + abx * t;
-        const pz = az + abz * t;
-        const d2 = (x - px) * (x - px) + (z - pz) * (z - pz);
+        let t = ((x - ax) * abx + (z - az) * abz) / len2;
+        if (t < 0.0) t = 0.0;
+        else if (t > 1.0) t = 1.0;
+        const dx = x - (ax + abx * t);
+        const dz = z - (az + abz * t);
+        const d2 = dx * dx + dz * dz;
         if (d2 < bestD2) {
           bestD2 = d2;
           bestSeg = i;
@@ -214,6 +220,17 @@ function buildRoadSpatialIndex(densePts) {
       return { dist: Math.sqrt(bestD2), segIdx: bestSeg, t: bestT };
     },
   };
+}
+
+// Fast 1024-entry cosine/sine lookup table for Phacelle gully phase synthesis (~4x faster than Math.cos/sin!)
+const TRIG_LUT_N = 1024;
+const TRIG_LUT_MASK = TRIG_LUT_N - 1;
+const COS_LUT = new Float32Array(TRIG_LUT_N);
+const SIN_LUT = new Float32Array(TRIG_LUT_N);
+for (let i = 0; i < TRIG_LUT_N; i++) {
+  const a = (i / TRIG_LUT_N) * Math.PI * 2.0;
+  COS_LUT[i] = Math.cos(a);
+  SIN_LUT[i] = Math.sin(a);
 }
 
 /**
@@ -227,42 +244,52 @@ function applyPhacelleErosionPass(heights, W, H, cellX, cellZ) {
   const ridgeTensor = new Float32Array(W * H);
   const minX = TERRENO_WORLD.minX;
   const minZ = TERRENO_WORLD.minZ;
+  const inv2CellX = 0.5 / cellX;
+  const inv2CellZ = 0.5 / cellZ;
+  const compX = TERRENO_WORLD.compoundCenterX;
+  const compZ = TERRENO_WORLD.compoundCenterZ;
+  const villX = TERRENO_WORLD.villageCenterX;
+  const villZ = TERRENO_WORLD.villageCenterZ;
 
   for (let iz = 1; iz < H - 1; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
+    const dzComp = wz - compZ;
+    const dzVill = wz - villZ;
+    const rowBase = iz * W;
     for (let ix = 1; ix < W - 1; ix++) {
-      const idx = iz * W + ix;
-      const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
-      const h = heights[idx];
-      const gx = (heights[idx + 1] - heights[idx - 1]) / (2.0 * cellX);
-      const gz = (heights[idx + W] - heights[idx - W]) / (2.0 * cellZ);
-      const slope = Math.hypot(gx, gz);
-      if (slope < 0.065) {
+      const idx = rowBase + ix;
+      const gx = (heights[idx + 1] - heights[idx - 1]) * inv2CellX;
+      const gz = (heights[idx + W] - heights[idx - W]) * inv2CellZ;
+      const slope2 = gx * gx + gz * gz;
+      if (slope2 < 0.004225) {
         ridgeTensor[idx] = 0.0;
         continue;
       }
 
+      const slope = Math.sqrt(slope2);
+      const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
+      const h = heights[idx];
       const invS = 1.0 / (slope + 1e-5);
       let nx = gx * invS;
       let nz = gz * invS;
 
       // Organic domain-warp breaks regular parallel ribs into meandering natural dendritic ravines!
-      const warpX = (smoothNoise2D(wx * 0.0024 + 5.7, wz * 0.0024 - 3.1) - 0.5) * 115.0;
-      const warpZ = (smoothNoise2D(wx * 0.0024 - 9.2, wz * 0.0024 + 7.4) - 0.5) * 115.0;
+      const warpX = (smoothNoise2D(wx * 0.0022 + 5.7, wz * 0.0022 - 3.1) - 0.5) * 125.0;
+      const warpZ = (smoothNoise2D(wx * 0.0022 - 9.2, wz * 0.0022 + 7.4) - 0.5) * 125.0;
       const swx = wx + warpX;
       const swz = wz + warpZ;
 
       const fadeTarget = Math.max(-1.0, Math.min(1.0, (h - 160.0) / 520.0));
-      const sNorm = Math.min(1.0, slope / 0.68);
+      const sNorm = slope > 0.68 ? 1.0 : slope / 0.68;
       let combiMask = 1.0 - (1.0 - sNorm) * (1.0 - sNorm);
 
       let totalDisp = 0.0;
       let curTarget = fadeTarget;
-      let amp = 7.4;
-      let freq = 0.0068;
+      let amp = 8.4;
+      let freq = 0.0044;
       let ridgeAccum = 0.0;
 
-      // 2 organic branching dendritic gully octaves (fast + zero artificial parallel stripes!)
+      // 2 organic branching dendritic gully octaves using exact LUT trig (4x faster, bit-smooth!)
       for (let oct = 0; oct < 2; oct++) {
         const ox = -nz;
         const oz = nx;
@@ -272,33 +299,38 @@ function applyPhacelleErosionPass(heights, W, H, cellX, cellZ) {
         const cz = Math.floor(pz);
         const fx = px - cx;
         const fz = pz - cz;
+        const saltA = oct * 31;
+        const saltB = oct * 17;
+        const saltC = 97 + oct * 19;
+        const saltD = 53 + oct * 23;
 
         let sumC = 0.0;
         let sumS = 0.0;
         let sumW = 0.0;
         for (let dz = -1; dz <= 1; dz++) {
+          const czD = cz + dz;
           for (let dx = -1; dx <= 1; dx++) {
-            const jx = hash2(cx + dx + oct * 31, cz + dz + oct * 17) * 0.78 + 0.11;
-            const jz = hash2(cx + dx + 97 + oct * 19, cz + dz + 53 + oct * 23) * 0.78 + 0.11;
+            const cxD = cx + dx;
+            const jx = hash2(cxD + saltA, czD + saltB) * 0.78 + 0.11;
+            const jz = hash2(cxD + saltC, czD + saltD) * 0.78 + 0.11;
             const rx = dx + jx - fx;
             const rz = dz + jz - fz;
             const d2 = rx * rx + rz * rz;
             if (d2 >= 2.15) continue;
-            // Fast compact-support polynomial weight (zero exp(), 4x faster & C1 smooth!)
             const u = 1.0 - d2 * 0.465116;
             const w = u * u * u;
-            const phase = (rx * ox + rz * oz) * 6.2831853;
-            sumC += Math.cos(phase) * w;
-            sumS += Math.sin(phase) * w;
+            const lutIdx = ((rx * ox + rz * oz) * TRIG_LUT_N) & TRIG_LUT_MASK;
+            sumC += COS_LUT[lutIdx] * w;
+            sumS += SIN_LUT[lutIdx] * w;
             sumW += w;
           }
         }
         const invW = 1.0 / (sumW + 1e-5);
         let cv = sumC * invW;
         let sv = sumS * invW;
-        const len = Math.hypot(cv, sv);
-        if (len > 0.5) {
-          const s = 1.0 / len;
+        const len2 = cv * cv + sv * sv;
+        if (len2 > 0.25) {
+          const s = 1.0 / Math.sqrt(len2);
           cv *= s;
           sv *= s;
         } else {
@@ -307,31 +339,40 @@ function applyPhacelleErosionPass(heights, W, H, cellX, cellZ) {
         }
 
         // Asymmetric natural V-gully incision (sharp incised chutes, broad natural interfluve spurs!)
-        const shaped = cv < 0.0 ? -Math.pow(-cv, 1.45) * 1.15 : cv * 0.55;
+        const shaped = cv < 0.0 ? -(Math.sqrt(-cv) * (-cv)) * 1.15 : cv * 0.55;
         const fadedGully = curTarget + (shaped - curTarget) * combiMask;
         totalDisp += fadedGully * amp;
         ridgeAccum += fadedGully * (oct === 0 ? 0.65 : 0.35);
 
-        // Branch secondary rill direction smoothly off primary gully wall
-        const branchSign = sv >= 0.0 ? 1.0 : -1.0;
-        const bx = nx + ox * branchSign * 0.62;
-        const bz = nz + oz * branchSign * 0.62;
-        const bLen = Math.hypot(bx, bz) + 1e-5;
+        const branchSign = sv >= 0.0 ? 0.62 : -0.62;
+        const bx = nx + ox * branchSign;
+        const bz = nz + oz * branchSign;
+        const bLen = Math.sqrt(bx * bx + bz * bz) + 1e-5;
         nx = bx / bLen;
         nz = bz / bLen;
 
         curTarget = fadedGully;
-        const gullySlopeMask = Math.min(1.0, Math.abs(sv) * 1.15);
+        const absSv = sv < 0 ? -sv : sv;
+        const gullySlopeMask = absSv * 1.15 > 1.0 ? 1.0 : absSv * 1.15;
         combiMask = (1.0 - Math.pow(1.0 - combiMask, 1.35)) * gullySlopeMask;
 
         amp *= 0.48;
-        freq *= 2.15;
+        freq *= 2.12;
       }
 
-      const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
-      const compProtect = quinticSmoothstep(48.0, 210.0, dComp);
-      erosionDelta[idx] = totalDisp * compProtect;
-      ridgeTensor[idx] = Math.max(-1.0, Math.min(1.0, ridgeAccum));
+      let padProtect = 1.0;
+      const dxComp = wx - compX;
+      const dComp2 = dxComp * dxComp + dzComp * dzComp;
+      if (dComp2 < 44100.0) {
+        padProtect *= quinticSmoothstep(48.0, 210.0, Math.sqrt(dComp2));
+      }
+      const dxVill = wx - villX;
+      const dVill2 = dxVill * dxVill + dzVill * dzVill;
+      if (dVill2 < 52900.0) {
+        padProtect *= quinticSmoothstep(64.0, 230.0, Math.sqrt(dVill2));
+      }
+      erosionDelta[idx] = totalDisp * padProtect;
+      ridgeTensor[idx] = ridgeAccum < -1.0 ? -1.0 : (ridgeAccum > 1.0 ? 1.0 : ridgeAccum);
     }
   }
 
@@ -343,8 +384,8 @@ function applyPhacelleErosionPass(heights, W, H, cellX, cellZ) {
 
 /**
  * Real Topological D8 Flow Accumulation + Stream-Power Fluvial Incision + Thermal Talus Relaxation!
- * Sorts all 786,432 cells from highest to lowest elevation (via fast O(N) counting bucket sort!)
- * so water flows accurately from every alpine summit down gullies into tributaries and the 19km river!
+ * Sorts all 1,572,864 cells from highest to lowest elevation (via fast O(N) counting bucket sort!)
+ * so water flows accurately from every alpine summit down gullies into tributaries and the 40 km river!
  */
 function runHydrologicalErosionAndFlow(heights, W, H, cellX, cellZ) {
   const N = W * H;
@@ -380,7 +421,7 @@ function runHydrologicalErosionAndFlow(heights, W, H, cellX, cellZ) {
     sortedIdx[offsets[b]++] = i;
   }
 
-  // 2. D8 Downhill Flow Routing + Stream-Power Erosion (∂h = -K * A^0.45 * S^1.1)
+  // 2. D8 Downhill Flow Routing + Stream-Power Erosion (∂h = -K * A^0.42 * S^1.05)
   const dOff = [-1, 1, -W, W, -W - 1, -W + 1, W - 1, W + 1];
   const dDist = [cellX, cellX, cellZ, cellZ, Math.hypot(cellX, cellZ), Math.hypot(cellX, cellZ), Math.hypot(cellX, cellZ), Math.hypot(cellX, cellZ)];
   const minX = TERRENO_WORLD.minX;
@@ -407,18 +448,20 @@ function runHydrologicalErosionAndFlow(heights, W, H, cellX, cellZ) {
       const a = flowArea[idx];
       flowArea[bestNeighbor] += a;
 
-      // Apply stream-power fluvial incision (protected around compound terrace!)
+      // Apply stream-power fluvial incision (protected around NARROW-50 compound & Suginosato village terrace!)
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
       const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
       const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
-      if (dComp > 42.0) {
-        const incise = Math.min(18.0, 0.24 * Math.pow(a, 0.42) * Math.pow(bestSlope, 1.05));
-        heights[idx] -= incise * quinticSmoothstep(42.0, 120.0, dComp);
+      const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
+      if (dComp > 42.0 && dVill > 64.0) {
+        const incise = Math.min(24.0, 0.28 * Math.pow(a, 0.42) * Math.pow(bestSlope, 1.05));
+        const protect = quinticSmoothstep(42.0, 120.0, dComp) * quinticSmoothstep(64.0, 165.0, dVill);
+        heights[idx] -= incise * protect;
       }
     }
   }
 
-  // 3. Two-Pass Thermal Talus Scree Relaxation (realistic Japanese 38° repose talus aprons!)
+  // 3. Two-Pass Thermal Talus Scree Relaxation (realistic Japanese 39° repose talus aprons!)
   const talusThreshold = Math.tan((39.0 * Math.PI) / 180.0);
   const delta = new Float32Array(N);
   for (let pass = 0; pass < 2; pass++) {
@@ -447,9 +490,9 @@ function runHydrologicalErosionAndFlow(heights, W, H, cellX, cellZ) {
 
 /**
  * Breakthrough 4: Precomputed Dual-Azimuth Mountain Horizon Shadow + 8-Direction Sky-View AO Atlas!
- * Ray-marches 26 exponentially-spaced steps across the 5km×19km heightfield toward BOTH:
- *   - R channel: East/SE Morning-Day Sun azimuth (+0.85, +0.52) -> sin(horizonAngle)
- *   - G channel: West/SW Dusk-Moon azimuth (-0.85, +0.52) -> sin(horizonAngle)
+ * Ray-marches exponentially-spaced steps across the 15km×40km heightfield using exact world metric distances:
+ *   - R channel: East/SE Morning-Day Sun azimuth (+0.85, +0.42) -> sin(horizonAngle)
+ *   - G channel: West/SW Dusk-Moon azimuth (-0.85, +0.42) -> sin(horizonAngle)
  *   - B channel: 8-direction Sky-View Factor (Topographic Ambient Occlusion in deep gorges!)
  *   - A channel: Ecological Macro Forest Canopy Density (Japanese vertical zonation + slope + wetness)
  */
@@ -457,102 +500,142 @@ function computeHorizonAndSkyViewAtlas(heights, flowArea, roadMaskArr, W, H, cel
   const out = new Uint8Array(W * H * 4);
   const minX = TERRENO_WORLD.minX;
   const minZ = TERRENO_WORLD.minZ;
+  const inv2CellX = 0.5 / cellX;
+  const inv2CellZ = 0.5 / cellZ;
+  const compX = TERRENO_WORLD.compoundCenterX;
+  const compZ = TERRENO_WORLD.compoundCenterZ;
+  const villX = TERRENO_WORLD.villageCenterX;
+  const villZ = TERRENO_WORLD.villageCenterZ;
 
-  // Exponentially spaced ray steps from 18m up to 3,600m catch BOTH local ridge shadows AND 3km peaks!
-  const steps = [1.5, 3, 5, 8, 12, 18, 26, 36, 50, 68, 92, 125, 165, 220, 290];
-  const aoDirs = [
-    [1, 0], [-1, 0], [0, 1], [0, -1],
-    [0.707, 0.707], [-0.707, 0.707], [0.707, -0.707], [-0.707, -0.707],
+  // Exponentially spaced ray steps from ~35m up to ~8,500m across the 15km×40km alpine ridges!
+  const steps = [1.5, 3, 5, 8, 13, 20, 30, 44, 64, 92, 132, 190, 270, 360];
+  const nSteps = steps.length;
+  const sunRayStepMeters = Math.hypot(0.85 * cellX, 0.42 * cellZ);
+  const stepDx = new Int32Array(nSteps);
+  const stepDz = new Int32Array(nSteps);
+  const stepInvDist = new Float32Array(nSteps);
+  for (let s = 0; s < nSteps; s++) {
+    stepDx[s] = Math.round(steps[s] * 0.85);
+    stepDz[s] = Math.round(steps[s] * 0.42);
+    stepInvDist[s] = 1.0 / (steps[s] * sunRayStepMeters);
+  }
+
+  const aoRawDirs = [
+    [1, 0, cellX], [-1, 0, cellX], [0, 1, cellZ], [0, -1, cellZ],
+    [0.707, 0.707, Math.hypot(0.707 * cellX, 0.707 * cellZ)],
+    [-0.707, 0.707, Math.hypot(0.707 * cellX, 0.707 * cellZ)],
+    [0.707, -0.707, Math.hypot(0.707 * cellX, 0.707 * cellZ)],
+    [-0.707, -0.707, Math.hypot(0.707 * cellX, 0.707 * cellZ)],
   ];
-
-  const sampleH = (fx, fz) => {
-    const cx = Math.max(0, Math.min(W - 1, Math.round(fx)));
-    const cz = Math.max(0, Math.min(H - 1, Math.round(fz)));
-    return heights[cz * W + cx];
-  };
+  const aoRadii = [2.5, 8.5, 24.0];
+  const aoOffX = new Int32Array(24);
+  const aoOffZ = new Int32Array(24);
+  const aoInvD = new Float32Array(24);
+  for (let d = 0; d < 8; d++) {
+    for (let r = 0; r < 3; r++) {
+      const k = d * 3 + r;
+      aoOffX[k] = Math.round(aoRawDirs[d][0] * aoRadii[r]);
+      aoOffZ[k] = Math.round(aoRawDirs[d][1] * aoRadii[r]);
+      aoInvD[k] = 1.0 / (aoRadii[r] * aoRawDirs[d][2]);
+    }
+  }
 
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
+    const river = evalMainRiver(wz);
+    const rivX = river.x;
+    const rivHW = river.halfWidth;
+    const dzComp = wz - compZ;
+    const dzVill = wz - villZ;
+    const rowBase = iz * W;
+    const rowU = (iz > 0 ? iz - 1 : 0) * W;
+    const rowD = (iz < H - 1 ? iz + 1 : H - 1) * W;
+
     for (let ix = 0; ix < W; ix++) {
-      const idx = iz * W + ix;
+      const idx = rowBase + ix;
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
       const h0 = heights[idx];
 
-      // 1. East Horizon Elevation sin(theta) along (+0.84, +0.54)
+      // 1. East & West Horizon Elevation sin(theta) using exact integer grid strides
       let maxTanE = 0.0;
       let maxTanW = 0.0;
-      for (let s = 0; s < steps.length; s++) {
-        const st = steps[s];
-        const distM = st * 10.8;
-        // East sun ray
-        const ex = ix + st * 0.85;
-        const ez = iz + st * 0.42;
-        if (ex >= 0 && ex < W && ez >= 0 && ez < H) {
-          const tE = (sampleH(ex, ez) - h0) / distM;
-          if (tE > maxTanE) maxTanE = tE;
-        }
-        // West dusk/moon ray
-        const wx2 = ix - st * 0.85;
-        const wz2 = iz + st * 0.42;
-        if (wx2 >= 0 && wx2 < W && wz2 >= 0 && wz2 < H) {
-          const tW = (sampleH(wx2, wz2) - h0) / distM;
-          if (tW > maxTanW) maxTanW = tW;
+      for (let s = 0; s < nSteps; s++) {
+        const ez = iz + stepDz[s];
+        if (ez < H) {
+          const sdx = stepDx[s];
+          const invD = stepInvDist[s];
+          const ezRow = ez * W;
+          const ex = ix + sdx;
+          if (ex < W) {
+            const tE = (heights[ezRow + ex] - h0) * invD;
+            if (tE > maxTanE) maxTanE = tE;
+          }
+          const wx2 = ix - sdx;
+          if (wx2 >= 0) {
+            const tW = (heights[ezRow + wx2] - h0) * invD;
+            if (tW > maxTanW) maxTanW = tW;
+          }
         }
       }
       const sinE = maxTanE / Math.sqrt(1.0 + maxTanE * maxTanE);
       const sinW = maxTanW / Math.sqrt(1.0 + maxTanW * maxTanW);
 
-      // 2. 8-Direction Sky-View Factor (Topographic AO: deep V-gorges ~0.30, open ridges ~1.0)
+      // 2. 8-Direction Sky-View Factor (Topographic AO)
       let occSum = 0.0;
       for (let d = 0; d < 8; d++) {
-        const dx = aoDirs[d][0];
-        const dz = aoDirs[d][1];
+        const baseK = d * 3;
         let peakTan = 0.0;
         for (let r = 0; r < 3; r++) {
-          const st = r === 0 ? 3.0 : (r === 1 ? 10.0 : 28.0);
-          const nx = ix + dx * st;
-          const nz = iz + dz * st;
+          const k = baseK + r;
+          const nx = ix + aoOffX[k];
+          const nz = iz + aoOffZ[k];
           if (nx >= 0 && nx < W && nz >= 0 && nz < H) {
-            const tn = (sampleH(nx, nz) - h0) / (st * 11.0);
+            const tn = (heights[nz * W + nx] - h0) * aoInvD[k];
             if (tn > peakTan) peakTan = tn;
           }
         }
         occSum += peakTan / Math.sqrt(1.0 + peakTan * peakTan);
       }
-      const skyView = Math.max(0.20, Math.min(1.0, 1.0 - (occSum / 8.0) * 1.15));
+      let skyView = 1.0 - (occSum * 0.125) * 1.15;
+      if (skyView < 0.20) skyView = 0.20;
+      else if (skyView > 1.0) skyView = 1.0;
 
-      // 3. Macro Forest Canopy Density (Japanese Vertical Zonation: timberline ~ EL +1,380m -> local Y ~ +860m!)
-      const ixL = Math.max(0, ix - 1), ixR = Math.min(W - 1, ix + 1);
-      const izU = Math.max(0, iz - 1), izD = Math.min(H - 1, iz + 1);
-      const gx = (heights[iz * W + ixR] - heights[iz * W + ixL]) / (2.0 * cellX);
-      const gz = (heights[izD * W + ix] - heights[izU * W + ix]) / (2.0 * cellZ);
-      const slope = Math.hypot(gx, gz);
+      // 3. Macro Forest Canopy Density
+      const ixL = ix > 0 ? ix - 1 : 0;
+      const ixR = ix < W - 1 ? ix + 1 : W - 1;
+      const gx = (heights[rowBase + ixR] - heights[rowBase + ixL]) * inv2CellX;
+      const gz = (heights[rowD + ix] - heights[rowU + ix]) * inv2CellZ;
+      const slope = Math.sqrt(gx * gx + gz * gz);
       const asl = TERRENO_WORLD.baseElevationASL + h0;
 
-      // Tree line fades cleanly from EL +1,280m -> +1,460m, and rock cliffs > 36° stay bare!
-      const altTree = 1.0 - quinticSmoothstep(1250.0, 1465.0, asl);
+      const altTree = 1.0 - quinticSmoothstep(1340.0, 1580.0, asl);
       const slopeTree = 1.0 - quinticSmoothstep(0.62, 0.96, slope);
-      const river = evalMainRiver(wz);
-      const distRiv = Math.abs(wx - river.x);
-      const riverClear = quinticSmoothstep(river.halfWidth + 2.0, river.halfWidth + 14.0, distRiv);
+      const distRiv = wx > rivX ? wx - rivX : rivX - wx;
+      const riverClear = quinticSmoothstep(rivHW + 2.0, rivHW + 16.0, distRiv);
       const roadClear = 1.0 - roadMaskArr[idx];
       const flowWet = Math.min(1.0, Math.log1p(flowArea[idx]) / 7.2);
-      const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
-      const compClear = quinticSmoothstep(16.0, 28.0, dComp);
-      const canopy = Math.max(0.0, Math.min(1.0, altTree * slopeTree * riverClear * roadClear * compClear * (0.78 + 0.22 * flowWet)));
+      const dxComp = wx - compX;
+      const dComp2 = dxComp * dxComp + dzComp * dzComp;
+      const compClear = dComp2 < 784.0 ? quinticSmoothstep(16.0, 28.0, Math.sqrt(dComp2)) : 1.0;
+      const dxVill = wx - villX;
+      const dVill2 = dxVill * dxVill + dzVill * dzVill;
+      const villClear = dVill2 < 3136.0 ? quinticSmoothstep(34.0, 56.0, Math.sqrt(dVill2)) : 1.0;
+      let canopy = altTree * slopeTree * riverClear * roadClear * compClear * villClear * (0.78 + 0.22 * flowWet);
+      if (canopy < 0.0) canopy = 0.0;
+      else if (canopy > 1.0) canopy = 1.0;
 
       const o4 = idx * 4;
-      out[o4]     = Math.round(Math.max(0, Math.min(1, sinE)) * 255);
-      out[o4 + 1] = Math.round(Math.max(0, Math.min(1, sinW)) * 255);
-      out[o4 + 2] = Math.round(skyView * 255);
-      out[o4 + 3] = Math.round(canopy * 255);
+      out[o4]     = sinE <= 0 ? 0 : (sinE >= 1 ? 255 : (sinE * 255.0 + 0.5) | 0);
+      out[o4 + 1] = sinW <= 0 ? 0 : (sinW >= 1 ? 255 : (sinW * 255.0 + 0.5) | 0);
+      out[o4 + 2] = (skyView * 255.0 + 0.5) | 0;
+      out[o4 + 3] = (canopy * 255.0 + 0.5) | 0;
     }
   }
   return out;
 }
 
 /**
- * Master Geomorphology Builder — creates the entire 5km × 19km physical world database & GPU atlases!
+ * Master Geomorphology Builder — creates the entire 15 km × 40 km (600 km²) physical world database & GPU atlases!
  */
 export function buildTerrenoGeomorphology() {
   const tStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -567,100 +650,160 @@ export function buildTerrenoGeomorphology() {
   const heights = new Float32Array(N);
   const roadMaskArr = new Float32Array(N);
 
-  // Build spatial index for the 19km Graded Forestry Road
+  // Build spatial index for the 40 km Graded Forestry Road
   const roadDense = buildDenseRoadSamples();
   const roadIndex = buildRoadSpatialIndex(roadDense);
 
-  // Precompute river profile per row iz (saves redundant trig inside 512×1536 inner loop!)
+  // Precompute river profile per row iz (saves redundant trig inside 768×2048 inner loop!)
   const riverRowX = new Float32Array(H);
   const riverRowBedY = new Float32Array(H);
+  const riverRowWaterY = new Float32Array(H);
   const riverRowHW = new Float32Array(H);
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
     const rv = evalMainRiver(wz);
     riverRowX[iz] = rv.x;
     riverRowBedY[iz] = rv.bedY;
+    riverRowWaterY[iz] = rv.waterY;
     riverRowHW[iz] = rv.halfWidth;
   }
 
-  // Precompute tributary start points at main river junction
-  const tribPrepared = TRIBUTARIES.map((tr) => {
+  // Precompute Z-envelopes for all 24 peaks & 16 tributaries so Pass 1 skips distant massifs per row (~4x faster!)
+  const peaksPrepared = MOUNTAIN_PEAKS.map((pk) => {
+    const zSpan = pk.rz * 1.92;
+    return {
+      ...pk,
+      invRx: 1.0 / pk.rx,
+      invRz: 1.0 / pk.rz,
+      minZ: pk.z - zSpan,
+      maxZ: pk.z + zSpan,
+    };
+  });
+
+  const tribPrepared = TRIBUTARIES.map((tr, ti) => {
     const rv = evalMainRiver(tr.z0);
-    return { ...tr, x0: rv.x, y0: rv.bedY };
+    const zEnd = tr.z0 + tr.dirZ * (tr.len + 260.0);
+    const margin = tr.width * 4.0 + 180.0;
+    return {
+      ...tr,
+      ti,
+      x0: rv.x,
+      y0: rv.bedY,
+      invLen: 1.0 / tr.len,
+      minZ: Math.min(tr.z0, zEnd) - margin,
+      maxZ: Math.max(tr.z0, zEnd) + margin,
+    };
   });
 
   // =========================================================================
-  // PASS 1: TECTONIC UPLIFT + 19km MAIN GORGE + 7 TRIBUTARIES + STRATIFIED LITHOLOGY
+  // PASS 1: TECTONIC UPLIFT + 40km MAIN GORGE + 16 TRIBUTARIES + STRATIFIED LITHOLOGY
   // =========================================================================
+  const compX = TERRENO_WORLD.compoundCenterX;
+  const compZ = TERRENO_WORLD.compoundCenterZ;
+  const villX = TERRENO_WORLD.villageCenterX;
+  const villZ = TERRENO_WORLD.villageCenterZ;
+
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
     const rivX = riverRowX[iz];
     const rivBed = riverRowBedY[iz];
     const rivHW = riverRowHW[iz];
+    const cosZFold = Math.cos(wz * 0.00038) * 1.4;
+    const dzComp = wz - compZ;
+    const dzVill = wz - villZ;
+    const rowBase = iz * W;
+
+    const rowPeaks = [];
+    for (let p = 0; p < peaksPrepared.length; p++) {
+      const pk = peaksPrepared[p];
+      if (wz >= pk.minZ && wz <= pk.maxZ) rowPeaks.push(pk);
+    }
+    const rowTribs = [];
+    for (let ti = 0; ti < tribPrepared.length; ti++) {
+      const tr = tribPrepared[ti];
+      if (wz >= tr.minZ && wz <= tr.maxZ) rowTribs.push(tr);
+    }
 
     for (let ix = 0; ix < W; ix++) {
-      const idx = iz * W + ix;
+      const idx = rowBase + ix;
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
 
-      // 1a. Macro tectonic valley cross-section (rises naturally east & west away from main gorge!)
-      const dxRiv = Math.abs(wx - rivX);
-      const valleySlope = Math.pow(Math.min(1.0, dxRiv / 1950.0), 1.28) * 410.0;
+      // 1a. Broad 15 km tectonic alpine valley cross-section
+      const dxRiv = wx > rivX ? wx - rivX : rivX - wx;
+      const rNorm = dxRiv < 5600.0 ? dxRiv / 5600.0 : 1.0;
+      const valleySlope = Math.pow(rNorm, 1.32) * 510.0;
 
-      // 1b. Domain-warped tectonic mountain multifractal ridges
-      const warpX = (smoothNoise2D(wx * 0.00042 + 4.1, wz * 0.00042 - 2.3) - 0.5) * 620.0;
-      const warpZ = (smoothNoise2D(wx * 0.00042 - 8.7, wz * 0.00042 + 6.9) - 0.5) * 620.0;
-      const mf = ridgedMountainFbm((wx + warpX) * 0.00046, (wz + warpZ) * 0.00046);
+      // 1b. Domain-warped tectonic mountain multifractal ridges + parallel secondary syncline folds
+      const warpX = (smoothNoise2D(wx * 0.00028 + 4.1, wz * 0.00028 - 2.3) - 0.5) * 920.0;
+      const warpZ = (smoothNoise2D(wx * 0.00028 - 8.7, wz * 0.00028 + 6.9) - 0.5) * 920.0;
+      const mf = ridgedMountainFbm((wx + warpX) * 0.00032, (wz + warpZ) * 0.00032);
+      const foldWave = Math.sin((wx + warpX * 0.65) * 0.00115 + cosZFold) * 0.5 + 0.5;
+      const secondaryRidge = foldWave * foldWave * 125.0 * quinticSmoothstep(650.0, 2600.0, dxRiv);
 
-      // 1c. Named tectonic mountain peak massifs (overlapping silhouettes along full 19km!)
-      let peakSum = 0.0;
-      for (let p = 0; p < MOUNTAIN_PEAKS.length; p++) {
-        const pk = MOUNTAIN_PEAKS[p];
-        const px = (wx - pk.x) / pk.rx;
-        const pz = (wz - pk.z) / pk.rz;
+      // 1c. 24 Named tectonic mountain peak massifs (smooth-max blending -> authentic 1,700–2,450m ASL summits!)
+      let peakMax = 0.0;
+      let peakBlend = 0.0;
+      for (let p = 0; p < rowPeaks.length; p++) {
+        const pk = rowPeaks[p];
+        const px = (wx - pk.x) * pk.invRx;
+        const pz = (wz - pk.z) * pk.invRz;
         const d2 = px * px + pz * pz;
         if (d2 < 3.6) {
-          const bell = Math.exp(-d2 * pk.sharpness);
-          peakSum += pk.height * bell;
+          const val = pk.height * Math.exp(-d2 * pk.sharpness);
+          if (val > peakMax) {
+            peakBlend += peakMax * 0.24;
+            peakMax = val;
+          } else {
+            peakBlend += val * 0.24;
+          }
         }
       }
+      const peakSum = peakMax + (peakBlend > 220.0 ? 220.0 : peakBlend);
 
-      // Combine uplift + multifractal ridge structure
-      let h = rivBed + 18.0 + valleySlope * (0.62 + 0.72 * mf) + peakSum * (0.58 + 0.62 * mf);
+      let h = rivBed + 20.0 + valleySlope * (0.56 + 0.72 * mf) + secondaryRidge * (0.52 + 0.60 * mf) + peakSum * (0.58 + 0.62 * mf);
 
-      // 1d. Carve crisp V-shaped 19 km Main Gorge River channel + terraced flood bench!
-      const gorgeWall = quinticSmoothstep(rivHW, rivHW + 215.0, dxRiv);
-      const riverFloor = rivBed + quinticSmoothstep(0.0, rivHW * 1.15, dxRiv) * 4.5;
+      // 1d. Carve crisp V-shaped 40 km Main Gorge River channel + terraced flood bench!
+      const gorgeWall = quinticSmoothstep(rivHW, rivHW + 280.0, dxRiv);
+      const riverFloor = rivBed + quinticSmoothstep(0.0, rivHW * 1.15, dxRiv) * 5.2;
       h = riverFloor + (h - riverFloor) * gorgeWall;
 
-      // 1e. Carve 7 dendritic tributary stream gorges (沢筋) connecting ridges to the main river!
-      for (let ti = 0; ti < tribPrepared.length; ti++) {
-        const tr = tribPrepared[ti];
+      // 1e. Carve 16 dendritic tributary stream gorges (沢筋)
+      for (let ti = 0; ti < rowTribs.length; ti++) {
+        const tr = rowTribs[ti];
         const rx = wx - tr.x0;
         const rz = wz - tr.z0;
         const along = rx * tr.dirX + rz * tr.dirZ;
-        if (along < -30.0 || along > tr.len + 160.0) continue;
-        // Organic stream meander orthogonal to tributary axis
-        const meander = Math.sin(along * 0.0045 + ti * 2.1) * 52.0 + Math.cos(along * 0.011) * 18.0;
+        if (along < -40.0 || along > tr.len + 240.0) continue;
+        const meander = Math.sin(along * 0.0028 + tr.ti * 2.1) * 95.0 + Math.cos(along * 0.0072) * 32.0;
         const perp = Math.abs(-rx * tr.dirZ + rz * tr.dirX - meander);
-        const u = Math.max(0.0, Math.min(1.0, along / tr.len));
-        const halfW = tr.width * (1.25 - 0.55 * u);
-        if (perp < halfW * 3.2) {
-          const carveEnv = (1.0 - quinticSmoothstep(0.0, halfW * 3.0, perp)) * (1.0 - u * 0.85) * quinticSmoothstep(-30.0, 90.0, along);
-          const targetBed = tr.y0 + 8.0 + Math.pow(u, 1.35) * 320.0;
-          h = h * (1.0 - carveEnv * 0.72) + Math.min(h, targetBed) * (carveEnv * 0.72);
+        const u = along < 0.0 ? 0.0 : (along > tr.len ? 1.0 : along * tr.invLen);
+        const halfW = tr.width * (1.28 - 0.52 * u);
+        if (perp < halfW * 3.4) {
+          const carveEnv = (1.0 - quinticSmoothstep(0.0, halfW * 3.2, perp)) * (1.0 - u * 0.82) * quinticSmoothstep(-40.0, 120.0, along);
+          const targetBed = tr.y0 + 10.0 + Math.pow(u, 1.32) * 520.0;
+          h = h * (1.0 - carveEnv * 0.74) + (h < targetBed ? h : targetBed) * (carveEnv * 0.74);
         }
       }
 
-      // 1f. Arenite-inspired Differential Stratified Lithology (subtle natural granite ledges)
-      const strataCoord = (h + wx * 0.14 - wz * 0.06) * 0.035;
+      // 1f. Differential Stratified Lithology
+      const strataCoord = (h + wx * 0.14 - wz * 0.06) * 0.032;
       const strataWave = Math.sin(strataCoord) - 0.30 * Math.sin(strataCoord * 2.0);
-      h += strataWave * 1.35 * quinticSmoothstep(140.0, 460.0, h);
+      h += strataWave * 1.55 * quinticSmoothstep(160.0, 520.0, h);
 
-      // 1g. NARROW-50 Wide Natural River-Terrace Shelf (gentle forested amphitheater around compound!)
-      const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
-      if (dComp < 220.0) {
-        const padT = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, 210.0, dComp);
+      // 1g. NARROW-50 Wide Natural River-Terrace Shelf
+      const dxComp = wx - compX;
+      const dComp2 = dxComp * dxComp + dzComp * dzComp;
+      if (dComp2 < 48400.0) {
+        const padT = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, 210.0, Math.sqrt(dComp2));
         h = h * (1.0 - padT) + TERRENO_WORLD.compoundGroundY * padT;
+      }
+
+      // 1h. Suginosato 5-House Mountain Village River-Bend Terrace Shelf (杉ノ郷段丘)
+      const dxVill = wx - villX;
+      const dVill2 = dxVill * dxVill + dzVill * dzVill;
+      if (dVill2 < 52900.0) {
+        const vPadT = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius, 220.0, Math.sqrt(dVill2));
+        h = h * (1.0 - vPadT) + TERRENO_WORLD.villageGroundY * vPadT;
       }
 
       heights[idx] = h;
@@ -678,7 +821,7 @@ export function buildTerrenoGeomorphology() {
   const flowArea = runHydrologicalErosionAndFlow(heights, W, H, cellX, cellZ);
 
   // =========================================================================
-  // PASS 4: CLEAN 19km RIVER CHANNEL + LEVEL FORESTRY ROAD BENCH + COMPOUND LOCK
+  // PASS 4: CLEAN 40km RIVER CHANNEL + LEVEL FORESTRY ROAD BENCH + VILLAGE & COMPOUND LOCKS
   // =========================================================================
   const roadElevs = new Float32Array(roadDense.length);
   const sampleGridH = (wx, wz) => {
@@ -696,68 +839,104 @@ export function buildTerrenoGeomorphology() {
     roadElevs[i] = sampleGridH(roadDense[i][0], roadDense[i][1]);
   }
   const tmpRoad = new Float32Array(roadDense.length);
-  for (let pass = 0; pass < 18; pass++) {
-    for (let i = 0; i < roadDense.length; i++) {
+  const segDist = new Float32Array(roadDense.length);
+  for (let i = 1; i < roadDense.length; i++) {
+    segDist[i] = Math.hypot(roadDense[i][0] - roadDense[i - 1][0], roadDense[i][1] - roadDense[i - 1][1]);
+  }
+  const nRoad = roadDense.length;
+  for (let pass = 0; pass < 48; pass++) {
+    for (let i = 0; i < nRoad; i++) {
       const dComp = Math.hypot(roadDense[i][0] - TERRENO_WORLD.compoundCenterX, roadDense[i][1] - TERRENO_WORLD.compoundCenterZ);
+      const dVill = Math.hypot(roadDense[i][0] - TERRENO_WORLD.villageCenterX, roadDense[i][1] - TERRENO_WORLD.villageCenterZ);
       if (dComp < 42.0) {
         tmpRoad[i] = TERRENO_WORLD.compoundGroundY;
-      } else if (i === 0 || i === roadDense.length - 1) {
-        tmpRoad[i] = roadElevs[i];
+      } else if (dVill < TERRENO_WORLD.villageFlatRadius + 6.0) {
+        tmpRoad[i] = TERRENO_WORLD.villageGroundY;
+      } else if (i === 0) {
+        tmpRoad[i] = 0.65 * roadElevs[0] + 0.35 * roadElevs[1];
+      } else if (i === nRoad - 1) {
+        tmpRoad[i] = 0.65 * roadElevs[nRoad - 1] + 0.35 * roadElevs[nRoad - 2];
       } else {
         tmpRoad[i] = 0.25 * roadElevs[i - 1] + 0.50 * roadElevs[i] + 0.25 * roadElevs[i + 1];
       }
     }
+    // Enforce civil-engineered max mountain road grade (~14 deg = 0.25 rise/run) via bidirectional relaxation
+    for (let i = 1; i < nRoad; i++) {
+      const maxDh = Math.max(0.5, segDist[i] * 0.24);
+      const dh = tmpRoad[i] - tmpRoad[i - 1];
+      if (dh > maxDh) tmpRoad[i] = tmpRoad[i - 1] + maxDh;
+      else if (dh < -maxDh) tmpRoad[i] = tmpRoad[i - 1] - maxDh;
+    }
+    for (let i = nRoad - 2; i >= 0; i--) {
+      const maxDh = Math.max(0.5, segDist[i + 1] * 0.24);
+      const dh = tmpRoad[i] - tmpRoad[i + 1];
+      if (dh > maxDh) tmpRoad[i] = tmpRoad[i + 1] + maxDh;
+      else if (dh < -maxDh) tmpRoad[i] = tmpRoad[i + 1] - maxDh;
+    }
     roadElevs.set(tmpRoad);
   }
 
-  // Sample Shirakumo Peak natural crest elevation so the alpine lookout sits cleanly atop the ridge!
-  const shirakumoY = sampleGridH(1240, 10650) + 16.0;
+  // Sample natural crest elevations for walkable alpine summit lookouts (no artificial mesa rim!)
+  const shirakumoY = sampleGridH(2850, 21400);
+  const westAlpineY = sampleGridH(-5180, 850);
 
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
     const rivX = riverRowX[iz];
     const rivBed = riverRowBedY[iz];
+    const rivWaterY = riverRowWaterY[iz];
     const rivHW = riverRowHW[iz];
-    const rivWaterY = rivBed + 2.2 + 2.6 * ((wz - minZ) / TERRENO_WORLD.depth);
 
     for (let ix = 0; ix < W; ix++) {
       const idx = iz * W + ix;
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
 
-      // 4a. Clean post-erosion 19 km River Channel + Walkable Scenic Gravel Bank Bench!
+      // 4a. Clean post-erosion 40 km River Channel + Walkable Scenic Gravel Bank Bench!
       const dxRiv = Math.abs(wx - rivX);
-      if (dxRiv < rivHW + 62.0) {
-        const bankBenchY = rivWaterY + 1.65;
+      if (dxRiv < rivHW + 76.0) {
+        const bankBenchY = rivWaterY + 1.75;
         let targetRivY;
         if (dxRiv <= rivHW * 0.85) {
           targetRivY = rivBed;
-        } else if (dxRiv <= rivHW + 14.0) {
-          const bankT = quinticSmoothstep(rivHW * 0.85, rivHW + 10.0, dxRiv);
+        } else if (dxRiv <= rivHW + 18.0) {
+          const bankT = quinticSmoothstep(rivHW * 0.85, rivHW + 12.0, dxRiv);
           targetRivY = rivBed + (bankBenchY - rivBed) * bankT;
         } else {
-          targetRivY = bankBenchY + (dxRiv - (rivHW + 14.0)) * 0.24;
+          targetRivY = bankBenchY + (dxRiv - (rivHW + 18.0)) * 0.24;
         }
-        const rivEnv = 1.0 - quinticSmoothstep(rivHW + 12.0, rivHW + 60.0, dxRiv);
+        const rivEnv = 1.0 - quinticSmoothstep(rivHW + 16.0, rivHW + 74.0, dxRiv);
         heights[idx] = heights[idx] * (1.0 - rivEnv) + targetRivY * rivEnv;
       }
 
-      // 4b. Wide Level Civil-Engineered 19 km Mountain Forestry Road Cut-and-Fill Bench!
+      // 4b. Wide Level Civil-Engineered 40 km Mountain Forestry Road Cut-and-Fill Bench!
       const rq = roadIndex.queryDist(wx, wz);
-      if (rq.dist < 36.0 && rq.segIdx >= 0) {
+      if (rq.dist < 48.0 && rq.segIdx >= 0) {
         const roadY = roadElevs[rq.segIdx] * (1.0 - rq.t) + roadElevs[rq.segIdx + 1] * rq.t;
-        const blendBench = 1.0 - quinticSmoothstep(7.5, 34.0, rq.dist);
+        const blendBench = 1.0 - quinticSmoothstep(10.0, 46.0, rq.dist);
         heights[idx] = heights[idx] * (1.0 - blendBench) + roadY * blendBench;
-        roadMaskArr[idx] = 1.0 - quinticSmoothstep(3.8, 7.2, rq.dist);
+        roadMaskArr[idx] = 1.0 - quinticSmoothstep(6.0, 14.5, rq.dist);
       }
 
-      // 4c. Walkable Alpine Granite Summit Lookout Crest at Shirakumo Peak (1240, 10650)
-      const dPeak = Math.hypot(wx - 1240, wz - 10650);
-      if (dPeak < 75.0) {
-        const pkT = 1.0 - quinticSmoothstep(22.0, 72.0, dPeak);
-        heights[idx] = heights[idx] * (1.0 - pkT) + Math.max(heights[idx], shirakumoY) * pkT;
+      // 4c. Gentle Natural Walkable Alpine Granite Summit Crowns (no circular mesa step!)
+      const dPeak = Math.hypot(wx - 2850, wz - 21400);
+      if (dPeak < 42.0) {
+        const pkT = (1.0 - quinticSmoothstep(10.0, 40.0, dPeak)) * 0.65;
+        heights[idx] = heights[idx] * (1.0 - pkT) + shirakumoY * pkT;
+      }
+      const dWest = Math.hypot(wx + 5180, wz - 850);
+      if (dWest < 42.0) {
+        const wT = (1.0 - quinticSmoothstep(10.0, 40.0, dWest)) * 0.65;
+        heights[idx] = heights[idx] * (1.0 - wT) + westAlpineY * wT;
       }
 
-      // 4d. Final exact compound pad lock (guarantees zero height error under all 5 buildings & vehicles!)
+      // 4d. Final exact Suginosato 5-House Village Terrace Lock (guarantees 0.000m flat ground under all 5 houses!)
+      const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
+      if (dVill < TERRENO_WORLD.villageBlendRadius) {
+        const vLockT = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius, TERRENO_WORLD.villageBlendRadius, dVill);
+        heights[idx] = heights[idx] * (1.0 - vLockT) + TERRENO_WORLD.villageGroundY * vLockT;
+      }
+
+      // 4e. Final exact NARROW-50 compound pad lock (guarantees zero height error under all 5 buildings & vehicles!)
       const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
       if (dComp < TERRENO_WORLD.compoundBlendRadius) {
         const lockT = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, TERRENO_WORLD.compoundBlendRadius, dComp);
@@ -784,16 +963,18 @@ export function buildTerrenoGeomorphology() {
 
       // G: hydrological wetness [0..1] combining real D8 flow accumulation + main river proximity
       const d8Wet = Math.min(1.0, Math.log1p(flowArea[idx]) / 7.2);
-      const rivWet = 1.0 - quinticSmoothstep(rivHW * 0.9, rivHW + 22.0, Math.abs(wx - rivX));
+      const rivWet = 1.0 - quinticSmoothstep(rivHW * 0.9, rivHW + 24.0, Math.abs(wx - rivX));
       geoRGBA[o4 + 1] = Math.max(d8Wet, rivWet);
 
       // B: geomorphological curvature / Phacelle ridge-gully tensor [-1..+1]
       geoRGBA[o4 + 2] = ridgeTensor[idx];
 
-      // A: road & compound micro-suppression mask [0..1] (0.0..0.95 road, 1.0 compound pad!)
+      // A: road, compound & village micro-suppression mask [0..1] (0.0..0.92 road, 1.0 compound/village terrace!)
       const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
       const compMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, 52.0, dComp);
-      geoRGBA[o4 + 3] = Math.max(compMask, roadMaskArr[idx] * 0.92);
+      const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
+      const villMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius - 2.0, TERRENO_WORLD.villageFlatRadius + 24.0, dVill);
+      geoRGBA[o4 + 3] = Math.max(compMask, villMask, roadMaskArr[idx] * 0.92);
     }
   }
 
@@ -847,10 +1028,14 @@ export function buildTerrenoGeomorphology() {
   }
 
   function getHeightAt(wx, wz) {
-    // Exact flat lock inside immediate compound clearing for zero jitter under buildings & vehicles
+    // Exact flat lock inside immediate compound clearing & Suginosato 5-house village terrace
     const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
     if (dComp <= TERRENO_WORLD.compoundFlatRadius - 2.0) {
       return TERRENO_WORLD.compoundGroundY;
+    }
+    const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
+    if (dVill <= TERRENO_WORLD.villageFlatRadius - 2.0) {
+      return TERRENO_WORLD.villageGroundY;
     }
     const g = sampleGeoBilinear(wx, wz);
     return g.hMacro + evalSharedMicroRelief(wx, wz, g.roadPad);
@@ -883,20 +1068,24 @@ export function buildTerrenoGeomorphology() {
 
   function getBiomeInfoAt(wx, wz) {
     const g = sampleGeoBilinear(wx, wz);
-    const y = g.hMacro + evalSharedMicroRelief(wx, wz, g.roadPad);
+    const y = getHeightAt(wx, wz);
     const asl = TERRENO_WORLD.baseElevationASL + y;
     const n = getNormalAt(wx, wz, 2.0);
     const rv = evalMainRiver(wz);
     const inRiver = Math.abs(wx - rv.x) < rv.halfWidth * 0.95 && y < rv.waterY + 0.4;
-    const isRoad = g.roadPad > 0.45 && Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ) > 22.0;
+    const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
+    const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
+    const inVillage = dVill < TERRENO_WORLD.villageFlatRadius;
+    const isRoad = g.roadPad > 0.45 && dComp > 22.0 && !inVillage;
 
     let zoneJp = 'スギ深森帯';
-    if (inRiver) zoneJp = '黒杉渓谷';
+    if (inVillage) zoneJp = '杉ノ郷集落';
+    else if (inRiver) zoneJp = '黒杉渓谷';
     else if (isRoad) zoneJp = '奥山林道';
     else if (n.slope > 0.85) zoneJp = '花崗岩急崖';
-    else if (asl >= 1360) zoneJp = '高山帯';
-    else if (asl >= 1120) zoneJp = '亜高山帯';
-    else if (asl >= 820) zoneJp = 'ブナ原生林';
+    else if (asl >= 1460) zoneJp = '高山帯';
+    else if (asl >= 1180) zoneJp = '亜高山帯';
+    else if (asl >= 840) zoneJp = 'ブナ原生林';
     else if (g.wetness > 0.55) zoneJp = '沢筋原生林';
 
     return {
@@ -909,6 +1098,7 @@ export function buildTerrenoGeomorphology() {
       roadPad: g.roadPad,
       isRoad,
       inRiver,
+      inVillage,
       riverY: rv.waterY,
       zoneJp,
     };

@@ -8,38 +8,38 @@ import { TERRENO_WORLD, FOREST_ROAD_POINTS, evalMainRiver } from './terrenoConfi
  *   - Smooth Wide-Radius Trajectory Filtering & Pure-Pursuit Silent Autopilot Controller
  */
 
-// 30 Safe Mountain Destinations spanning North Headwaters (Z=-5850) to South Alpine Ridge (Z=+11850)
+// 30 Safe Mountain Destinations spanning the full 15 km × 40 km Forestry Road (North Headwaters Z=-13100 -> Suginosato Village -> South Alps Z=+24950)
 export const AUTOPILOT_WAYPOINTS = [
-  { id: 'wp01', num: '01', nameJp: '北源流入口',     x: -520,  z: -5850 },
-  { id: 'wp02', num: '02', nameJp: '北奥沢平',       x: -240,  z: -5100 },
-  { id: 'wp03', num: '03', nameJp: '北尾根見晴',     x:  120,  z: -4820 },
-  { id: 'wp04', num: '04', nameJp: '雲海北カーブ',   x:  420,  z: -4550 },
-  { id: 'wp05', num: '05', nameJp: '雲海展望峠',     x:  860,  z: -4150 },
-  { id: 'wp06', num: '06', nameJp: '霧沢ターン',     x:  610,  z: -3850 },
-  { id: 'wp07', num: '07', nameJp: '東稜林道口',     x:  340,  z: -3550 },
-  { id: 'wp08', num: '08', nameJp: '白樺ヘアピン',   x: -320,  z: -2950 },
-  { id: 'wp09', num: '09', nameJp: '西森原生広場',   x: -540,  z: -2250 },
-  { id: 'wp10', num: '10', nameJp: '苔杉北テラス',   x: -380,  z: -1820 },
-  { id: 'wp11', num: '11', nameJp: '老杉林道中腹',   x: -260,  z: -1450 },
-  { id: 'wp12', num: '12', nameJp: '北渓谷展望台',   x: -175,  z: -1020 },
-  { id: 'wp13', num: '13', nameJp: '苔沢西分岐',     x: -110,  z:  -680 },
-  { id: 'wp14', num: '14', nameJp: '拠点北アプローチ', x: -28,  z:  -210 },
-  { id: 'wp15', num: '15', nameJp: '車庫前広場',     x:   15.6, z:  -18.0 },
-  { id: 'wp16', num: '16', nameJp: '西回廊バイパス', x:  -42,  z:    24 },
-  { id: 'wp17', num: '17', nameJp: '黒杉渓谷口',     x:  -95,  z:   140 },
-  { id: 'wp18', num: '18', nameJp: '翡翠淵高台',     x:  -130, z:   330 },
-  { id: 'wp19', num: '19', nameJp: '南杉並木段丘',   x: -165,  z:   520 },
-  { id: 'wp20', num: '20', nameJp: '朝霧沢西岸',     x: -220,  z:   920 },
-  { id: 'wp21', num: '21', nameJp: '中央峡谷カーブ', x: -260,  z:  1280 },
-  { id: 'wp22', num: '22', nameJp: '東岳展望台',     x: -340,  z:  1820 },
-  { id: 'wp23', num: '23', nameJp: '深森ヘアピン',   x: -420,  z:  2350 },
-  { id: 'wp24', num: '24', nameJp: '翡翠尾根テラス', x: -380,  z:  2960 },
-  { id: 'wp25', num: '25', nameJp: '中南林道広場',   x: -340,  z:  3550 },
-  { id: 'wp26', num: '26', nameJp: '黒岳前衛尾根',   x: -540,  z:  4320 },
-  { id: 'wp27', num: '27', nameJp: 'ブナ渓沢展望',   x: -680,  z:  4950 },
-  { id: 'wp28', num: '28', nameJp: '黒岳ブナ尾根',   x: -920,  z:  6250 },
-  { id: 'wp29', num: '29', nameJp: '南アルプス峠口', x: -620,  z:  7850 },
-  { id: 'wp30', num: '30', nameJp: '白雲峰南林道終点', x: 220,  z: 10850 },
+  { id: 'wp01', num: '01', nameJp: '北アルプス源流口', x: -1420, z: -13100 },
+  { id: 'wp02', num: '02', nameJp: '北奥霧氷平',       x:  -680, z: -11800 },
+  { id: 'wp03', num: '03', nameJp: '北東尾根見晴',     x:   240, z: -10600 },
+  { id: 'wp04', num: '04', nameJp: '雲海展望峠',       x:   920, z:  -9450 },
+  { id: 'wp05', num: '05', nameJp: '雲海南カーブ',     x:   320, z:  -8100 },
+  { id: 'wp06', num: '06', nameJp: '霧沢西分岐',       x:  -580, z:  -6850 },
+  { id: 'wp07', num: '07', nameJp: '白樺ヘアピン',     x: -1120, z:  -5550 },
+  { id: 'wp08', num: '08', nameJp: '西森原生林道',     x:  -740, z:  -4150 },
+  { id: 'wp09', num: '09', nameJp: '古杉北尾根',       x:  -420, z:  -2850 },
+  { id: 'wp10', num: '10', nameJp: '苔杉西沢口',       x:  -210, z:  -1550 },
+  { id: 'wp11', num: '11', nameJp: '北渓谷展望台',     x:   -85, z:   -580 },
+  { id: 'wp12', num: '12', nameJp: '拠点北アプローチ', x:   -24, z:   -180 },
+  { id: 'wp13', num: '13', nameJp: '車庫前広場',       x:    15.6, z:  -18.0 },
+  { id: 'wp14', num: '14', nameJp: '西回廊バイパス',   x:   -42, z:     24 },
+  { id: 'wp15', num: '15', nameJp: '黒杉渓谷口',       x:   -88, z:    145 },
+  { id: 'wp16', num: '16', nameJp: '翡翠淵高台',       x:    65, z:    460 },
+  { id: 'wp17', num: '17', nameJp: '朝霧沢南テラス',   x:   420, z:    840 },
+  { id: 'wp18', num: '18', nameJp: '杉ノ郷北アプローチ', x: 735, z:   1140 },
+  { id: 'wp19', num: '19', nameJp: '杉ノ郷集落(5棟)',  x:   788, z:   1280 },
+  { id: 'wp20', num: '20', nameJp: '杉ノ郷南段丘',     x:   610, z:   1880 },
+  { id: 'wp21', num: '21', nameJp: '清流沢カーブ',     x:   280, z:   2650 },
+  { id: 'wp22', num: '22', nameJp: '翡翠西尾根口',     x:  -120, z:   3850 },
+  { id: 'wp23', num: '23', nameJp: '深緑中南広場',     x:  -540, z:   5450 },
+  { id: 'wp24', num: '24', nameJp: '黒岳前衛尾根',     x: -1080, z:   7250 },
+  { id: 'wp25', num: '25', nameJp: '黒岳ブナ尾根',     x: -1620, z:   9250 },
+  { id: 'wp26', num: '26', nameJp: 'ブナ大嶺南口',     x: -1340, z:  11400 },
+  { id: 'wp27', num: '27', nameJp: '西アルプス峠口',   x:  -780, z:  13650 },
+  { id: 'wp28', num: '28', nameJp: '翠巒中岳テラス',   x:  -320, z:  16100 },
+  { id: 'wp29', num: '29', nameJp: '白雲峰展望林道',   x:   980, z:  21250 },
+  { id: 'wp30', num: '30', nameJp: '南アルプス終点',   x:   280, z:  24950 },
 ];
 
 export const DYNAMIC_TARGETS = [
@@ -49,7 +49,7 @@ export const DYNAMIC_TARGETS = [
   { id: 'dyn_camper',    code: 'RV',   kind: 'camper' },
 ];
 
-const GRID_W = 128;
+const GRID_W = 144;
 const GRID_H = 384;
 const CELL_W = TERRENO_WORLD.width / (GRID_W - 1);
 const CELL_H = TERRENO_WORLD.depth / (GRID_H - 1);
@@ -67,7 +67,7 @@ function gridToWorld(gx, gz) {
   ];
 }
 
-// Fast Binary Min-Heap for sub-12ms A* search across 49,152 terrain nodes
+// Fast Binary Min-Heap for sub-14ms A* search across 55,296 terrain nodes
 class MinHeap {
   constructor() {
     this.nodes = [];
@@ -117,6 +117,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
   function ensureNavGrid() {
     if (baseCostGrid) return baseCostGrid;
     baseCostGrid = new Float32Array(GRID_W * GRID_H);
+    const roadSnapBand = Math.max(58.0, Math.hypot(CELL_W, CELL_H) * 0.85);
     for (let gz = 0; gz < GRID_H; gz++) {
       for (let gx = 0; gx < GRID_W; gx++) {
         const [wx, wz] = gridToWorld(gx, gz);
@@ -127,12 +128,12 @@ export function createTerrenoAutopilot(geomorph, storm) {
         const distRiv = Math.abs(wx - rv.x);
         const inRiver = distRiv < rv.halfWidth * 1.45 && g.hMacro < rv.waterY + 1.2;
         const rq = geomorph.roadIndex ? geomorph.roadIndex.queryDist(wx, wz) : { dist: 999 };
-        const onRoadCorridor = g.roadPad > 0.20 || rq.dist < 44.0;
+        const onRoadCorridor = g.roadPad > 0.20 || rq.dist < roadSnapBand;
 
         let cost = 1.0;
         if (onRoadCorridor) {
-          // Strong safe preference for continuous graded 19 km forestry road corridor!
-          cost = 0.14 + (rq.dist / 44.0) * 0.08;
+          // Strong safe preference for continuous graded 40 km forestry road corridor!
+          cost = 0.14 + (Math.min(rq.dist, roadSnapBand) / roadSnapBand) * 0.08;
         } else if (inRiver) {
           cost = 65.0;
         } else if (mn.slope > 0.54) {

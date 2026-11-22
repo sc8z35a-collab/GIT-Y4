@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TERRENO_WORLD, evalMainRiver } from './terrenoConfig.js';
+import { isInsideVillageClearing, isInsideVillagePaving } from '../villageData.js';
 import {
   TERRENO_ATMO_UNIFORMS_GLSL,
   TERRENO_ATMO_FUNCTIONS_GLSL,
@@ -1041,6 +1042,9 @@ function isInsideCompoundClearing(x, z, extraMargin = 0.0) {
   if (x > -6.0 - extraMargin && x < 23.0 + extraMargin && z > -28.0 - extraMargin && z <= -15.5) {
     return true;
   }
+  if (isInsideVillageClearing(x, z, extraMargin)) {
+    return true;
+  }
   return false;
 }
 
@@ -1048,8 +1052,11 @@ function isInsideCompoundClearing(x, z, extraMargin = 0.0) {
 function isInsideCompoundPaving(x, z) {
   // Main Tower + Annex + Storage + Camper-75 + Giant Vehicle Warehouse (GARAGE-200) footprints & aprons
   if (x > -9.6 && x < 23.4 && z > -11.5 && z < 16.5) return true;
-  // Front entry walkway + Kei-340 concrete pad + approach path
+  // Front entry walkway + Kei-340 concrete pad + Garage north concrete apron
   if (x > -4.6 && x < 19.8 && z > -16.5 && z <= -11.0) return true;
+  if (x > -4.6 && x < 5.6 && z > -12.8 && z <= -5.0) return true;
+  // Suginosato 5-house village interiors, porches, stone plaza, lane & garden
+  if (isInsideVillagePaving(x, z)) return true;
   return false;
 }
 
@@ -1188,12 +1195,12 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           const geo = geomorph.sampleGeoBilinear(wx, wz);
           const y = geomorph.getHeightAt(wx, wz);
           const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1420.0) continue;
+          if (asl > 1540.0) continue;
 
           const nrm = geomorph.getNormalAt(wx, wz, 2.2);
           if (nrm.slope > 0.78) continue;
 
-          if (asl > 1270.0 && rng() < (asl - 1270.0) / 155.0) continue;
+          if (asl > 1360.0 && rng() < (asl - 1360.0) / 185.0) continue;
 
           const in6fVistaCorridor = wx > -9.0 && wx < 13.0 && wz >= 10.0 && wz < 46.0;
           if (in6fVistaCorridor && rng() < 0.45) continue;
@@ -1542,7 +1549,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           // Use exact getHeightAt() & deep anchor (-2.6m) so ZERO impostors ever float above distant ridges!
           const y = geomorph.getHeightAt(wx, wz);
           const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1410.0) continue;
+          if (asl > 1530.0) continue;
           const nrm = geomorph.getNormalAt(wx, wz, 4.0);
           if (nrm.slope > 0.76) continue;
 
