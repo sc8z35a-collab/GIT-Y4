@@ -226,6 +226,7 @@ export function createVolumetricAtmosphere(scene) {
   addMoonShaft(-4.00, 5.50 + 1.10, 8.15, 1.25, 2.10, 0.54, -0.08, 0.0, 0.082);
   addMoonShaft(-5.10, 8.15 + 1.15, 8.05, 1.35, 2.25, 0.56, 0.04, 0.0, 0.095);
 
+  const mistPlanes = [];
   // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 5F/6F Sky Terraces!)
   [
     { y: 0.26, col: 0x1b2b38 },
@@ -251,10 +252,33 @@ export function createVolumetricAtmosphere(scene) {
     plane.position.set(0.0, layer.y, 4.0);
     plane.renderOrder = 2;
     group.add(plane);
+    mistPlanes.push({ plane, mat: mistMat, nightHex: layer.col });
   });
 
   return {
     group,
+    setAtmospherePreset(preset) {
+      if (!preset) return;
+      const isNight = preset.id === 'night';
+      const isDay = preset.id === 'day';
+      mistPlanes.forEach(({ plane, mat, nightHex }) => {
+        plane.visible = isNight; // TERRENO's exact 3D height fog handles daylight/dawn/dusk valley mist cleanly!
+        if (isNight) mat.uniforms.uMistColor.value.setHex(nightHex);
+      });
+      group.children.forEach((ch) => {
+        if (ch.material && ch.material.uniforms && ch.material.uniforms.uColor && ch.material.uniforms.uOpacity) {
+          if (isNight) {
+            ch.material.uniforms.uColor.value.setHex(0x88b4e0);
+          } else if (preset.id === 'dawn') {
+            ch.material.uniforms.uColor.value.setRGB(1.0, 0.78, 0.52);
+          } else if (isDay) {
+            ch.material.uniforms.uColor.value.setRGB(1.0, 0.96, 0.86);
+          } else {
+            ch.material.uniforms.uColor.value.setRGB(1.0, 0.56, 0.34);
+          }
+        }
+      });
+    },
     update(elapsed, camperPose = null, keiPose = null) {
       uniforms.uTime.value = elapsed;
       if (camperPose) {

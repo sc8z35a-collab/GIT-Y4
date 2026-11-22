@@ -10,6 +10,7 @@ import {
   STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, SHEET_OFFSETS, getAtticCeilingY,
   ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F, getFloorByPhysicalIndex,
 } from './planData.js';
+import { TERRENO_WORLD, TERRENO_LANDMARKS, evalMainRiver } from './terreno/terrenoConfig.js';
 
 const _forward = new THREE.Vector3();
 const _right = new THREE.Vector3();
@@ -17,6 +18,8 @@ const _input = new THREE.Vector3();
 const _zero = new THREE.Vector3(0, 0, 0);
 const _lookDir = new THREE.Vector3();
 const _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+const _flashWorldPos = new THREE.Vector3();
+const _flashWorldDir = new THREE.Vector3();
 
 // Strict Static Building World AABBs for Movable Vehicles (Giant Camper & Daily Kei-Van)
 const STATIC_VEHICLE_OBSTACLES = [
@@ -83,13 +86,20 @@ export class FirstPersonHouseExplorer {
     this._initDarkForestLighting();
 
     this.house = buildHouse3D(this.scene);
+    this.terreno = this.house.terreno;
     this.atmosphere = createVolumetricAtmosphere(this.scene);
     this._initFlashlight();
     this.postfx = new SinglePassPostFX(this.renderer);
     this.adaptive = new AdaptiveMobileEngine(this.renderer, this.postfx, this.house);
     this.audio = new SpatialForestAudio();
 
+    this.currentTodId = 'night';
+    this.lastNear = 0.14;
+    this.lastFar = 26000;
+    this._applyTimeOfDayLighting(this.terreno.getTimeOfDay());
+
     this._initEvents();
+    this._syncCameraFrustum();
     this._updateCameraTransform(0);
     this.adaptive.markShadowsDirty();
     this._startLoop();
@@ -112,8 +122,8 @@ export class FirstPersonHouseExplorer {
 
   _initScene() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x050a10);
-    this.scene.fog = new THREE.FogExp2(0x070e16, 0.030);
+    this.scene.background = new THREE.Color(0x07111e);
+    this.scene.fog = new THREE.FogExp2(0x0a1728, 0.00018);
 
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -122,33 +132,130 @@ export class FirstPersonHouseExplorer {
 
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.06, 120);
+    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.14, 26000);
     this.scene.add(this.camera);
   }
 
   _initDarkForestLighting() {
-    this.hemiLight = new THREE.HemisphereLight(0x2b4566, 0x090807, 0.13);
+    this.hemiLight = new THREE.HemisphereLight(0x2b4566, 0x090807, 0.22);
     this.scene.add(this.hemiLight);
 
-    this.moonLight = new THREE.DirectionalLight(0x7ea8d8, 1.38);
+    this.moonLight = new THREE.DirectionalLight(0x7ea8d8, 1.48);
     this.moonLight.position.set(-10.0, 29.0, 28.0);
     this.moonLight.target.position.set(0.5, 7.5, 4.5);
     this.moonLight.castShadow = true;
     this.moonLight.shadow.mapSize.set(1024, 1024);
     this.moonLight.shadow.camera.near = 2;
-    this.moonLight.shadow.camera.far = 76;
-    this.moonLight.shadow.camera.left = -22;
-    this.moonLight.shadow.camera.right = 22;
-    this.moonLight.shadow.camera.top = 24;
-    this.moonLight.shadow.camera.bottom = -16;
+    this.moonLight.shadow.camera.far = 96;
+    this.moonLight.shadow.camera.left = -26;
+    this.moonLight.shadow.camera.right = 26;
+    this.moonLight.shadow.camera.top = 26;
+    this.moonLight.shadow.camera.bottom = -20;
     this.moonLight.shadow.bias = -0.0007;
     this.moonLight.shadow.normalBias = 0.03;
     this.scene.add(this.moonLight);
     this.scene.add(this.moonLight.target);
 
-    const northMoon = new THREE.DirectionalLight(0x52759e, 0.62);
-    northMoon.position.set(6.5, 24.0, -17.0);
-    this.scene.add(northMoon);
+    this.northMoon = new THREE.DirectionalLight(0x52759e, 0.62);
+    this.northMoon.position.set(6.5, 24.0, -17.0);
+    this.scene.add(this.northMoon);
+  }
+
+  _applyTimeOfDayLighting(preset) {
+    if (!preset) return;
+    this.currentTodId = preset.id;
+    const isNight = preset.id === 'night';
+    const isDay = preset.id === 'day';
+
+    this.hemiLight.color.setHex(preset.hemiSky);
+    this.hemiLight.groundColor.setHex(preset.hemiGround);
+    this.hemiLight.intensity = isNight ? 0.20 : preset.hemiIntensity;
+
+    this.moonLight.color.setRGB(preset.sunColor[0], preset.sunColor[1], preset.sunColor[2]);
+    this.moonLight.intensity = preset.sunIntensity;
+    if (this.northMoon) {
+      this.northMoon.intensity = isNight ? 0.62 : (isDay ? 0.45 : 0.32);
+      this.northMoon.color.setHex(preset.hemiSky);
+    }
+
+    if (this.scene.background) {
+      this.scene.background.setRGB(preset.skyHorizon[0], preset.skyHorizon[1], preset.skyHorizon[2]);
+    }
+    if (this.scene.fog) {
+      this.scene.fog.color.setRGB(preset.aerialFogColor[0], preset.aerialFogColor[1], preset.aerialFogColor[2]);
+    }
+    this.scene.environmentIntensity = isNight ? 0.042 : (isDay ? 0.14 : 0.085);
+
+    if (this.atmosphere && this.atmosphere.setAtmospherePreset) {
+      this.atmosphere.setAtmospherePreset(preset);
+    }
+    if (this.house.fireflies) {
+      this.house.fireflies.visible = !isDay;
+    }
+    if (this.house.exteriorFillLights) {
+      const fillScale = isNight ? 1.0 : (isDay ? 0.0 : 0.35);
+      this.house.exteriorFillLights.forEach(({ light, baseIntensity }) => {
+        light.intensity = baseIntensity * fillScale;
+      });
+    }
+    if (this.adaptive) this.adaptive.markShadowsDirty();
+    if (this.callbacks.onTimeOfDayChange) this.callbacks.onTimeOfDayChange(preset);
+  }
+
+  setTimeOfDay(presetId) {
+    if (!this.terreno) return null;
+    const preset = this.terreno.setTimeOfDay(presetId);
+    this._applyTimeOfDayLighting(preset);
+    return preset;
+  }
+
+  cycleTimeOfDay() {
+    if (!this.terreno) return null;
+    const preset = this.terreno.cycleTimeOfDay();
+    this._applyTimeOfDayLighting(preset);
+    return preset;
+  }
+
+  getTimeOfDay() {
+    return this.terreno ? this.terreno.getTimeOfDay() : null;
+  }
+
+  _syncCameraFrustum() {
+    const underground = this.currentFloor <= 0;
+    const outdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && !this.drivingVehicle;
+    const targetNear = underground ? 0.06 : (outdoors ? 0.24 : 0.14);
+    const targetFar = underground ? 140 : 26000;
+    if (this.terreno) {
+      this.terreno.setVisible(!underground);
+    }
+    if (targetNear !== this.lastNear || targetFar !== this.lastFar) {
+      this.lastNear = targetNear;
+      this.lastFar = targetFar;
+      this.camera.near = targetNear;
+      this.camera.far = targetFar;
+      this.camera.updateProjectionMatrix();
+    }
+  }
+
+  teleportToWorld(x, z, yaw = null, pitch = -0.06) {
+    if (this.drivingVehicle) this.toggleVehicleDrive(this.drivingVehicle, false);
+    this.inElevator = false;
+    this.activeFlight = null;
+    this.currentFloor = 1;
+    const cx = Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, x));
+    const cz = Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, z));
+    this.setPose(cx, cz, yaw !== null ? yaw : this.yaw, pitch, 1);
+    if (this.terreno) {
+      this._syncCameraFrustum();
+      this.terreno.update(this.camera.position, 0, null);
+    }
+  }
+
+  teleportToLandmark(id) {
+    const lm = TERRENO_LANDMARKS.find((item) => item.id === id);
+    if (!lm) return false;
+    this.teleportToWorld(lm.x, lm.z, lm.yaw, lm.pitch);
+    return true;
   }
 
   _initFlashlight() {
@@ -312,7 +419,7 @@ export class FirstPersonHouseExplorer {
         this.activeBuilding = 'camper';
         const seatW = this.camperLocalToWorld(0.72, 0.88);
         this.playerPos.set(seatW.x, 0, seatW.z);
-        this.floorY = CAMPER.floor1WorldY;
+        this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
         this.eyeHeight = 1.20;
         this.yaw = veh.pose.yaw;
         this.pitch = -0.10;
@@ -326,7 +433,7 @@ export class FirstPersonHouseExplorer {
         this.activeBuilding = 'kei';
         const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, KEI.driverSeatLocal.z);
         this.playerPos.set(seatW.x, 0, seatW.z);
-        this.floorY = KEI.floorWorldY;
+        this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
         this.eyeHeight = 0.98;
         this.yaw = veh.pose.yaw;
         this.pitch = -0.09;
@@ -336,13 +443,13 @@ export class FirstPersonHouseExplorer {
       if (activeKey === 'camper') {
         const standW = this.camperLocalToWorld(1.35, 0.88);
         this.playerPos.set(standW.x, 0, standW.z);
-        this.floorY = CAMPER.floor1WorldY;
+        this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
         this.eyeHeight = 1.54;
       } else {
         // Exit smoothly straight into the open walk-in cargo bay (100% collision-safe anywhere!)
         const cargoW = this.keiLocalToWorld(0.68, 1.56);
         this.playerPos.set(cargoW.x, 0, cargoW.z);
-        this.floorY = KEI.floorWorldY;
+        this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
         this.eyeHeight = 1.04;
       }
       this.audio.updateEngine(false, 0, activeKey === 'kei' ? 'kei' : 'diesel');
@@ -359,26 +466,60 @@ export class FirstPersonHouseExplorer {
     }
   }
 
-  setCamperPose(cx, cz, yaw = 0) {
+  _applyVehicleTerrainPose(veh, isKei) {
+    const cx = veh.pose.cx;
+    const cz = veh.pose.cz;
+    const yaw = veh.pose.yaw;
+    let baseY = 0;
+    let pitch = 0;
+    let roll = 0;
+
+    if (this.terreno) {
+      const halfWB = isKei ? 1.15 : 2.35;
+      const halfTr = isKei ? 0.65 : 1.15;
+      const fx = -Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      const rx = Math.cos(yaw);
+      const rz = -Math.sin(yaw);
+
+      const yCenter = this.terreno.getHeightAt(cx, cz);
+      const yFront = this.terreno.getHeightAt(cx + fx * halfWB, cz + fz * halfWB);
+      const yRear = this.terreno.getHeightAt(cx - fx * halfWB, cz - fz * halfWB);
+      const yRight = this.terreno.getHeightAt(cx + rx * halfTr, cz + rz * halfTr);
+      const yLeft = this.terreno.getHeightAt(cx - rx * halfTr, cz - rz * halfTr);
+
+      const avgGround = 0.4 * yCenter + 0.15 * (yFront + yRear + yRight + yLeft);
+      baseY = avgGround + 0.35;
+      pitch = Math.max(-0.46, Math.min(0.46, Math.atan2(yFront - yRear, 2 * halfWB)));
+      roll = Math.max(-0.42, Math.min(0.42, Math.atan2(yRight - yLeft, 2 * halfTr)));
+    }
+
+    veh.pose.y = baseY;
+    veh.pose.pitch = pitch;
+    veh.pose.roll = roll;
+    veh.root.position.set(cx, baseY, cz);
+    veh.root.rotation.order = 'YXZ';
+    veh.root.rotation.set(pitch, yaw, roll);
+  }
+
+  setCamperPose(cx, cz, yaw = 0, force = false) {
     const camper = this.house.camper;
-    if (this._camperCollidesAt(cx, cz, yaw)) return false;
+    if (!force && this._camperCollidesAt(cx, cz, yaw)) return false;
     camper.pose.cx = cx;
     camper.pose.cz = cz;
     camper.pose.yaw = yaw;
-    camper.root.position.set(cx, 0, cz);
-    camper.root.rotation.y = yaw;
+    this._applyVehicleTerrainPose(camper, false);
     this.adaptive.markShadowsDirty();
     return true;
   }
 
-  setKeiPose(cx, cz, yaw = 0) {
+  setKeiPose(cx, cz, yaw = 0, force = false) {
     const kei = this.house.kei;
-    if (this._keiCollidesAt(cx, cz, yaw)) return false;
+    if (!force && this._keiCollidesAt(cx, cz, yaw)) return false;
     kei.pose.cx = cx;
     kei.pose.cz = cz;
     kei.pose.yaw = yaw;
-    kei.root.position.set(cx, 0, cz);
-    kei.root.rotation.y = yaw;
+    this._applyVehicleTerrainPose(kei, true);
     this.adaptive.markShadowsDirty();
     return true;
   }
@@ -439,17 +580,33 @@ export class FirstPersonHouseExplorer {
     const c = Math.cos(nyaw);
     const s = Math.sin(nyaw);
 
-    // 1. Strict Forest Perimeter Check on all 4 OBB corners
+    // 1. Strict 5 km × 19 km TERRENO World Perimeter Check on all 4 OBB corners
     const corners = [[-hw, -hl], [hw, -hl], [-hw, hl], [hw, hl]];
     for (let i = 0; i < 4; i++) {
       const wx = ncx + corners[i][0] * c + corners[i][1] * s;
       const wz = ncz - corners[i][0] * s + corners[i][1] * c;
-      if (wx < -14.8 || wx > 15.2 || wz < -15.2 || wz > 14.8) return true;
+      if (
+        wx < TERRENO_WORLD.playMinX || wx > TERRENO_WORLD.playMaxX ||
+        wz < TERRENO_WORLD.playMinZ || wz > TERRENO_WORLD.playMaxZ
+      ) return true;
     }
 
-    // 2. Exact SAT OBB vs All 3 Static Building AABBs
-    for (let i = 0; i < STATIC_VEHICLE_OBSTACLES.length; i++) {
-      if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, STATIC_VEHICLE_OBSTACLES[i])) return true;
+    // 1b. Steep Granite Cliff (> 39°) & Deep River Channel Guard
+    if (this.terreno) {
+      const nrm = this.terreno.getNormalAt(ncx, ncz, 2.2);
+      if (nrm.slope > 0.82) return true;
+      const rv = evalMainRiver(ncz);
+      if (Math.abs(ncx - rv.x) < rv.halfWidth * 0.80) {
+        const gY = this.terreno.getHeightAt(ncx, ncz);
+        if (rv.waterY - gY > 0.65) return true;
+      }
+    }
+
+    // 2. Exact SAT OBB vs All 3 Static Building AABBs (near compound)
+    if (Math.abs(ncx) < 28 && Math.abs(ncz) < 28) {
+      for (let i = 0; i < STATIC_VEHICLE_OBSTACLES.length; i++) {
+        if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, STATIC_VEHICLE_OBSTACLES[i])) return true;
+      }
     }
 
     // 3. Exact SAT OBB vs Other Movable Vehicle OBB (Camper <-> Kei-Van mutual collision!)
@@ -457,12 +614,13 @@ export class FirstPersonHouseExplorer {
       return true;
     }
 
-    // 4. Exact OBB vs Circle (Stone Lanterns, Boulders, and ALL 305 Forest Cedar Tree Trunks!)
+    // 4. Exact OBB vs Circle (Stone Lanterns, Courtyard Boulders, & TERRENO Streamed Trees/Boulders!)
     const checkCircles = (arr) => {
       for (let i = 0; i < arr.length; i++) {
         const o = arr[i];
         const dx = o.x - ncx;
         const dz = o.z - ncz;
+        if (dx * dx + dz * dz > 64.0) continue;
         const rx = dx * c - dz * s;
         const rz = dx * s + dz * c;
         const clx = rx < -hw ? -hw : (rx > hw ? hw : rx);
@@ -474,9 +632,11 @@ export class FirstPersonHouseExplorer {
       return false;
     };
 
-    if (checkCircles(LANTERN_OBSTACLES)) return true;
-    if (checkCircles(this.house.boulderColliders || [])) return true;
-    if (checkCircles(this.house.treeColliders || [])) return true;
+    if (Math.abs(ncx) < 28 && Math.abs(ncz) < 28) {
+      if (checkCircles(LANTERN_OBSTACLES)) return true;
+      if (checkCircles(this.house.boulderColliders || [])) return true;
+    }
+    if (this.terreno && checkCircles(this.terreno.getLocalColliders())) return true;
     return false;
   }
 
@@ -514,23 +674,25 @@ export class FirstPersonHouseExplorer {
     throttle = Math.max(-1, Math.min(1, throttle));
     steerIn = Math.max(-1, Math.min(1, steerIn));
 
-    const maxSteer = isKei ? 0.56 : 0.46;
+    const maxSteer = isKei ? 0.54 : 0.44;
     const steerRate = isKei ? 8.2 : 6.5;
     const targetSteer = steerIn * maxSteer;
     veh.steerAngle += (targetSteer - veh.steerAngle) * Math.min(1, dt * steerRate);
     veh.frontSteerPivots.forEach((p) => { p.rotation.y = veh.steerAngle; });
     veh.steerWheelGroup.rotation.z = veh.steerAngle * 2.4;
 
-    const accelFwd = isKei ? 5.6 : 4.2;
-    const accelRev = isKei ? 4.4 : 3.8;
-    const maxFwd = isKei ? 6.8 : 5.4;
-    const maxRev = isKei ? 3.2 : 3.0;
+    const distFromCompound = Math.hypot(veh.pose.cx - TERRENO_WORLD.compoundCenterX, veh.pose.cz - TERRENO_WORLD.compoundCenterZ);
+    const openRoad = distFromCompound > 22.0;
+    const accelFwd = isKei ? (openRoad ? 9.2 : 5.6) : (openRoad ? 7.4 : 4.2);
+    const accelRev = isKei ? 5.0 : 4.2;
+    const maxFwd = isKei ? (openRoad ? 18.5 : 7.2) : (openRoad ? 15.5 : 5.8);
+    const maxRev = isKei ? 4.8 : 4.0;
     if (throttle > 0.02) {
       veh.speed += throttle * accelFwd * dt;
     } else if (throttle < -0.02) {
       veh.speed += throttle * accelRev * dt;
     } else {
-      veh.speed *= Math.max(0, 1 - dt * 4.4);
+      veh.speed *= Math.max(0, 1 - dt * 3.8);
       if (Math.abs(veh.speed) < 0.03) veh.speed = 0;
     }
     veh.speed = Math.max(-maxRev, Math.min(maxFwd, veh.speed));
@@ -572,8 +734,7 @@ export class FirstPersonHouseExplorer {
       }
 
       if (Math.abs(totalMoved) > 0.0001) {
-        veh.root.position.set(veh.pose.cx, 0, veh.pose.cz);
-        veh.root.rotation.y = veh.pose.yaw;
+        this._applyVehicleTerrainPose(veh, isKei);
         const wheelSpin = totalMoved / wheelRad;
         veh.wheelMeshes.forEach((w) => { w.rotation.x -= wheelSpin; });
         this.yaw += totalDYaw;
@@ -584,13 +745,13 @@ export class FirstPersonHouseExplorer {
     if (isKei) {
       const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, KEI.driverSeatLocal.z);
       this.playerPos.set(seatW.x, 0, seatW.z);
-      this.floorY = KEI.floorWorldY;
+      this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
       this.eyeHeight += (0.98 - this.eyeHeight) * Math.min(1, dt * 10);
       this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'kei');
     } else {
       const seatW = this.camperLocalToWorld(0.72, 0.88);
       this.playerPos.set(seatW.x, 0, seatW.z);
-      this.floorY = CAMPER.floor1WorldY;
+      this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
       this.eyeHeight += (1.20 - this.eyeHeight) * Math.min(1, dt * 10);
       this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'diesel');
     }
@@ -674,7 +835,9 @@ export class FirstPersonHouseExplorer {
     this.eyeHeight = this._computeDesiredEyeHeight(x, z);
     this.yaw = yaw;
     this.pitch = pitch;
+    this._syncCameraFrustum();
     this._updateCameraTransform(0);
+    if (this.terreno) this.terreno.update(this.camera.position, 0, null);
     this.adaptive.markShadowsDirty();
   }
 
@@ -749,6 +912,7 @@ export class FirstPersonHouseExplorer {
       const k = e.key.toLowerCase();
       if (k === 'm') { if (this.callbacks.onToggleMap) this.callbacks.onToggleMap(); return; }
       if (k === 'p') { if (this.callbacks.onToggleTelemetry) this.callbacks.onToggleTelemetry(); return; }
+      if (k === 't') { this.cycleTimeOfDay(); return; }
       if (this.mapOpen) {
         if (k === 'escape' && this.callbacks.onToggleMap) this.callbacks.onToggleMap();
         return;
@@ -982,26 +1146,28 @@ export class FirstPersonHouseExplorer {
     const inCamper = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
     const kl = this.worldToKeiLocal(x, z);
     const inKei = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
+    const camperBaseY = this.house.camper.pose.y || 0;
+    const keiBaseY = this.house.kei.pose.y || 0;
 
     const baseY = getFloorByPhysicalIndex(this.currentFloor).baseY;
     if (this.currentFloor === 1) {
-      if (inKei) return KEI.floorWorldY;
+      if (inKei) return keiBaseY + KEI.floorWorldY;
       // Smooth step-in outside Kei-Van Left Sliding Door (DK-L) and Rear Liftgate (DK-R)!
       if (kl.lx >= -0.32 && kl.lx < 0.0 && kl.lz >= 1.20 && kl.lz <= 2.10) {
         const t = Math.max(0, Math.min(1, (kl.lx + 0.32) / 0.32));
-        return -0.18 + (KEI.floorWorldY + 0.18) * t;
+        return keiBaseY - 0.18 + (KEI.floorWorldY + 0.18) * t;
       }
       if (kl.lz > KEI.length && kl.lz <= KEI.length + 0.36 && kl.lx >= 0.12 && kl.lx <= 1.36) {
         const t = Math.max(0, Math.min(1, (KEI.length + 0.36 - kl.lz) / 0.36));
-        return -0.18 + (KEI.floorWorldY + 0.18) * t;
+        return keiBaseY - 0.18 + (KEI.floorWorldY + 0.18) * t;
       }
       if (inCamper) {
-        if (cl.lx < 1.03 && cl.lz > 3.69 && cl.lz < 5.25) return CAMPER.floor1WorldY - 0.02;
-        return CAMPER.floor1WorldY;
+        if (cl.lx < 1.03 && cl.lz > 3.69 && cl.lz < 5.25) return camperBaseY + CAMPER.floor1WorldY - 0.02;
+        return camperBaseY + CAMPER.floor1WorldY;
       }
       if (cl.lx >= -0.36 && cl.lx < 0.0 && cl.lz >= 2.15 && cl.lz <= 2.82) {
         const stepT = Math.max(0, Math.min(1, (cl.lx + 0.36) / 0.36));
-        return -0.18 + (CAMPER.floor1WorldY + 0.18) * stepT;
+        return camperBaseY - 0.18 + (CAMPER.floor1WorldY + 0.18) * stepT;
       }
       if (x >= 0.0 && x <= 5.0 && z >= 0.0 && z <= 10.0) {
         if (x < 2.15 && z < 1.35) return -0.12;
@@ -1019,10 +1185,17 @@ export class FirstPersonHouseExplorer {
       if (sx >= 0.0 && sx <= STORAGE.width && sz >= 0.0 && sz <= STORAGE.depth) {
         return 0.0;
       }
+      if (this.terreno) {
+        const groundY = this.terreno.getHeightAt(x, z);
+        const dComp = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
+        // Exact -0.18m courtyard height right at NARROW-50, smoothly settling onto boots-on-ground across 5km×19km!
+        const yardLift = dComp < 20.0 ? 0.17 : (dComp < 34.0 ? 0.17 - 0.15 * ((dComp - 20.0) / 14.0) : 0.02);
+        return groundY + yardLift;
+      }
       return -0.18;
     }
     if (this.currentFloor === 2) {
-      if (inCamper || this.activeBuilding === 'camper') return CAMPER.loft2WorldY;
+      if (inCamper || this.activeBuilding === 'camper') return camperBaseY + CAMPER.loft2WorldY;
       if (x > 5.5) return STORAGE.floor2Y;
       if (x < -1.2) return baseY;
       if (x > 3.55 && z > 3.50 && z < 5.95) return baseY - 0.02;
@@ -1253,7 +1426,10 @@ export class FirstPersonHouseExplorer {
     } else if (this.currentFloor === 0) {
       if (x < -1.20 || x > 4.95 || z < 0.75 || z > 9.95) return true;
     } else if (this.currentFloor === 1) {
-      if (x < -14.5 || x > 15.2 || z < -15.2 || z > 14.5) return true;
+      if (
+        x < TERRENO_WORLD.playMinX || x > TERRENO_WORLD.playMaxX ||
+        z < TERRENO_WORLD.playMinZ || z > TERRENO_WORLD.playMaxZ
+      ) return true;
       // Strict Movable Giant Camper 1F exterior shell + 14-room + widened 560mm corridor collision!
       const cl = this.worldToCamperLocal(x, z);
       if (cl.lx >= -r - 0.16 && cl.lx <= CAMPER.width + r + 0.16 && cl.lz >= -r - 0.18 && cl.lz <= CAMPER.length + r + 0.18) {
@@ -1357,17 +1533,32 @@ export class FirstPersonHouseExplorer {
     }
 
     if (this.currentFloor === 1) {
-      const trees = this.house.treeColliders;
-      for (let i = 0; i < trees.length; i++) {
-        const t = trees[i];
-        const md = r + t.r;
-        if ((x - t.x) * (x - t.x) + (z - t.z) * (z - t.z) < md * md) return true;
-      }
       const boulders = this.house.boulderColliders || [];
       for (let i = 0; i < boulders.length; i++) {
         const b = boulders[i];
         const md = r + b.r;
         if ((x - b.x) * (x - b.x) + (z - b.z) * (z - b.z) < md * md) return true;
+      }
+      if (this.terreno) {
+        const localCols = this.terreno.getLocalColliders();
+        for (let i = 0; i < localCols.length; i++) {
+          const t = localCols[i];
+          const md = r + t.r;
+          const dx = x - t.x;
+          const dz = z - t.z;
+          if (dx * dx + dz * dz < md * md) return true;
+        }
+        // Outside compound buildings, guard against unwalkable sheer cliffs (> 59°) and deep river rapids!
+        const dComp = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
+        if (dComp > 22.0) {
+          const nrm = this.terreno.getNormalAt(x, z, 1.5);
+          if (nrm.slope > 1.65) return true;
+          const rv = evalMainRiver(z);
+          if (Math.abs(x - rv.x) < rv.halfWidth * 0.85) {
+            const gY = this.terreno.getHeightAt(x, z);
+            if (rv.waterY - gY > 1.15) return true;
+          }
+        }
       }
     }
     return false;
@@ -1511,7 +1702,10 @@ export class FirstPersonHouseExplorer {
     const sprinting = (this.keys.has('shift') || this.virtualMove.sprint) && !this.crouching;
     const stairSlow = this.activeFlight !== null ? 0.80 : 1.0;
     const tightSlow = ((this.activeBuilding === 'camper' && this.currentFloor === 2) || this.activeBuilding === 'kei') ? 0.72 : 1.0;
-    const maxSpeed = (this.crouching ? 1.05 : (sprinting ? 2.75 : 1.75)) * stairSlow * tightSlow;
+    const outdoorHike = this.currentFloor === 1 && this.activeBuilding === 'courtyard'
+      && Math.hypot(this.playerPos.x - TERRENO_WORLD.compoundCenterX, this.playerPos.z - TERRENO_WORLD.compoundCenterZ) > 22.0;
+    const baseWalk = this.crouching ? 1.05 : (sprinting ? (outdoorHike ? 6.8 : 2.75) : (outdoorHike ? 2.65 : 1.75));
+    const maxSpeed = baseWalk * stairSlow * tightSlow;
     const mag = Math.min(1.0, _input.length());
     if (mag > 0.01) {
       _input.normalize().multiplyScalar(maxSpeed * mag);
@@ -1715,6 +1909,29 @@ export class FirstPersonHouseExplorer {
     }
 
     this.house.windTimeUniform.value = elapsed;
+    this._syncCameraFrustum();
+    if (this.terreno) {
+      let flashState = null;
+      if (this.flashlightOn) {
+        this.camera.getWorldPosition(_flashWorldPos);
+        this.camera.getWorldDirection(_flashWorldDir);
+        flashState = { enabled: true, position: _flashWorldPos, direction: _flashWorldDir, intensity: 4.5 };
+      }
+      this.terreno.update(this.camera.position, elapsed, flashState);
+
+      // Keep main directional sun/moon shadow camera centered on player outdoors & aligned to active sky!
+      const tod = this.terreno.getTimeOfDay();
+      if (tod && this.moonLight) {
+        const sd = this.terreno.atmoUniforms.uSunDir.value;
+        const nearComp = Math.hypot(this.playerPos.x - 1.5, this.playerPos.z - 4.5) < 35.0;
+        const tx = nearComp ? 0.5 : this.playerPos.x;
+        const ty = nearComp ? 7.5 : this.floorY + 2.0;
+        const tz = nearComp ? 4.5 : this.playerPos.z;
+        this.moonLight.target.position.set(tx, ty, tz);
+        this.moonLight.position.set(tx + sd.x * 46.0, ty + sd.y * 46.0, tz + sd.z * 46.0);
+        this.moonLight.target.updateMatrixWorld();
+      }
+    }
     this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
 
     const propStates = {};
@@ -1906,7 +2123,20 @@ export class FirstPersonHouseExplorer {
       if (x > -3.1 && x < 0.25 && z > -2.0 && z < 10.2) {
         return { id: 'exterior', code: '中庭', floor: 1, building: 'courtyard', nameJp: '石灯籠の苔中庭（母屋↔隣棟）' };
       }
-      return { id: 'exterior', code: 'EXT', floor: 1, building: 'courtyard', nameJp: '深い森・苔石アプローチ' };
+      const distBase = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
+      if (this.terreno && distBase > 22.0) {
+        const b = this.terreno.getBiomeInfoAt(x, z);
+        const dirNS = z < 0 ? '北' : '南';
+        const distLabel = distBase >= 1000 ? `${(distBase / 1000).toFixed(2)}km` : `${Math.round(distBase)}m`;
+        return {
+          id: 'exterior_mountain',
+          code: `EL+${Math.round(b.asl)}m`,
+          floor: 1,
+          building: 'courtyard',
+          nameJp: `${b.zoneJp}（母屋より${dirNS} ${distLabel}）`,
+        };
+      }
+      return { id: 'exterior', code: 'EXT', floor: 1, building: 'courtyard', nameJp: '深い森・苔石アプローチ（標高 +520m）' };
     }
 
     if (this.currentFloor === -1 && x < 0.0) {
@@ -1962,12 +2192,14 @@ export class FirstPersonHouseExplorer {
         playerZ: this.playerPos.z,
       });
 
-      // Keep deep underground spaces crystal clear (no exterior forest fog bleed!)
+      // Keep underground crystal clear and standard meshes smoothly harmonized with TERRENO's 19km atmosphere!
       if (this.scene.fog) {
-        const targetFog = this.currentFloor < 0 || this.inElevator ? 0.0035 : 0.030;
+        const targetFog = this.currentFloor < 0 || this.inElevator ? 0.0035 : 0.00018;
         this.scene.fog.density += (targetFog - this.scene.fog.density) * Math.min(1, dt * 8);
       }
 
+      const todPreset = this.terreno ? this.terreno.getTimeOfDay() : null;
+      const outdoorExp = todPreset ? todPreset.exposure : 1.12;
       let targetExposure = 1.15;
       if (this.flashlightOn) targetExposure = 1.06;
       else if (this.inElevator) targetExposure = 1.18;
@@ -1976,9 +2208,13 @@ export class FirstPersonHouseExplorer {
       else if (this.currentFloor === -2) targetExposure = 1.16;
       else if (this.currentFloor === 0) targetExposure = 1.02;
       else if (this.activeBuilding === 'storage') targetExposure = 1.08;
-      else if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') targetExposure = 1.18;
-      else if (room && (room.id === 'exterior' || room.id.includes('passage') || room.id.includes('gallery') || room.id.includes('stair'))) {
+      else if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') targetExposure = this.currentTodId === 'night' ? 1.18 : outdoorExp;
+      else if (room && (room.id === 'exterior_mountain' || room.id === 'exterior')) {
+        targetExposure = this.currentTodId === 'night' ? 1.20 : outdoorExp;
+      } else if (room && (room.id.includes('passage') || room.id.includes('gallery') || room.id.includes('stair'))) {
         targetExposure = 1.24;
+      } else if (this.currentTodId !== 'night') {
+        targetExposure = outdoorExp;
       }
       this.postfx.render(this.scene, this.camera, elapsed, targetExposure);
 
@@ -1991,17 +2227,22 @@ export class FirstPersonHouseExplorer {
         const inCamper = this.activeBuilding === 'camper';
         const inAnnex = this.activeBuilding === 'annex';
         const inStorage = this.activeBuilding === 'storage';
-        let sheetIndex = this.currentFloor + 3; // 0=B4F, 1=B3F, 2=B2F, 3=B1F, 4=1F..9=6F, 10=RF!
-        let floorCode = this.activeBuilding === 'courtyard'
-          ? '中庭'
-          : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code);
+        const distFromComp = Math.hypot(this.playerPos.x - TERRENO_WORLD.compoundCenterX, this.playerPos.z - TERRENO_WORLD.compoundCenterZ);
+        const farOutdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && distFromComp > 22.0;
+
+        let sheetIndex = farOutdoors ? 20 : (this.currentFloor + 3); // 0..19 CAD sheets, 20 = TERRENO 5×19km Topo Map!
+        let floorCode = farOutdoors
+          ? '山岳'
+          : (this.activeBuilding === 'courtyard'
+            ? '中庭'
+            : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code));
         let localX = this.playerPos.x;
         let localZ = this.playerPos.z;
         let localDx = _lookDir.x;
         let localDz = _lookDir.z;
 
         if (inKei) {
-          sheetIndex = SHEET_OFFSETS.kei;
+          sheetIndex = distFromComp > 26.0 ? 20 : SHEET_OFFSETS.kei;
           floorCode = this.drivingVehicle === 'kei' ? '軽運転' : '軽バン';
           const kl = this.worldToKeiLocal(this.playerPos.x, this.playerPos.z);
           localX = kl.lx;
@@ -2012,7 +2253,7 @@ export class FirstPersonHouseExplorer {
           localDx = _lookDir.x * c - _lookDir.z * s;
           localDz = _lookDir.x * s + _lookDir.z * c;
         } else if (inCamper) {
-          sheetIndex = SHEET_OFFSETS.camper + (this.currentFloor === 2 ? 1 : 0);
+          sheetIndex = distFromComp > 26.0 ? 20 : (SHEET_OFFSETS.camper + (this.currentFloor === 2 ? 1 : 0));
           floorCode = this.drivingVehicle === 'camper' ? 'RV運転' : (this.currentFloor === 2 ? 'RV 2F' : 'RV 1F');
           const cl = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
           localX = cl.lx;
@@ -2038,6 +2279,8 @@ export class FirstPersonHouseExplorer {
         this.callbacks.onPoseUpdate({
           x: this.playerPos.x,
           z: this.playerPos.z,
+          yaw: this.yaw,
+          todId: this.currentTodId,
           localX,
           localZ,
           dx: localDx,
@@ -2060,6 +2303,7 @@ export class FirstPersonHouseExplorer {
           this.callbacks.onTelemetry({
             ...this.adaptive.getTelemetry(),
             batch: this.house.batchStats,
+            terreno: this.terreno ? this.terreno.getStats() : null,
           });
         }
       }
