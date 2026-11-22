@@ -1037,8 +1037,249 @@ html, body {
   display: none !important;
 }
 
+/* TERRENO 5km × 19km GSI-Style Topographic Survey Map Console (Sheet 20) */
+.floor-tab-terreno {
+  background: linear-gradient(135deg, #0d3b32, #145c4b) !important;
+  color: #dffcf0 !important;
+  border-color: rgba(52, 211, 153, 0.55) !important;
+  font-weight: 700;
+}
+.floor-tab-terreno.active {
+  background: linear-gradient(135deg, #10b981, #047857) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.35);
+}
+
+.terreno-map-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 14px;
+  background: #0c141d;
+  color: #e2edf7;
+}
+
+.terreno-survey-root {
+  display: grid;
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.terreno-survey-left {
+  background: #080f16;
+  border: 1px solid rgba(125, 170, 204, 0.28);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.terreno-map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.terreno-map-hint {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6ee7b7;
+}
+
+.terreno-map-canvas {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 6px;
+  cursor: crosshair;
+  display: block;
+}
+
+.terreno-survey-right {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.terreno-card {
+  background: #101b27;
+  border: 1px solid rgba(125, 170, 204, 0.24);
+  border-radius: 7px;
+  padding: 7px 10px;
+}
+
+.terreno-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #93c5fd;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.terreno-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: rgba(148, 163, 184, 0.18);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #e2e8f0;
+}
+
+.terreno-telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.terreno-telemetry-grid > div {
+  background: rgba(8, 15, 22, 0.72);
+  border: 1px solid rgba(148, 184, 214, 0.16);
+  border-radius: 5px;
+  padding: 4px 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.terreno-telemetry-grid label {
+  font-size: 9.5px;
+  color: #8fa9bf;
+}
+
+.terreno-telemetry-grid strong {
+  font-size: 11.5px;
+  color: #f1f5f9;
+  font-family: var(--font-mono);
+}
+
+.terreno-tod-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.terreno-tod-btn {
+  background: #0a121b;
+  border: 1px solid rgba(148, 184, 214, 0.28);
+  border-radius: 6px;
+  padding: 7px 6px;
+  color: #cbd5e1;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: all 0.15s ease;
+}
+
+.terreno-tod-btn strong {
+  font-size: 12px;
+  color: #f8fafc;
+}
+
+.terreno-tod-btn span {
+  font-size: 9px;
+  color: #8fa9bf;
+  text-align: center;
+}
+
+.terreno-tod-btn:hover {
+  border-color: #38bdf8;
+  background: #132233;
+}
+
+.terreno-tod-btn.active {
+  background: linear-gradient(135deg, #0c4a6e, #065f46);
+  border-color: #34d399;
+  color: #ffffff;
+}
+
+.terreno-landmarks-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.terreno-lm-btn {
+  background: #0a121b;
+  border: 1px solid rgba(148, 184, 214, 0.22);
+  border-radius: 6px;
+  padding: 7px 9px;
+  text-align: left;
+  color: #e2edf7;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.terreno-lm-btn:hover {
+  border-color: #34d399;
+  background: #122432;
+}
+
+.terreno-lm-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.terreno-lm-code {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+}
+
+.terreno-lm-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #f8fafc;
+  flex: 1;
+}
+
+.terreno-lm-asl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #6ee7b7;
+}
+
+.terreno-lm-desc {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.terreno-profile-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 184, 214, 0.18);
+}
+
 @media (max-width: 860px) {
   .map-body {
+    grid-template-columns: 1fr;
+  }
+  .terreno-survey-root {
+    grid-template-columns: 1fr;
+  }
+  .terreno-telemetry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .terreno-landmarks-grid {
     grid-template-columns: 1fr;
   }
 }

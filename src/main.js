@@ -12,6 +12,7 @@ const floorBadgeEl = document.getElementById('floor-badge');
 const roomCodeEl = document.getElementById('room-code');
 const roomNameEl = document.getElementById('room-name');
 const btnInstall = document.getElementById('btn-install');
+const btnTod = document.getElementById('btn-tod');
 const btnFlash = document.getElementById('btn-flash');
 const btnAudio = document.getElementById('btn-audio');
 const btnMap = document.getElementById('btn-map');
@@ -40,6 +41,10 @@ const elvBtnOpen = document.getElementById('elv-btn-open');
 const elvBtnClose = document.getElementById('elv-btn-close');
 
 const mapModal = document.getElementById('map-modal');
+const cadMapBody = document.getElementById('cad-map-body');
+const terrenoMapPanel = document.getElementById('terreno-map-panel');
+const bpLayersEl = document.getElementById('bp-layers');
+const btnExportSvg = document.getElementById('btn-export-svg');
 const blueprintMount = document.getElementById('blueprint-mount');
 const roomDetailBar = document.getElementById('room-detail-bar');
 const areaTableTitle = document.getElementById('area-table-title');
@@ -48,7 +53,10 @@ const tableAreas = document.getElementById('table-areas');
 let mapVisible = false;
 let perfVisible = false;
 let isDriving = false;
-let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, dx: 0, dz: 1 };
+let activeSheetIdx = 4;
+let terrenoMap2d = null;
+let terrenoMapMounted = false;
+let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, yaw: Math.PI, todId: 'night', dx: 0, dz: 1 };
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -177,14 +185,56 @@ function renderFloorAreaTable(sheetIdx) {
   `;
 }
 
+function ensureTerrenoMapMounted() {
+  if (!explorer || !explorer.terreno) return null;
+  if (!terrenoMap2d) {
+    terrenoMap2d = explorer.terreno.getOrCreateMap2D({
+      onSetTimeOfDay: (todId) => {
+        if (explorer) explorer.setTimeOfDay(todId);
+      },
+      onTeleportLandmark: (lmId) => {
+        if (explorer) {
+          explorer.teleportToLandmark(lmId);
+          toggleMap(false);
+        }
+      },
+      onTeleportWorld: (wx, wz) => {
+        if (explorer) {
+          explorer.teleportToWorld(wx, wz);
+          toggleMap(false);
+        }
+      },
+    });
+  }
+  if (!terrenoMapMounted && terrenoMapPanel) {
+    terrenoMap2d.mount(terrenoMapPanel);
+    terrenoMapMounted = true;
+  }
+  return terrenoMap2d;
+}
+
 function selectBlueprintFloor(sheetIdx) {
-  const idx = Math.max(0, Math.min(BLUEPRINT_SHEETS.length - 1, Number(sheetIdx) || 0));
-  blueprint.setFloor(idx);
-  renderFloorAreaTable(idx);
+  const numIdx = Number(sheetIdx);
+  const isTerrenoSheet = numIdx === 20;
+  activeSheetIdx = isTerrenoSheet ? 20 : Math.max(0, Math.min(BLUEPRINT_SHEETS.length - 1, numIdx || 0));
+
   document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
-    btn.classList.toggle('active', Number(btn.dataset.floor) === idx);
+    btn.classList.toggle('active', Number(btn.dataset.floor) === activeSheetIdx);
   });
-  if (lastPose) blueprint.updateCameraPose(lastPose);
+
+  if (cadMapBody) cadMapBody.classList.toggle('hidden', isTerrenoSheet);
+  if (terrenoMapPanel) terrenoMapPanel.classList.toggle('hidden', !isTerrenoSheet);
+  if (bpLayersEl) bpLayersEl.classList.toggle('hidden', isTerrenoSheet);
+  if (btnExportSvg) btnExportSvg.classList.toggle('hidden', isTerrenoSheet);
+
+  if (isTerrenoSheet) {
+    const m2d = ensureTerrenoMapMounted();
+    if (m2d) m2d.render(lastPose);
+  } else {
+    blueprint.setFloor(activeSheetIdx);
+    renderFloorAreaTable(activeSheetIdx);
+    if (lastPose) blueprint.updateCameraPose(lastPose);
+  }
 }
 
 document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
@@ -202,6 +252,11 @@ function toggleMap(force = null) {
 }
 
 function renderTelemetry(t) {
+  const tr = t.terreno;
+  const trHtml = tr ? `
+    <div>TERRENO: <strong>5×19km (${tr.bakeMs}ms)</strong></div>
+    <div>Forest: <strong>${tr.forest.sugi + tr.forest.abies + tr.forest.buna + tr.forest.midConifers + tr.forest.midBroad}</strong> inst</div>
+  ` : '';
   perfGrid.innerHTML = `
     <div>FPS: <strong>${t.fps}</strong> / ${t.targetHz}Hz</div>
     <div>Frame: <strong>${t.frameMs}ms</strong></div>
@@ -211,6 +266,7 @@ function renderTelemetry(t) {
     <div>Tris: <strong>${(t.triangles / 1000).toFixed(1)}k</strong></div>
     <div>Lights: <strong>${t.activeLights}</strong> active</div>
     <div>Shadows: <strong>${t.shadowRate}/s</strong></div>
+    ${trHtml}
   `;
 }
 
@@ -219,7 +275,11 @@ function togglePerf(force = null) {
   perfPanel.classList.toggle('hidden', !perfVisible);
   btnPerf.classList.toggle('active', perfVisible);
   if (perfVisible && explorer && explorer.adaptive) {
-    renderTelemetry({ ...explorer.adaptive.getTelemetry(), batch: explorer.house.batchStats });
+    renderTelemetry({
+      ...explorer.adaptive.getTelemetry(),
+      batch: explorer.house.batchStats,
+      terreno: explorer.terreno ? explorer.terreno.getStats() : null,
+    });
   }
 }
 
@@ -283,11 +343,23 @@ try {
   explorer = new FirstPersonHouseExplorer(canvas3dEl, {
     onPoseUpdate: (pose) => {
       lastPose = pose;
-      if (mapVisible) blueprint.updateCameraPose(pose);
+      if (mapVisible) {
+        if (activeSheetIdx === 20 && terrenoMap2d) terrenoMap2d.render(pose);
+        else blueprint.updateCameraPose(pose);
+      }
       floorBadgeEl.textContent = pose.floorCode || '1F';
       if (pose.room) {
         roomCodeEl.textContent = pose.room.code;
         roomNameEl.textContent = pose.room.nameJp;
+      }
+    },
+    onTimeOfDayChange: (preset) => {
+      if (btnTod && preset) {
+        btnTod.textContent = `空: ${preset.labelJp}`;
+        btnTod.classList.toggle('active', preset.id !== 'night');
+      }
+      if (mapVisible && activeSheetIdx === 20 && terrenoMap2d) {
+        terrenoMap2d.render({ ...lastPose, todId: preset?.id });
       }
     },
     onAimChange: (aim) => {
@@ -326,6 +398,9 @@ try {
   webglErrorMsgEl.textContent = `WebGL初期化エラー: ${err?.message || err}`;
 }
 
+if (btnTod) {
+  btnTod.addEventListener('click', () => explorer && explorer.cycleTimeOfDay());
+}
 btnFlash.addEventListener('click', () => {
   if (!explorer) return;
   if (isDriving) explorer.toggleVehicleHeadlights();
@@ -477,25 +552,39 @@ document.getElementById('table-openings').innerHTML = `
 
 const params = new URLSearchParams(window.location.search);
 if (explorer) {
+  if (params.get('tod')) {
+    explorer.setTimeOfDay(params.get('tod'));
+  }
   if (params.has('elvFloor')) {
     const ef = Number(params.get('elvFloor'));
     const eOpen = params.get('elvDoors') !== 'closed';
     if (!Number.isNaN(ef)) explorer.snapElevator(ef, eOpen);
   }
   if (params.get('camperPose')) {
-    const [cx, cz, cyaw] = params.get('camperPose').split(',').map(Number);
+    const parts = params.get('camperPose').split(',');
+    const cx = Number(parts[0]), cz = Number(parts[1]), cyaw = Number(parts[2]);
+    const force = parts[3] === '1';
     if (!Number.isNaN(cx) && !Number.isNaN(cz)) {
-      explorer.setCamperPose(cx, cz, Number.isNaN(cyaw) ? 0 : cyaw);
+      explorer.setCamperPose(cx, cz, Number.isNaN(cyaw) ? 0 : cyaw, force);
     }
   }
   if (params.get('keiPose')) {
-    const [kx, kz, kyaw] = params.get('keiPose').split(',').map(Number);
+    const parts = params.get('keiPose').split(',');
+    const kx = Number(parts[0]), kz = Number(parts[1]), kyaw = Number(parts[2]);
+    const force = parts[3] === '1';
     if (!Number.isNaN(kx) && !Number.isNaN(kz)) {
-      explorer.setKeiPose(kx, kz, Number.isNaN(kyaw) ? 0 : kyaw);
+      explorer.setKeiPose(kx, kz, Number.isNaN(kyaw) ? 0 : kyaw, force);
     }
   }
   const floorParam = params.has('floor') ? Number(params.get('floor')) : null;
-  if (params.get('keiLocal')) {
+  if (params.get('landmark')) {
+    explorer.teleportToLandmark(params.get('landmark'));
+    if (params.has('yaw') || params.has('pitch')) {
+      const yw = params.has('yaw') ? Number(params.get('yaw')) : explorer.yaw;
+      const pt = params.has('pitch') ? Number(params.get('pitch')) : explorer.pitch;
+      explorer.setPose(explorer.playerPos.x, explorer.playerPos.z, yw, pt, 1);
+    }
+  } else if (params.get('keiLocal')) {
     const [lx, lz] = params.get('keiLocal').split(',').map(Number);
     const yaw = params.has('yaw') ? Number(params.get('yaw')) : 0;
     const pitch = params.has('pitch') ? Number(params.get('pitch')) : -0.05;

@@ -9,6 +9,7 @@ import { buildCamper3D } from './buildCamper3d.js';
 import { buildKeiCar3D } from './buildKeiCar3d.js';
 import { buildElevator3D } from './buildElevator3d.js';
 import { buildDeepBasement3D } from './buildDeepBasement3d.js';
+import { createTerrenoEngine } from './terreno/terrenoEngine.js';
 
 export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
@@ -2045,23 +2046,9 @@ export function buildHouse3D(scene) {
   addLight('Attic_Hatch_Bulb', attFloorIdx, 'north', 0xffc684, 1.55, 6.8, 2.15, yAtt + 2.10, 2.35);
 
   // =========================================================================
-  // 7. EXTERIOR FOREST GROUND (WITH EXACT 5m×10m HOUSE CUTOUT!) & 22-34m CEDARS
+  // 7. TERRENO 5 km × 19 km (95 km²) ULTRA-PRECISION MOUNTAIN & DEEP-FOREST ENGINE
   // =========================================================================
-  // Build exterior forest ground as 4 surrounding quads so it NEVER cuts across B1F / ST0!
-  function addGroundQuad(x1, z1, x2, z2) {
-    const w = x2 - x1;
-    const d = z2 - z1;
-    const m = makeSurfaceMat('forest_mulch_ground', w, d, { roughness: 0.96 });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set((x1 + x2) / 2, -0.35, (z1 + z2) / 2);
-    mesh.receiveShadow = true;
-    exteriorGroup.add(mesh);
-  }
-  addGroundQuad(-48, -48, 53, 0);    // North of house
-  addGroundQuad(-48, 10, 53, 58);    // South of house
-  addGroundQuad(-48, 0, 0, 10);      // West of house
-  addGroundQuad(5, 0, 53, 10);       // East of house
+  const terreno = createTerrenoEngine(scene, 'night');
 
   // North Mossy Stepping Stone Approach & Porch Canopy
   addBox(exteriorGroup, 2.10, 0.14, 7.50, makeSurfaceMat('paver_moss_stones', 2.2, 7.5), 1.12, -0.28, -3.75, false);
@@ -2074,7 +2061,7 @@ export function buildHouse3D(scene) {
   addBox(exteriorGroup, 0.14, 2.10, 1.30, makeSurfaceMat('wood_lattice_dark', 1.30, 2.10), 0.08, 0.95, 10.68, true);
   addBox(exteriorGroup, 0.34, 0.62, 0.78, makeFrontMat('prop_ac_outdoor'), 5.20, 0.02, 2.65, true);
 
-  // Mossy Cliff Boulders (positioned safely outside all 3 buildings AND the Giant Camper drive bay!)
+  // Mossy Courtyard Accent Boulders (positioned safely outside all 3 buildings AND vehicle bays!)
   const rockGeo = new THREE.DodecahedronGeometry(1.0, 1);
   const rockMossMat = makeSurfaceMat('rock_mossy_cliff', 2.5, 2.5, { roughness: 0.88 });
   const rockWetMat = makeSurfaceMat('rock_wet_black', 2.0, 2.0, { roughness: 0.34 });
@@ -2092,7 +2079,6 @@ export function buildHouse3D(scene) {
     boulderColliders.push({ x: bx, z: bz, r: sx * 0.88 });
   });
 
-  // GPU Wind-Animated Instanced Towering Ancient Cedars (22m - 34m tall enveloping the 6-story 18.93m tower + compound!)
   const windTimeUniform = { value: 0 };
   let seed = 42081;
   const rand = () => {
@@ -2100,98 +2086,8 @@ export function buildHouse3D(scene) {
     return seed / 4294967296;
   };
 
-  const treeSpecs = [];
-  const attempts = 1550;
-  for (let i = 0; i < attempts && treeSpecs.length < 305; i++) {
-    const tx = -42 + rand() * 88;
-    const tz = -35 + rand() * 82;
-    // Clear Main Tower, Annex + Balconies, Concrete Warehouse + STS1, Giant Camper Bay (6.4..9.1, 2..9.5), AND North/East Forest Drive Track!
-    const inHouseClear = tx > -11.60 && tx < 13.00 && tz > -4.60 && tz < 14.20;
-    const inDriveClearing = tx > -10.50 && tx < 13.50 && tz > -14.50 && tz <= -4.0;
-    if (inHouseClear || inDriveClearing) continue;
-
-    const isUnderstory = i % 5 === 0;
-    const h = isUnderstory ? (6.5 + rand() * 7.0) : (22.0 + rand() * 12.0); // up to 34m ancient forest giants framing 6F sky terrace!
-    const rad = isUnderstory ? (0.12 + rand() * 0.08) : (0.24 + rand() * 0.19);
-    const cw = isUnderstory ? (0.95 + rand() * 0.55) : (1.25 + rand() * 0.78);
-    treeSpecs.push({ x: tx, z: tz, h, rad, cw, rot: rand() * Math.PI * 2 });
-    if (tx > -19 && tx < 20 && tz > -19 && tz < 19) {
-      treeColliders.push({ x: tx, z: tz, r: rad + 0.14 });
-    }
-  }
-
-  const trunkGeo = new THREE.CylinderGeometry(0.42, 1.0, 1.0, 7);
-  trunkGeo.translate(0, 0.5, 0);
-  const trunkMat = makeSurfaceMat('yakisugi_dark', 1.2, 5.2, { color: 0x6b5c4e, roughness: 0.92 });
-  const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, treeSpecs.length);
-  trunkInst.castShadow = false;
-  trunkInst.receiveShadow = true;
-
-  const coneGeo = new THREE.ConeGeometry(1.0, 1.0, 7);
-  coneGeo.translate(0, 0.5, 0);
-  const foliageDeepMat = new THREE.MeshStandardMaterial({ color: 0x172b1c, roughness: 0.88, metalness: 0.0 });
-  const foliageMidMat = new THREE.MeshStandardMaterial({ color: 0x203b25, roughness: 0.85, metalness: 0.0 });
-  injectForestWindShader(foliageDeepMat, windTimeUniform);
-  injectForestWindShader(foliageMidMat, windTimeUniform);
-
-  const tier1Inst = new THREE.InstancedMesh(coneGeo, foliageDeepMat, treeSpecs.length);
-  const tier2Inst = new THREE.InstancedMesh(coneGeo, foliageMidMat, treeSpecs.length);
-  const tier3Inst = new THREE.InstancedMesh(coneGeo, foliageDeepMat, treeSpecs.length);
-  const tier4Inst = new THREE.InstancedMesh(coneGeo, foliageMidMat, treeSpecs.length);
-  [tier1Inst, tier2Inst, tier3Inst, tier4Inst].forEach((im) => {
-    im.castShadow = false;
-    im.receiveShadow = true;
-  });
-
-  const dummy = new THREE.Object3D();
-  treeSpecs.forEach((t, i) => {
-    dummy.position.set(t.x, -0.35, t.z);
-    dummy.rotation.set(0, t.rot, 0);
-    dummy.scale.set(t.rad, t.h * 0.72, t.rad);
-    dummy.updateMatrix();
-    trunkInst.setMatrixAt(i, dummy.matrix);
-
-    const tiers = [
-      [tier1Inst, t.h * 0.13, t.cw * 1.02, t.h * 0.36],
-      [tier2Inst, t.h * 0.35, t.cw * 0.85, t.h * 0.32],
-      [tier3Inst, t.h * 0.57, t.cw * 0.65, t.h * 0.27],
-      [tier4Inst, t.h * 0.78, t.cw * 0.43, t.h * 0.24],
-    ];
-    for (const [inst, yOff, w, th] of tiers) {
-      dummy.position.set(t.x, -0.35 + yOff, t.z);
-      dummy.rotation.set(0, t.rot + yOff * 0.3, 0);
-      dummy.scale.set(w, th, w);
-      dummy.updateMatrix();
-      inst.setMatrixAt(i, dummy.matrix);
-    }
-  });
-  [trunkInst, tier1Inst, tier2Inst, tier3Inst, tier4Inst].forEach((im) => {
-    im.instanceMatrix.needsUpdate = true;
-    exteriorGroup.add(im);
-  });
-
-  // Forest Underbrush Ferns (excluding all 3 buildings + Camper parking bay & drive clearing)
-  const bushGeo = new THREE.DodecahedronGeometry(0.65, 0);
-  const bushMat = new THREE.MeshStandardMaterial({ color: 0x1a301e, roughness: 0.92 });
-  const bushSpecs = [];
-  for (let i = 0; i < 320 && bushSpecs.length < 105; i++) {
-    const bx = -22 + rand() * 48;
-    const bz = -18 + rand() * 44;
-    if (bx > -10.4 && bx < 12.6 && bz > -13.5 && bz < 12.8) continue;
-    bushSpecs.push({ x: bx, z: bz, s: 0.65 + rand() * 0.95 });
-  }
-  const bushInst = new THREE.InstancedMesh(bushGeo, bushMat, bushSpecs.length);
-  bushSpecs.forEach((b, i) => {
-    dummy.position.set(b.x, -0.20, b.z);
-    dummy.rotation.set(0, i * 0.7, 0);
-    dummy.scale.set(b.s * 1.25, b.s * 0.58, b.s * 1.15);
-    dummy.updateMatrix();
-    bushInst.setMatrixAt(i, dummy.matrix);
-  });
-  bushInst.instanceMatrix.needsUpdate = true;
-  exteriorGroup.add(bushInst);
-
   // Exterior Moonlit Canopy Fill Lights spanning all 6-story Main Tower + Annex + Warehouse + Vehicles
+  const exteriorFillLights = [];
   [
     [2.5, 4.5, 16.5, 0x4a73a3, 1.85, 22],
     [2.5, 13.5, 17.8, 0x5c8ac0, 2.45, 28],
@@ -2206,6 +2102,7 @@ export function buildHouse3D(scene) {
     const l = new THREE.PointLight(col, inten, dist, 1.4);
     l.position.set(lx, ly, lz);
     exteriorGroup.add(l);
+    exteriorFillLights.push({ light: l, baseIntensity: inten });
   });
 
   // Drifting Midnight Forest Fireflies across the compound clearing (rising up to 19m past 5F/6F Sky Terraces!)
@@ -2382,6 +2279,8 @@ export function buildHouse3D(scene) {
     elevator,
     b3Thermal: deepBasement.b3Thermal,
     b4Lab: deepBasement.b4Lab,
+    terreno,
+    exteriorFillLights,
     batchStats: combinedBatchStats,
   };
 }
