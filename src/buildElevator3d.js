@@ -662,13 +662,13 @@ export function buildElevator3D(ctx) {
 
   const copButtons = new Map();
   const copBtnSpecs = [
-    { id: 'elv_btn_1',     floor: 1,    label: '1F',  sub: '地上',  y: 1.66, accent: '#38e89e', prompt: '【1F 地上直通】エレベーターで地上へ' },
-    { id: 'elv_btn_0',     floor: 0,    label: 'B1',  sub: '倉庫',  y: 1.52, accent: '#f5b041', prompt: '【B1F 地下1階】セメント倉庫へ' },
-    { id: 'elv_btn_-1',    floor: -1,   label: 'B2',  sub: 'ｽﾀｼﾞｵ', y: 1.38, accent: '#f5b041', prompt: '【B2F 地下2階】10×10mスタジオへ' },
-    { id: 'elv_btn_-2',    floor: -2,   label: 'B3',  sub: 'ｼｪﾙﾀｰ', y: 1.24, accent: '#f5b041', prompt: '【B3F 地下3階】木造シェルターへ' },
-    { id: 'elv_btn_-3',    floor: -3,   label: 'B4',  sub: '極秘研', y: 1.10, accent: '#f43f5e', prompt: '【B4F 地下4階】ギャング極秘研究所へ (ELV専用)' },
-    { id: 'elv_btn_open',  floor: null, label: '◀▶',  sub: '',      y: 0.94, accent: '#60a5fa', prompt: 'エレベーター扉を開く (安全延長)', action: 'open' },
-    { id: 'elv_btn_close', floor: null, label: '▶◀',  sub: '',      y: 0.80, accent: '#94a3b8', prompt: 'エレベーター扉を閉める', action: 'close' },
+    { id: 'elv_btn_1',     floor: 1,    label: '1F',  sub: '地上',  y: 1.66, accent: '#38e89e', prompt: '1F' },
+    { id: 'elv_btn_0',     floor: 0,    label: 'B1',  sub: '倉庫',  y: 1.52, accent: '#f5b041', prompt: 'B1' },
+    { id: 'elv_btn_-1',    floor: -1,   label: 'B2',  sub: 'ｽﾀｼﾞｵ', y: 1.38, accent: '#f5b041', prompt: 'B2' },
+    { id: 'elv_btn_-2',    floor: -2,   label: 'B3',  sub: 'ｼｪﾙﾀｰ', y: 1.24, accent: '#f5b041', prompt: 'B3' },
+    { id: 'elv_btn_-3',    floor: -3,   label: 'B4',  sub: '極秘研', y: 1.10, accent: '#f43f5e', prompt: 'B4' },
+    { id: 'elv_btn_open',  floor: null, label: '◀▶',  sub: '',      y: 0.94, accent: '#60a5fa', prompt: '開', action: 'open' },
+    { id: 'elv_btn_close', floor: null, label: '▶◀',  sub: '',      y: 0.80, accent: '#94a3b8', prompt: '閉', action: 'close' },
   ];
 
   // Forward-declared hyper-realistic elevator controller
@@ -720,8 +720,9 @@ export function buildElevator3D(ctx) {
   copBtnSpecs.forEach((spec) => {
     const offMat = makeButtonMat(spec.label, spec.accent, false, spec.sub);
     const onMat = makeButtonMat(spec.label, spec.accent, true, spec.sub);
-    const btnMesh = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.115, 0.165), offMat);
-    btnMesh.position.set(copX + 0.012, spec.y, copZ);
+    // Generous extruded physical 3D button for crisp mobile tap & crosshair aiming (no overlay UI needed!)
+    const btnMesh = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.128, 0.195), offMat);
+    btnMesh.position.set(copX + 0.016, spec.y, copZ);
     btnMesh.userData.propId = spec.id;
     cabGroup.add(btnMesh);
     copButtons.set(spec.id, { mesh: btnMesh, offMat, onMat, floor: spec.floor });
@@ -770,14 +771,14 @@ export function buildElevator3D(ctx) {
     indBox.position.set(S.minX - 0.115, y0 + D.height + 0.125, doorCz);
     grp.add(indBox);
 
-    // Oversized Glowing Hall Call Button Panel
+    // Oversized Glowing Hall Call Button Panel (tappable directly in 3D!)
     const callId = `elv_call_${st.floor}`;
     const callAccent = st.classified ? '#f43f5e' : '#38e89e';
     const callOffMat = makeButtonMat('呼出', callAccent, false, st.code);
     const callOnMat = makeButtonMat('呼出', callAccent, true, st.code);
-    addEBox(elvStatic, 0.025, 0.36, 0.23, darkStainlessMat, S.minX - 0.105, y0 + 1.18, 2.36);
-    const callMesh = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.195, 0.175), callOffMat);
-    callMesh.position.set(S.minX - 0.125, y0 + 1.18, 2.36);
+    addEBox(elvStatic, 0.028, 0.40, 0.26, darkStainlessMat, S.minX - 0.105, y0 + 1.18, 2.36);
+    const callMesh = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.235, 0.215), callOffMat);
+    callMesh.position.set(S.minX - 0.130, y0 + 1.18, 2.36);
     callMesh.userData.propId = callId;
     grp.add(callMesh);
 
@@ -788,8 +789,8 @@ export function buildElevator3D(ctx) {
       isElevatorCall: true,
       mesh: callMesh,
       getLabel: () => (controller.currentStopFloor === st.floor && (controller.phase === 'IDLE_OPEN' || controller.phase === 'IDLE_CLOSED' || controller.phase === 'DOOR_OPENING')
-        ? `エレベーター扉を開く（${st.code} 待機中）`
-        : `エレベーターを呼ぶ（現在 ${ELEVATOR.stops.find((x) => x.floor === controller.currentStopFloor)?.code || 'B3'} → ${st.code}）`),
+        ? '開'
+        : `呼出 ${st.code}`),
       toggle: () => controller.callToFloor(st.floor),
     });
 

@@ -74,6 +74,207 @@ export class ArchitecturalBlueprint2D {
     return `<?xml version="1.0" encoding="UTF-8"?>\n${clone.outerHTML}`;
   }
 
+  /**
+   * Render all 20 architectural CAD sheets offscreen without altering the active displayed sheet.
+   * Returns an array of { index, code, filename, vw, vh, svgString, innerMarkup }.
+   */
+  _renderAllSheetsOffscreen() {
+    const prevFloor = this.activeFloor;
+    const prevContainer = this.container;
+    const prevSvg = this.svg;
+    const prevLayerGroups = this.layerGroups;
+    const prevCamGroup = this.camGroup;
+    const prevCamDot = this.camDot;
+    const prevCamCone = this.camCone;
+    const prevScale = this.scale;
+    const prevPadL = this.padL;
+    const prevPadR = this.padR;
+    const prevPadT = this.padT;
+    const prevPadB = this.padB;
+    const prevVW = this.curVW;
+    const prevVH = this.curVH;
+
+    const scratch = document.createElement('div');
+    const sheets = [];
+    try {
+      this.container = scratch;
+      for (let i = 0; i < BLUEPRINT_SHEETS.length; i++) {
+        this.activeFloor = i;
+        this.layerGroups = {};
+        this._buildSVG();
+        this.syncLayerVisibility();
+        if (this.layerGroups.camera) this.layerGroups.camera.style.display = 'none';
+        const clone = this.svg.cloneNode(true);
+        clone.setAttribute('xmlns', SVG_NS);
+        clone.setAttribute('width', String(this.curVW));
+        clone.setAttribute('height', String(this.curVH));
+        const fl = BLUEPRINT_SHEETS[i];
+        const safeCode = String(fl.code || `S${i}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const num = String(i + 1).padStart(2, '0');
+        sheets.push({
+          index: i,
+          code: fl.code,
+          filename: `${num}_NARROW50_${safeCode}.svg`,
+          vw: this.curVW,
+          vh: this.curVH,
+          svgString: `<?xml version="1.0" encoding="UTF-8"?>\n${clone.outerHTML}`,
+          innerMarkup: clone.innerHTML,
+        });
+      }
+    } finally {
+      this.activeFloor = prevFloor;
+      this.container = prevContainer;
+      this.svg = prevSvg;
+      this.layerGroups = prevLayerGroups;
+      this.camGroup = prevCamGroup;
+      this.camDot = prevCamDot;
+      this.camCone = prevCamCone;
+      this.scale = prevScale;
+      this.padL = prevPadL;
+      this.padR = prevPadR;
+      this.padT = prevPadT;
+      this.padB = prevPadB;
+      this.curVW = prevVW;
+      this.curVH = prevVH;
+    }
+    return sheets;
+  }
+
+  /**
+   * Export ALL 20 house/vehicle architectural CAD sheets combined into a single standalone vector SVG
+   * (4-column × 5-row print-ready architectural portfolio with collision-free namespaced IDs).
+   */
+  exportAllSheetsCombinedSVG() {
+    const sheets = this._renderAllSheetsOffscreen();
+    const cols = 4;
+    const cellW = 1120;
+    const cellH = 1520;
+    const gap = 36;
+    const pad = 48;
+    const rows = Math.ceil(sheets.length / cols);
+    const totalW = pad * 2 + cols * cellW + (cols - 1) * gap;
+    const totalH = pad * 2 + rows * cellH + (rows - 1) * gap;
+
+    const tiles = sheets.map((s, idx) => {
+      const col = idx % cols;
+      const row = Math.floor(idx / cols);
+      const tx = pad + col * (cellW + gap);
+      const ty = pad + row * (cellH + gap);
+      const prefix = `s${idx}-`;
+      // Namespace every SVG id and url(#...) reference so patterns & markers never collide across sheets
+      const scoped = s.innerMarkup
+        .replace(/\bid="([^"]+)"/g, (_, id) => `id="${prefix}${id}"`)
+        .replace(/url\(#([^)]+)\)/g, (_, id) => `url(#${prefix}${id})`);
+      return `<svg x="${tx}" y="${ty}" width="${cellW}" height="${cellH}" viewBox="0 0 ${s.vw} ${s.vh}" preserveAspectRatio="xMidYMid meet">${scoped}</svg>`;
+    });
+
+    return [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      `<svg xmlns="${SVG_NS}" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">`,
+      `<rect x="0" y="0" width="${totalW}" height="${totalH}" fill="#ece7dc"/>`,
+      ...tiles,
+      '</svg>',
+    ].join('\n');
+  }
+
+  /**
+   * Export ALL 20 individual architectural CAD .svg sheets + 1 combined portfolio .svg
+   * packaged into a valid standard ZIP Blob (zero external dependencies, IEEE 802.3 CRC-32).
+   */
+  exportAllSheetsZipBlob() {
+    const sheets = this._renderAllSheetsOffscreen();
+    const enc = new TextEncoder();
+
+    // Standard IEEE CRC-32 table
+    const crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      crcTable[n] = c >>> 0;
+    }
+    const crc32 = (buf) => {
+      let c = 0xffffffff;
+      for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    };
+
+    const entries = sheets.map((s) => ({
+      nameBytes: enc.encode(s.filename),
+      data: enc.encode(s.svgString),
+    }));
+
+    const localParts = [];
+    const centralParts = [];
+    let offset = 0;
+
+    for (const entry of entries) {
+      const crc = crc32(entry.data);
+      const size = entry.data.length;
+      const nLen = entry.nameBytes.length;
+
+      // Local File Header (30 bytes + filename)
+      const lh = new Uint8Array(30 + nLen);
+      const lv = new DataView(lh.buffer);
+      lv.setUint32(0, 0x04034b50, true);  // Signature PK\x03\x04
+      lv.setUint16(4, 20, true);          // Version needed
+      lv.setUint16(6, 0x0800, true);      // UTF-8 filename flag
+      lv.setUint16(8, 0, true);           // Method: STORE (uncompressed)
+      lv.setUint16(10, 0, true);          // Mod time
+      lv.setUint16(12, 0x5421, true);     // Mod date
+      lv.setUint32(14, crc, true);
+      lv.setUint32(18, size, true);
+      lv.setUint32(22, size, true);
+      lv.setUint16(26, nLen, true);
+      lv.setUint16(28, 0, true);
+      lh.set(entry.nameBytes, 30);
+
+      localParts.push(lh, entry.data);
+
+      // Central Directory File Header (46 bytes + filename)
+      const ch = new Uint8Array(46 + nLen);
+      const cv = new DataView(ch.buffer);
+      cv.setUint32(0, 0x02014b50, true);  // Signature PK\x01\x02
+      cv.setUint16(4, 20, true);
+      cv.setUint16(6, 20, true);
+      cv.setUint16(8, 0x0800, true);
+      cv.setUint16(10, 0, true);
+      cv.setUint16(12, 0, true);
+      cv.setUint16(14, 0x5421, true);
+      cv.setUint32(16, crc, true);
+      cv.setUint32(20, size, true);
+      cv.setUint32(24, size, true);
+      cv.setUint16(28, nLen, true);
+      cv.setUint16(30, 0, true);
+      cv.setUint16(32, 0, true);
+      cv.setUint16(34, 0, true);
+      cv.setUint16(36, 0, true);
+      cv.setUint32(38, 0, true);
+      cv.setUint32(42, offset, true);
+      ch.set(entry.nameBytes, 46);
+      centralParts.push(ch);
+
+      offset += lh.length + size;
+    }
+
+    const centralOffset = offset;
+    let centralSize = 0;
+    for (const p of centralParts) centralSize += p.length;
+
+    // End of Central Directory Record (22 bytes)
+    const eocd = new Uint8Array(22);
+    const ev = new DataView(eocd.buffer);
+    ev.setUint32(0, 0x06054b50, true);    // Signature PK\x05\x06
+    ev.setUint16(4, 0, true);
+    ev.setUint16(6, 0, true);
+    ev.setUint16(8, entries.length, true);
+    ev.setUint16(10, entries.length, true);
+    ev.setUint32(12, centralSize, true);
+    ev.setUint32(16, centralOffset, true);
+    ev.setUint16(20, 0, true);
+
+    return new Blob([...localParts, ...centralParts, eocd], { type: 'application/zip' });
+  }
+
   updateCameraPose(pose) {
     this.lastPose = pose;
     if (!this.camGroup) return;

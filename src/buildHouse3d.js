@@ -2048,7 +2048,7 @@ export function buildHouse3D(scene) {
   // =========================================================================
   // 7. TERRENO 5 km × 19 km (95 km²) ULTRA-PRECISION MOUNTAIN & DEEP-FOREST ENGINE
   // =========================================================================
-  const terreno = createTerrenoEngine(scene, 'night');
+  const terreno = createTerrenoEngine(scene, 'day');
 
   // North Mossy Stepping Stone Approach & Porch Canopy
   addBox(exteriorGroup, 2.10, 0.14, 7.50, makeSurfaceMat('paver_moss_stones', 2.2, 7.5), 1.12, -0.28, -3.75, false);
@@ -2076,7 +2076,7 @@ export function buildHouse3D(scene) {
     rMesh.rotation.set(i * 0.4, i * 1.1, 0.15);
     rMesh.receiveShadow = true;
     exteriorGroup.add(rMesh);
-    boulderColliders.push({ x: bx, z: bz, r: sx * 0.88 });
+    boulderColliders.push({ x: bx, z: bz, r: sx * 0.72, kind: 'boulder', height: sy * 1.15 });
   });
 
   const windTimeUniform = { value: 0 };

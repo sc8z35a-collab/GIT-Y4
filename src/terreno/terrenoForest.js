@@ -1233,7 +1233,10 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
             tmpColor.setRGB(0.84 + gVar * 0.26, 0.80 + gVar * 0.22, 0.76 + gVar * 0.20);
             imSugiTrunk.setColorAt(nSugi, tmpColor);
             nSugi++;
-            if (isDetailTile) newColliders.push({ x: wx, z: wz, r: Math.max(0.42, h * 0.028) });
+            if (isDetailTile) {
+              const trunkR = Math.max(0.24, Math.min(rS * 0.025, h * 0.026));
+              newColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
+            }
           } else if (species === 1 && nAbies < CAP_ABIES) {
             const h = (13.5 + rng() * 13.0) * altScale;
             const rS = h * (0.90 + rng() * 0.24);
@@ -1249,7 +1252,10 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
             tmpColor.setRGB(0.82 + gVar * 0.25, 0.82 + gVar * 0.20, 0.80 + gVar * 0.20);
             imAbiesTrunk.setColorAt(nAbies, tmpColor);
             nAbies++;
-            if (isDetailTile) newColliders.push({ x: wx, z: wz, r: Math.max(0.38, h * 0.026) });
+            if (isDetailTile) {
+              const trunkR = Math.max(0.22, Math.min(rS * 0.022, h * 0.023));
+              newColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
+            }
           } else if (species === 2 && nBuna < CAP_BUNA) {
             const h = (14.0 + rng() * 11.5) * altScale;
             const rS = h * (0.98 + rng() * 0.30);
@@ -1271,7 +1277,10 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
             tmpColor.setRGB(0.88 + tint * 0.18, 0.88 + tint * 0.18, 0.84 + tint * 0.16);
             imBunaTrunk.setColorAt(nBuna, tmpColor);
             nBuna++;
-            if (isDetailTile) newColliders.push({ x: wx, z: wz, r: Math.max(0.45, h * 0.032) });
+            if (isDetailTile) {
+              const trunkR = Math.max(0.26, Math.min(rS * 0.032, h * 0.032));
+              newColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
+            }
           }
         }
 
@@ -1322,16 +1331,23 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
 
           const y = geomorph.getHeightAt(wx, wz);
           const rScale = nearRiver ? (1.05 + rng() * 2.15) : (0.70 + rng() * 1.45);
+          const scaleY = rScale * (0.62 + rng() * 0.42);
+          const scaleZ = rScale * (0.82 + rng() * 0.38);
           dummyObj.position.set(wx, y - rScale * 0.46, wz);
           dummyObj.rotation.set((rng() - 0.5) * 0.28, rng() * Math.PI * 2, (rng() - 0.5) * 0.28);
-          dummyObj.scale.set(rScale, rScale * (0.62 + rng() * 0.42), rScale * (0.82 + rng() * 0.38));
+          dummyObj.scale.set(rScale, scaleY, scaleZ);
           dummyObj.updateMatrix();
           imBoulder.setMatrixAt(nBoulder, dummyObj.matrix);
           const bv = 0.78 + rng() * 0.36;
           tmpColor.setRGB(bv, bv * 1.02, bv * 1.05);
           imBoulder.setColorAt(nBoulder, tmpColor);
           nBoulder++;
-          if (rScale > 0.90) newColliders.push({ x: wx, z: wz, r: rScale * 0.85 });
+          // Exact protruding height above terrain: NEVER collide with buried pebbles hidden under grass!
+          const protrudeH = 0.92 * scaleY - rScale * 0.46;
+          if (protrudeH > 0.22) {
+            const coreR = Math.min(rScale, scaleZ) * 0.66;
+            newColliders.push({ x: wx, z: wz, r: coreR, kind: 'boulder', height: protrudeH });
+          }
         }
 
         // 2c. Fallen Mossy Nurse Logs (gentle forest floor only)
@@ -1357,6 +1373,8 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           tmpColor.setRGB(lv, lv * 0.96, lv * 0.90);
           imLog.setColorAt(nLog, tmpColor);
           nLog++;
+          // Low natural log step-over metadata (player auto-jumps, vehicles smoothly roll over!)
+          newColliders.push({ x: wx, z: wz, r: sc * 0.30, kind: 'log', height: sc * 0.34 });
         }
       }
     }
@@ -1590,6 +1608,22 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     }
   }
 
+  function ensureCollidersAt(wx, wz) {
+    const ntx = Math.floor(wx / NEAR_TILE_SIZE);
+    const ntz = Math.floor(wz / NEAR_TILE_SIZE);
+    if (ntx !== lastNearTx || ntz !== lastNearTz) {
+      lastNearTx = ntx;
+      lastNearTz = ntz;
+      rebuildNearForest(ntx, ntz);
+    }
+  }
+
+  function setSurfaceSuper(enabled, maxAniso = 8) {
+    const aniso = enabled ? Math.min(16, maxAniso) : 4;
+    if (foliageAtlas) { foliageAtlas.anisotropy = aniso; foliageAtlas.needsUpdate = true; }
+    if (barkTex) { barkTex.anisotropy = aniso; barkTex.needsUpdate = true; }
+  }
+
   function getLocalColliders() {
     return localColliders;
   }
@@ -1601,6 +1635,8 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   return {
     group,
     update,
+    ensureCollidersAt,
+    setSurfaceSuper,
     getLocalColliders,
     getStats,
   };

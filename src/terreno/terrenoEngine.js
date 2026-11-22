@@ -15,6 +15,7 @@ import { createTerrenoClipmap } from './terrenoClipmap.js';
 import { createTerrenoWater } from './terrenoWater.js';
 import { createTerrenoForest } from './terrenoForest.js';
 import { createTerrenoMap2D } from './terrenoMap2d.js';
+import { createTerrenoMap3D } from './terrenoMap3d.js';
 
 /**
  * TERRENO Engine — Unified 5 km × 19 km (95.0 km²) Ultra-Precision Mountain & Deep-Forest World Controller.
@@ -25,7 +26,7 @@ import { createTerrenoMap2D } from './terrenoMap2d.js';
  *   4. Deterministic Zero-GC Ecological Japanese Forest Streamer + 6,800 Mid-Distance Canopy Impostors
  *   5. Interactive GSI-Style 2D Topographic Contour Map & 6-Landmark Survey Console
  */
-export function createTerrenoEngine(scene, initialTodId = 'night') {
+export function createTerrenoEngine(scene, initialTodId = 'day') {
   const root = new THREE.Group();
   root.name = 'TERRENO_WORLD_5x19km';
 
@@ -33,7 +34,7 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
   const geomorph = buildTerrenoGeomorphology();
 
   // 2. Shared Atmosphere Uniforms (including uAtmoHorizonMap for volumetric Sea-of-Clouds & God-Rays!)
-  let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'night';
+  let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'day';
   const atmoUniforms = createSharedAtmosphereUniforms(currentTodId, geomorph);
 
   // 3. Instantiate visual & ecological subsystems
@@ -52,6 +53,7 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
   forest.update(initPos);
 
   let map2dInstance = null;
+  let map3dInstance = null;
 
   function setTimeOfDay(presetId) {
     if (!ATMOSPHERE_PRESETS[presetId]) return ATMOSPHERE_PRESETS[currentTodId];
@@ -60,9 +62,8 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
   }
 
   function cycleTimeOfDay() {
-    const idx = ATMOSPHERE_ORDER.indexOf(currentTodId);
-    const nextId = ATMOSPHERE_ORDER[(idx + 1) % ATMOSPHERE_ORDER.length];
-    return setTimeOfDay(nextId);
+    // Locked — time of day is fixed
+    return ATMOSPHERE_PRESETS[currentTodId];
   }
 
   function getTimeOfDay() {
@@ -71,6 +72,11 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
 
   function setVisible(visible) {
     root.visible = !!visible;
+  }
+
+  function setSurfaceSuper(enabled, maxAniso = 8) {
+    if (clipmap.setSurfaceSuper) clipmap.setSurfaceSuper(enabled, maxAniso);
+    if (forest.setSurfaceSuper) forest.setSurfaceSuper(enabled, maxAniso);
   }
 
   function update(cameraPos, elapsed, flashlightState = null) {
@@ -94,6 +100,13 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
       map2dInstance = createTerrenoMap2D(geomorph, callbacks);
     }
     return map2dInstance;
+  }
+
+  function getOrCreateMap3D() {
+    if (!map3dInstance) {
+      map3dInstance = createTerrenoMap3D(geomorph);
+    }
+    return map3dInstance;
   }
 
   function getStats() {
@@ -127,15 +140,19 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
     evalMainRiver,
     getHeightAt: geomorph.getHeightAt,
     getNormalAt: geomorph.getNormalAt,
+    getMacroNormalAt: geomorph.getMacroNormalAt,
     sampleGeoBilinear: geomorph.sampleGeoBilinear,
     getBiomeInfoAt: geomorph.getBiomeInfoAt,
     getLocalColliders: forest.getLocalColliders,
+    ensureCollidersAt: forest.ensureCollidersAt,
+    setSurfaceSuper,
     setTimeOfDay,
     cycleTimeOfDay,
     getTimeOfDay,
     setVisible,
     update,
     getOrCreateMap2D,
+    getOrCreateMap3D,
     getStats,
   };
 }
