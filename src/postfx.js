@@ -49,6 +49,19 @@ const POST_FRAG = /* glsl */ `
   void main() {
     vec3 col = texture2D(tDiffuse, vUv).rgb;
 
+    // Subtle 5-tap Contrast-Adaptive Optical Micro-Sharpening (CAS) — snaps pine needles,
+    // granite fractures, and leaf veins to prime-lens crispness without ringing halos!
+    vec3 cN = texture2D(tDiffuse, vUv + vec2(0.0,  uTexel.y)).rgb;
+    vec3 cS = texture2D(tDiffuse, vUv + vec2(0.0, -uTexel.y)).rgb;
+    vec3 cE = texture2D(tDiffuse, vUv + vec2( uTexel.x, 0.0)).rgb;
+    vec3 cW = texture2D(tDiffuse, vUv + vec2(-uTexel.x, 0.0)).rgb;
+    vec3 mnRGB = min(col, min(min(cN, cS), min(cE, cW)));
+    vec3 mxRGB = max(col, max(max(cN, cS), max(cE, cW)));
+    // Adaptive weight drops smoothly on high-contrast silhouette edges to prevent haloing
+    vec3 amp = sqrt(clamp(min(mnRGB, 2.0 - mxRGB) / max(mxRGB, vec3(0.0001)), 0.0, 1.0));
+    vec3 wCas = amp * -0.115;
+    col = clamp((col + (cN + cS + cE + cW) * wCas) / (vec3(1.0) + 4.0 * wCas), vec3(0.0), vec3(64.0));
+
     // 9-tap circular kernel analytic bloom (single Adreno TBDR pass)
     vec3 bloom = vec3(0.0);
     vec2 r1 = uTexel * 3.0;
@@ -63,15 +76,15 @@ const POST_FRAG = /* glsl */ `
     bloom += softBright(texture2D(tDiffuse, vUv + vec2(-r2.x, -r2.y) * 0.707).rgb) * 0.75;
     bloom /= 7.0;
 
-    col += bloom * uBloomStrength;
+    col += bloom * (uBloomStrength * 0.88);
     col *= uExposure;
     col = acesFilm(col);
 
-    // Nocturnal Japanese Cinema split-tone grading
+    // Subtle Natural Japanese Mountain Cinema split-tone grading
     float luma = dot(col, vec3(0.299, 0.587, 0.114));
-    vec3 shadowTint = vec3(0.92, 0.97, 1.06);
-    vec3 highTint   = vec3(1.05, 1.00, 0.94);
-    col *= mix(shadowTint, highTint, smoothstep(0.12, 0.72, luma));
+    vec3 shadowTint = vec3(0.95, 0.98, 1.04);
+    vec3 highTint   = vec3(1.03, 1.00, 0.96);
+    col *= mix(shadowTint, highTint, smoothstep(0.14, 0.74, luma));
 
     // Optical vignette
     vec2 centered = vUv * 2.0 - 1.0;

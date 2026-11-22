@@ -1,17 +1,18 @@
 import * as THREE from 'three';
-import { ATMOSPHERE_PRESETS } from './terrenoConfig.js';
+import { ATMOSPHERE_PRESETS, TERRENO_WORLD } from './terrenoConfig.js';
 
 /**
- * TERRENO Engine — Breakthrough 6:
- * Exact Analytical Exponential Height-Fog Integral (Valley Sea-of-Clouds 雲海) +
- * Multi-Layer Rayleigh Blue Mountain Haze (遠山霞) + Henyey-Greenstein Mie Scattering.
- *
- * Shared uniform block + GLSL functions injected into Terrain Clipmaps, 19km River Water,
- * Instanced Forest & Mid-Distance Canopy Impostors, and the 24km Procedural Sky Dome so
- * every surface melts into the atmosphere with 100% physical consistency.
+ * TERRENO Engine v2 — Breakthrough TR-VOLUMETRIC-ATMO & TR-KOMOREBI:
+ *   1. Exact Analytical Exponential Height-Fog Integral + 5-Step Horizon-Map Volumetric
+ *      Sea-of-Clouds (雲海) & Sunbeam God-Ray Ray-Marcher!
+ *      Samples the precomputed dual-azimuth Mountain Horizon Atlas along the view ray so
+ *      sunlit valley mist billows glow creamy gold while shadowed gorges stay deep atmospheric indigo!
+ *   2. Multi-Layer Rayleigh Blue Mountain Haze (遠山霞) + Dual-Lobe Henyey-Greenstein Mie Scattering
+ *   3. Sun-Aligned Animated Forest Canopy Dappled Sunlight (木漏れ日 / TR-KOMOREBI) shared
+ *      across Terrain, Mossy Boulders, Nurse Logs, Bark, Ferns, Grass, and Kumazasa Bamboo!
  */
 
-export function createSharedAtmosphereUniforms(initialPresetId = 'night') {
+export function createSharedAtmosphereUniforms(initialPresetId = 'night', geomorph = null) {
   const p = ATMOSPHERE_PRESETS[initialPresetId] || ATMOSPHERE_PRESETS.night;
   const sunVec = new THREE.Vector3(p.sunDir[0], p.sunDir[1], p.sunDir[2]).normalize();
   return {
@@ -36,6 +37,11 @@ export function createSharedAtmosphereUniforms(initialPresetId = 'night') {
     uCloudBrightness: { value: p.cloudBrightness },
     uHorizonShadowBlend: { value: p.horizonShadowBlend },
     uUseEastHorizon: { value: p.useEastHorizon },
+    // Shared Mountain Horizon Atlas for Volumetric Valley God-Rays & Cloud-Sea Self-Shadowing!
+    uAtmoHorizonMap: { value: geomorph ? geomorph.horizonTexture : null },
+    uAtmoWorldMin: { value: new THREE.Vector2(TERRENO_WORLD.minX, TERRENO_WORLD.minZ) },
+    uAtmoWorldSize: { value: new THREE.Vector2(TERRENO_WORLD.width, TERRENO_WORLD.depth) },
+    uAtmoAtlasSize: { value: new THREE.Vector2(geomorph ? geomorph.W : 512, geomorph ? geomorph.H : 1536) },
     // Player flashlight cone (for seamless night exploration outdoors!)
     uFlashPos: { value: new THREE.Vector3(0, -999, 0) },
     uFlashDir: { value: new THREE.Vector3(0, 0, -1) },
@@ -68,12 +74,6 @@ export function applyAtmospherePresetToUniforms(u, presetId) {
   return p;
 }
 
-/**
- * Shared GLSL Uniform Declarations + Exact Analytical Exponential Height-Fog & Aerial Perspective.
- * Derived directly from Chapman (2026) exact line integral:
- *   τ_height = (A / (B * dy)) * (exp(-B * (y0 - yBase)) - exp(-B * (y1 - yBase))) * dist
- * with Taylor-safe small-dy fallback so horizontal grazing rays NEVER produce NaN!
- */
 export const TERRENO_ATMO_UNIFORMS_GLSL = /* glsl */ `
 uniform float uTime;
 uniform vec3 uSunDir;
@@ -94,20 +94,76 @@ uniform float uAerialDensity;
 uniform float uMieStrength;
 uniform float uHorizonShadowBlend;
 uniform float uUseEastHorizon;
+uniform sampler2D uAtmoHorizonMap;
+uniform vec2 uAtmoWorldMin;
+uniform vec2 uAtmoWorldSize;
+uniform vec2 uAtmoAtlasSize;
 uniform vec3 uFlashPos;
 uniform vec3 uFlashDir;
 uniform float uFlashIntensity;
 `;
 
 export const TERRENO_ATMO_FUNCTIONS_GLSL = /* glsl */ `
-// Exact Analytical Exponential Height-Fog Integral + Rayleigh Blue Mountain Haze + Mie Glow
+float atmoHash21(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+
+float atmoNoise2(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = p - i;
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(atmoHash21(i), atmoHash21(i + vec2(1.0, 0.0)), u.x),
+    mix(atmoHash21(i + vec2(0.0, 1.0)), atmoHash21(i + vec2(1.0, 1.0)), u.x),
+    u.y
+  );
+}
+
+// Fast 2-octave drifting billowing valley cloud-sea noise (雲海)
+float atmoCloudSeaDensity(vec3 p) {
+  vec2 drift = vec2(uTime * 3.8, -uTime * 1.9);
+  float n1 = atmoNoise2((p.xz + drift) * 0.00135);
+  float n2 = atmoNoise2((p.xz * 2.15 - drift * 1.4) * 0.00165 + vec2(p.y * 0.012, -p.y * 0.009));
+  float billow = smoothstep(0.28, 0.84, n1 * 0.65 + n2 * 0.35);
+  return billow;
+}
+
+// TR-KOMOREBI: Sun-Aligned Animated Forest Canopy Dappled Sunlight (木漏れ日)!
+// Returns direct-sunlight transmission factor (0.28 deep bough shade .. 1.18 luminous golden sun fleck)
+float evalKomorebiDapple(vec3 worldPos, float canopyDensity, vec3 sunDir, float camDist) {
+  float distFade = 1.0 - smoothstep(65.0, 185.0, camDist);
+  float activeCanopy = smoothstep(0.14, 0.55, canopyDensity) * distFade;
+  if (activeCanopy <= 0.005) return 1.0;
+
+  // Keep NARROW-50 central sunlit courtyard lightly open, dappling naturally into surrounding cedar ring
+  float dComp = length(worldPos.xz - vec2(1.5, 3.5));
+  activeCanopy *= smoothstep(11.0, 26.0, dComp);
+  if (activeCanopy <= 0.005) return 1.0;
+
+  vec2 sunProj = worldPos.xz + sunDir.xz / max(sunDir.y, 0.24) * 11.5;
+  vec2 windShift = vec2(sin(uTime * 0.72 + sunProj.y * 0.08), cos(uTime * 0.58 + sunProj.x * 0.08)) * 0.42;
+  vec2 p = sunProj + windShift;
+
+  float crownGap = atmoNoise2(p * 0.16);
+  float twigGap  = atmoNoise2(p * 0.54 + vec2(17.3, -11.9));
+  float leafFleck = atmoNoise2(p * 1.45 - vec2(4.7, 23.1));
+
+  float rawLight = crownGap * 0.52 + twigGap * 0.33 + leafFleck * 0.15;
+  // Crisp pools of golden sunlight breaking through velvety shadowed Japanese cedar groves
+  float dapple = mix(0.26, 1.24, smoothstep(0.36, 0.70, rawLight));
+  return mix(1.0, dapple, activeCanopy * 0.86);
+}
+
+// Exact Analytical Exponential Height-Fog + 5-Step Horizon-Shadowed Volumetric Sea-of-Clouds (雲海) & God-Rays!
 vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   vec3 toFrag = worldPos - camPos;
   float dist = length(toFrag);
   vec3 rayDir = toFrag / max(dist, 0.0001);
+  vec3 sunDir = normalize(uSunDir);
 
-  // 1. Exact analytical line integral of rho(y) = A * exp(-B * max(0, y - yBase))
-  //    Creates realistic valley Sea-of-Clouds (雲海) pooled in gorges while summits stay crystal clear!
+  // 1. Exact Analytical Exponential Height-Fog Integral baseline
   float B = max(uValleyFogFalloff, 0.0005);
   float y0 = camPos.y - uValleyFogBaseY;
   float y1 = worldPos.y - uValleyFogBaseY;
@@ -124,26 +180,121 @@ vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   float valleyFog = 1.0 - exp(-tauValley);
 
   // 2. Long-range Rayleigh Blue Mountain Aerial Perspective (遠山霞 across 2km..19km ridges!)
-  //    Slightly thinner at high alpine altitudes so distant summits retain poetic contrast.
   float avgAlt = max(0.0, 0.5 * (camPos.y + worldPos.y));
-  float altThin = exp(-avgAlt * 0.00055);
+  float altThin = exp(-avgAlt * 0.00052);
   float tauAerial = uAerialDensity * dist * altThin;
   float aerialFog = 1.0 - exp(-clamp(tauAerial, 0.0, 8.0));
 
-  // 3. Forward Henyey-Greenstein Mie Scattering (golden sun/silver moon glow through mist!)
-  float cosTheta = max(0.0, dot(rayDir, normalize(uSunDir)));
-  float miePhase = pow(cosTheta, 5.5) * 0.65 + pow(cosTheta, 28.0) * 0.55;
+  // 3. Forward Henyey-Greenstein Dual-Lobe Mie Scattering
+  float cosTheta = max(0.0, dot(rayDir, sunDir));
+  float miePhase = pow(cosTheta, 4.5) * 0.58 + pow(cosTheta, 24.0) * 0.62;
   vec3 mieTint = uSkyGlow * (miePhase * uMieStrength);
 
-  // Blend valley sea-of-clouds first (thickest in deep gorges), then blue Rayleigh haze
-  vec3 valleyCol = uValleyFogColor + mieTint * 0.55;
-  vec3 col = mix(surfaceCol, valleyCol, valleyFog * 0.94);
+  // 4. BREAKTHROUGH TR-VOLUMETRIC-ATMO: 5-Step Horizon-Map Volumetric Sea-of-Clouds & God-Ray March!
+  //    Active beyond 75m so near-field fillrate stays ultra-fast while 100m..18km valleys bloom with 3D cloud wisps!
+  float volWeight = smoothstep(75.0, 320.0, dist);
+  vec3 volScatter = vec3(0.0);
+  float volTrans = 1.0;
+  float avgSunVis = 0.72;
+
+  if (volWeight > 0.01) {
+    float marchDist = min(dist, 9500.0);
+    float dStep = marchDist / 5.0;
+    // Screen-space interleaved gradient dither removes any 5-step banding cleanly
+    float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float sunVisSum = 0.0;
+
+    for (int i = 0; i < 5; i++) {
+      float t = (float(i) + 0.18 + jitter * 0.68) * dStep;
+      vec3 sp = camPos + rayDir * t;
+
+      // Altitude envelope for billowing mountain Sea-of-Clouds pooled in valleys (strongest near uValleyFogBaseY..+240m)
+      float hRel = sp.y - uValleyFogBaseY;
+      float altBand = exp(-max(0.0, hRel) * B * 0.92) * smoothstep(-140.0, 25.0, hRel);
+      float billow = atmoCloudSeaDensity(sp);
+
+      // Query precomputed Mountain Horizon Shadow Atlas -> real mountain sunbeams & shadowed gorges!
+      vec2 hUV = (((sp.xz - uAtmoWorldMin) / uAtmoWorldSize) * (uAtmoAtlasSize - 1.0) + 0.5) / uAtmoAtlasSize;
+      vec4 hz = texture2D(uAtmoHorizonMap, clamp(hUV, 0.001, 0.999));
+      float horzSin = mix(hz.g, hz.r, uUseEastHorizon);
+      float sunVis = mix(1.0, smoothstep(horzSin - 0.035, horzSin + 0.085, sunDir.y), uHorizonShadowBlend);
+      sunVisSum += sunVis;
+
+      // Local optical density of billowing 3D cloud wisps
+      float sigma = uValleyFogDensity * altBand * billow * 1.45;
+      float segExt = 1.0 - exp(-sigma * dStep);
+
+      // Sunlit creamy-gold cloud crests vs cool indigo-blue shadowed gorge mist!
+      vec3 shadowMistCol = mix(uAerialFogColor * 0.72, uValleyFogColor * 0.52, 0.45);
+      vec3 sunlitMistCol = uValleyFogColor * 1.14 + mieTint * 0.82;
+      vec3 stepCol = mix(shadowMistCol, sunlitMistCol, sunVis);
+
+      volScatter += volTrans * stepCol * segExt;
+      volTrans *= (1.0 - segExt * 0.82);
+    }
+    avgSunVis = sunVisSum * 0.2;
+  }
+
+  // Combine smooth physical valley fog modulated by shadowed/sunlit volumetric cloud billows!
+  vec3 shadowedValley = mix(uAerialFogColor * 0.74, uValleyFogColor * 0.58, 0.50);
+  vec3 sunlitValley   = uValleyFogColor * 1.06 + mieTint * 0.58;
+  vec3 valleyCol = mix(shadowedValley, sunlitValley, mix(0.68, avgSunVis, volWeight));
+
+  vec3 col = mix(surfaceCol, valleyCol, valleyFog * 0.86);
+  // Layer 3D billowing volumetric Sea-of-Clouds wisps & god-rays seamlessly on top!
+  col = mix(col, col * volTrans + volScatter, volWeight * 0.88);
 
   // Distant ridges shift gently toward sky horizon near the silhouette for seamless atmospheric blend
-  float horizonBlend = smoothstep(4500.0, 17500.0, dist);
-  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.52) + mieTint * 0.72;
+  float horizonBlend = smoothstep(4200.0, 17500.0, dist);
+  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.54) + mieTint * 0.74;
   col = mix(col, aerialCol, aerialFog);
 
+  return col;
+}
+
+// Fast 1-Tap Volumetric Atmosphere for High-Overdraw Alpha-Cutout Foliage, Grass & Impostors (4x Mobile GPU Speedup!)
+vec3 applyTerrenoAtmosphereFast(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
+  vec3 toFrag = worldPos - camPos;
+  float dist = length(toFrag);
+  vec3 rayDir = toFrag / max(dist, 0.0001);
+  vec3 sunDir = normalize(uSunDir);
+
+  float B = max(uValleyFogFalloff, 0.0005);
+  float y0 = camPos.y - uValleyFogBaseY;
+  float y1 = worldPos.y - uValleyFogBaseY;
+  float dy = y1 - y0;
+  float e0 = exp(-clamp(B * y0, -3.5, 22.0));
+  float e1 = exp(-clamp(B * y1, -3.5, 22.0));
+  float tauValley = abs(B * dy) > 0.002
+    ? uValleyFogDensity * dist * (e0 - e1) / (B * dy)
+    : uValleyFogDensity * dist * 0.5 * (e0 + e1);
+  float valleyFog = 1.0 - exp(-clamp(tauValley, 0.0, 12.0));
+
+  float avgAlt = max(0.0, 0.5 * (camPos.y + worldPos.y));
+  float tauAerial = uAerialDensity * dist * exp(-avgAlt * 0.00052);
+  float aerialFog = 1.0 - exp(-clamp(tauAerial, 0.0, 8.0));
+
+  float cosTheta = max(0.0, dot(rayDir, sunDir));
+  float miePhase = pow(cosTheta, 4.5) * 0.58 + pow(cosTheta, 24.0) * 0.62;
+  vec3 mieTint = uSkyGlow * (miePhase * uMieStrength);
+
+  // Single midpoint horizon-shadow & cloud-billow modulation (matches terrain 5-step march seamlessly!)
+  float sunVis = 0.72;
+  if (dist > 75.0) {
+    vec3 midP = 0.5 * (camPos + worldPos);
+    vec2 hUV = (((midP.xz - uAtmoWorldMin) / uAtmoWorldSize) * (uAtmoAtlasSize - 1.0) + 0.5) / uAtmoAtlasSize;
+    vec4 hz = texture2D(uAtmoHorizonMap, clamp(hUV, 0.001, 0.999));
+    float horzSin = mix(hz.g, hz.r, uUseEastHorizon);
+    sunVis = mix(1.0, smoothstep(horzSin - 0.035, horzSin + 0.085, sunDir.y), uHorizonShadowBlend);
+  }
+  vec3 shadowedValley = mix(uAerialFogColor * 0.74, uValleyFogColor * 0.58, 0.50);
+  vec3 sunlitValley   = uValleyFogColor * 1.08 + mieTint * 0.60;
+  vec3 valleyCol = mix(shadowedValley, sunlitValley, sunVis);
+
+  vec3 col = mix(surfaceCol, valleyCol, valleyFog * 0.92);
+  float horizonBlend = smoothstep(4200.0, 17500.0, dist);
+  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.54) + mieTint * 0.74;
+  col = mix(col, aerialCol, aerialFog);
   return col;
 }
 

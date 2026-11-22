@@ -32,9 +32,9 @@ export function createTerrenoEngine(scene, initialTodId = 'night') {
   // 1. Bake 5km × 19km physical watershed & dual-azimuth horizon shadow atlas
   const geomorph = buildTerrenoGeomorphology();
 
-  // 2. Shared Atmosphere Uniforms across Clipmaps, Sky Dome, Water, and Forest!
+  // 2. Shared Atmosphere Uniforms (including uAtmoHorizonMap for volumetric Sea-of-Clouds & God-Rays!)
   let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'night';
-  const atmoUniforms = createSharedAtmosphereUniforms(currentTodId);
+  const atmoUniforms = createSharedAtmosphereUniforms(currentTodId, geomorph);
 
   // 3. Instantiate visual & ecological subsystems
   const clipmap = createTerrenoClipmap(geomorph, atmoUniforms);
