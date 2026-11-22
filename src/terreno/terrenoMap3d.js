@@ -5,6 +5,7 @@ import {
   TERRENO_LANDMARKS,
   evalMainRiver,
 } from './terrenoConfig.js';
+import { VILLAGE, VILLAGE_HOUSES } from '../villageData.js';
 
 /**
  * TERRENO High-Precision Real-Time 3D Topographic Map Renderer.
@@ -20,12 +21,12 @@ import {
  *   - Ultra-fast (<0.1ms) analytical heightfield raymarching for exact tap-anywhere-on-3D-terrain teleportation
  */
 
-const MAP_SCALE = 0.01;          // 100 m world = 1.0 map unit -> 50 × 190 diorama slab
-const MAP_Y_SCALE = 0.0175;      // 1.75× sculptural vertical relief exaggeration
-const MAP_CENTER_Z = (TERRENO_WORLD.minZ + TERRENO_WORLD.maxZ) * 0.5; // +3000m
-const HALF_W = (TERRENO_WORLD.width * 0.5) * MAP_SCALE;   // 25.0
-const HALF_D = (TERRENO_WORLD.depth * 0.5) * MAP_SCALE;   // 95.0
-const PLINTH_BASE_Y = -4.6;
+const MAP_SCALE = 0.005;         // 200 m world = 1.0 map unit -> 75 × 200 diorama slab (15km × 40km!)
+const MAP_Y_SCALE = 0.011;       // 2.2× sculptural vertical relief exaggeration
+const MAP_CENTER_Z = (TERRENO_WORLD.minZ + TERRENO_WORLD.maxZ) * 0.5; // +6000m
+const HALF_W = (TERRENO_WORLD.width * 0.5) * MAP_SCALE;   // 37.5
+const HALF_D = (TERRENO_WORLD.depth * 0.5) * MAP_SCALE;   // 100.0
+const PLINTH_BASE_Y = -5.2;
 
 export function worldToMap3D(wx, wz, wy = 0) {
   return {
@@ -43,6 +44,10 @@ export function map3DToWorld(mx, mz) {
 }
 
 const TERRAIN_MAP_VERT = /* glsl */ `
+  uniform float uInvMapScale;
+  uniform float uInvMapYScale;
+  uniform float uMapCenterZ;
+
   varying vec2 vAtlasUv;
   varying vec3 vMapPos;
   varying vec3 vWorldXZ_Y;
@@ -51,9 +56,9 @@ const TERRAIN_MAP_VERT = /* glsl */ `
     vAtlasUv = uv;
     vMapPos = position;
     vWorldXZ_Y = vec3(
-      position.x * 100.0,
-      position.y / 0.0175,
-      position.z * 100.0 + 3000.0
+      position.x * uInvMapScale,
+      position.y * uInvMapYScale,
+      position.z * uInvMapScale + uMapCenterZ
     );
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
@@ -69,6 +74,7 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
   uniform float uTime;
   uniform vec3 uCamPos;
   uniform vec3 uWorldBounds; // width, depth, minZ
+  uniform vec2 uVillageCenter;
 
   varying vec2 vAtlasUv;
   varying vec3 vMapPos;
@@ -92,40 +98,40 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
   }
 
   float evalRiverCenterX(float z) {
-    return 195.0
-      + sin(z * 0.00072 + 0.18) * 340.0
-      + sin(z * 0.00185 - 0.95) * 145.0
-      + cos(z * 0.00034 + 0.55) * 190.0
-      - 180.0 * exp(-(z * z) / (900.0 * 900.0));
+    return 240.0
+      + sin(z * 0.00024 + 0.10) * 1420.0
+      + sin(z * 0.00068 - 0.62) * 540.0
+      + cos(z * 0.00014 + 0.45) * 680.0
+      - 495.0 * exp(-(z * z) / (1700.0 * 1700.0));
   }
 
   float evalRiverHalfW(float z) {
     float t = clamp((z - uWorldBounds.z) / uWorldBounds.y, 0.0, 1.0);
-    return 14.0 + 28.0 * pow(t, 0.85) + sin(z * 0.0021) * 3.5;
+    return 16.0 + 40.0 * pow(t, 0.85) + sin(z * 0.0014) * 4.5;
   }
 
   vec3 alpineBiomeAlbedo(float asl, float slope, float ridge, float wetness) {
-    // Rich photoreal Japanese Alps elevation & biome palette
-    vec3 cGorge  = vec3(0.08, 0.21, 0.16); // +320m deep moss gorge
-    vec3 cCedar  = vec3(0.11, 0.29, 0.19); // +520m Sugi cedar forest
-    vec3 cBeech  = vec3(0.24, 0.42, 0.23); // +850m Buna beech forest
-    vec3 cSubAlp = vec3(0.45, 0.48, 0.29); // +1150m subalpine scrub
-    vec3 cAlpine = vec3(0.60, 0.55, 0.44); // +1350m alpine meadow / scree
-    vec3 cRock   = vec3(0.47, 0.49, 0.52); // exposed alpine granite
-    vec3 cSnow   = vec3(0.89, 0.93, 0.97); // high alpine snow peaks
+    // Rich photoreal Japanese Northern Alps elevation & biome palette (EL +265m .. +2,260m ASL)
+    vec3 cGorge  = vec3(0.08, 0.21, 0.16);
+    vec3 cCedar  = vec3(0.11, 0.29, 0.19);
+    vec3 cBeech  = vec3(0.24, 0.42, 0.23);
+    vec3 cSubAlp = vec3(0.45, 0.48, 0.29);
+    vec3 cAlpine = vec3(0.60, 0.55, 0.44);
+    vec3 cRock   = vec3(0.47, 0.49, 0.52);
+    vec3 cSnow   = vec3(0.89, 0.93, 0.97);
 
-    vec3 col = mix(cGorge, cCedar, smoothstep(330.0, 560.0, asl));
-    col = mix(col, cBeech, smoothstep(660.0, 960.0, asl));
-    col = mix(col, cSubAlp, smoothstep(1000.0, 1240.0, asl));
-    col = mix(col, cAlpine, smoothstep(1240.0, 1410.0, asl));
+    vec3 col = mix(cGorge, cCedar, smoothstep(310.0, 560.0, asl));
+    col = mix(col, cBeech, smoothstep(700.0, 1020.0, asl));
+    col = mix(col, cSubAlp, smoothstep(1080.0, 1340.0, asl));
+    col = mix(col, cAlpine, smoothstep(1340.0, 1560.0, asl));
 
     // Exposed granite crags on steep mountain faces & sharp ridges
-    float rockMask = smoothstep(0.46, 0.88, slope) * 0.82 + smoothstep(0.32, 0.85, ridge) * smoothstep(980.0, 1340.0, asl) * 0.45;
+    float rockMask = smoothstep(0.46, 0.88, slope) * 0.82 + smoothstep(0.32, 0.85, ridge) * smoothstep(1080.0, 1480.0, asl) * 0.45;
     col = mix(col, cRock, clamp(rockMask, 0.0, 0.92));
 
-    // Sunlit high alpine snow caps & couloirs above +1320m ASL
-    float snowLine = 1340.0 + slope * 140.0 - max(0.0, -ridge) * 110.0;
-    float snowMask = smoothstep(snowLine, snowLine + 145.0, asl) * (1.0 - smoothstep(0.75, 1.25, slope));
+    // Sunlit high alpine snow caps & couloirs above +1460m ASL
+    float snowLine = 1480.0 + slope * 150.0 - max(0.0, -ridge) * 120.0;
+    float snowMask = smoothstep(snowLine, snowLine + 190.0, asl) * (1.0 - smoothstep(0.75, 1.25, slope));
     col = mix(col, cSnow, clamp(snowMask, 0.0, 0.95));
 
     // Deep lush moisture tint along ravines
@@ -141,7 +147,7 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
     float roadMask = gC.a;
     float asl = uBaseASL + hC;
 
-    // Per-pixel high-precision analytical normal from 512×1536 Float32 elevation atlas
+    // Per-pixel high-precision analytical normal from Float32 elevation atlas
     vec2 du = vec2(1.0 / (uAtlasSize.x - 1.0), 0.0);
     vec2 dv = vec2(0.0, 1.0 / (uAtlasSize.y - 1.0));
     float hL = sampleGeo(vAtlasUv - du).r;
@@ -154,8 +160,7 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
     float gx = (hR - hL) / (2.0 * cellX);
     float gz = (hU - hD) / (2.0 * cellZ);
     float slope = length(vec2(gx, gz));
-    // Exaggerate normal slightly to match MAP_Y_SCALE = 1.75× relief
-    vec3 N = normalize(vec3(-gx * 1.45, 1.0, -gz * 1.45));
+    vec3 N = normalize(vec3(-gx * 1.55, 1.0, -gz * 1.55));
 
     vec4 hor = texture2D(uHorizonTex, vAtlasUv);
     float skyAO = 0.56 + 0.44 * hor.b;
@@ -168,13 +173,15 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
     float wz = vWorldXZ_Y.z;
     float distRiv = abs(wx - evalRiverCenterX(wz));
     float rivHW = evalRiverHalfW(wz);
-    float isMainRiver = 1.0 - smoothstep(rivHW * 0.72, rivHW * 1.45, distRiv);
-    float isStream = smoothstep(0.77, 0.92, wetness) * (1.0 - smoothstep(1180.0, 1340.0, asl)) * 0.65;
+    float isMainRiver = 1.0 - smoothstep(rivHW * 0.72, rivHW * 1.65, distRiv);
+    float isStream = smoothstep(0.77, 0.92, wetness) * (1.0 - smoothstep(1260.0, 1460.0, asl)) * 0.65;
     float waterFactor = max(isMainRiver, isStream);
 
-    // Compound pad check so forestry road stops cleanly around compound
+    // Compound & Suginosato Village pad check so forestry road blends cleanly into settlements
     float distComp = length(vec2(wx - 1.5, wz - 3.5));
-    float isRoad = smoothstep(0.32, 0.78, roadMask) * smoothstep(32.0, 62.0, distComp) * (1.0 - waterFactor);
+    float distVill = length(vec2(wx, wz) - uVillageCenter);
+    float isVillagePad = 1.0 - smoothstep(42.0, 68.0, distVill);
+    float isRoad = smoothstep(0.32, 0.78, roadMask) * smoothstep(32.0, 62.0, distComp) * (1.0 - isVillagePad) * (1.0 - waterFactor);
 
     // Crisp alpine directional sunlight + cool mountain sky hemisphere + sculptural rim
     vec3 sunDir = normalize(vec3(-0.56, 0.68, -0.47));
@@ -186,14 +193,19 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
     vec3 skyFill = mix(vec3(0.11, 0.17, 0.25), vec3(0.24, 0.36, 0.52), N.y * 0.5 + 0.5);
     vec3 lit = albedo * (sunCol * (ndl * 0.92 + wrap * 0.26) * horShade + skyFill * skyAO * 0.85);
 
+    // Subtle warm sunlit meadow highlight for Suginosato 5-House Village terrace
+    if (isVillagePad > 0.01) {
+      lit = mix(lit, vec3(0.32, 0.48, 0.26), isVillagePad * 0.55);
+    }
+
     // Subtle specular glint on snow & sunlit granite ridges
     vec3 H = normalize(sunDir + V);
-    float spec = pow(max(dot(N, H), 0.0), 28.0) * smoothstep(1260.0, 1460.0, asl) * 0.28;
+    float spec = pow(max(dot(N, H), 0.0), 28.0) * smoothstep(1380.0, 1680.0, asl) * 0.28;
     lit += vec3(0.92, 0.96, 1.0) * spec;
 
-    // Shimmering specular emerald-cyan 19km River water
+    // Shimmering specular emerald-cyan 40 km River water
     if (waterFactor > 0.01) {
-      float wave = sin(wz * 0.055 - uTime * 2.4 + wx * 0.04) * 0.5 + 0.5;
+      float wave = sin(wz * 0.045 - uTime * 2.4 + wx * 0.03) * 0.5 + 0.5;
       vec3 riverCol = mix(vec3(0.07, 0.42, 0.56), vec3(0.16, 0.74, 0.82), 0.45 + 0.45 * wave);
       float fresnel = pow(1.0 - max(dot(vec3(0.0, 1.0, 0.0), V), 0.0), 3.0);
       float wSpec = pow(max(dot(vec3(0.0, 1.0, 0.0), H), 0.0), 42.0) * (0.45 + 0.35 * wave);
@@ -201,36 +213,36 @@ const TERRAIN_MAP_FRAG = /* glsl */ `
       lit = mix(lit, riverCol, waterFactor * 0.92);
     }
 
-    // Luminous graded 19km Forestry Road ribbon (奥山林道)
+    // Luminous graded 40 km Forestry Road ribbon (奥山林道)
     if (isRoad > 0.01) {
       vec3 roadCol = vec3(0.95, 0.78, 0.44);
       lit = mix(lit, roadCol, isRoad * 0.82);
     }
 
-    // Screen-space anti-aliased Topographic Contour Isolines (50m minor + 200m major) via fwidth!
-    float dfAsl = max(fwidth(asl), 0.65);
-    float c50 = abs(fract(asl / 50.0 + 0.5) - 0.5) * 50.0 / dfAsl;
-    float line50 = 1.0 - smoothstep(0.32, 0.92, c50);
-    float c200 = abs(fract(asl / 200.0 + 0.5) - 0.5) * 200.0 / dfAsl;
-    float line200 = 1.0 - smoothstep(0.38, 1.05, c200);
+    // Screen-space anti-aliased Topographic Contour Isolines (100m minor + 250m major) via fwidth!
+    float dfAsl = max(fwidth(asl), 0.85);
+    float c100 = abs(fract(asl / 100.0 + 0.5) - 0.5) * 100.0 / dfAsl;
+    float line100 = 1.0 - smoothstep(0.32, 0.92, c100);
+    float c250 = abs(fract(asl / 250.0 + 0.5) - 0.5) * 250.0 / dfAsl;
+    float line250 = 1.0 - smoothstep(0.38, 1.05, c250);
 
     float contourFade = (1.0 - waterFactor * 0.85) * (1.0 - isRoad * 0.5);
-    lit = mix(lit, lit * 0.72 + vec3(0.08, 0.07, 0.05), line50 * 0.22 * contourFade);
-    lit = mix(lit, vec3(0.95, 0.89, 0.74), line200 * 0.34 * contourFade);
+    lit = mix(lit, lit * 0.72 + vec3(0.08, 0.07, 0.05), line100 * 0.22 * contourFade);
+    lit = mix(lit, vec3(0.95, 0.89, 0.74), line250 * 0.34 * contourFade);
 
-    // Hairline 1 km Metric Grid draped seamlessly over 3D topography
-    vec2 kmCoord = vec2(wx, wz) * 0.001;
+    // Hairline 2 km Metric Grid draped seamlessly over 15km × 40km 3D topography
+    vec2 kmCoord = vec2(wx, wz) * 0.0005;
     vec2 kmDist = abs(fract(kmCoord + 0.5) - 0.5) / max(fwidth(kmCoord), vec2(0.0005));
     float kmLine = 1.0 - smoothstep(0.55, 1.45, min(kmDist.x, kmDist.y));
     lit = mix(lit, vec3(0.75, 0.88, 1.0), kmLine * 0.14);
 
     // Subtle crisp atmospheric perspective + cool Fresnel ridge rim
     float distCam = length(uCamPos - vMapPos);
-    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.6) * smoothstep(550.0, 1450.0, asl) * 0.22;
+    float rim = pow(1.0 - max(dot(N, V), 0.0), 3.6) * smoothstep(650.0, 1750.0, asl) * 0.22;
     lit += vec3(0.42, 0.66, 0.88) * rim;
 
-    float fogT = 1.0 - exp(-max(0.0, distCam - 85.0) * 0.0028);
-    lit = mix(lit, vec3(0.045, 0.075, 0.115), clamp(fogT, 0.0, 0.55));
+    float fogT = 1.0 - exp(-max(0.0, distCam - 115.0) * 0.0022);
+    lit = mix(lit, vec3(0.045, 0.075, 0.115), clamp(fogT, 0.0, 0.52));
 
     // Crisp luminous cyan-slate perimeter edge highlight
     float edgeDist = min(min(vAtlasUv.x, 1.0 - vAtlasUv.x), min(vAtlasUv.y, 1.0 - vAtlasUv.y));
@@ -261,12 +273,12 @@ const PLINTH_FRAG = /* glsl */ `
   varying vec3 vPos;
   varying vec3 vNormal;
   void main() {
-    float t = clamp((vPos.y - (-4.6)) / 14.0, 0.0, 1.0);
+    float t = clamp((vPos.y - (-5.2)) / 18.0, 0.0, 1.0);
     vec3 base = mix(vec3(0.03, 0.045, 0.068), vec3(0.085, 0.11, 0.145), t);
     // Subtle geological strata hairlines along cutaway rock wall
     float strata = 1.0 - smoothstep(0.0, 0.08, abs(fract(vPos.y * 0.9) - 0.5));
     base += vec3(0.04, 0.06, 0.08) * strata * 0.5;
-    float bottomRim = 1.0 - smoothstep(0.0, 0.28, vPos.y - (-4.6));
+    float bottomRim = 1.0 - smoothstep(0.0, 0.30, vPos.y - (-5.2));
     base = mix(base, vec3(0.18, 0.45, 0.58), bottomRim * 0.55);
     float sideShade = 0.72 + 0.28 * abs(vNormal.x);
     gl_FragColor = vec4(base * sideShade, 1.0);
@@ -363,7 +375,7 @@ export function createTerrenoMap3D(geomorph) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x060b12);
 
-  const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.5, 900);
+  const camera = new THREE.PerspectiveCamera(42, 16 / 9, 0.5, 1400);
 
   // Subtle ambient & directional fill for 3D markers/miniatures
   const hemi = new THREE.HemisphereLight(0xb8d8ff, 0x16202c, 1.15);
@@ -373,10 +385,10 @@ export function createTerrenoMap3D(geomorph) {
   scene.add(keyLight);
 
   // =========================================================================
-  // 1. HIGH-PRECISION 224 × 480 3D RELIEF TERRAIN MESH
+  // 1. HIGH-PRECISION 240 × 512 3D RELIEF TERRAIN MESH (15 km × 40 km)
   // =========================================================================
-  const SEG_X = 224;
-  const SEG_Z = 480;
+  const SEG_X = 240;
+  const SEG_Z = 512;
   const terrainGeo = new THREE.PlaneGeometry(HALF_W * 2, HALF_D * 2, SEG_X, SEG_Z);
   terrainGeo.rotateX(-Math.PI * 0.5);
 
@@ -404,6 +416,10 @@ export function createTerrenoMap3D(geomorph) {
     uTime: { value: 0 },
     uCamPos: { value: new THREE.Vector3() },
     uWorldBounds: { value: new THREE.Vector3(TERRENO_WORLD.width, TERRENO_WORLD.depth, TERRENO_WORLD.minZ) },
+    uInvMapScale: { value: 1.0 / MAP_SCALE },
+    uInvMapYScale: { value: 1.0 / MAP_Y_SCALE },
+    uMapCenterZ: { value: MAP_CENTER_Z },
+    uVillageCenter: { value: new THREE.Vector2(TERRENO_WORLD.villageCenterX, TERRENO_WORLD.villageCenterZ) },
   };
 
   const terrainMat = new THREE.ShaderMaterial({
@@ -419,7 +435,7 @@ export function createTerrenoMap3D(geomorph) {
   // =========================================================================
   // 2. GEOLOGICAL CUTAWAY PLINTH SKIRT + FLOATING BASE FRAME
   // =========================================================================
-  const plinthMesh = buildGeologicalPlinth(geomorph, 96, 220);
+  const plinthMesh = buildGeologicalPlinth(geomorph, 112, 240);
   scene.add(plinthMesh);
 
   const frameGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(HALF_W * 2 + 0.16, 0.08, HALF_D * 2 + 0.16));
@@ -431,7 +447,7 @@ export function createTerrenoMap3D(geomorph) {
   scene.add(frameLine);
 
   // =========================================================================
-  // 3. 3D LUMINOUS FORESTRY ROAD SPLINE RIBBON (奥山林道)
+  // 3. 3D LUMINOUS FORESTRY ROAD SPLINE RIBBON (奥山林道 40 km)
   // =========================================================================
   if (geomorph.roadDense && geomorph.roadDense.length > 2) {
     const roadPts = [];
@@ -439,7 +455,7 @@ export function createTerrenoMap3D(geomorph) {
       const [rx, rz] = geomorph.roadDense[i];
       const ry = geomorph.sampleGeoBilinear(rx, rz).hMacro;
       const p = worldToMap3D(rx, rz, ry);
-      roadPts.push(new THREE.Vector3(p.x, p.y + 0.18, p.z));
+      roadPts.push(new THREE.Vector3(p.x, p.y + 0.20, p.z));
     }
     const roadGeo = new THREE.BufferGeometry().setFromPoints(roadPts);
     const roadLine = new THREE.Line(
@@ -450,7 +466,7 @@ export function createTerrenoMap3D(geomorph) {
   }
 
   // =========================================================================
-  // 4. 3D MINIATURE NARROW-50 COMPOUND + LANDMARK BEACONS + PEAK CRYSTALS
+  // 4. 3D MINIATURE NARROW-50 COMPOUND + SUGINOSATO 5-HOUSE VILLAGE + BEACONS
   // =========================================================================
   const compPos = worldToMap3D(
     TERRENO_WORLD.compoundCenterX,
@@ -483,50 +499,81 @@ export function createTerrenoMap3D(geomorph) {
   compoundMini.add(miniAnnex);
   scene.add(compoundMini);
 
+  // Miniature 3D 5-House Suginosato Mountain Village (杉ノ郷集落) Cluster!
+  const villPos = worldToMap3D(VILLAGE.centerX, VILLAGE.centerZ, VILLAGE.groundY);
+  const villageMini = new THREE.Group();
+  villageMini.position.set(villPos.x, villPos.y, villPos.z);
+
+  const villRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.85, 1.32, 32),
+    new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.82, side: THREE.DoubleSide })
+  );
+  villRing.rotation.x = -Math.PI * 0.5;
+  villRing.position.y = 0.15;
+  villageMini.add(villRing);
+
+  const miniHouseMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, emissive: 0x10b981, emissiveIntensity: 0.42, roughness: 0.35 });
+  const miniRoofMat = new THREE.MeshStandardMaterial({ color: 0x334155, emissive: 0x059669, emissiveIntensity: 0.25, roughness: 0.5 });
+  VILLAGE_HOUSES.forEach((h) => {
+    const cx = (h.ox + h.w * 0.5 - VILLAGE.centerX) * MAP_SCALE * 3.8;
+    const cz = (h.oz + h.d * 0.5 - VILLAGE.centerZ) * MAP_SCALE * 3.8;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.20), miniHouseMat);
+    body.position.set(cx, 0.20, cz);
+    villageMini.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.16, 4), miniRoofMat);
+    roof.rotation.y = Math.PI * 0.25;
+    roof.position.set(cx, 0.40, cz);
+    villageMini.add(roof);
+  });
+  scene.add(villageMini);
+
   // Subtle geometric diamond needles over major mountain summits (zero text clutter!)
-  const peakCrystalGeo = new THREE.OctahedronGeometry(0.34, 0);
+  const peakCrystalGeo = new THREE.OctahedronGeometry(0.38, 0);
   const peakCrystalMat = new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.72 });
   MOUNTAIN_PEAKS.forEach((pk) => {
     const py = geomorph.sampleGeoBilinear(pk.x, pk.z).hMacro;
     const p = worldToMap3D(pk.x, pk.z, py);
     const cry = new THREE.Mesh(peakCrystalGeo, peakCrystalMat);
     cry.scale.set(0.75, 1.55, 0.75);
-    cry.position.set(p.x, p.y + 0.95, p.z);
+    cry.position.set(p.x, p.y + 1.05, p.z);
     scene.add(cry);
   });
 
-  // 6 Tappable 3D Landmark Beacons (clean light pillars + pulsing ground rings)
+  // 8 Tappable 3D Landmark Beacons (BASE=cyan, VLG=emerald, Alpine Landmarks=amber)
   const beaconTargets = [];
   const beaconMeshes = [];
   TERRENO_LANDMARKS.forEach((lm) => {
     const wy = geomorph.sampleGeoBilinear(lm.x, lm.z).hMacro;
     const p = worldToMap3D(lm.x, lm.z, wy);
     const isBase = lm.id === 'compound';
-    const colHex = isBase ? 0x38bdf8 : 0xf59e0b;
+    const isVillage = lm.id === 'village';
+    const colHex = isBase ? 0x38bdf8 : (isVillage ? 0x34d399 : 0xf59e0b);
+    const orbHex = isBase ? 0x7dd3fc : (isVillage ? 0x6ee7b7 : 0xfde68a);
+    const tall = isBase || isVillage;
 
     const grp = new THREE.Group();
     grp.position.set(p.x, p.y, p.z);
 
     const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.16, isBase ? 4.4 : 3.2, 10, 1, true),
-      new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.46, side: THREE.DoubleSide })
+      new THREE.CylinderGeometry(0.08, 0.20, tall ? 5.2 : 3.8, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.48, side: THREE.DoubleSide })
     );
-    beam.position.y = isBase ? 2.2 : 1.6;
+    beam.position.y = tall ? 2.6 : 1.9;
     grp.add(beam);
 
     const orb = new THREE.Mesh(
-      new THREE.OctahedronGeometry(isBase ? 0.52 : 0.42, 0),
-      new THREE.MeshBasicMaterial({ color: isBase ? 0x7dd3fc : 0xfde68a })
+      new THREE.OctahedronGeometry(tall ? 0.62 : 0.48, 0),
+      new THREE.MeshBasicMaterial({ color: orbHex })
     );
-    orb.position.y = isBase ? 4.6 : 3.4;
+    orb.position.y = tall ? 5.5 : 4.0;
     grp.add(orb);
 
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.58, 0.92, 24),
-      new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.65, side: THREE.DoubleSide })
+      new THREE.RingGeometry(0.68, 1.08, 24),
+      new THREE.MeshBasicMaterial({ color: colHex, transparent: true, opacity: 0.68, side: THREE.DoubleSide })
     );
     ring.rotation.x = -Math.PI * 0.5;
-    ring.position.y = 0.18;
+    ring.position.y = 0.20;
     grp.add(ring);
 
     scene.add(grp);
@@ -534,7 +581,7 @@ export function createTerrenoMap3D(geomorph) {
     beaconTargets.push({
       id: lm.id,
       x: p.x,
-      y: p.y + (isBase ? 2.4 : 1.8),
+      y: p.y + (tall ? 2.8 : 2.1),
       z: p.z,
       worldX: lm.x,
       worldZ: lm.z,
@@ -546,53 +593,49 @@ export function createTerrenoMap3D(geomorph) {
   // =========================================================================
   const playerMarker = new THREE.Group();
   const playerCore = new THREE.Mesh(
-    new THREE.SphereGeometry(0.62, 16, 12),
+    new THREE.SphereGeometry(0.72, 16, 12),
     new THREE.MeshBasicMaterial({ color: 0xf43f5e })
   );
-  playerCore.position.y = 0.95;
+  playerCore.position.y = 1.05;
   playerMarker.add(playerCore);
 
   const playerRing = new THREE.Mesh(
-    new THREE.RingGeometry(0.95, 1.38, 32),
+    new THREE.RingGeometry(1.05, 1.55, 32),
     new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
   );
   playerRing.rotation.x = -Math.PI * 0.5;
-  playerRing.position.y = 0.28;
+  playerRing.position.y = 0.30;
   playerMarker.add(playerRing);
 
-  // Translucent 3D directional view-heading wedge
   const coneShape = new THREE.Shape();
   coneShape.moveTo(0, 0);
-  coneShape.absarc(0, 0, 5.2, -0.44, 0.44, false);
+  coneShape.absarc(0, 0, 5.8, -0.44, 0.44, false);
   coneShape.lineTo(0, 0);
   const coneGeo = new THREE.ShapeGeometry(coneShape, 16);
-  // Rotate so shape +X maps to -Z (North when yaw=0)
   coneGeo.rotateX(-Math.PI * 0.5);
   coneGeo.rotateY(Math.PI * 0.5);
   const playerCone = new THREE.Mesh(
     coneGeo,
     new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.34, side: THREE.DoubleSide })
   );
-  playerCone.position.y = 0.34;
+  playerCone.position.y = 0.36;
   playerMarker.add(playerCone);
   scene.add(playerMarker);
 
-  // Subtle vehicle dots (Camper = amber, Kei = yellow)
   const camperDot = new THREE.Mesh(
-    new THREE.BoxGeometry(0.36, 0.36, 0.62),
+    new THREE.BoxGeometry(0.42, 0.42, 0.72),
     new THREE.MeshBasicMaterial({ color: 0xf59e0b })
   );
   scene.add(camperDot);
 
   const keiDot = new THREE.Mesh(
-    new THREE.BoxGeometry(0.26, 0.26, 0.44),
+    new THREE.BoxGeometry(0.30, 0.30, 0.52),
     new THREE.MeshBasicMaterial({ color: 0xfacc15 })
   );
   scene.add(keiDot);
 
-  // Tap confirmation ripple ring
   const tapRipple = new THREE.Mesh(
-    new THREE.RingGeometry(0.7, 1.2, 28),
+    new THREE.RingGeometry(0.8, 1.4, 28),
     new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0, side: THREE.DoubleSide })
   );
   tapRipple.rotation.x = -Math.PI * 0.5;
@@ -600,16 +643,15 @@ export function createTerrenoMap3D(geomorph) {
   let tapRippleAge = 99;
 
   // =========================================================================
-  // 6. SMOOTH DAMPED 3D CAMERA STATE (WIDESCREEN LANDSCAPE OPTIMIZED!)
+  // 6. SMOOTH DAMPED 3D CAMERA STATE (WIDESCREEN LANDSCAPE OPTIMIZED FOR 15×40km!)
   // =========================================================================
-  // Default view sweeps the entire 19km mountain chain horizontally across POCO F7 21.6:9 widescreen!
   const DEFAULT_VIEW = {
     tx: 0,
-    ty: 3.2,
-    tz: 2,
-    azimuth: 1.44,   // ~82.5° WSW overlook -> full 19km alpine watershed sweeps edge-to-edge horizontally!
+    ty: 4.0,
+    tz: 0,
+    azimuth: 1.40,   // ~80° WSW overlook -> full 15km × 40km alpine watershed sweeps edge-to-edge!
     pitch: 0.56,     // ~32° dramatic sculpted mountain relief angle
-    dist: 106,
+    dist: 138,
   };
 
   const camTarget = new THREE.Vector3(DEFAULT_VIEW.tx, DEFAULT_VIEW.ty, DEFAULT_VIEW.tz);
@@ -626,7 +668,7 @@ export function createTerrenoMap3D(geomorph) {
   const _raycaster = new THREE.Raycaster();
   const _ndc = new THREE.Vector2();
   const _boxMin = new THREE.Vector3(-HALF_W, PLINTH_BASE_Y, -HALF_D);
-  const _boxMax = new THREE.Vector3(HALF_W, 28.0, HALF_D);
+  const _boxMax = new THREE.Vector3(HALF_W, 34.0, HALF_D);
   const _hitBox = new THREE.Box3(_boxMin, _boxMax);
   const _tmpVec = new THREE.Vector3();
 
@@ -634,9 +676,9 @@ export function createTerrenoMap3D(geomorph) {
     camTarget.x = Math.max(-HALF_W, Math.min(HALF_W, camTarget.x));
     camTarget.z = Math.max(-HALF_D, Math.min(HALF_D, camTarget.z));
     const groundY = geomorph.sampleGeoBilinear(camTarget.x / MAP_SCALE, camTarget.z / MAP_SCALE + MAP_CENTER_Z).hMacro * MAP_Y_SCALE;
-    camTarget.y = Math.max(-1.0, Math.min(20.0, groundY + 1.2));
+    camTarget.y = Math.max(-2.0, Math.min(26.0, groundY + 1.2));
     targetPitch = Math.max(0.24, Math.min(1.46, targetPitch));
-    targetDist = Math.max(16, Math.min(210, targetDist));
+    targetDist = Math.max(16, Math.min(280, targetDist));
   }
 
   function resetOverview(instant = false) {

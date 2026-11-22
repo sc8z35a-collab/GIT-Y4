@@ -18,19 +18,19 @@ import { createTerrenoMap2D } from './terrenoMap2d.js';
 import { createTerrenoMap3D } from './terrenoMap3d.js';
 
 /**
- * TERRENO Engine — Unified 5 km × 19 km (95.0 km²) Ultra-Precision Mountain & Deep-Forest World Controller.
+ * TERRENO 1.1 Engine — Unified 15 km × 40 km (600.0 km²) Ultra-Precision Mountain & Deep-Forest World Controller.
  * Coordinates:
  *   1. Hydro-Tectonic + Phacelle + D8 Stream-Power Geomorphology & Dual-Azimuth Horizon Atlas
- *   2. 12-Ring Crack-Free GPU Geomorphing Clipmaps + Mikkelsen Hex-Tiling + Triplanar Granite + 24km Sky Dome
- *   3. Slope-Conforming 19 km Main Gorge River (黒杉川) & 7 Cascading Tributaries
+ *   2. 13-Ring Crack-Free GPU Geomorphing Clipmaps + Seamless PBR + Triplanar Granite + 52km Sky Dome
+ *   3. Slope-Conforming 40 km Main Gorge River (黒杉川) & 16 Cascading Tributaries
  *   4. Deterministic Zero-GC Ecological Japanese Forest Streamer + 6,800 Mid-Distance Canopy Impostors
- *   5. Interactive GSI-Style 2D Topographic Contour Map & 6-Landmark Survey Console
+ *   5. Interactive Real-Time 3D Topographic Map, 2D Contour Survey & 8-Landmark Console (incl. Suginosato 5-House Village)
  */
 export function createTerrenoEngine(scene, initialTodId = 'day') {
   const root = new THREE.Group();
-  root.name = 'TERRENO_WORLD_5x19km';
+  root.name = 'TERRENO_WORLD_15x40km';
 
-  // 1. Bake 5km × 19km physical watershed & dual-azimuth horizon shadow atlas
+  // 1. Bake 15km × 40km physical watershed & dual-azimuth horizon shadow atlas
   const geomorph = buildTerrenoGeomorphology();
 
   // 2. Shared Atmosphere Uniforms (including uAtmoHorizonMap for volumetric Sea-of-Clouds & God-Rays!)
