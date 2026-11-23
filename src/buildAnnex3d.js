@@ -38,11 +38,11 @@ export function buildAnnex3D(ctx) {
   // =========================================================================
   const cisternMat = makeSurfaceMat('stone_cistern_grey', 5.2, 0.34);
   const mossPlinthMat = makeSurfaceMat('stone_moss_wall', 8.2, 0.34);
-  addBox(staticGroup, 5.14, 0.28, 8.14, cisternMat, wx(2.50), -0.25, wz(4.00), true);
+  addBox(staticGroup, 5.04, 0.28, 8.10, cisternMat, wx(2.50), -0.25, wz(4.00), true);
   addBox(staticGroup, 2.75, 0.11, 7.80, cisternMat, wx(1.48), -0.055, wz(4.00), false);
   addBox(staticGroup, 2.15, 0.11, 6.25, cisternMat, wx(3.90), -0.055, wz(4.80), false);
-  addBox(staticGroup, 0.06, 0.32, 8.16, mossPlinthMat, wx(-0.07), -0.22, wz(4.00), false);
-  addBox(staticGroup, 0.06, 0.32, 8.16, mossPlinthMat, wx(5.07), -0.22, wz(4.00), false);
+  addBox(staticGroup, 0.06, 0.32, 8.12, mossPlinthMat, wx(-0.06), -0.22, wz(4.00), false);
+  addBox(staticGroup, 0.06, 0.32, 8.12, mossPlinthMat, wx(5.06), -0.22, wz(4.00), false);
 
   // Annex North Entry Porch Slab & Dark Iron Awning Canopy
   addBox(exteriorGroup, 2.10, 0.14, 1.15, makeSurfaceMat('paver_granite_grid', 2.1, 1.15), wx(3.90), -0.22, wz(-0.55), true);
@@ -51,7 +51,7 @@ export function buildAnnex3D(ctx) {
   // Connecting Mossy Stepping-Stone Garden Path between Main North Porch & Annex North Porch
   const mossPathMat = makeSurfaceMat('paver_moss_stones', 6.0, 1.5);
   addBox(exteriorGroup, 5.40, 0.10, 1.35, mossPathMat, -1.35, -0.30, -0.45, false);
-  addBox(exteriorGroup, 1.35, 0.08, 8.60, mossPathMat, -1.30, -0.31, 4.40, false);
+  addBox(exteriorGroup, 1.35, 0.08, 8.46, mossPathMat, -1.30, -0.31, 4.46, false);
 
   function addStoneLantern(lx, lz) {
     const stMat = makeSurfaceMat('stone_cistern_grey', 0.4, 0.8);
@@ -82,11 +82,12 @@ export function buildAnnex3D(ctx) {
     const sb = ANNEX.stairLocal;
     const subMat = mat.wallCutCap;
     const ceilMat = makeSurfaceMat(ceilTex, 4.7, 4.5, { roughness: 0.90 });
+    const ox1 = 0.010, ox2 = 4.990, oz1 = 0.010, oz2 = 7.990;
     [
-      { x1: 0.0, x2: 5.0, z1: 0.0, z2: sb.topZ },
-      { x1: 0.0, x2: 5.0, z1: sb.bottomZ, z2: 8.0 },
-      { x1: sb.maxX, x2: 5.0, z1: sb.topZ, z2: sb.bottomZ },
-      { x1: 0.0, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
+      { x1: ox1, x2: ox2, z1: oz1, z2: sb.topZ },
+      { x1: ox1, x2: ox2, z1: sb.bottomZ, z2: oz2 },
+      { x1: sb.maxX, x2: ox2, z1: sb.topZ, z2: sb.bottomZ },
+      { x1: ox1, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
     ].forEach((r) => {
       const w = r.x2 - r.x1;
       const d = r.z2 - r.z1;
@@ -99,10 +100,10 @@ export function buildAnnex3D(ctx) {
       mesh.receiveShadow = true;
       staticGroup.add(mesh);
     });
-    addBox(staticGroup, 5.08, h * 0.72, 0.04, mat.darkIron, wx(2.5), midY, wz(-0.02), false);
-    addBox(staticGroup, 5.08, h * 0.72, 0.04, mat.darkIron, wx(2.5), midY, wz(8.02), false);
-    addBox(staticGroup, 0.04, h * 0.72, 8.08, mat.darkIron, wx(-0.02), midY, wz(4.0), false);
-    addBox(staticGroup, 0.04, h * 0.72, 8.08, mat.darkIron, wx(5.02), midY, wz(4.0), false);
+    addBox(staticGroup, 4.90, h * 0.72, 0.036, mat.darkIron, wx(2.5), midY, wz(-0.022), false);
+    addBox(staticGroup, 4.90, h * 0.72, 0.036, mat.darkIron, wx(2.5), midY, wz(8.022), false);
+    addBox(staticGroup, 0.036, h * 0.72, 7.90, mat.darkIron, wx(-0.022), midY, wz(4.0), false);
+    addBox(staticGroup, 0.036, h * 0.72, 7.90, mat.darkIron, wx(5.022), midY, wz(4.0), false);
   }
 
   addAnnexSlottedSlab(2.50, 2.75, 'ceiling_acoustic'); // 1F ceiling / 2F floor
@@ -122,7 +123,7 @@ export function buildAnnex3D(ctx) {
   const y2 = 2.75;
   addAnnexFloorPatch(0.15, 0.15, 4.85, 2.25, y2, 'parquet_oak');
   addAnnexFloorPatch(1.20, 2.25, 2.45, 5.55, y2, 'parquet_oak');
-  addAnnexFloorPatch(0.15, 4.95, 1.25, 5.55, y2, 'parquet_oak');
+  addAnnexFloorPatch(0.15, 4.95, 1.20, 5.55, y2, 'parquet_oak');
   addAnnexFloorPatch(2.55, 2.35, 4.85, 5.55, y2, 'tatami_ryukyu');
   addAnnexFloorPatch(0.15, 5.65, 4.85, 7.85, y2, 'wood_floor');
 
@@ -130,7 +131,7 @@ export function buildAnnex3D(ctx) {
   const y3 = 5.50;
   addAnnexFloorPatch(0.15, 0.15, 2.15, 1.45, y3, 'carpet_charcoal_tile'); // A301 NW Study
   addAnnexFloorPatch(0.15, 1.55, 2.15, 2.25, y3, 'wood_floor');           // North Stair Landing
-  addAnnexFloorPatch(1.25, 2.25, 2.15, 5.65, y3, 'wood_floor');           // Central Spine
+  addAnnexFloorPatch(1.25, 2.25, 2.15, 4.95, y3, 'wood_floor');           // Central Spine
   addAnnexFloorPatch(0.15, 4.95, 4.85, 5.65, y3, 'wood_floor');           // South T-Hall & STA3 entry
   addAnnexFloorPatch(2.25, 0.15, 4.85, 2.15, y3, 'wood_floor');           // A302 NE Guest
   addAnnexFloorPatch(2.25, 2.25, 4.85, 3.55, y3, 'parquet_oak');          // A303 East Library
@@ -153,22 +154,30 @@ export function buildAnnex3D(ctx) {
 
     const addRailingSeg = (sideName) => {
       if (sideName === 'north') {
-        addBox(staticGroup, bw + 0.04, 0.042, 0.042, mat.darkIron, cx, y3 + railH, zMin + 0.02, false);
+        const lenX = bal.side === 'west' ? bw - 0.044 : bw + 0.04;
+        const offX = bal.side === 'west' ? 0.022 : 0;
+        addBox(staticGroup, lenX, 0.042, 0.042, mat.darkIron, cx + offX, y3 + railH, zMin + 0.02, false);
         const g = addBox(dynamicGroup, bw - 0.08, railH - 0.12, 0.018, mat.glassClear, cx, y3 + railH / 2, zMin + 0.02, false);
         g.userData.noBatch = true;
         addCollider(3, xMin - 0.05, zMin - 0.06, xMax + 0.05, zMin + 0.04);
       } else if (sideName === 'south') {
-        addBox(staticGroup, bw + 0.04, 0.042, 0.042, mat.darkIron, cx, y3 + railH, zMax - 0.02, false);
+        const lenX = bal.side === 'west' ? bw - 0.044 : bw + 0.04;
+        const offX = bal.side === 'west' ? 0.022 : 0;
+        addBox(staticGroup, lenX, 0.042, 0.042, mat.darkIron, cx + offX, y3 + railH, zMax - 0.02, false);
         const g = addBox(dynamicGroup, bw - 0.08, railH - 0.12, 0.018, mat.glassClear, cx, y3 + railH / 2, zMax - 0.02, false);
         g.userData.noBatch = true;
         addCollider(3, xMin - 0.05, zMax - 0.04, xMax + 0.05, zMax + 0.06);
       } else if (sideName === 'west') {
-        addBox(staticGroup, 0.042, 0.042, bd + 0.04, mat.darkIron, xMin + 0.02, y3 + railH, cz, false);
+        const lenZ = bal.side === 'west' ? bd + 0.04 : bd - 0.044;
+        const offZ = bal.side === 'north' ? 0.022 : (bal.side === 'south' ? -0.022 : 0);
+        addBox(staticGroup, 0.042, 0.042, lenZ, mat.darkIron, xMin + 0.02, y3 + railH, cz + offZ, false);
         const g = addBox(dynamicGroup, 0.018, railH - 0.12, bd - 0.08, mat.glassClear, xMin + 0.02, y3 + railH / 2, cz, false);
         g.userData.noBatch = true;
         addCollider(3, xMin - 0.06, zMin - 0.05, xMin + 0.04, zMax + 0.05);
       } else if (sideName === 'east') {
-        addBox(staticGroup, 0.042, 0.042, bd + 0.04, mat.darkIron, xMax - 0.02, y3 + railH, cz, false);
+        const lenZ = bd - 0.044;
+        const offZ = bal.side === 'north' ? 0.022 : -0.022;
+        addBox(staticGroup, 0.042, 0.042, lenZ, mat.darkIron, xMax - 0.02, y3 + railH, cz + offZ, false);
         const g = addBox(dynamicGroup, 0.018, railH - 0.12, bd - 0.08, mat.glassClear, xMax - 0.02, y3 + railH / 2, cz, false);
         g.userData.noBatch = true;
         addCollider(3, xMax - 0.04, zMin - 0.05, xMax + 0.06, zMax + 0.05);
@@ -182,9 +191,10 @@ export function buildAnnex3D(ctx) {
     } else if (bal.side === 'west') {
       addRailingSeg('west'); addRailingSeg('north'); addRailingSeg('south');
     }
-    // 4 Corner iron posts
+    // 4 Corner iron posts stopped cleanly below top handrail
+    const postH = railH - 0.022;
     [[xMin + 0.02, zMin + 0.02], [xMax - 0.02, zMin + 0.02], [xMin + 0.02, zMax - 0.02], [xMax - 0.02, zMax - 0.02]].forEach(([px, pz]) => {
-      addBox(staticGroup, 0.038, railH, 0.038, mat.darkIron, px, y3 + railH / 2, pz, false);
+      addBox(staticGroup, 0.038, postH, 0.038, mat.darkIron, px, y3 + postH / 2, pz, false);
     });
     // Compact balcony teak stool
     addBox(furnitureGroup, 0.32, 0.42, 0.32, mat.walnut, cx + (bal.side === 'west' ? 0 : 0.46), y3 + 0.20, cz + (bal.side === 'west' ? 0.46 : 0), false);
@@ -207,10 +217,12 @@ export function buildAnnex3D(ctx) {
   function buildAnnexFloorWalls(annexFloor) {
     const fIdx = annexFloor.physicalFloor;
     const baseY = annexFloor.baseY;
-    const wallH = annexFloor.slabTopY - baseY;
+    const extWallH = annexFloor.slabTopY - baseY;
+    const intWallH = annexFloor.ceilingH != null ? annexFloor.ceilingH : extWallH;
 
     for (const rawWall of annexFloor.walls) {
       if (rawWall.kind === 'railing') continue;
+      const wallH = rawWall.kind === 'ext' ? extWallH : intWallH;
 
       const isH = rawWall.axis === 'h';
       const wall = {
@@ -378,7 +390,7 @@ export function buildAnnex3D(ctx) {
 
   [-1, 1].forEach((side) => {
     const rMesh = new THREE.Mesh(new THREE.BoxGeometry(extSlopeLen, 0.12, roofDepth), slateRoofMat);
-    rMesh.position.set(wx(2.5) + side * (extRun / 2), ridgeY + 0.10 - (extRun / 2) * ANNEX.atticSlope, wz(4.0));
+    rMesh.position.set(wx(2.5) + side * (extRun / 2 + 0.025), ridgeY + 0.10 - (extRun / 2) * ANNEX.atticSlope + (side > 0 ? 0.002 : 0), wz(4.0));
     rMesh.rotation.z = -side * roofAngle;
     rMesh.castShadow = true;
     rMesh.receiveShadow = true;
@@ -387,11 +399,12 @@ export function buildAnnex3D(ctx) {
     const intRun = 2.40;
     const intSlopeLen = intRun / Math.cos(roofAngle);
     const cMesh = new THREE.Mesh(new THREE.BoxGeometry(intSlopeLen, 0.04, 7.72), plywoodCeilMat);
-    cMesh.position.set(wx(2.5) + side * (intRun / 2), ridgeY - 0.02 - (intRun / 2) * ANNEX.atticSlope, wz(4.0));
+    cMesh.position.set(wx(2.5) + side * (intRun / 2 + 0.025), ridgeY - 0.02 - (intRun / 2) * ANNEX.atticSlope + (side > 0 ? 0.002 : 0), wz(4.0));
     cMesh.rotation.z = -side * roofAngle;
     cMesh.receiveShadow = true;
     staticGroup.add(cMesh);
   });
+  addBox(staticGroup, 0.22, 0.09, roofDepth + 0.04, mat.darkIron, wx(2.50), ridgeY + 0.17, wz(4.0), false);
 
   // Exposed Walnut Ridge Beam & Rafters in Annex Attic
   addBox(staticGroup, 0.12, 0.20, 7.75, mat.walnut, wx(2.50), ridgeY - 0.13, wz(4.0), true);
@@ -499,23 +512,23 @@ export function buildAnnex3D(ctx) {
     }
   }
 
-  // Annex Attic Stairwell Iron & Oak Safety Guardrail (guarding STA3 opening on Floor 4!)
+  // Annex Attic Stairwell Iron & Oak Safety Guardrail (mitered cleanly at corner)
   addBox(staticGroup, 0.05, 0.05, 2.78, mat.darkIron, wx(1.18), attY + 0.96, wz(3.62), false);
-  addBox(staticGroup, 0.05, 0.05, 2.78, mat.oak, wx(1.18), attY + 1.00, wz(3.62), false);
-  addBox(staticGroup, 1.06, 0.05, 0.05, mat.darkIron, wx(0.68), attY + 0.96, wz(4.98), false);
-  addBox(staticGroup, 1.06, 0.05, 0.05, mat.oak, wx(0.68), attY + 1.00, wz(4.98), false);
+  addBox(staticGroup, 0.05, 0.05, 2.78, mat.oak, wx(1.18), attY + 1.01, wz(3.62), false);
+  addBox(staticGroup, 1.00, 0.05, 0.05, mat.darkIron, wx(0.655), attY + 0.96, wz(4.98), false);
+  addBox(staticGroup, 1.00, 0.05, 0.05, mat.oak, wx(0.655), attY + 1.01, wz(4.98), false);
   for (let lz = 2.30; lz <= 4.98; lz += 0.22) {
-    addBox(staticGroup, 0.022, 0.96, 0.022, mat.darkIron, wx(1.18), attY + 0.48, wz(lz), false);
+    addBox(staticGroup, 0.022, 0.935, 0.022, mat.darkIron, wx(1.18), attY + 0.4675, wz(lz), false);
   }
-  for (let lx = 0.22; lx <= 1.18; lx += 0.22) {
-    addBox(staticGroup, 0.022, 0.96, 0.022, mat.darkIron, wx(lx), attY + 0.48, wz(4.98), false);
+  for (let lx = 0.22; lx <= 1.08; lx += 0.22) {
+    addBox(staticGroup, 0.022, 0.935, 0.022, mat.darkIron, wx(lx), attY + 0.4675, wz(4.98), false);
   }
   addCollider(4, wx(1.14), wz(2.25), wx(1.24), wz(5.04));
   addCollider(4, wx(0.15), wz(4.94), wx(1.24), wz(5.04));
 
-  // Continuous Exterior Corner Pilasters (0 -> eaveY = 9.55m)
-  [[0.02, 0.02], [4.98, 0.02], [0.02, 7.98], [4.98, 7.98]].forEach(([lx, lz]) => {
-    addBox(staticGroup, 0.10, eaveY, 0.10, mat.darkIron, wx(lx), eaveY / 2, wz(lz), false);
+  // Continuous Exterior Corner Pilasters proud of walls & slab bands (0 -> eaveY = 9.55m)
+  [[-0.01, -0.01], [5.01, -0.01], [-0.01, 8.01], [5.01, 8.01]].forEach(([lx, lz]) => {
+    addBox(staticGroup, 0.08, eaveY, 0.08, mat.darkIron, wx(lx), eaveY / 2, wz(lz), false);
   });
 
   // =========================================================================
@@ -575,7 +588,7 @@ export function buildAnnex3D(ctx) {
   const burlapMat = makeSurfaceMat('burlap_sack', 0.6, 0.6);
 
   // --- Annex 1F ---
-  addBox(furnitureGroup, 0.68, 0.015, 0.46, makeFrontMat('doormat_coir', { roughness: 0.95 }), wx(3.90), -0.09, wz(0.50), false);
+  addBox(furnitureGroup, 0.68, 0.015, 0.46, makeFrontMat('doormat_coir', { roughness: 0.95 }), wx(3.90), -0.075, wz(0.50), false);
   addBox(furnitureGroup, 0.36, 0.52, 1.05, mat.oak, wx(4.64), 0.16, wz(0.95), true);
   addCollider(1, wx(4.42), wz(0.40), wx(4.85), wz(1.52));
 
@@ -604,7 +617,7 @@ export function buildAnnex3D(ctx) {
   });
   addBox(furnitureGroup, 0.46, 0.02, 0.34, makeFrontMat('meal_teishoku'), wx(2.85), 0.76, wz(5.85), false);
   addCollider(1, wx(2.38), wz(5.22), wx(3.32), wz(6.48));
-  addBox(furnitureGroup, 0.76, 0.38, 1.56, denimMat, wx(0.62), 0.20, wz(6.68), true);
+  addBox(furnitureGroup, 0.60, 0.38, 1.54, denimMat, wx(0.68), 0.20, wz(6.68), true);
   addBox(furnitureGroup, 0.18, 0.68, 1.56, denimMat, wx(0.28), 0.42, wz(6.68), true);
   addCollider(1, wx(0.16), wz(5.86), wx(1.04), wz(7.50));
   addBox(furnitureGroup, 0.48, 0.035, 0.88, mat.walnut, wx(1.48), 0.36, wz(6.68), true);
@@ -639,12 +652,12 @@ export function buildAnnex3D(ctx) {
 
   addBox(furnitureGroup, 0.82, 0.04, 0.82, mat.walnut, wx(3.68), y2 + 0.33, wz(3.90), true);
   addBox(furnitureGroup, 0.64, 0.31, 0.64, mat.walnut, wx(3.68), y2 + 0.155, wz(3.90), false);
-  addBox(furnitureGroup, 0.52, 0.07, 0.52, makeFrontMat('zabuton_red'), wx(3.68), y2 + 0.045, wz(3.20), false);
-  addBox(furnitureGroup, 0.52, 0.07, 0.52, makeFrontMat('zabuton_red'), wx(3.68), y2 + 0.045, wz(4.60), false);
+  addBox(furnitureGroup, 0.52, 0.07, 0.52, makeFrontMat('zabuton_red'), wx(3.68), y2 + 0.052, wz(3.20), false);
+  addBox(furnitureGroup, 0.52, 0.07, 0.52, makeFrontMat('zabuton_red'), wx(3.68), y2 + 0.052, wz(4.60), false);
   addCollider(2, wx(3.24), wz(3.45), wx(4.12), wz(4.35));
 
   // Annex 2F Master Bedroom (shifted cleanly into lz=5.65..7.85!)
-  addBox(furnitureGroup, 2.05, 0.015, 1.98, makeSurfaceMat('carpet_beige', 2.05, 1.98), wx(2.85), y2 + 0.016, wz(6.75), false);
+  addBox(furnitureGroup, 2.05, 0.014, 1.98, makeSurfaceMat('carpet_beige', 2.05, 1.98), wx(2.85), y2 + 0.024, wz(6.75), false);
   addBox(furnitureGroup, 1.54, 0.25, 1.88, mat.walnut, wx(3.05), y2 + 0.125, wz(6.70), true);
   addBox(furnitureGroup, 1.48, 0.22, 1.82, makeSurfaceMat('fabric_floral_quilt', 1.48, 1.82), wx(3.05), y2 + 0.36, wz(6.70), true);
   addBox(furnitureGroup, 0.50, 0.13, 0.30, makeFrontMat('fabric_rose_vintage'), wx(2.72), y2 + 0.52, wz(5.96), false);
@@ -667,15 +680,15 @@ export function buildAnnex3D(ctx) {
   addCollider(3, wx(2.75), wz(2.25), wx(4.35), wz(2.64));
   // A304 East Tea & Dressing Room
   addBox(furnitureGroup, 0.68, 0.30, 0.68, mat.walnut, wx(3.65), y3 + 0.15, wz(4.30), true);
-  addBox(furnitureGroup, 0.48, 0.06, 0.48, makeFrontMat('zabuton_red'), wx(2.96), y3 + 0.04, wz(4.30), false);
+  addBox(furnitureGroup, 0.48, 0.06, 0.48, makeFrontMat('zabuton_red'), wx(2.96), y3 + 0.048, wz(4.30), false);
   addCollider(3, wx(3.28), wz(3.94), wx(4.02), wz(4.66));
   // A305 SW Forest Atelier (leaves clear path to West Balcony DA3-B2!)
   addBox(furnitureGroup, 1.15, 0.04, 0.55, mat.oak, wx(1.65), y3 + 0.74, wz(7.52), true);
   addBox(furnitureGroup, 0.03, 0.75, 1.05, makeSurfaceMat('cork_board', 1.05, 0.75), wx(2.33), y3 + 1.38, wz(6.75), false);
   addCollider(3, wx(1.04), wz(7.22), wx(2.26), wz(7.82));
   // A306 SE Sky Salon (leaves clear path to South Balcony DA3-B3!)
-  addBox(furnitureGroup, 1.35, 0.34, 0.68, sofaMat, wx(3.95), y3 + 0.18, wz(6.28), true);
-  addBox(furnitureGroup, 1.35, 0.58, 0.16, sofaMat, wx(3.95), y3 + 0.36, wz(5.96), true);
+  addBox(furnitureGroup, 1.34, 0.34, 0.54, sofaMat, wx(3.95), y3 + 0.18, wz(6.35), true);
+  addBox(furnitureGroup, 1.36, 0.58, 0.16, sofaMat, wx(3.95), y3 + 0.36, wz(5.98), true);
   addCollider(3, wx(3.24), wz(5.84), wx(4.66), wz(6.66));
   addFramedArt(furnitureGroup, 'art_poster_2', 0.48, 0.62, wx(4.82), y3 + 1.32, wz(6.75), -Math.PI / 2);
 

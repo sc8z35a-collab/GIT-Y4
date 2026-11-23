@@ -205,12 +205,12 @@ export function buildArmorCamperAndContainer3D(ctx) {
   });
 
   // ---- 1B. FLOOR DECK, ARMORED STEEL SHELL WALLS, MINIMAL SLIT WINDOWS & MOTORIZED IRON SHUTTERS ----
-  // Interior warm cedar/walnut floor deck (A01..A05 wood, A06 steel airlock grate)
-  addABox(aStatic, W - 0.16, 0.08, 13.40, makeSurfaceMat('secret_cedar_plank', W - 0.16, 13.40), W / 2, yFloor - 0.04, 6.80, false);
-  addABox(aStatic, W - 0.16, 0.08, 1.96, makeSurfaceMat('metal_grate', W - 0.16, 1.96), W / 2, yFloor - 0.04, 14.44, false);
-  // Armored Steel Roof Slab (yFloor+clearH .. yRoof) + Cedar Interior Ceiling + Arched Timber Secret-Base Ribs!
+  // Interior warm cedar/walnut floor deck (A01..A05 wood, A06 steel airlock grate — cleanly disjoint!)
+  addABox(aStatic, W - 0.16, 0.08, 13.38, makeSurfaceMat('secret_cedar_plank', W - 0.16, 13.38), W / 2, yFloor - 0.04, 6.79, false);
+  addABox(aStatic, W - 0.16, 0.08, 1.90, makeSurfaceMat('metal_grate', W - 0.16, 1.90), W / 2, yFloor - 0.04, 14.44, false);
+  // Armored Steel Roof Slab (yFloor+clearH .. yRoof) + Cedar Interior Ceiling strictly inside exterior walls!
   addABox(aStatic, W, 0.14, L, armorSteelMat, W / 2, yRoof - 0.07, L / 2, true);
-  addABox(aStatic, W - 0.24, 0.06, L - 0.24, cedarMat, W / 2, yFloor + clearH + 0.03, L / 2, false);
+  addABox(aStatic, W - 0.26, 0.05, L - 0.26, cedarMat, W / 2, yFloor + clearH + 0.025, L / 2, false);
   // Roof Expedition Steel Railings, Solar Panels, Satellite Radar Dome & Insulated Wood-Stove Chimney!
   addABox(aStatic, 0.06, 0.24, L - 1.2, darkArmorTrimMat, 0.14, yRoof + 0.12, L / 2, false);
   addABox(aStatic, 0.06, 0.24, L - 1.2, darkArmorTrimMat, W - 0.14, yRoof + 0.12, L / 2, false);
@@ -223,12 +223,14 @@ export function buildArmorCamperAndContainer3D(ctx) {
   chimney.position.set(rx(0.42), yRoof + 0.26, rz(4.80));
   aStatic.add(chimney);
 
-  // Build Walls + Minimal Slit Windows + Motorized IRON SHUTTERS + Doors directly from ARMOR_CAMPER_PLAN!
+  // Build Walls + Panoramic Armored Windshield + Motorized IRON SHUTTERS + Doors directly from ARMOR_CAMPER_PLAN!
   const ironShutters = [];
-  const wallH = yRoof - 0.14 - yFloor; // ~2.92m full height up to roof slab
+  const extWallH = yRoof - 0.142 - yFloor;
+  const intWallH = clearH - 0.006;
 
   ARMOR_CAMPER_PLAN.walls.forEach((wall) => {
     const isH = wall.axis === 'h';
+    const wallH = wall.kind === 'ext' ? extWallH : intWallH;
     const wallStart = isH ? wall.x1 : wall.z1;
     const wallEnd = isH ? wall.x2 : wall.z2;
     const thick = isH ? wall.z2 - wall.z1 : wall.x2 - wall.x1;
@@ -272,33 +274,33 @@ export function buildArmorCamperAndContainer3D(ctx) {
         else addAWallBox(thick, topH, op.width, midOrtho, cy, mid, frontTex, backTex, 'v');
       }
 
-      // Opening details: Ballistic Slit Window + Motorized IRON SHUTTER OR Interactive Door!
+      // Opening details: Window + Motorized IRON SHUTTER OR Interactive Door!
       if (op.type === 'window') {
         const mid = op.pos + op.width / 2;
         const cy = yFloor + sill + op.height / 2;
         if (isH) {
           addABox(aStatic, op.width - 0.04, op.height - 0.04, 0.025, mat.glassClear, mid, cy, midOrtho, false);
-          addABox(aStatic, op.width + 0.08, 0.08, thick + 0.08, darkArmorTrimMat, mid, yFloor + sill + op.height + 0.04, midOrtho, false);
-          addABox(aStatic, op.width + 0.08, 0.06, thick + 0.06, darkArmorTrimMat, mid, yFloor + sill - 0.02, midOrtho, false);
+          addABox(aStatic, op.width + 0.08, 0.06, thick + 0.08, darkArmorTrimMat, mid, yFloor + sill + op.height + 0.032, midOrtho, false);
+          addABox(aStatic, op.width + 0.08, 0.05, thick + 0.06, darkArmorTrimMat, mid, yFloor + sill - 0.026, midOrtho, false);
           if (op.hasIronShutter) {
             const shMesh = new THREE.Mesh(new THREE.BoxGeometry(op.width + 0.04, op.height + 0.04, 0.045), shutterMat);
             const openY = yFloor + sill + op.height + op.height * 0.46;
             const closedY = cy;
-            shMesh.position.set(rx(mid), openY, rz(midOrtho - thick * 0.56));
+            shMesh.position.set(rx(mid), openY, rz(midOrtho - thick * 0.5 - 0.04));
             shMesh.scale.y = 0.08;
             aDynamic.add(shMesh);
             ironShutters.push({ mesh: shMesh, openY, closedY, fullH: op.height + 0.04 });
           }
         } else {
           addABox(aStatic, 0.025, op.height - 0.04, op.width - 0.04, mat.glassClear, midOrtho, cy, mid, false);
-          addABox(aStatic, thick + 0.08, 0.08, op.width + 0.08, darkArmorTrimMat, midOrtho, yFloor + sill + op.height + 0.04, mid, false);
-          addABox(aStatic, thick + 0.06, 0.06, op.width + 0.08, darkArmorTrimMat, midOrtho, yFloor + sill - 0.02, mid, false);
+          addABox(aStatic, thick + 0.08, 0.06, op.width + 0.08, darkArmorTrimMat, midOrtho, yFloor + sill + op.height + 0.032, mid, false);
+          addABox(aStatic, thick + 0.06, 0.05, op.width + 0.08, darkArmorTrimMat, midOrtho, yFloor + sill - 0.026, mid, false);
           if (op.hasIronShutter) {
             const shMesh = new THREE.Mesh(new THREE.BoxGeometry(0.045, op.height + 0.04, op.width + 0.04), shutterMat);
             const sideSign = midOrtho < W * 0.5 ? -1 : 1;
             const openY = yFloor + sill + op.height + op.height * 0.46;
             const closedY = cy;
-            shMesh.position.set(rx(midOrtho + sideSign * (thick * 0.56)), openY, rz(mid));
+            shMesh.position.set(rx(midOrtho + sideSign * (thick * 0.5 + 0.04)), openY, rz(mid));
             shMesh.scale.y = 0.08;
             aDynamic.add(shMesh);
             ironShutters.push({ mesh: shMesh, openY, closedY, fullH: op.height + 0.04 });
@@ -391,28 +393,28 @@ export function buildArmorCamperAndContainer3D(ctx) {
   });
 
   // ---- 1C. WARM WOODEN SECRET-BASE INTERIOR (6 COMPLETELY ORIGINAL ZONES!) ----
-  // Exposed Curved Dark-Walnut Timber Ceiling Ribs & Warm Amber Indirect Cove Strips along entire hideout!
+  // Exposed Curved Dark-Walnut Timber Ceiling Ribs (vertical posts stop cleanly below top beams — zero corner Z-fighting!)
   for (let zRib = 2.6; zRib <= 13.4; zRib += 1.35) {
-    addABox(aStatic, W - 0.28, 0.14, 0.10, walnutMat, W / 2, yFloor + clearH - 0.07, zRib, false);
-    addABox(aStatic, 0.10, clearH - 0.10, 0.10, walnutMat, 0.17, yFloor + (clearH - 0.10) / 2, zRib, false);
-    addABox(aStatic, 0.10, clearH - 0.10, 0.10, walnutMat, W - 0.17, yFloor + (clearH - 0.10) / 2, zRib, false);
+    addABox(aStatic, W - 0.26, 0.14, 0.10, walnutMat, W / 2, yFloor + clearH - 0.075, zRib, false);
+    addABox(aStatic, 0.10, clearH - 0.15, 0.10, walnutMat, 0.18, yFloor + (clearH - 0.15) / 2, zRib, false);
+    addABox(aStatic, 0.10, clearH - 0.15, 0.10, walnutMat, W - 0.18, yFloor + (clearH - 0.15) / 2, zRib, false);
   }
   // Continuous warm amber indirect LED cove bars tucked beneath ceiling eaves
-  addABox(aStatic, 0.04, 0.04, 10.6, warmCoveMat, 0.20, yFloor + clearH - 0.22, 8.0, false);
-  addABox(aStatic, 0.04, 0.04, 10.6, warmCoveMat, W - 0.20, yFloor + clearH - 0.22, 8.0, false);
+  addABox(aStatic, 0.04, 0.04, 10.6, warmCoveMat, 0.25, yFloor + clearH - 0.22, 8.0, false);
+  addABox(aStatic, 0.04, 0.04, 10.6, warmCoveMat, W - 0.25, yFloor + clearH - 0.22, 8.0, false);
 
   // ZONE A01: Armored Command Cockpit (z = 0.12..2.50)
-  // Full-width wood-and-steel tactical dash + recessed luminous route computer display
-  addABox(aStatic, W - 0.30, 0.88, 0.62, darkArmorTrimMat, W / 2, yFloor + 0.44, 0.46, false);
-  addABox(aStatic, W - 0.32, 0.06, 0.58, walnutMat, W / 2, yFloor + 0.90, 0.48, false);
-  addABox(aStatic, 0.72, 0.34, 0.04, navScreenMat, W / 2, yFloor + 1.08, 0.36, false); // On-board route computer screen
+  // Full-width low-profile tactical dash + compact route computer display (clear windshield sightline!)
+  addABox(aStatic, W - 0.30, 0.84, 0.60, darkArmorTrimMat, W / 2, yFloor + 0.42, 0.45, false);
+  addABox(aStatic, W - 0.32, 0.05, 0.56, walnutMat, W / 2, yFloor + 0.865, 0.47, false);
+  addABox(aStatic, 0.64, 0.22, 0.04, navScreenMat, W / 2, yFloor + 0.99, 0.38, false); // Low-profile nav display below sightline
   addACol(0.14, 0.14, W - 0.14, 0.80);
 
   // Driver Captain Seat (Port X=0.88, Z=1.38) + Co-Pilot Seat (Starboard X=2.22, Z=1.38)
   [0.88, 2.22].forEach((sx) => {
-    addABox(aStatic, 0.62, 0.42, 0.58, heavyIronMat, sx, yFloor + 0.21, 1.44, false);
-    addABox(aStatic, 0.60, 0.14, 0.56, leatherMat, sx, yFloor + 0.48, 1.44, false);
-    addABox(aStatic, 0.58, 0.78, 0.14, leatherMat, sx, yFloor + 0.88, 1.70, false);
+    addABox(aStatic, 0.62, 0.40, 0.58, heavyIronMat, sx, yFloor + 0.20, 1.44, false);
+    addABox(aStatic, 0.60, 0.14, 0.56, leatherMat, sx, yFloor + 0.475, 1.44, false);
+    addABox(aStatic, 0.58, 0.74, 0.14, leatherMat, sx, yFloor + 0.90, 1.71, false);
   });
   addACol(1.90, 1.12, 2.58, 1.82);
 
@@ -480,22 +482,22 @@ export function buildArmorCamperAndContainer3D(ctx) {
 
   // ZONE A02: Windowless Cedar Secret-Base Lounge & Cast-Iron Wood Stove (z = 2.50..5.80)
   // Cast-iron wood-burning stove on slate hearth pad (Port side X=0.45, Z=4.80)
-  addABox(aStatic, 0.72, 0.05, 0.78, makeSurfaceMat('slate_charcoal', 0.72, 0.78), 0.48, yFloor + 0.025, 4.80, false);
-  addABox(aStatic, 0.48, 0.64, 0.44, heavyIronMat, 0.46, yFloor + 0.37, 4.80, true);
-  addABox(aStatic, 0.04, 0.24, 0.24, emberMat, 0.71, yFloor + 0.42, 4.80, false); // Glowing hearth fire window
-  const fluePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, clearH - 0.66, 10), heavyIronMat);
-  fluePipe.position.set(rx(0.42), yFloor + 0.68 + (clearH - 0.66) / 2, rz(4.80));
+  addABox(aStatic, 0.72, 0.04, 0.78, makeSurfaceMat('slate_charcoal', 0.72, 0.78), 0.48, yFloor + 0.022, 4.80, false);
+  addABox(aStatic, 0.48, 0.64, 0.44, heavyIronMat, 0.46, yFloor + 0.365, 4.80, true);
+  addABox(aStatic, 0.04, 0.24, 0.24, emberMat, 0.71, yFloor + 0.42, 4.80, false);
+  const fluePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, clearH - 0.68, 10), heavyIronMat);
+  fluePipe.position.set(rx(0.42), yFloor + 0.685 + (clearH - 0.68) / 2, rz(4.80));
   aStatic.add(fluePipe);
   addACol(0.14, 4.40, 0.86, 5.20);
 
-  // Built-in Starboard U-Shaped Cedar & Saddle-Leather Sunken Pit Lounge + Solid Walnut Map Table (X=1.70..2.96, Z=2.75..5.55)
-  addABox(aStatic, 1.18, 0.44, 0.56, cedarMat, 2.34, yFloor + 0.22, 2.95, true);
-  addABox(aStatic, 1.12, 0.12, 0.52, leatherMat, 2.34, yFloor + 0.48, 2.95, false);
-  addABox(aStatic, 0.58, 0.44, 2.55, cedarMat, 2.66, yFloor + 0.22, 4.18, true);
-  addABox(aStatic, 0.54, 0.12, 2.48, leatherMat, 2.66, yFloor + 0.48, 4.18, false);
-  addABox(aStatic, 0.12, 0.52, 2.48, leatherMat, 2.90, yFloor + 0.78, 4.18, false);
-  addABox(aStatic, 1.18, 0.44, 0.56, cedarMat, 2.34, yFloor + 0.22, 5.38, true);
-  addABox(aStatic, 1.12, 0.12, 0.52, leatherMat, 2.34, yFloor + 0.48, 5.38, false);
+  // Built-in Starboard U-Shaped Cedar & Saddle-Leather Sunken Pit Lounge (disjoint mitered corners — zero Z-fighting!)
+  addABox(aStatic, 0.64, 0.44, 0.56, cedarMat, 2.05, yFloor + 0.22, 2.95, true);
+  addABox(aStatic, 0.62, 0.12, 0.52, leatherMat, 2.05, yFloor + 0.502, 2.95, false);
+  addABox(aStatic, 0.58, 0.44, 2.98, cedarMat, 2.66, yFloor + 0.22, 4.17, true);
+  addABox(aStatic, 0.54, 0.12, 2.92, leatherMat, 2.66, yFloor + 0.502, 4.17, false);
+  addABox(aStatic, 0.12, 0.52, 2.90, leatherMat, 2.90, yFloor + 0.825, 4.17, false);
+  addABox(aStatic, 0.64, 0.44, 0.56, cedarMat, 2.05, yFloor + 0.22, 5.38, true);
+  addABox(aStatic, 0.62, 0.12, 0.52, leatherMat, 2.05, yFloor + 0.502, 5.38, false);
   // Solid Walnut Expedition Chart Table inside U-Pit
   addABox(aStatic, 0.74, 0.05, 1.42, walnutMat, 1.98, yFloor + 0.74, 4.18, true);
   addABox(aStatic, 0.12, 0.72, 0.12, heavyIronMat, 2.02, yFloor + 0.36, 4.18, false);
@@ -694,22 +696,23 @@ export function buildArmorCamperAndContainer3D(ctx) {
     });
   });
 
-  // ISO Corrugated Container Box (Floor + Roof + Front + Left + Right + Rear Frame & Auto Swing Door)
+  // ISO Corrugated Container Box (walls stop cleanly below roof slab — zero roof-edge Z-fighting!)
   const boxH = tyRoof - tyFloor; // 2.26m
-  addTBox(tStatic, TW - 0.14, 0.06, TL - 0.14, contFloorMat, TW / 2, tyFloor - 0.03, TL / 2, false);
+  const cWallH = boxH - 0.084;
+  addTBox(tStatic, TW - 0.16, 0.06, TL - 0.16, contFloorMat, TW / 2, tyFloor - 0.03, TL / 2, false);
   addTBox(tStatic, TW, 0.08, TL, contRoofMat, TW / 2, tyRoof - 0.04, TL / 2, true);
   // Front wall (lz = 0.04)
-  addTBox(tStatic, TW, boxH, 0.08, contEndMat, TW / 2, tyFloor + boxH / 2, 0.04, true);
+  addTBox(tStatic, TW, cWallH, 0.08, contEndMat, TW / 2, tyFloor + cWallH / 2, 0.04, true);
   addTCol(0, 0, TW, 0.09);
   // West & East corrugated walls
-  addTBox(tStatic, 0.08, boxH, TL - 0.16, contWallMat, 0.04, tyFloor + boxH / 2, TL / 2, true);
-  addTBox(tStatic, 0.08, boxH, TL - 0.16, contWallMat, TW - 0.04, tyFloor + boxH / 2, TL / 2, true);
+  addTBox(tStatic, 0.08, cWallH, TL - 0.162, contWallMat, 0.04, tyFloor + cWallH / 2, TL / 2, true);
+  addTBox(tStatic, 0.08, cWallH, TL - 0.162, contWallMat, TW - 0.04, tyFloor + cWallH / 2, TL / 2, true);
   addTCol(0, 0, 0.09, TL);
   addTCol(TW - 0.09, 0, TW, TL);
   // Rear corner piers flanking wide cargo door (lx = 0.35..1.65)
-  addTBox(tStatic, 0.35, boxH, 0.08, contEndMat, 0.175, tyFloor + boxH / 2, TL - 0.04, true);
-  addTBox(tStatic, 0.35, boxH, 0.08, contEndMat, TW - 0.175, tyFloor + boxH / 2, TL - 0.04, true);
-  addTBox(tStatic, 1.30, boxH - 2.04, 0.08, contEndMat, TW / 2, tyFloor + 2.04 + (boxH - 2.04) / 2, TL - 0.04, false);
+  addTBox(tStatic, 0.35, cWallH, 0.08, contEndMat, 0.175, tyFloor + cWallH / 2, TL - 0.04, true);
+  addTBox(tStatic, 0.35, cWallH, 0.08, contEndMat, TW - 0.175, tyFloor + cWallH / 2, TL - 0.04, true);
+  addTBox(tStatic, 1.30, Math.max(0.04, cWallH - 2.04), 0.08, contEndMat, TW / 2, tyFloor + 2.04 + Math.max(0.04, cWallH - 2.04) / 2, TL - 0.04, false);
   addTCol(0, TL - 0.09, 0.35, TL);
   addTCol(TW - 0.35, TL - 0.09, TW, TL);
   // Rear safety taillights on container

@@ -20,19 +20,13 @@ import { createTerrenoStorm } from './terrenoStorm.js';
 import { createTerrenoAutopilot } from './terrenoAutopilot.js';
 
 /**
- * TERRENO 1.1 Engine — Unified 15 km × 40 km (600.0 km²) Ultra-Precision Mountain & Deep-Forest World Controller.
- * Coordinates:
- *   1. Hydro-Tectonic + Phacelle + D8 Stream-Power Geomorphology & Dual-Azimuth Horizon Atlas
- *   2. 13-Ring Crack-Free GPU Geomorphing Clipmaps + Seamless PBR + Triplanar Granite + 52km Sky Dome
- *   3. Slope-Conforming 40 km Main Gorge River (黒杉川), 16 Cascading Tributaries & +7.5m Flash-Flooding
- *   4. Deterministic Zero-GC Ecological Forest Streamer, Extreme Storm/Landslides & 30-Waypoint Safe A* Autopilot
- *   5. Interactive Real-Time 3D Topographic Map, Full-Screen 2D GSI Map & Suginosato 5-House Mountain Village
+ * TERRENO 2.0 Engine — Unified 60 km × 60 km (3,600.0 km²) Non-Mountainous Countryside & Nature World Controller.
  */
 export function createTerrenoEngine(scene, initialTodId = 'day') {
   const root = new THREE.Group();
-  root.name = 'TERRENO_WORLD_15x40km';
+  root.name = 'TERRENO_WORLD_60x60km';
 
-  // 1. Bake 15km × 40km physical watershed & dual-azimuth horizon shadow atlas
+  // 1. Bake 60km × 60km multi-biome watershed & dual-azimuth horizon shadow atlas
   const geomorph = buildTerrenoGeomorphology();
 
   let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'day';
@@ -159,6 +153,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     sampleGeoBilinear: geomorph.sampleGeoBilinear,
     getBiomeInfoAt: geomorph.getBiomeInfoAt,
     getLocalColliders: forest.getLocalColliders,
+    getCollidersNear: forest.getCollidersNear,
     ensureCollidersAt: forest.ensureCollidersAt,
     setSurfaceSuper,
     setTimeOfDay,

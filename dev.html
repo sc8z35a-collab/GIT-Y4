@@ -121,10 +121,20 @@
       </div>
     </aside>
 
-    <!-- Minimal Driving Speedometer ONLY (Bottom-Right Corner; Tap or [E] to Exit Vehicle) -->
-    <button id="drive-hud" class="drive-speed-pill hidden" type="button" aria-label="速度">
-      <strong id="drive-speed-val">0</strong>
-      <span>km/h</span>
+    <!-- Minimal Driving Control Bar (Autopilot / Viewpoint / Exit / Speedometer) -->
+    <div id="drive-hud" class="drive-hud-bar hidden" aria-label="運転操作">
+      <button id="btn-drive-auto" class="drive-action-btn" type="button">自動運転</button>
+      <button id="btn-drive-cam" class="drive-action-btn" type="button">視点</button>
+      <button id="btn-drive-exit" class="drive-action-btn drive-action-exit" type="button">降車</button>
+      <div class="drive-speed-pill" aria-label="速度">
+        <strong id="drive-speed-val">0</strong>
+        <span>km/h</span>
+      </div>
+    </div>
+
+    <!-- Subtle On-Foot Autopilot Indicator & Stop Chip (Shown Only While Autopilot Drives Without Seated Driver) -->
+    <button id="autopilot-stop-chip" class="autopilot-stop-chip hidden" type="button">
+      <span id="autopilot-stop-label">自動走行中・停止</span>
     </button>
 
     <!-- Single Ultra-Minimal Crouch Icon (On-Foot Touch Only, Hidden While Driving) -->
@@ -141,17 +151,17 @@
       <!-- Transparent Full-Screen Interactive Gesture Layer for Live 3D Topographic Map -->
       <div id="map3d-gesture-layer" class="map3d-gesture-layer"></div>
 
-      <!-- Full-Screen Authentic 2D Topographic Map & 30-Waypoint Autonomous Route Selector -->
+      <!-- Full-Screen Authentic 2D Topographic Map & Free-Destination Autonomous Route Selector -->
       <div id="terreno-2d-panel" class="terreno-2d-panel hidden"></div>
 
-      <!-- Full-Screen Edge-to-Edge CAD Architectural Blueprint Layer (2-Finger Zoom Out/In & Free Pan) -->
+      <!-- Full-Screen Edge-to-Edge CAD Architectural Blueprint Layer (Crisp Vector ViewBox Zoom & Pan) -->
       <div id="cad-map-body" class="cad-fullscreen hidden">
         <div id="blueprint-viewport" class="blueprint-viewport">
           <div id="blueprint-mount" class="blueprint-mount"></div>
         </div>
       </div>
 
-      <!-- Minimal Floating Top-Left 3D Camera Icons (3D Map Mode Only — Zero Text) -->
+      <!-- Minimal Floating Top-Left 3D Camera & Autopilot Vehicle Controls -->
       <div id="map3d-controls" class="map-float-tl">
         <button id="btn-map3d-focus" class="map-icon-btn" type="button" aria-label="現在地・全景">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -165,6 +175,8 @@
             <polyline points="21 3 21 9 15 9" />
           </svg>
         </button>
+        <button id="btn-map3d-veh-rv" class="map-pill-btn map2d-veh-btn active" data-veh-key="camper" type="button">RV自動</button>
+        <button id="btn-map3d-veh-armor" class="map-pill-btn map2d-veh-btn" data-veh-key="armor" type="button">装甲自動</button>
       </div>
 
       <!-- Minimal Floating Top-Right Controls -->

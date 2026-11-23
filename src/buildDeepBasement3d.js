@@ -233,20 +233,20 @@ export function buildDeepBasement3D(ctx) {
       addDBox(deepStatic, w - 0.04, 0.015, 0.03, mat.darkIron, cx, st.topY - i * stepH - 0.008, st.topZ + i * stepD + 0.02);
     }
 
-    // Enclosed concrete stairwell shell (West wall, North cap, South cap, East wall along run, Sloped ceiling)
+    // Enclosed concrete stairwell shell (West wall mitered between North & South caps, East wall along run, ceiling above)
     const fullTop = st.topY + 2.35;
     const fullBot = st.bottomY - 0.20;
     const fullH = fullTop - fullBot;
     const midY = (fullTop + fullBot) / 2;
     const zMin = landingZ0 - 0.12;
     const zMax = lowerVestZ1 + 0.12;
-    addDBox(deepStatic, 0.14, fullH, zMax - zMin, concPconMat, st.minX - 0.07, midY, (zMin + zMax) / 2);
+    addDBox(deepStatic, 0.14, fullH, zMax - zMin - 0.28, concPconMat, st.minX - 0.07, midY, (zMin + zMax) / 2);
     addDBox(deepStatic, w + 0.24, fullH, 0.14, concPconMat, cx, midY, zMin + 0.07);
     addDBox(deepStatic, w + 0.24, fullH, 0.14, concPconMat, cx, midY, zMax - 0.07);
     // East divider wall along the sloped middle section
     addDBox(deepStatic, 0.14, fullH, st.bottomZ - st.topZ, concPconMat, st.maxX + 0.07, midY, (st.topZ + st.bottomZ) / 2);
     // Ceilings over upper landing & lower vestibule + sloped soffit
-    addDBox(deepStatic, w + 0.20, 0.14, zMax - zMin, concPconMat, cx, fullTop, (zMin + zMax) / 2);
+    addDBox(deepStatic, w + 0.20, 0.14, zMax - zMin, concPconMat, cx, fullTop + 0.07, (zMin + zMax) / 2);
 
     // Steel pipe handrail along West wall of stairs
     const railLen = Math.hypot(runD, totalH);
@@ -275,7 +275,7 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 1.35, 0.16, 2.05, concCleanMat, 2.60, yB1 - 0.08, 1.85);
   addDBox(deepStatic, 1.35, 0.14, 2.05, concPconMat, 2.60, yB1 + 2.09, 1.85);
   addDWallBox(1.45, 2.02, 0.14, 2.55, yB1 + 1.01, 0.78, 'concrete_pcon', 'concrete_pcon', 'h');
-  addDWallBox(0.14, 2.02, 2.00, 1.88, yB1 + 1.01, 1.85, 'concrete_pcon', 'concrete_pcon', 'v');
+  addDWallBox(0.14, 2.02, 1.93, 1.88, yB1 + 1.01, 1.885, 'concrete_pcon', 'concrete_pcon', 'v');
   addCollider(0, 1.80, 0.70, 3.25, 0.85);
   addCollider(0, 1.80, 0.85, 1.95, 2.85);
   // Subtle illuminated sign over B1F -> B2F stair portal
@@ -307,7 +307,7 @@ export function buildDeepBasement3D(ctx) {
     addDBox(deepStatic, 10.00, 0.28, 0.26, concPconMat, 5.00, yB2 + hB2 - 0.14, bz);
   });
   [3.35, 6.65].forEach((bx) => {
-    addDBox(deepStatic, 0.24, 0.24, 10.00, concPconMat, bx, yB2 + hB2 - 0.12, 7.85);
+    addDBox(deepStatic, 0.24, 0.22, 10.00, concPconMat, bx, yB2 + hB2 - 0.11, 7.85);
   });
   // Suspended Studio Lighting Rails + Warm-White Architectural Acoustic Ceiling Baffles!
   [4.10, 7.85, 11.40].forEach((tz) => {
@@ -342,7 +342,7 @@ export function buildDeepBasement3D(ctx) {
   for (let i = 0; i < 4; i++) {
     const mx = 4.15 + i * 1.58;
     addDBox(deepStatic, 1.54, 2.68, 0.025, mat.chrome, mx, yB2 + 1.48, 2.865);
-    addDBox(deepStatic, 1.48, 2.62, 0.016, studioMirrorMat, mx, yB2 + 1.48, 2.880);
+    addDBox(deepStatic, 1.48, 2.62, 0.016, studioMirrorMat, mx, yB2 + 1.48, 2.885);
   }
   // Full-length Twin-Tier Oak Ballet/Studio Barre along North Mirror Wall
   [0.86, 1.12].forEach((bh) => {
@@ -360,7 +360,7 @@ export function buildDeepBasement3D(ctx) {
   for (let i = 0; i < 4; i++) {
     const mz = 3.95 + i * 1.56;
     addDBox(deepStatic, 0.025, 2.68, 1.52, mat.chrome, 0.015, yB2 + 1.48, mz);
-    addDBox(deepStatic, 0.016, 2.62, 1.46, studioMirrorMat, 0.030, yB2 + 1.48, mz);
+    addDBox(deepStatic, 0.016, 2.62, 1.46, studioMirrorMat, 0.035, yB2 + 1.48, mz);
   }
   [0.86, 1.12].forEach((bh) => {
     const barreW = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 6.15, 10), mat.oak);
@@ -407,8 +407,8 @@ export function buildDeepBasement3D(ctx) {
   // Wall Mirror along South Concrete Wall
   addDBox(deepStatic, 3.20, 2.10, 0.02, studioMirrorMat, 6.85, yB2 + 1.25, 16.97);
   // Leather/Denim Lounge Sofa + Oak Low Table (West-South)
-  addDBox(deepStatic, 2.10, 0.44, 0.82, denimMat, 5.45, yB2 + 0.22, 16.20);
-  addDBox(deepStatic, 2.10, 0.72, 0.18, denimMat, 5.45, yB2 + 0.46, 16.58);
+  addDBox(deepStatic, 2.08, 0.44, 0.64, denimMat, 5.45, yB2 + 0.22, 16.12);
+  addDBox(deepStatic, 2.10, 0.72, 0.18, denimMat, 5.45, yB2 + 0.46, 16.56);
   addDBox(deepStatic, 1.25, 0.36, 0.62, mat.oak, 5.45, yB2 + 0.18, 15.15);
   addCollider(-1, 4.35, 14.80, 6.55, 16.70);
   // Heavy Equipment Rack & Flight Cases (East Wall)
@@ -432,7 +432,7 @@ export function buildDeepBasement3D(ctx) {
   // --- B300: W 520mm (1.3× Protagonist) Corridor Floor, Ceiling & Amber Baseboard Guide Strips ---
   addDBox(deepStatic, 2.15, 0.24, 2.65, concCleanMat, 2.25, yB3 - 0.12, 2.35);
   addDBox(deepStatic, 0.56, 0.02, 2.20, makeSurfaceMat('metal_grate', 0.6, 2.2), 1.60, yB3 + 0.01, 2.55);
-  addDBox(deepStatic, 1.50, 0.02, 0.56, makeSurfaceMat('metal_grate', 1.5, 0.6), 2.55, yB3 + 0.01, 1.75);
+  addDBox(deepStatic, 0.72, 0.02, 0.56, makeSurfaceMat('metal_grate', 0.7, 0.6), 2.25, yB3 + 0.01, 1.75);
   addDBox(deepStatic, 0.65, 0.02, 1.15, makeSurfaceMat('tile_grey_stone', 0.7, 1.2), 2.95, yB3 + 0.01, 1.75);
   addDBox(deepStatic, 2.25, 0.24, 2.75, concPconMat, 2.25, yB3 + 2.58, 2.35);
   // Warm Amber Recessed Baseboard Guide LED Strips along the 520mm corridor leading right to ELV-1!
@@ -453,7 +453,7 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 1.65, 0.022, 3.55, makeSurfaceMat('wood_floor', 1.7, 3.6), 0.825, yB3 + 0.011, 10.35);
   addDBox(deepStatic, 3.20, 0.022, 3.90, makeSurfaceMat('parquet_oak', 3.2, 3.9), 1.60, yB3 + 0.011, 14.15);
   // Shower & Toilet waterproof tile floors
-  addDBox(deepStatic, 1.45, 0.018, 1.80, makeSurfaceMat('tile_blue_bath', 1.45, 1.8), 2.475, yB3 - 0.005, 9.50);
+  addDBox(deepStatic, 1.45, 0.018, 1.80, makeSurfaceMat('tile_blue_bath', 1.45, 1.8), 2.475, yB3 + 0.009, 9.50);
   addDBox(deepStatic, 1.45, 0.020, 1.60, makeSurfaceMat('tile_beige_grid', 1.45, 1.6), 2.475, yB3 + 0.010, 11.30);
   // Warm Wood Plank Ceiling + Exposed Structural Timber Ceiling Joists every 1.25m!
   addDBox(deepStatic, 3.50, 0.26, 12.80, makeSurfaceMat('plywood_attic', 3.5, 12.8), 1.60, yB3 + hB3 + 0.13, 9.85);
@@ -493,8 +493,8 @@ export function buildDeepBasement3D(ctx) {
   addCollider(-2, 1.74, 4.72, 3.06, 6.40);
 
   // Cozy Plush Denim Shelter Sofa + Rug beneath WB3-WK Observation Window (leaves Z=6.60..8.55 wide open before DB3-WK!)
-  addDBox(deepStatic, 1.30, 0.015, 1.75, makeSurfaceMat('carpet_beige', 1.3, 1.8), 0.90, yB3 + 0.025, 5.72);
-  addDBox(deepStatic, 0.68, 0.40, 1.48, denimMat, 0.40, yB3 + 0.20, 5.72);
+  addDBox(deepStatic, 1.30, 0.014, 1.75, makeSurfaceMat('carpet_beige', 1.3, 1.8), 0.90, yB3 + 0.029, 5.72);
+  addDBox(deepStatic, 0.54, 0.40, 1.46, denimMat, 0.47, yB3 + 0.20, 5.72);
   addDBox(deepStatic, 0.16, 0.66, 1.48, denimMat, 0.11, yB3 + 0.43, 5.72);
   addCollider(-2, 0.04, 4.94, 0.78, 6.50);
   // Relocated Bookshelf cleanly along Middle Gallery West Wall (clear of DB3-WK & DB3-SH/DB3-WC!)
@@ -509,7 +509,7 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 0.04, 0.12, 0.56, mat.chrome, 3.12, yB3 + 1.15, 9.50); // Mixer bar
   addDBox(deepStatic, 0.32, 0.025, 0.32, mat.chrome, 2.86, yB3 + 2.18, 9.50); // Overhead rain shower head
   addDBox(deepStatic, 0.34, 0.02, 0.02, mat.chrome, 3.00, yB3 + 2.20, 9.50);
-  addDBox(deepStatic, 0.14, 0.015, 1.15, mat.stainless, 2.95, yB3 - 0.002, 9.50); // Linear drain grate
+  addDBox(deepStatic, 0.14, 0.015, 1.15, mat.stainless, 2.95, yB3 + 0.024, 9.50); // Linear drain grate
   addDBox(deepStatic, 0.42, 0.44, 0.72, hinokiMat, 2.92, yB3 + 0.22, 8.98); // Hinoki waterproof shower bench
   addCollider(-2, 2.68, 8.62, 3.18, 9.38);
 
@@ -620,12 +620,14 @@ export function buildDeepBasement3D(ctx) {
       return new THREE.MeshStandardMaterial({ color: 0x1e293b, emissive: new THREE.Color(emissiveHex), emissiveIntensity: emissiveInt });
     }
     const cv = document.createElement('canvas');
-    cv.width = w;
-    cv.height = h;
+    cv.width = w * 2;
+    cv.height = h * 2;
     const c = cv.getContext('2d');
+    c.scale(2, 2);
     drawFn(c, w, h);
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
     return new THREE.MeshStandardMaterial({
       map: tex,
       emissiveMap: tex,
@@ -800,27 +802,28 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 2.70, 0.022, 3.15, makeSurfaceMat('concrete_clean', 2.7, 3.1, { color: 0x6c7278 }), b4Cx, yB4 + 0.011, 11.90); // B404 Fab
   addDBox(deepStatic, 2.70, 0.022, 2.85, makeSurfaceMat('rubber_black_stud', 2.7, 2.8), b4Cx, yB4 + 0.011, 14.95); // B405 Vault
 
-  // Full-Length Recessed Central Steel Trench Drain / Fiber-Optic Floor Channel (X=1.96, Z=1.55..15.80) + Luminous Strip!
-  addDBox(deepStatic, 0.18, 0.026, 14.20, makeSurfaceMat('metal_grate', 0.2, 14.2), 1.96, yB4 + 0.014, 8.65);
-  addDBox(deepStatic, 0.026, 0.028, 13.80, labCyanGlowMat, 1.96, yB4 + 0.015, 8.65);
+  // Full-Length Recessed Central Steel Trench Drain / Fiber-Optic Floor Channel (X=1.96, Z=3.20..15.80) + Luminous Strip!
+  addDBox(deepStatic, 0.18, 0.020, 12.60, makeSurfaceMat('metal_grate', 0.2, 12.6), 1.96, yB4 + 0.018, 9.50);
+  addDBox(deepStatic, 0.026, 0.020, 12.40, labCyanGlowMat, 1.96, yB4 + 0.022, 9.50);
 
   // 8 Exposed Reinforced Concrete Portal Frame Structural Ribs (Columns + Haunched Ceiling Beams along 15.5m!)
+  const pilH = hB4 - 0.30;
   [1.05, 3.05, 5.05, 7.05, 9.05, 11.05, 13.05, 15.25].forEach((rz) => {
-    // West & East concrete pilaster columns
-    addDBox(deepStatic, 0.14, hB4, 0.22, concPconMat, b4MinX + 0.05, yB4 + hB4 * 0.5, rz);
+    // West & East concrete pilaster columns stopped cleanly below ceiling rib beams
+    addDBox(deepStatic, 0.14, pilH, 0.22, concPconMat, b4MinX + 0.075, yB4 + pilH * 0.5, rz);
     if (rz > 2.70) {
-      addDBox(deepStatic, 0.14, hB4, 0.22, concPconMat, b4MaxX - 0.05, yB4 + hB4 * 0.5, rz);
+      addDBox(deepStatic, 0.14, pilH, 0.22, concPconMat, b4MaxX - 0.075, yB4 + pilH * 0.5, rz);
     }
     // Overhead deep structural ceiling rib beam + dark steel gusset brackets
-    addDBox(deepStatic, FLOOR_B4F.width, 0.30, 0.24, concPconMat, b4Cx, yB4 + hB4 - 0.15, rz);
-    addDBox(deepStatic, 0.26, 0.26, 0.10, labDarkSteelMat, b4MinX + 0.14, yB4 + hB4 - 0.32, rz);
-    addDBox(deepStatic, 0.26, 0.26, 0.10, labDarkSteelMat, b4MaxX - 0.14, yB4 + hB4 - 0.32, rz);
+    addDBox(deepStatic, FLOOR_B4F.width - 0.02, 0.30, 0.24, concPconMat, b4Cx, yB4 + hB4 - 0.15, rz);
+    addDBox(deepStatic, 0.26, 0.26, 0.10, labDarkSteelMat, b4MinX + 0.15, yB4 + hB4 - 0.32, rz);
+    addDBox(deepStatic, 0.26, 0.26, 0.10, labDarkSteelMat, b4MaxX - 0.15, yB4 + hB4 - 0.32, rz);
   });
 
   // Lower Hairline Stainless Steel Lab Wainscoting & Yellow Hazard Kick Strips along West & East Walls
-  addDBox(deepStatic, 0.025, 0.96, FLOOR_B4F.depth - 0.10, mat.stainless, b4MinX + 0.012, yB4 + 0.48, b4Cz);
-  addDBox(deepStatic, 0.025, 0.96, FLOOR_B4F.depth - 1.90, mat.stainless, b4MaxX - 0.012, yB4 + 0.48, (2.65 + b4MaxZ) * 0.5);
-  addDBox(deepStatic, 0.032, 0.045, FLOOR_B4F.depth - 0.10, labHazardYellowMat, b4MinX + 0.016, yB4 + 0.05, b4Cz);
+  addDBox(deepStatic, 0.020, 0.96, FLOOR_B4F.depth - 0.10, mat.stainless, b4MinX + 0.015, yB4 + 0.48, b4Cz);
+  addDBox(deepStatic, 0.020, 0.96, FLOOR_B4F.depth - 1.90, mat.stainless, b4MaxX - 0.015, yB4 + 0.48, (2.65 + b4MaxZ) * 0.5);
+  addDBox(deepStatic, 0.024, 0.045, FLOOR_B4F.depth - 0.10, labHazardYellowMat, b4MinX + 0.028, yB4 + 0.05, b4Cz);
 
   // OVERHEAD INDUSTRIAL UTILITY SPINE (Soaring Y = yB4 + 2.95 .. 3.45m!)
   // 1) Full 15.0m Galvanized Cylindrical HEPA Exhaust Trunk Duct along West Ceiling (X = 0.88)
@@ -882,7 +885,7 @@ export function buildDeepBasement3D(ctx) {
   // Biometric Retinal/Palm Scanner Panel right beside Door DB4-1 (Z = 3.22) + Decon Floor Grate
   addDBox(deepStatic, 0.20, 0.36, 0.05, labDarkSteelMat, 2.66, yB4 + 1.32, 3.22);
   addDBox(deepStatic, 0.14, 0.18, 0.02, labEmeraldGlowMat, 2.66, yB4 + 1.36, 3.19);
-  addDBox(deepStatic, 0.96, 0.026, 0.72, makeSurfaceMat('metal_grate', 0.96, 0.72), 1.98, yB4 + 0.015, 2.75);
+  addDBox(deepStatic, 0.96, 0.020, 0.72, makeSurfaceMat('metal_grate', 0.96, 0.72), 1.98, yB4 + 0.018, 2.75);
 
   // --- ZONE 2: B402 PRECISION CHEMICAL & PHARMACOLOGY SYNTHESIS LAB (Z = 3.35..6.85) ---
   // West Wall: Full Stainless & Tempered-Glass Chemical Fume Hood (ドラフトチャンバー, Z = 3.70..5.45)
@@ -1001,7 +1004,7 @@ export function buildDeepBasement3D(ctx) {
   addDBox(deepStatic, 0.66, 0.82, 0.92, labToolRedMat, 0.92, yB4 + 0.41, 12.81); // Red rolling tool chest
   // Quad-Rotor Tactical Recon Drone Frame on Workbench!
   addDBox(deepStatic, 0.42, 0.03, 0.04, labDarkSteelMat, 0.96, yB4 + 0.94, 12.78);
-  addDBox(deepStatic, 0.04, 0.03, 0.42, labDarkSteelMat, 0.96, yB4 + 0.94, 12.78);
+  addDBox(deepStatic, 0.04, 0.03, 0.42, labDarkSteelMat, 0.96, yB4 + 0.946, 12.78);
   addDBox(deepStatic, 0.14, 0.05, 0.14, labEmeraldGlowMat, 0.96, yB4 + 0.96, 12.78); // Flight controller PCB
   addCollider(-3, 0.55, 10.48, 1.36, 13.36);
 

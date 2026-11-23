@@ -109,13 +109,14 @@ export function buildHouse3D(scene) {
       ? mat.darkIron
       : (op.tex === 'door_white' ? mat.creamTrim : mat.walnut);
     const jambT = 0.032;
+    const jambH = Math.max(0.1, doorH - jambT);
     if (isH) {
-      addBox(jambParent, jambT, doorH, thick + 0.014, frameMat, op.pos + jambT / 2, sillY + doorH / 2, centerOrtho, false);
-      addBox(jambParent, jambT, doorH, thick + 0.014, frameMat, op.pos + doorW - jambT / 2, sillY + doorH / 2, centerOrtho, false);
+      addBox(jambParent, jambT, jambH, thick + 0.014, frameMat, op.pos + jambT / 2, sillY + jambH / 2, centerOrtho, false);
+      addBox(jambParent, jambT, jambH, thick + 0.014, frameMat, op.pos + doorW - jambT / 2, sillY + jambH / 2, centerOrtho, false);
       addBox(jambParent, doorW, jambT, thick + 0.016, frameMat, op.pos + doorW / 2, sillY + doorH - jambT / 2, centerOrtho, false);
     } else {
-      addBox(jambParent, thick + 0.014, doorH, jambT, frameMat, centerOrtho, sillY + doorH / 2, op.pos + jambT / 2, false);
-      addBox(jambParent, thick + 0.014, doorH, jambT, frameMat, centerOrtho, sillY + doorH / 2, op.pos + doorW - jambT / 2, false);
+      addBox(jambParent, thick + 0.014, jambH, jambT, frameMat, centerOrtho, sillY + jambH / 2, op.pos + jambT / 2, false);
+      addBox(jambParent, thick + 0.014, jambH, jambT, frameMat, centerOrtho, sillY + jambH / 2, op.pos + doorW - jambT / 2, false);
       addBox(jambParent, thick + 0.016, jambT, doorW, frameMat, centerOrtho, sillY + doorH - jambT / 2, op.pos + doorW / 2, false);
     }
 
@@ -208,28 +209,29 @@ export function buildHouse3D(scene) {
     const h = op.height;
     const sillY = baseY + (op.sill || 0.8);
     const frameT = 0.036;
+    const innerH = Math.max(0.06, h - frameT * 2);
     const sashMat = mat.darkIron;
     const glassMat = op.type === 'window_frosted' ? mat.glassFrosted : mat.glassClear;
 
     if (isH) {
       addBox(staticGroup, w, frameT, thick + 0.015, sashMat, op.pos + w / 2, sillY + frameT / 2, centerOrtho, false);
       addBox(staticGroup, w, frameT, thick + 0.015, sashMat, op.pos + w / 2, sillY + h - frameT / 2, centerOrtho, false);
-      addBox(staticGroup, frameT, h, thick + 0.015, sashMat, op.pos + frameT / 2, sillY + h / 2, centerOrtho, false);
-      addBox(staticGroup, frameT, h, thick + 0.015, sashMat, op.pos + w - frameT / 2, sillY + h / 2, centerOrtho, false);
+      addBox(staticGroup, frameT, innerH, thick + 0.015, sashMat, op.pos + frameT / 2, sillY + h / 2, centerOrtho, false);
+      addBox(staticGroup, frameT, innerH, thick + 0.015, sashMat, op.pos + w - frameT / 2, sillY + h / 2, centerOrtho, false);
       if (w >= 1.3) {
-        addBox(staticGroup, 0.028, h, thick * 0.65, sashMat, op.pos + w / 2, sillY + h / 2, centerOrtho, false);
+        addBox(staticGroup, 0.028, innerH, thick * 0.65, sashMat, op.pos + w / 2, sillY + h / 2, centerOrtho, false);
       }
-      const gMesh = addBox(dynamicGroup, w - 0.06, h - 0.06, 0.014, glassMat, op.pos + w / 2, sillY + h / 2, centerOrtho, false);
+      const gMesh = addBox(dynamicGroup, w - frameT * 2 - 0.008, innerH - 0.008, 0.014, glassMat, op.pos + w / 2, sillY + h / 2, centerOrtho, false);
       gMesh.userData.noBatch = true;
     } else {
       addBox(staticGroup, thick + 0.015, frameT, w, sashMat, centerOrtho, sillY + frameT / 2, op.pos + w / 2, false);
       addBox(staticGroup, thick + 0.015, frameT, w, sashMat, centerOrtho, sillY + h - frameT / 2, op.pos + w / 2, false);
-      addBox(staticGroup, thick + 0.015, h, frameT, sashMat, centerOrtho, sillY + h / 2, op.pos + frameT / 2, false);
-      addBox(staticGroup, thick + 0.015, h, frameT, sashMat, centerOrtho, sillY + h / 2, op.pos + w - frameT / 2, false);
+      addBox(staticGroup, thick + 0.015, innerH, frameT, sashMat, centerOrtho, sillY + h / 2, op.pos + frameT / 2, false);
+      addBox(staticGroup, thick + 0.015, innerH, frameT, sashMat, centerOrtho, sillY + h / 2, op.pos + w - frameT / 2, false);
       if (w >= 1.2) {
-        addBox(staticGroup, thick * 0.65, h, 0.028, sashMat, centerOrtho, sillY + h / 2, op.pos + w / 2, false);
+        addBox(staticGroup, thick * 0.65, innerH, 0.028, sashMat, centerOrtho, sillY + h / 2, op.pos + w / 2, false);
       }
-      const gMesh = addBox(dynamicGroup, 0.014, h - 0.06, w - 0.06, glassMat, centerOrtho, sillY + h / 2, op.pos + w / 2, false);
+      const gMesh = addBox(dynamicGroup, 0.014, innerH - 0.008, w - frameT * 2 - 0.008, glassMat, centerOrtho, sillY + h / 2, op.pos + w / 2, false);
       gMesh.userData.noBatch = true;
     }
   }
@@ -237,9 +239,11 @@ export function buildHouse3D(scene) {
   function buildStandardFloorWalls(floorDef) {
     const fIdx = floorDef.index;
     const baseY = floorDef.baseY;
-    const wallH = floorDef.slabTopY - baseY;
+    const extWallH = floorDef.slabTopY - baseY;
+    const intWallH = floorDef.ceilingH != null ? floorDef.ceilingH : extWallH;
 
     for (const wall of floorDef.walls) {
+      const wallH = wall.kind === 'ext' ? extWallH : intWallH;
       const isH = wall.axis === 'h';
       const start = isH ? wall.x1 : wall.z1;
       const end = isH ? wall.x2 : wall.z2;
@@ -329,23 +333,25 @@ export function buildHouse3D(scene) {
     const el = ELEVATOR.shaft;
     const subMat = mat.wallCutCap;
     const cMat = makeSurfaceMat(ceilTex, 4.7, 4.5, { roughness: 0.90 });
+    // Inset outer slab edge by 10mm strictly inside exterior cladding (X=0..5, Z=0..10) to prevent coplanar facade Z-fighting
+    const ox1 = 0.010, ox2 = 4.990, oz1 = 0.010, oz2 = 9.990;
 
     const rects = cutElevatorShaft
       ? [
         // Cut BOTH ST0 Stairwell (0.15..1.15, 2.45..5.15) AND ELV-1 Shaft (3.25..4.85, 0.85..2.65)!
-        { x1: 0.0, x2: 5.0, z1: 0.0, z2: el.minZ },
-        { x1: 0.0, x2: el.minX, z1: el.minZ, z2: sb.topZ },
-        { x1: el.maxX, x2: 5.0, z1: el.minZ, z2: el.maxZ },
-        { x1: 0.0, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
+        { x1: ox1, x2: ox2, z1: oz1, z2: el.minZ },
+        { x1: ox1, x2: el.minX, z1: el.minZ, z2: sb.topZ },
+        { x1: el.maxX, x2: ox2, z1: el.minZ, z2: el.maxZ },
+        { x1: ox1, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
         { x1: sb.maxX, x2: el.minX, z1: sb.topZ, z2: el.maxZ },
-        { x1: sb.maxX, x2: 5.0, z1: el.maxZ, z2: sb.bottomZ },
-        { x1: 0.0, x2: 5.0, z1: sb.bottomZ, z2: 10.0 },
+        { x1: sb.maxX, x2: ox2, z1: el.maxZ, z2: sb.bottomZ },
+        { x1: ox1, x2: ox2, z1: sb.bottomZ, z2: oz2 },
       ]
       : [
-        { x1: 0.0, x2: 5.0, z1: 0.0, z2: sb.topZ },
-        { x1: 0.0, x2: 5.0, z1: sb.bottomZ, z2: 10.0 },
-        { x1: sb.maxX, x2: 5.0, z1: sb.topZ, z2: sb.bottomZ },
-        { x1: 0.0, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
+        { x1: ox1, x2: ox2, z1: oz1, z2: sb.topZ },
+        { x1: ox1, x2: ox2, z1: sb.bottomZ, z2: oz2 },
+        { x1: sb.maxX, x2: ox2, z1: sb.topZ, z2: sb.bottomZ },
+        { x1: ox1, x2: sb.minX, z1: sb.topZ, z2: sb.bottomZ },
       ];
     for (const r of rects) {
       const w = r.x2 - r.x1;
@@ -361,10 +367,11 @@ export function buildHouse3D(scene) {
       staticGroup.add(mesh);
     }
     if (addExteriorBand) {
-      addBox(staticGroup, 5.08, h * 0.72, 0.04, mat.darkIron, 2.5, midY, -0.02, false);
-      addBox(staticGroup, 5.08, h * 0.72, 0.04, mat.darkIron, 2.5, midY, 10.02, false);
-      addBox(staticGroup, 0.04, h * 0.72, 10.08, mat.darkIron, -0.02, midY, 5.0, false);
-      addBox(staticGroup, 0.04, h * 0.72, 10.08, mat.darkIron, 5.02, midY, 5.0, false);
+      // Mitered strictly outside exterior wall and cleanly between the 4 corner steel pilasters
+      addBox(staticGroup, 4.90, h * 0.72, 0.036, mat.darkIron, 2.5, midY, -0.022, false);
+      addBox(staticGroup, 4.90, h * 0.72, 0.036, mat.darkIron, 2.5, midY, 10.022, false);
+      addBox(staticGroup, 0.036, h * 0.72, 9.90, mat.darkIron, -0.022, midY, 5.0, false);
+      addBox(staticGroup, 0.036, h * 0.72, 9.90, mat.darkIron, 5.022, midY, 5.0, false);
     }
   }
 
@@ -372,13 +379,13 @@ export function buildHouse3D(scene) {
   const b1SlabMat = makeSurfaceMat('concrete_clean', 5.0, 7.6, { roughness: 0.88 });
   addBox(staticGroup, 5.20, 0.24, 7.80, b1SlabMat, 2.50, -2.52, 6.15, false);
 
-  // Exterior Foundation Plinth Skirt around perimeter (never blocks ST0 stairwell cutout!)
+  // Exterior Foundation Plinth Skirt mitered strictly outside exterior perimeter (zero corner/wall overlap)
   const cisternMat = makeSurfaceMat('stone_cistern_grey', 5.2, 0.42);
   const mossPlinthMat = makeSurfaceMat('stone_moss_wall', 10.2, 0.38);
-  addBox(staticGroup, 5.16, 0.40, 0.14, cisternMat, 2.50, -0.20, -0.05, false);
-  addBox(staticGroup, 5.16, 0.40, 0.14, cisternMat, 2.50, -0.20, 10.05, false);
-  addBox(staticGroup, 0.14, 0.40, 10.20, mossPlinthMat, -0.05, -0.20, 5.00, false);
-  addBox(staticGroup, 0.14, 0.40, 10.20, mossPlinthMat, 5.05, -0.20, 5.00, false);
+  addBox(staticGroup, 5.22, 0.40, 0.11, cisternMat, 2.50, -0.20, -0.06, false);
+  addBox(staticGroup, 5.22, 0.40, 0.11, cisternMat, 2.50, -0.20, 10.06, false);
+  addBox(staticGroup, 0.11, 0.40, 10.00, mossPlinthMat, -0.06, -0.20, 5.00, false);
+  addBox(staticGroup, 0.11, 0.40, 10.00, mossPlinthMat, 5.06, -0.20, 5.00, false);
 
   // Slotted Structural Slabs leaving exact stairwell void X=0.15..1.15, Z=2.45..5.15 (+ ELV-1 shaft on 1F floor!)
   addSlottedSlab(-0.38, 0.00, 'concrete_clean', false, true); // B1F low cement ceiling (CH 2.02m) / 1F floor!
@@ -414,7 +421,7 @@ export function buildHouse3D(scene) {
   addFloorPatch(0.15, 0.15, 2.15, 1.35, -0.12, 'terrazzo_white');
   addBox(staticGroup, 2.00, 0.13, 0.08, mat.oak, 1.15, -0.055, 1.35, false);
   addFloorPatch(0.15, 1.35, 2.15, 2.45, 0.0, 'wood_floor');
-  addFloorPatch(1.25, 2.45, 2.15, 5.25, 0.0, 'wood_floor');
+  addFloorPatch(1.25, 2.45, 2.15, 5.15, 0.0, 'wood_floor');
   addFloorPatch(2.25, 0.15, 4.85, 0.85, 0.0, 'tile_grey_stone');
   addFloorPatch(2.25, 0.85, 3.25, 2.65, 0.0, 'tile_grey_stone');
   addFloorPatch(2.25, 2.65, 4.85, 3.45, 0.0, 'tile_grey_stone');
@@ -470,15 +477,16 @@ export function buildHouse3D(scene) {
     staticGroup.add(strut);
   });
   addFloorPatch(bal.minX, bal.minZ, bal.maxX, bal.maxZ, y4f - 0.02, 'wood_deck');
-  // Balcony sleek iron & tempered glass balustrade railing (H = 1.10m)
+  // Balcony sleek iron & tempered glass balustrade railing (H = 1.10m, mitered corners)
   const railH = 1.10;
+  const railPostH = railH - 0.024;
   // Top handrails
   addBox(staticGroup, balW + 0.04, 0.045, 0.045, mat.darkIron, balCX, y4f + railH, bal.maxZ - 0.02, false);
-  addBox(staticGroup, 0.045, 0.045, balD + 0.04, mat.darkIron, bal.minX + 0.02, y4f + railH, balCZ, false);
-  addBox(staticGroup, 0.045, 0.045, balD + 0.04, mat.darkIron, bal.maxX - 0.02, y4f + railH, balCZ, false);
+  addBox(staticGroup, 0.045, 0.045, balD - 0.046, mat.darkIron, bal.minX + 0.02, y4f + railH, balCZ - 0.022, false);
+  addBox(staticGroup, 0.045, 0.045, balD - 0.046, mat.darkIron, bal.maxX - 0.02, y4f + railH, balCZ - 0.022, false);
   // Corner & intermediate posts
   [[bal.minX + 0.02, bal.minZ + 0.02], [bal.minX + 0.02, bal.maxZ - 0.02], [balCX, bal.maxZ - 0.02], [bal.maxX - 0.02, bal.maxZ - 0.02], [bal.maxX - 0.02, bal.minZ + 0.02]].forEach(([px, pz]) => {
-    addBox(staticGroup, 0.04, railH, 0.04, mat.darkIron, px, y4f + railH / 2, pz, false);
+    addBox(staticGroup, 0.04, railPostH, 0.04, mat.darkIron, px, y4f + railPostH / 2, pz, false);
   });
   // Tempered glass balustrade panels
   const gBalS = addBox(dynamicGroup, balW - 0.08, railH - 0.12, 0.018, mat.glassClear, balCX, y4f + railH / 2, bal.maxZ - 0.02, false);
@@ -498,10 +506,10 @@ export function buildHouse3D(scene) {
   addFloorPatch(2.25, 0.15, 4.85, 3.45, y5f, 'parquet_oak');            // 5R02 Architect's Model Studio
   addFloorPatch(2.25, 3.55, 3.50, 5.95, y5f, 'wood_deck');              // 5R03 Hinoki Finnish Sauna
   addFloorPatch(3.60, 3.55, 4.85, 5.95, y5f - 0.02, 'stone_wet_granite'); // 5R04 Canopy Hinoki Sky Bath
-  addFloorPatch(0.15, 6.05, 2.55, 9.85, y5f, 'wood_floor');             // 5R05 Conservatory West Tea Lounge
-  addFloorPatch(2.55, 6.05, 4.85, 9.85, y5f, 'terrazzo_emerald');       // 5R05 Conservatory East Botanical Zone
-  // Flush brass inlay threshold dividing oak tea deck & emerald terrazzo botanical zone
-  addBox(staticGroup, 0.025, 0.018, 3.80, mat.bronze, 2.55, y5f + 0.009, 7.95, false);
+  addFloorPatch(0.15, 6.05, 2.536, 9.85, y5f, 'wood_floor');            // 5R05 Conservatory West Tea Lounge
+  addFloorPatch(2.564, 6.05, 4.85, 9.85, y5f, 'terrazzo_emerald');      // 5R05 Conservatory East Botanical Zone
+  // Flush brass inlay threshold cleanly separating oak tea deck & emerald terrazzo botanical zone
+  addBox(staticGroup, 0.026, 0.020, 3.80, mat.bronze, 2.55, y5f + 0.010, 7.95, false);
 
   // 5F Cantilevered 1.00m × 2.60m West Canopy Spa Cool-Down Deck (X=-1.00..0.00, Z=6.20..8.80)
   const bal5 = HOUSE.balcony5F;
@@ -518,12 +526,12 @@ export function buildHouse3D(scene) {
     staticGroup.add(strut);
   });
   addFloorPatch(bal5.minX, bal5.minZ, bal5.maxX, bal5.maxZ, y5f - 0.02, 'wood_deck');
-  // 5F West Deck sleek iron + tempered glass balustrade (H = 1.10m)
+  // 5F West Deck sleek iron + tempered glass balustrade (H = 1.10m, mitered corners)
   addBox(staticGroup, 0.045, 0.045, b5D + 0.04, mat.darkIron, bal5.minX + 0.02, y5f + railH, b5CZ, false);
-  addBox(staticGroup, b5W + 0.04, 0.045, 0.045, mat.darkIron, b5CX, y5f + railH, bal5.minZ + 0.02, false);
-  addBox(staticGroup, b5W + 0.04, 0.045, 0.045, mat.darkIron, b5CX, y5f + railH, bal5.maxZ - 0.02, false);
+  addBox(staticGroup, b5W - 0.046, 0.045, 0.045, mat.darkIron, b5CX + 0.022, y5f + railH, bal5.minZ + 0.02, false);
+  addBox(staticGroup, b5W - 0.046, 0.045, 0.045, mat.darkIron, b5CX + 0.022, y5f + railH, bal5.maxZ - 0.02, false);
   [[bal5.maxX - 0.02, bal5.minZ + 0.02], [bal5.minX + 0.02, bal5.minZ + 0.02], [bal5.minX + 0.02, b5CZ], [bal5.minX + 0.02, bal5.maxZ - 0.02], [bal5.maxX - 0.02, bal5.maxZ - 0.02]].forEach(([px, pz]) => {
-    addBox(staticGroup, 0.04, railH, 0.04, mat.darkIron, px, y5f + railH / 2, pz, false);
+    addBox(staticGroup, 0.04, railPostH, 0.04, mat.darkIron, px, y5f + railPostH / 2, pz, false);
   });
   const gBal5W = addBox(dynamicGroup, 0.018, railH - 0.12, b5D - 0.08, mat.glassClear, bal5.minX + 0.02, y5f + railH / 2, b5CZ, false);
   const gBal5N = addBox(dynamicGroup, b5W - 0.08, railH - 0.12, 0.018, mat.glassClear, b5CX, y5f + railH / 2, bal5.minZ + 0.02, false);
@@ -541,7 +549,7 @@ export function buildHouse3D(scene) {
   addFloorPatch(0.15, 5.15, 1.25, 5.95, y6f, 'wood_walnut_floor');      // South Stair Vestibule
   // 6R02 Authentic Japanese Ita-no-ma walnut border framing central Ryukyu tatami mat field
   addFloorPatch(2.25, 0.15, 4.85, 3.45, y6f, 'wood_walnut_floor');
-  addFloorPatch(2.55, 0.45, 4.55, 3.15, y6f + 0.006, 'tatami_ryukyu');
+  addFloorPatch(2.55, 0.45, 4.55, 3.15, y6f + 0.014, 'tatami_ryukyu');
   addFloorPatch(2.25, 3.55, 3.45, 5.95, y6f, 'marble_black');           // 6R03 Sky Powder WC
   addFloorPatch(3.55, 3.55, 4.85, 5.95, y6f, 'tile_checker_stone');     // 6R04 Wine & Coffee Cellar
   addFloorPatch(0.15, 6.05, 4.85, 9.85, y6f, 'wood_walnut_floor');      // 6R05 Observatory Salon & Espresso Bar
@@ -561,32 +569,32 @@ export function buildHouse3D(scene) {
     staticGroup.add(strut);
   });
   addFloorPatch(bal6.minX, bal6.minZ, bal6.maxX, bal6.maxZ, y6f - 0.02, 'wood_deck');
-  // 6F Sky Terrace frameless-style dark iron + tempered glass balustrade (H = 1.10m)
+  // 6F Sky Terrace frameless-style dark iron + tempered glass balustrade (H = 1.10m, mitered corners)
   addBox(staticGroup, b6W + 0.04, 0.045, 0.045, mat.darkIron, b6CX, y6f + railH, bal6.maxZ - 0.02, false);
-  addBox(staticGroup, 0.045, 0.045, b6D + 0.04, mat.darkIron, bal6.minX + 0.02, y6f + railH, b6CZ, false);
-  addBox(staticGroup, 0.045, 0.045, b6D + 0.04, mat.darkIron, bal6.maxX - 0.02, y6f + railH, b6CZ, false);
+  addBox(staticGroup, 0.045, 0.045, b6D - 0.046, mat.darkIron, bal6.minX + 0.02, y6f + railH, b6CZ - 0.022, false);
+  addBox(staticGroup, 0.045, 0.045, b6D - 0.046, mat.darkIron, bal6.maxX - 0.02, y6f + railH, b6CZ - 0.022, false);
   [
     [bal6.minX + 0.02, bal6.minZ + 0.02], [bal6.minX + 0.02, bal6.maxZ - 0.02],
     [1.35, bal6.maxZ - 0.02], [2.50, bal6.maxZ - 0.02], [3.65, bal6.maxZ - 0.02],
     [bal6.maxX - 0.02, bal6.maxZ - 0.02], [bal6.maxX - 0.02, bal6.minZ + 0.02],
   ].forEach(([px, pz]) => {
-    addBox(staticGroup, 0.042, railH, 0.042, mat.darkIron, px, y6f + railH / 2, pz, false);
+    addBox(staticGroup, 0.042, railPostH, 0.042, mat.darkIron, px, y6f + railPostH / 2, pz, false);
   });
   const gBal6S = addBox(dynamicGroup, b6W - 0.08, railH - 0.12, 0.018, mat.glassClear, b6CX, y6f + railH / 2, bal6.maxZ - 0.02, false);
   const gBal6W = addBox(dynamicGroup, 0.018, railH - 0.12, b6D - 0.08, mat.glassClear, bal6.minX + 0.02, y6f + railH / 2, b6CZ, false);
   const gBal6E = addBox(dynamicGroup, 0.018, railH - 0.12, b6D - 0.08, mat.glassClear, bal6.maxX - 0.02, y6f + railH / 2, b6CZ, false);
   [gBal6S, gBal6W, gBal6E].forEach((g) => { g.userData.noBatch = true; });
-  // 6F Overhead Architectural Steel & Cedar Louver Sky Pergola (Y = 15.85m, shadows moonlight across terrace!)
+  // 6F Overhead Architectural Steel & Cedar Louver Sky Pergola (Y = 15.85m, mitered corners)
   const pergY = y6f + 2.60;
   addBox(staticGroup, b6W + 0.10, 0.09, 0.08, mat.darkIron, b6CX, pergY, bal6.maxZ - 0.04, true);
-  addBox(staticGroup, 0.08, 0.09, b6D + 0.06, mat.darkIron, bal6.minX + 0.04, pergY, b6CZ, true);
-  addBox(staticGroup, 0.08, 0.09, b6D + 0.06, mat.darkIron, bal6.maxX - 0.04, pergY, b6CZ, true);
-  // Corner pergola tie posts rising cleanly from outer railing corners to pergola beam
+  addBox(staticGroup, 0.08, 0.09, b6D - 0.08, mat.darkIron, bal6.minX + 0.04, pergY, b6CZ - 0.04, true);
+  addBox(staticGroup, 0.08, 0.09, b6D - 0.08, mat.darkIron, bal6.maxX - 0.04, pergY, b6CZ - 0.04, true);
+  // Corner pergola tie posts rising cleanly from outer railing corners to pergola beam underside
   [bal6.minX + 0.04, bal6.maxX - 0.04].forEach((px) => {
-    addBox(staticGroup, 0.055, 2.60, 0.055, mat.darkIron, px, y6f + 1.30, bal6.maxZ - 0.04, false);
+    addBox(staticGroup, 0.055, 2.55, 0.055, mat.darkIron, px, y6f + 1.275, bal6.maxZ - 0.04, false);
   });
   for (let lx = bal6.minX + 0.36; lx <= bal6.maxX - 0.32; lx += 0.39) {
-    addBox(staticGroup, 0.045, 0.075, b6D - 0.08, mat.walnut, lx, pergY, b6CZ, true);
+    addBox(staticGroup, 0.045, 0.075, b6D - 0.12, mat.walnut, lx, pergY, b6CZ - 0.02, true);
   }
   // 6F Sky Terrace safety colliders
   addCollider(6, bal6.minX - 0.06, bal6.minZ, bal6.minX + 0.04, bal6.maxZ + 0.06);
@@ -598,7 +606,7 @@ export function buildHouse3D(scene) {
   const attFloorIdx = HOUSE.atticFloor; // 7
   addFloorPatch(0.15, 0.15, 2.15, 2.45, attY, 'rubber_black_stud');
   addFloorPatch(1.20, 2.45, 2.15, 5.20, attY, 'rubber_black_stud');
-  addFloorPatch(2.15, 0.15, 4.85, 5.25, attY, 'wood_scratched_cedar');
+  addFloorPatch(2.15, 0.15, 4.85, 5.20, attY, 'wood_scratched_cedar');
   addFloorPatch(0.15, 5.20, 4.85, 9.85, attY, 'wood_scratched_cedar');
   addFloorPatch(1.30, 6.15, 3.70, 8.75, attY + 0.015, 'tatami_aged');
 
@@ -773,11 +781,11 @@ export function buildHouse3D(scene) {
   const slateRoofMat = makeSurfaceMat('slate_charcoal', extSlopeLen, roofDepth, { roughness: 0.64 });
   const plywoodCeilMat = makeSurfaceMat('plywood_attic', 2.85, 9.70, { roughness: 0.78 });
 
-  // East roof slope (continuous full length)
+  // East roof slope (continuous full length, offset slightly clear of ridge seam)
   {
     const side = 1;
     const rMesh = new THREE.Mesh(new THREE.BoxGeometry(extSlopeLen, 0.12, roofDepth), slateRoofMat);
-    rMesh.position.set(2.5 + side * (extRun / 2), ridgeY + 0.10 - (extRun / 2) * HOUSE.atticSlope, 5.0);
+    rMesh.position.set(2.5 + side * (extRun / 2 + 0.025), ridgeY + 0.102 - (extRun / 2) * HOUSE.atticSlope, 5.0);
     rMesh.rotation.z = -side * roofAngle;
     rMesh.castShadow = true;
     rMesh.receiveShadow = true;
@@ -786,7 +794,7 @@ export function buildHouse3D(scene) {
     const intRun = 2.40;
     const intSlopeLen = intRun / Math.cos(roofAngle);
     const cMesh = new THREE.Mesh(new THREE.BoxGeometry(intSlopeLen, 0.04, 9.72), plywoodCeilMat);
-    cMesh.position.set(2.5 + side * (intRun / 2), ridgeY - 0.02 - (intRun / 2) * HOUSE.atticSlope, 5.0);
+    cMesh.position.set(2.5 + side * (intRun / 2 + 0.025), ridgeY - 0.018 - (intRun / 2) * HOUSE.atticSlope, 5.0);
     cMesh.rotation.z = -side * roofAngle;
     cMesh.receiveShadow = true;
     staticGroup.add(cMesh);
@@ -802,7 +810,7 @@ export function buildHouse3D(scene) {
         new THREE.BoxGeometry(sLen, isInt ? 0.04 : 0.12, lenZ),
         isInt ? plywoodCeilMat : slateRoofMat,
       );
-      m.position.set(2.5 - runLen * 0.5, (isInt ? ridgeY - 0.02 : ridgeY + 0.10) - (runLen * 0.5) * HOUSE.atticSlope, cz);
+      m.position.set(2.5 - (runLen * 0.5 + 0.025), (isInt ? ridgeY - 0.02 : ridgeY + 0.10) - (runLen * 0.5) * HOUSE.atticSlope, cz);
       m.rotation.z = -side * roofAngle;
       m.castShadow = !isInt;
       m.receiveShadow = true;
@@ -823,7 +831,7 @@ export function buildHouse3D(scene) {
   addBox(staticGroup, 0.24, 0.10, roofDepth + 0.04, mat.darkIron, 2.50, ridgeY + 0.18, 5.0, false);
   [1.80, 8.20].forEach((vz) => {
     addBox(staticGroup, 0.34, 0.18, 1.30, mat.darkIron, 2.50, ridgeY + 0.28, vz, false);
-    addBox(staticGroup, 0.36, 0.04, 1.36, mat.bronze, 2.50, ridgeY + 0.38, vz, false);
+    addBox(staticGroup, 0.36, 0.04, 1.36, mat.bronze, 2.50, ridgeY + 0.39, vz, false);
   });
   // Lightning Rod + Weather Anemometer Mast on South Ridge Crown (code-compliant for ~20m tower!)
   const lightningMast = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.032, 1.48, 8), mat.chrome);
@@ -832,8 +840,8 @@ export function buildHouse3D(scene) {
   const lightningTip = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.16, 8), mat.bronze);
   lightningTip.position.set(2.50, ridgeY + 1.72, 9.25);
   staticGroup.add(lightningTip);
-  addBox(staticGroup, 0.42, 0.02, 0.02, mat.chrome, 2.50, ridgeY + 1.32, 9.25, false);
-  addBox(staticGroup, 0.02, 0.02, 0.42, mat.chrome, 2.50, ridgeY + 1.32, 9.25, false);
+  addBox(staticGroup, 0.42, 0.02, 0.02, mat.chrome, 2.50, ridgeY + 1.31, 9.25, false);
+  addBox(staticGroup, 0.02, 0.02, 0.42, mat.chrome, 2.50, ridgeY + 1.335, 9.25, false);
 
   // Exposed Walnut Structural Ridge Beam, Rafters & Collar Ties in Attic
   addBox(staticGroup, 0.14, 0.22, 9.75, mat.walnut, 2.50, ridgeY - 0.14, 5.0, true);
@@ -850,53 +858,54 @@ export function buildHouse3D(scene) {
     addBox(staticGroup, 2.35, 0.09, 0.08, mat.walnut, 2.50, attY + 2.07, rz, true);
   }
 
-  // Attic Stairwell Iron Safety Guardrail
+  // Attic Stairwell Iron Safety Guardrail (mitered cleanly at corner)
   addBox(staticGroup, 0.05, 0.05, 2.78, mat.darkIron, 1.18, attY + 0.96, 3.82, false);
-  addBox(staticGroup, 0.05, 0.05, 2.78, mat.oak, 1.18, attY + 1.00, 3.82, false);
-  addBox(staticGroup, 1.06, 0.05, 0.05, mat.darkIron, 0.68, attY + 0.96, 5.18, false);
-  addBox(staticGroup, 1.06, 0.05, 0.05, mat.oak, 0.68, attY + 1.00, 5.18, false);
+  addBox(staticGroup, 0.05, 0.05, 2.78, mat.oak, 1.18, attY + 1.01, 3.82, false);
+  addBox(staticGroup, 1.00, 0.05, 0.05, mat.darkIron, 0.655, attY + 0.96, 5.18, false);
+  addBox(staticGroup, 1.00, 0.05, 0.05, mat.oak, 0.655, attY + 1.01, 5.18, false);
   for (let bz = 2.50; bz <= 5.18; bz += 0.22) {
-    addBox(staticGroup, 0.022, 0.96, 0.022, mat.darkIron, 1.18, attY + 0.48, bz, false);
+    addBox(staticGroup, 0.022, 0.935, 0.022, mat.darkIron, 1.18, attY + 0.4675, bz, false);
   }
-  for (let bx = 0.22; bx <= 1.18; bx += 0.22) {
-    addBox(staticGroup, 0.022, 0.96, 0.022, mat.darkIron, bx, attY + 0.48, 5.18, false);
+  for (let bx = 0.22; bx <= 1.08; bx += 0.22) {
+    addBox(staticGroup, 0.022, 0.935, 0.022, mat.darkIron, bx, attY + 0.4675, 5.18, false);
   }
   addCollider(attFloorIdx, 1.14, 2.45, 1.24, 5.24);
   addCollider(attFloorIdx, 0.15, 5.14, 1.24, 5.24);
 
   addBox(staticGroup, 1.72, 1.38, 0.08, makeSurfaceMat('wood_lattice_dark', 1.72, 1.38), 3.98, attY + 0.69, 5.25, true);
-  addBox(staticGroup, 1.72, 1.38, 0.02, makeSurfaceMat('pegboard_wood', 1.72, 1.38), 3.98, attY + 0.69, 5.30, false);
+  addBox(staticGroup, 1.72, 1.38, 0.02, makeSurfaceMat('pegboard_wood', 1.72, 1.38), 3.98, attY + 0.69, 5.305, false);
   addCollider(attFloorIdx, 3.10, 5.18, 4.85, 5.33);
 
-  // Continuous 6-Story SRC Exterior Corner Steel Pilasters (0 -> 17.56m, full 6-story height!)
-  [[0.02, 0.02], [4.98, 0.02], [0.02, 9.98], [4.98, 9.98]].forEach(([cx, cz]) => {
-    addBox(staticGroup, 0.12, 17.56, 0.12, mat.darkIron, cx, 8.78, cz, false);
+  // Continuous 6-Story SRC Exterior Corner Steel Pilasters proud of walls & slab bands (0 -> 17.56m)
+  [[-0.01, -0.01], [5.01, -0.01], [-0.01, 10.01], [5.01, 10.01]].forEach(([cx, cz]) => {
+    addBox(staticGroup, 0.10, 17.56, 0.10, mat.darkIron, cx, 8.78, cz, false);
   });
-  // Intermediate Structural Facade Steel Mullion Columns aligned to Grid Axes (Y3=2.45, Y5=5.25, X3=2.20)
-  [[0.00, 2.45], [0.00, 5.25], [5.00, 2.45], [5.00, 5.25]].forEach(([cx, cz]) => {
-    addBox(staticGroup, 0.07, 16.10, 0.08, mat.darkIron, cx, 8.05, cz, false);
+  // Intermediate Structural Facade Steel Mullion Columns strictly outside exterior wall
+  [[-0.025, 2.45], [-0.025, 5.25], [5.025, 2.45], [5.025, 5.25]].forEach(([cx, cz]) => {
+    addBox(staticGroup, 0.048, 16.10, 0.08, mat.darkIron, cx, 8.05, cz, false);
   });
-  // Architectural Exterior Seismic Tension X-Bracing across Stair-Core Structural Bay (Z=2.45..5.25 on 4F, 5F, 6F!)
+  // Architectural Exterior Seismic Tension X-Bracing (diagonals staggered in X so crossing bars never Z-fight)
   [[8.15, 10.50], [10.50, 13.25], [13.25, 16.10]].forEach(([yLo, yHi]) => {
     const dy = yHi - yLo;
     const dz = 2.80;
     const diagLen = Math.hypot(dy, dz);
     const diagAng = Math.atan2(dy, dz);
     const midY = (yLo + yHi) / 2;
-    [-0.035, 5.035].forEach((fx) => {
+    [-0.042, 5.042].forEach((fx) => {
+      const outDir = fx < 0 ? -1 : 1;
       [1, -1].forEach((sgn) => {
-        const brace = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.045, diagLen), mat.darkIron);
-        brace.position.set(fx, midY, 3.85);
+        const brace = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.045, diagLen), mat.darkIron);
+        brace.position.set(fx + outDir * (sgn > 0 ? 0.014 : -0.010), midY, 3.85);
         brace.rotation.x = sgn * diagAng;
         staticGroup.add(brace);
       });
-      // Center gusset node plate
-      addBox(staticGroup, 0.042, 0.16, 0.16, mat.bronze, fx, midY, 3.85, false);
+      // Center gusset node plate enclosing crossing point cleanly
+      addBox(staticGroup, 0.060, 0.16, 0.16, mat.bronze, fx + outDir * 0.002, midY, 3.85, false);
     });
   });
   // Exterior Vertical Cedar/Bronze Architectural Sun-Shading Louvers framing 5F & 6F North/South Facades
   for (let lz = 0; lz < 4; lz++) {
-    addBox(staticGroup, 0.045, 5.50, 0.14, mat.bronze, 2.18 + lz * 0.12, 13.25, -0.05, false);
+    addBox(staticGroup, 0.045, 5.50, 0.14, mat.bronze, 2.18 + lz * 0.12, 13.25, -0.075, false);
   }
   // Vertical MEP Plumbing Stack Vent Cap exiting roof over East wet zone (X=3.52, Z=4.80)
   const ventStack = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.55, 10), mat.darkIron);
@@ -1001,7 +1010,7 @@ export function buildHouse3D(scene) {
   // ---------- 1F FURNISHING (Y = 0.00, Floor Index 1) ----------
   addBox(furnitureGroup, 0.34, 0.78, 1.02, makeFrontMat('furniture_chest'), 0.33, 0.42, 0.72, true);
   addCollider(1, 0.15, 0.20, 0.52, 1.24);
-  addBox(furnitureGroup, 0.68, 0.015, 0.46, makeFrontMat('doormat_coir', { roughness: 0.95 }), 1.10, -0.108, 0.52, false);
+  addBox(furnitureGroup, 0.68, 0.015, 0.46, makeFrontMat('doormat_coir', { roughness: 0.95 }), 1.10, -0.095, 0.52, false);
   addFramedArt(furnitureGroup, 'fixture_intercom', 0.18, 0.24, 2.13, 1.42, 1.55, -Math.PI / 2);
   addFramedArt(furnitureGroup, 'fixture_meter', 0.26, 0.34, 1.85, 1.72, 0.17, 0);
 
@@ -1040,12 +1049,12 @@ export function buildHouse3D(scene) {
   const tvScreenMat = makeFrontMat('appliance_tv_screen', { roughness: 0.16, emissive: 0x1a2838, emissiveIntensity: 0.35 });
   addBox(furnitureGroup, 0.055, 0.66, 1.18, tvScreenMat, 0.23, 1.18, 8.30, false);
 
-  addBox(furnitureGroup, 1.85, 0.015, 2.15, makeSurfaceMat('carpet_beige', 1.85, 2.15), 1.55, 0.016, 8.30, false);
+  addBox(furnitureGroup, 1.85, 0.014, 2.15, makeSurfaceMat('carpet_beige', 1.85, 2.15), 1.55, 0.024, 8.30, false);
   const sofaMat = makeSurfaceMat('fabric_grey_sofa', 1.85, 0.82);
-  addBox(furnitureGroup, 0.78, 0.38, 1.85, sofaMat, 2.18, 0.20, 8.35, true);
-  addBox(furnitureGroup, 0.20, 0.68, 1.85, sofaMat, 2.48, 0.42, 8.35, true);
-  addBox(furnitureGroup, 0.78, 0.54, 0.16, sofaMat, 2.18, 0.31, 7.48, true);
-  addBox(furnitureGroup, 0.78, 0.54, 0.16, sofaMat, 2.18, 0.31, 9.22, true);
+  addBox(furnitureGroup, 0.58, 0.38, 1.54, sofaMat, 2.09, 0.20, 8.35, true);
+  addBox(furnitureGroup, 0.20, 0.68, 1.86, sofaMat, 2.48, 0.42, 8.35, true);
+  addBox(furnitureGroup, 0.58, 0.54, 0.16, sofaMat, 2.09, 0.31, 7.50, true);
+  addBox(furnitureGroup, 0.58, 0.54, 0.16, sofaMat, 2.09, 0.31, 9.20, true);
   addCollider(1, 1.76, 7.38, 2.60, 9.32);
 
   addBox(furnitureGroup, 0.52, 0.035, 0.96, mat.oak, 1.28, 0.36, 8.35, true);
@@ -1057,9 +1066,9 @@ export function buildHouse3D(scene) {
   addBox(staticGroup, 0.03, 1.45, 2.85, makeSurfaceMat('tile_caramel_brick', 2.85, 1.45), 4.83, 1.55, 6.85, false);
   addBox(furnitureGroup, 0.64, 0.84, 2.72, makeSurfaceMat('furniture_kitchen_cab', 2.72, 0.84), 4.50, 0.42, 6.85, true);
   addBox(furnitureGroup, 0.66, 0.04, 2.74, makeSurfaceMat('marble_white', 2.74, 0.66), 4.50, 0.86, 6.85, false);
-  addBox(furnitureGroup, 0.42, 0.02, 0.62, mat.stainless, 4.48, 0.882, 6.15, false);
+  addBox(furnitureGroup, 0.42, 0.02, 0.62, mat.stainless, 4.48, 0.892, 6.15, false);
   addBox(furnitureGroup, 0.03, 0.28, 0.03, mat.chrome, 4.72, 1.01, 6.15, false);
-  addBox(furnitureGroup, 0.46, 0.02, 0.58, mat.darkIron, 4.48, 0.882, 7.45, false);
+  addBox(furnitureGroup, 0.46, 0.02, 0.58, mat.darkIron, 4.48, 0.892, 7.45, false);
   addBox(furnitureGroup, 0.52, 0.55, 0.78, mat.darkIron, 4.56, 2.22, 7.45, true);
   addCollider(1, 4.16, 5.45, 4.85, 8.24);
 
@@ -1115,7 +1124,7 @@ export function buildHouse3D(scene) {
   addBox(furnitureGroup, 0.46, 0.08, 0.46, denimMat, 3.78, y2 + 0.45, 1.75, true);
   addBox(furnitureGroup, 0.08, 0.46, 0.46, denimMat, 3.58, y2 + 0.68, 1.75, true);
   addBox(furnitureGroup, 0.06, 0.42, 0.06, mat.darkIron, 3.78, y2 + 0.22, 1.75, false);
-  addBox(furnitureGroup, 0.025, 0.72, 1.15, makeSurfaceMat('cork_board', 1.15, 0.72), 4.82, y2 + 1.48, 1.75, false);
+  addBox(furnitureGroup, 0.025, 0.72, 1.15, makeSurfaceMat('cork_board', 1.15, 0.72), 4.80, y2 + 1.48, 1.75, false);
   addBox(furnitureGroup, 1.05, 0.88, 0.025, makeSurfaceMat('pegboard_wood', 1.05, 0.88), 3.45, y2 + 1.45, 3.42, false);
   addBox(furnitureGroup, 1.18, 1.85, 0.38, makeFrontMat('furniture_bookshelf'), 3.15, y2 + 0.925, 3.24, true);
   addCollider(2, 2.54, 3.04, 3.76, 3.45);
@@ -1155,7 +1164,7 @@ export function buildHouse3D(scene) {
 
   // 2F Master Bedroom Suite
   addBox(staticGroup, 4.65, 2.48, 0.03, makeSurfaceMat('wood_planks_dark', 4.65, 2.48), 2.50, y2 + 1.24, 6.08, false);
-  addBox(furnitureGroup, 2.25, 0.015, 2.45, makeSurfaceMat('carpet_beige', 2.25, 2.45), 2.65, y2 + 0.018, 7.65, false);
+  addBox(furnitureGroup, 2.25, 0.014, 2.45, makeSurfaceMat('carpet_beige', 2.25, 2.45), 2.65, y2 + 0.024, 7.65, false);
   addBox(furnitureGroup, 1.62, 0.26, 2.08, mat.walnut, 2.88, y2 + 0.13, 7.16, true);
   addBox(furnitureGroup, 1.56, 0.24, 2.02, makeSurfaceMat('fabric_floral_quilt', 1.56, 2.02), 2.88, y2 + 0.38, 7.16, true);
   addBox(furnitureGroup, 0.56, 0.14, 0.34, makeFrontMat('fabric_rose_vintage'), 2.52, y2 + 0.55, 6.38, false);
@@ -1182,13 +1191,13 @@ export function buildHouse3D(scene) {
 
   const washiGlowPanelMat = makeSurfaceMat('washi_paper', 1.45, 2.05, { emissive: 0xffaa55, emissiveIntensity: 0.55, roughness: 0.88 });
   addBox(furnitureGroup, 0.04, 2.05, 1.45, washiGlowPanelMat, 4.81, y3 + 1.15, 1.75, false);
-  addBox(furnitureGroup, 0.06, 2.10, 0.05, mat.walnut, 4.80, y3 + 1.15, 1.02, false);
-  addBox(furnitureGroup, 0.06, 2.10, 0.05, mat.walnut, 4.80, y3 + 1.15, 2.48, false);
+  addBox(furnitureGroup, 0.055, 2.10, 0.05, mat.walnut, 4.80, y3 + 1.15, 1.00, false);
+  addBox(furnitureGroup, 0.055, 2.10, 0.05, mat.walnut, 4.80, y3 + 1.15, 2.50, false);
   addBox(furnitureGroup, 1.55, 0.24, 0.05, makeSurfaceMat('bamboo_sudare', 1.55, 0.24), 3.57, y3 + 2.08, 0.18, false);
   addBox(furnitureGroup, 0.88, 0.04, 0.88, mat.walnut, 3.55, y3 + 0.33, 1.80, true);
   addBox(furnitureGroup, 0.70, 0.31, 0.70, mat.walnut, 3.55, y3 + 0.155, 1.80, false);
-  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 2.86, y3 + 0.045, 1.80, false);
-  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 4.24, y3 + 0.045, 1.80, false);
+  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 2.86, y3 + 0.052, 1.80, false);
+  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 4.24, y3 + 0.052, 1.80, false);
   addCollider(3, 3.08, 1.34, 4.02, 2.26);
   addBox(furnitureGroup, 0.76, 0.34, 0.96, makeSurfaceMat('fabric_rose_vintage', 0.96, 0.76), 4.42, y3 + 0.17, 2.92, true);
   addCollider(3, 4.02, 2.42, 4.84, 3.42);
@@ -1225,8 +1234,8 @@ export function buildHouse3D(scene) {
     furnitureGroup.add(meshShade);
   });
   const loungeSofaMat = makeSurfaceMat('fabric_grey_sofa', 1.95, 0.82);
-  addBox(furnitureGroup, 1.90, 0.38, 0.80, loungeSofaMat, 1.48, y3 + 0.20, 8.15, true);
-  addBox(furnitureGroup, 1.90, 0.68, 0.20, loungeSofaMat, 1.48, y3 + 0.42, 7.82, true);
+  addBox(furnitureGroup, 1.88, 0.38, 0.62, loungeSofaMat, 1.48, y3 + 0.20, 8.24, true);
+  addBox(furnitureGroup, 1.90, 0.68, 0.20, loungeSofaMat, 1.48, y3 + 0.42, 7.83, true);
   addCollider(3, 0.50, 7.72, 2.46, 8.58);
   addBox(furnitureGroup, 0.66, 0.045, 1.18, mat.oak, 0.52, y3 + 0.76, 6.85, true);
   addBox(furnitureGroup, 0.60, 0.74, 0.06, mat.darkIron, 0.52, y3 + 0.37, 6.32, false);
@@ -1274,9 +1283,9 @@ export function buildHouse3D(scene) {
   addBox(furnitureGroup, 0.44, 0.44, 0.44, denimMat, 1.42, y4f + 0.22, 8.82, true);
 
   // Room 5: 4R05 SE Sky Lounge opening directly onto 1m×2m Forest Balcony (X=2.50..4.85, Z=6.05..9.85)
-  addBox(furnitureGroup, 1.75, 0.015, 1.95, makeSurfaceMat('carpet_beige', 1.75, 1.95), 3.68, y4f + 0.016, 7.95, false);
-  addBox(furnitureGroup, 1.48, 0.34, 0.74, sofaMat, 3.92, y4f + 0.18, 6.65, true); // Designer Low Sofa
-  addBox(furnitureGroup, 1.48, 0.60, 0.18, sofaMat, 3.92, y4f + 0.36, 6.32, true);
+  addBox(furnitureGroup, 1.75, 0.014, 1.95, makeSurfaceMat('carpet_beige', 1.75, 1.95), 3.68, y4f + 0.024, 7.95, false);
+  addBox(furnitureGroup, 1.46, 0.34, 0.58, sofaMat, 3.92, y4f + 0.18, 6.72, true); // Designer Low Sofa
+  addBox(furnitureGroup, 1.48, 0.60, 0.18, sofaMat, 3.92, y4f + 0.36, 6.34, true);
   addCollider(4, 3.14, 6.18, 4.72, 7.06);
   addBox(furnitureGroup, 0.86, 0.035, 0.54, makeSurfaceMat('marble_white', 0.86, 0.54), 3.85, y4f + 0.35, 7.68, true); // Sculptural Low Table
   addBox(furnitureGroup, 0.68, 0.33, 0.36, mat.oak, 3.85, y4f + 0.165, 7.68, false);
@@ -1462,7 +1471,7 @@ export function buildHouse3D(scene) {
   addCollider(5, 4.30, 2.98, 4.80, 3.44);
 
   // 5R03: Hinoki Finnish Dry Sauna (X=2.25..3.50, Z=3.55..5.95)
-  addBox(staticGroup, 0.03, 2.28, 2.36, makeSurfaceMat('wood_slats', 2.36, 2.28), 2.28, y5f + 1.14, 4.75, false);
+  addBox(staticGroup, 0.03, 2.28, 2.32, makeSurfaceMat('wood_slats', 2.32, 2.28), 2.28, y5f + 1.14, 4.74, false);
   addBox(staticGroup, 1.22, 2.28, 0.03, makeSurfaceMat('wood_slats', 1.22, 2.28), 2.88, y5f + 1.14, 5.92, false);
   // Two-Tier Cantilevered Hinoki Sauna Benches along South Wall + Warm Under-Bench Strip
   addBox(furnitureGroup, 1.18, 0.055, 0.40, mat.oakLight, 2.88, y5f + 0.44, 5.18, true);
@@ -1509,11 +1518,11 @@ export function buildHouse3D(scene) {
   addBox(staticGroup, 0.03, 2.32, 2.36, makeSurfaceMat('stone_wet_granite', 2.36, 2.32), 4.83, y5f + 1.15, 4.75, false);
   // Deep Hinoki-Rimmed Black Granite Soaking Tub beneath East Canopy Window W5-5 (hollow 4-rail Hinoki rim revealing open water!)
   addBox(furnitureGroup, 1.18, 0.52, 0.90, makeSurfaceMat('stone_wet_granite', 1.18, 0.90), 4.22, y5f + 0.24, 5.46, true);
-  // 4-sided hollow Hinoki timber coping rim framing the open shimmering bath water
+  // 4-sided hollow Hinoki timber coping rim framing the open shimmering bath water (mitered corners)
   addBox(furnitureGroup, 1.22, 0.075, 0.085, mat.oakLight, 4.22, y5f + 0.54, 5.04, false); // North rim
   addBox(furnitureGroup, 1.22, 0.075, 0.085, mat.oakLight, 4.22, y5f + 0.54, 5.88, false); // South rim
-  addBox(furnitureGroup, 0.085, 0.075, 0.78, mat.oakLight, 3.65, y5f + 0.54, 5.46, false); // West rim
-  addBox(furnitureGroup, 0.085, 0.075, 0.78, mat.oakLight, 4.79, y5f + 0.54, 5.46, false); // East rim
+  addBox(furnitureGroup, 0.085, 0.075, 0.75, mat.oakLight, 3.65, y5f + 0.54, 5.46, false); // West rim
+  addBox(furnitureGroup, 0.085, 0.075, 0.75, mat.oakLight, 4.79, y5f + 0.54, 5.46, false); // East rim
   // Open shimmering turquoise hot-spring water surface clearly visible inside the Hinoki frame!
   addBox(furnitureGroup, 1.05, 0.04, 0.75, mat.water, 4.22, y5f + 0.515, 5.46, false);
   // Floating Hinoki Bath Tray + Ceramic Sake Cup + Brass Waterfall Spout
@@ -1603,10 +1612,10 @@ export function buildHouse3D(scene) {
   addCollider(5, 2.62, 8.02, 3.58, 8.78);
 
   // SW Cool-Down Lounger, Woven Rug, Teak Side Table & Interactive [E] Tall Washi Floor Lantern!
-  addBox(furnitureGroup, 1.65, 0.015, 1.85, makeSurfaceMat('carpet_beige', 1.65, 1.85), 1.32, y5f + 0.016, 8.95, false);
+  addBox(furnitureGroup, 1.65, 0.014, 1.85, makeSurfaceMat('carpet_beige', 1.65, 1.85), 1.32, y5f + 0.024, 8.95, false);
   addBox(furnitureGroup, 0.86, 0.32, 0.74, mat.oak, 1.10, y5f + 0.16, 9.04, true);
-  addBox(furnitureGroup, 0.82, 0.14, 0.70, denimMat, 1.10, y5f + 0.36, 9.04, true);
-  addBox(furnitureGroup, 0.82, 0.56, 0.16, denimMat, 1.10, y5f + 0.62, 9.36, true);
+  addBox(furnitureGroup, 0.82, 0.14, 0.56, denimMat, 1.10, y5f + 0.39, 8.96, true);
+  addBox(furnitureGroup, 0.82, 0.56, 0.16, denimMat, 1.10, y5f + 0.62, 9.34, true);
   addCollider(5, 0.62, 8.62, 1.58, 9.48);
   const teakSide = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.16, 0.44, 14), mat.walnut);
   teakSide.position.set(2.02, y5f + 0.22, 9.12);
@@ -1684,7 +1693,7 @@ export function buildHouse3D(scene) {
   const koroEmber = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), emberMat);
   koroEmber.position.set(3.74, y6f + 0.435, 3.20);
   furnitureGroup.add(koroEmber);
-  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 3.40, y6f + 0.045, 2.48, false);
+  addBox(furnitureGroup, 0.54, 0.07, 0.54, makeFrontMat('zabuton_red'), 3.40, y6f + 0.065, 2.48, false);
   addCollider(6, 2.82, 2.75, 3.98, 3.42);
   // Recessed Tokonoma Display Plinth with Ceramic Ikebana Vase & Cedar Sprig + Hanging Scroll
   addBox(furnitureGroup, 0.40, 0.12, 0.68, mat.walnut, 4.62, y6f + 0.06, 3.02, true);
@@ -1713,7 +1722,7 @@ export function buildHouse3D(scene) {
   const ovalMir = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.03, 20), mat.mirror);
   ovalMir.rotation.z = Math.PI / 2;
   ovalMir.scale.set(1.25, 1.0, 0.88);
-  ovalMir.position.set(3.42, y6f + 1.50, 4.24);
+  ovalMir.position.set(3.41, y6f + 1.50, 4.24);
   furnitureGroup.add(ovalMir);
   const soap6 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 10), amberGlassMat);
   soap6.position.set(3.20, y6f + 0.89, 3.84);
@@ -1729,7 +1738,7 @@ export function buildHouse3D(scene) {
   // Full-Height Walnut Wine Bottle Lattice Rack stocked with 12 Miniature 3D Wine Bottles!
   addBox(furnitureGroup, 0.36, 2.15, 1.92, mat.walnut, 4.64, y6f + 1.075, 4.58, true);
   for (let row = 0; row < 4; row++) {
-    addBox(furnitureGroup, 0.38, 0.03, 1.90, mat.oak, 4.63, y6f + 0.38 + row * 0.42, 4.58, false);
+    addBox(furnitureGroup, 0.36, 0.03, 1.88, mat.oak, 4.61, y6f + 0.38 + row * 0.42, 4.58, false);
     for (let col = 0; col < 3; col++) {
       const bz = 3.92 + col * 0.62 + (row % 2) * 0.14;
       const by = y6f + 0.46 + row * 0.42;
@@ -1764,7 +1773,7 @@ export function buildHouse3D(scene) {
   // Exposed SRC Hybrid Steel-and-Walnut Roof-Transfer Beams across full 4.70m width
   [6.90, 8.10, 9.30].forEach((bz) => {
     addBox(staticGroup, 4.70, 0.16, 0.12, mat.walnut, 2.50, y6f + 2.55, bz, false);
-    addBox(staticGroup, 4.70, 0.03, 0.15, mat.darkIron, 2.50, y6f + 2.46, bz, false);
+    addBox(staticGroup, 4.70, 0.03, 0.15, mat.darkIron, 2.50, y6f + 2.455, bz, false);
   });
 
   // HERO SHOWPIECE 1: Authentic Brass & Walnut Equatorial Astronomical Telescope on Hardwood Tripod!
@@ -1833,7 +1842,7 @@ export function buildHouse3D(scene) {
   const hearthX = 0.52;
   const hearthZ = 8.20;
   const hearthPad = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.38, 0.04, 18), makeSurfaceMat('slate_charcoal', 0.8, 0.8));
-  hearthPad.position.set(hearthX, y6f + 0.02, hearthZ);
+  hearthPad.position.set(hearthX, y6f + 0.025, hearthZ);
   furnitureGroup.add(hearthPad);
   const fluePipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.56, 14), mat.darkIron);
   fluePipe.position.set(hearthX, y6f + 1.88, hearthZ);
@@ -1867,15 +1876,15 @@ export function buildHouse3D(scene) {
   addCollider(6, 0.22, 7.90, 0.82, 8.50);
 
   // Designer South-Facing Sky Lounge Sofa + Woven Salon Rug + Black Marble Coffee Table with Espresso Cups & Monograph!
-  addBox(furnitureGroup, 2.25, 0.015, 2.20, makeSurfaceMat('carpet_beige', 2.25, 2.20), 1.75, y6f + 0.016, 7.95, false);
-  addBox(furnitureGroup, 1.66, 0.36, 0.72, sofaMat, 1.75, y6f + 0.19, 7.42, true);
-  addBox(furnitureGroup, 1.66, 0.64, 0.18, sofaMat, 1.75, y6f + 0.40, 7.12, true);
-  addBox(furnitureGroup, 0.14, 0.52, 0.72, sofaMat, 0.98, y6f + 0.28, 7.42, true);
-  addBox(furnitureGroup, 0.14, 0.52, 0.72, sofaMat, 2.52, y6f + 0.28, 7.42, true);
+  addBox(furnitureGroup, 2.25, 0.014, 2.20, makeSurfaceMat('carpet_beige', 2.25, 2.20), 1.75, y6f + 0.024, 7.95, false);
+  addBox(furnitureGroup, 1.38, 0.36, 0.56, sofaMat, 1.75, y6f + 0.19, 7.50, true);
+  addBox(furnitureGroup, 1.68, 0.64, 0.18, sofaMat, 1.75, y6f + 0.40, 7.12, true);
+  addBox(furnitureGroup, 0.14, 0.52, 0.56, sofaMat, 0.98, y6f + 0.28, 7.50, true);
+  addBox(furnitureGroup, 0.14, 0.52, 0.56, sofaMat, 2.52, y6f + 0.28, 7.50, true);
   // 3 Accent Throw Pillows
-  addBox(furnitureGroup, 0.34, 0.30, 0.12, denimMat, 1.24, y6f + 0.48, 7.26, false);
-  addBox(furnitureGroup, 0.34, 0.30, 0.12, makeFrontMat('fabric_sakura'), 1.75, y6f + 0.48, 7.26, false);
-  addBox(furnitureGroup, 0.34, 0.30, 0.12, makeFrontMat('fabric_rose_vintage'), 2.26, y6f + 0.48, 7.26, false);
+  addBox(furnitureGroup, 0.34, 0.30, 0.12, denimMat, 1.24, y6f + 0.48, 7.28, false);
+  addBox(furnitureGroup, 0.34, 0.30, 0.12, makeFrontMat('fabric_sakura'), 1.75, y6f + 0.48, 7.28, false);
+  addBox(furnitureGroup, 0.34, 0.30, 0.12, makeFrontMat('fabric_rose_vintage'), 2.26, y6f + 0.48, 7.28, false);
   addCollider(6, 0.88, 7.02, 2.62, 7.82);
 
   addBox(furnitureGroup, 1.14, 0.04, 0.52, makeSurfaceMat('marble_black', 1.14, 0.52), 1.75, y6f + 0.36, 8.40, true);
@@ -2008,8 +2017,8 @@ export function buildHouse3D(scene) {
 
   addBox(furnitureGroup, 0.96, 0.04, 0.64, mat.walnut, 2.50, yAtt + 0.34, 7.45, true);
   addBox(furnitureGroup, 0.80, 0.32, 0.48, mat.walnut, 2.50, yAtt + 0.16, 7.45, false);
-  addBox(furnitureGroup, 0.56, 0.08, 0.56, makeFrontMat('zabuton_red'), 2.50, yAtt + 0.06, 6.72, false);
-  addBox(furnitureGroup, 0.56, 0.08, 0.56, denimMat, 2.50, yAtt + 0.06, 8.18, false);
+  addBox(furnitureGroup, 0.56, 0.08, 0.56, makeFrontMat('zabuton_red'), 2.50, yAtt + 0.072, 6.72, false);
+  addBox(furnitureGroup, 0.56, 0.08, 0.56, denimMat, 2.50, yAtt + 0.072, 8.18, false);
   addCollider(attFloorIdx, 1.98, 7.10, 3.02, 7.80);
   addBox(furnitureGroup, 0.54, 0.48, 1.15, crateMat, 0.52, yAtt + 0.24, 7.45, true);
   addBox(furnitureGroup, 0.52, 0.46, 1.05, makeFrontMat('furniture_chest'), 4.46, yAtt + 0.23, 7.55, true);
@@ -2084,12 +2093,12 @@ export function buildHouse3D(scene) {
   addLight('Attic_Hatch_Bulb', attFloorIdx, 'north', 0xffc684, 1.55, 6.8, 2.15, yAtt + 2.10, 2.35);
 
   // =========================================================================
-  // 7. TERRENO 5 km × 19 km (95 km²) ULTRA-PRECISION MOUNTAIN & DEEP-FOREST ENGINE
+  // 7. TERRENO 60 km × 60 km (3,600 km²) NATURAL COUNTRYSIDE & FOREST ENGINE
   // =========================================================================
   const terreno = createTerrenoEngine(scene, 'day');
 
-  // North Mossy Stepping Stone Approach & Porch Canopy
-  addBox(exteriorGroup, 2.10, 0.14, 7.50, makeSurfaceMat('paver_moss_stones', 2.2, 7.5), 1.12, -0.28, -3.75, false);
+  // North Mossy Stepping Stone Approach & Porch Canopy (cleanly separated at Z=-1.26)
+  addBox(exteriorGroup, 2.10, 0.14, 6.24, makeSurfaceMat('paver_moss_stones', 2.2, 6.2), 1.12, -0.28, -4.38, false);
   addBox(exteriorGroup, 2.20, 0.14, 1.25, makeSurfaceMat('paver_granite_grid', 2.2, 1.25), 1.12, -0.22, -0.62, true);
   addBox(exteriorGroup, 2.30, 0.08, 1.15, mat.darkIron, 1.12, 2.48, -0.58, true);
 
@@ -2114,7 +2123,12 @@ export function buildHouse3D(scene) {
     rMesh.rotation.set(i * 0.4, i * 1.1, 0.15);
     rMesh.receiveShadow = true;
     exteriorGroup.add(rMesh);
-    boulderColliders.push({ x: bx, z: bz, r: sx * 0.72, kind: 'boulder', height: sy * 1.15 });
+    boulderColliders.push({
+      x: bx, z: bz,
+      rx: sx * 0.86, rz: sx * 0.76, yaw: i * 1.1,
+      r: sx * 0.82,
+      kind: 'boulder', height: sy * 1.15,
+    });
   });
 
   const windTimeUniform = { value: 0 };

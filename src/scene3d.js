@@ -72,11 +72,13 @@ export class FirstPersonHouseExplorer {
     this.autoDoorsReadyTimer = 0.55;
 
     this.drivingVehicle = null; // null | 'camper' | 'kei' | 'armor'
+    this.driveCamMode = 'cockpit'; // 'cockpit' | 'hood' | 'chase'
     this.bumpCooldown = 0;
     this.vehicleBlockedTimer = 0;
 
-    // Silent On-Board Computer Autonomous Navigation State (ZERO special HUD!)
-    this.autopilotRoute = null; // null | { targetId, goalX, goalZ, points, cursor }
+    // Dual-Camper Autonomous Navigation State (CAMPER-75 & ARMOR-155, decoupled from player seat!)
+    this.autopilotRoutes = { camper: null, armor: null };
+    this.selectedAutopilotVehicle = 'camper';
     this.stormEnabled = false;
 
     this.cameraSensitivity = 1.0;
@@ -126,10 +128,10 @@ export class FirstPersonHouseExplorer {
     this._applyVehicleTerrainPose(this.house.armorCamper, 'armor');
     this._applyVehicleTerrainPose(this.house.towContainer, 'container');
 
-    // Locked daylight alpine/deep-forest atmosphere (時間帯変更不可)
+    // Locked daylight countryside atmosphere
     this.currentTodId = 'day';
-    this.lastNear = 0.14;
-    this.lastFar = 52000;
+    this.lastNear = 0.16;
+    this.lastFar = 95000;
     this._lastShadowTargetX = 0.5;
     this._lastShadowTargetZ = 4.5;
     this._applyTimeOfDayLighting(this.terreno.getTimeOfDay());
@@ -146,6 +148,7 @@ export class FirstPersonHouseExplorer {
       antialias: false,
       powerPreference: 'high-performance',
       preserveDrawingBuffer: true,
+      logarithmicDepthBuffer: true,
     });
     this.renderer.setSize(this.container.clientWidth || window.innerWidth, this.container.clientHeight || window.innerHeight);
     this.renderer.shadowMap.enabled = true;
@@ -168,7 +171,7 @@ export class FirstPersonHouseExplorer {
 
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.14, 52000);
+    this.camera = new THREE.PerspectiveCamera(64, w / Math.max(1, h), 0.16, 95000);
     this.scene.add(this.camera);
   }
 
@@ -275,16 +278,18 @@ export class FirstPersonHouseExplorer {
   _syncCameraFrustum() {
     const underground = this.currentFloor <= 0;
     const outdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && !this.drivingVehicle;
-    const targetNear = underground ? 0.06 : (outdoors ? 0.24 : 0.14);
-    const targetFar = underground ? 140 : 52000;
+    const targetNear = underground ? 0.08 : (outdoors ? 0.22 : 0.16);
+    const targetFar = underground ? 140 : 95000;
+    const targetFov = this.drivingVehicle ? (this.driveCamMode === 'chase' ? 68 : 74) : 64;
     if (this.terreno) {
       this.terreno.setVisible(!underground);
     }
-    if (targetNear !== this.lastNear || targetFar !== this.lastFar) {
+    if (targetNear !== this.lastNear || targetFar !== this.lastFar || Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.lastNear = targetNear;
       this.lastFar = targetFar;
       this.camera.near = targetNear;
       this.camera.far = targetFar;
+      this.camera.fov = targetFov;
       this.camera.updateProjectionMatrix();
     }
   }
@@ -552,46 +557,172 @@ export class FirstPersonHouseExplorer {
     return cont.hitched;
   }
 
-  cancelAutopilot() {
-    this.autopilotRoute = null;
+  cancelAutopilot(vehicleKey = null) {
+    if (vehicleKey) {
+      if (this.autopilotRoutes[vehicleKey]) this.autopilotRoutes[vehicleKey] = null;
+    } else {
+      this.autopilotRoutes.camper = null;
+      this.autopilotRoutes.armor = null;
+    }
+    this._notifyDriveHUD();
   }
 
-  startArmorAutopilotTo(goalX, goalZ, targetId = 'custom') {
+  isAutopilotActive(vehicleKey = null) {
+    if (vehicleKey) return Boolean(this.autopilotRoutes[vehicleKey]);
+    if (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor') {
+      return Boolean(this.autopilotRoutes[this.drivingVehicle]);
+    }
+    return Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor);
+  }
+
+  setSelectedAutopilotVehicle(vehicleKey) {
+    this.selectedAutopilotVehicle = vehicleKey === 'armor' ? 'armor' : 'camper';
+    return this.selectedAutopilotVehicle;
+  }
+
+  cycleDriveCameraMode(mode = null) {
+    const order = ['cockpit', 'hood', 'chase'];
+    if (mode && order.includes(mode)) {
+      this.driveCamMode = mode;
+    } else {
+      const idx = order.indexOf(this.driveCamMode);
+      this.driveCamMode = order[(idx + 1) % order.length];
+    }
+    this._syncCameraFrustum();
+    this._notifyDriveHUD();
+    return this.driveCamMode;
+  }
+
+  /**
+   * Start autonomous driving for CAMPER-75 ('camper') or ARMOR-155 ('armor') to ANY free world destination.
+   * NEVER teleports the player! If player is already seated in that camper, autopilot takes over seamlessly;
+   * otherwise the camper drives autonomously on its own (and player can ride inside freely!).
+   */
+  _ensureGarageGatesOpenForArmor() {
+    const ap = this.house.armorCamper?.pose;
+    if (!ap || ap.cx < 11.0 || ap.cx > 23.0 || ap.cz < -10.0 || ap.cz > 16.0) return;
+    for (const d of this.house.interactiveDoors) {
+      if (d.id === 'DG-N' || d.id === 'DG-S') {
+        d.isOpen = true;
+        d.progress = Math.max(d.progress, 0.95);
+        d.autoHoldTimer = 8.0;
+        if (d.kind === 'rollup') d.pivot.position.y = d.closedY + d.openLiftY * d.progress;
+      }
+    }
+  }
+
+  startCamperAutopilotTo(vehicleKey, goalX, goalZ, targetId = 'custom') {
     if (!this.terreno || !this.terreno.autopilot) return null;
-    const armor = this.house.armorCamper;
-    const points = this.terreno.autopilot.computeSafeRoute(armor.pose.cx, armor.pose.cz, goalX, goalZ);
-    this.autopilotRoute = {
+    const key = vehicleKey === 'armor' ? 'armor' : 'camper';
+    if (key === 'armor') this._ensureGarageGatesOpenForArmor();
+    const veh = this._getVehicleObj(key);
+    const points = this.terreno.autopilot.computeSafeRoute(veh.pose.cx, veh.pose.cz, goalX, goalZ);
+    const route = {
       targetId,
       goalX,
       goalZ,
       points,
       cursor: 0,
     };
-    // Silently seat protagonist inside ARMOR-155 cockpit and begin autonomous navigation (ZERO special HUD!)
-    if (this.drivingVehicle !== 'armor') {
-      if (this.drivingVehicle) this.toggleVehicleDrive(this.drivingVehicle, false);
-      this.toggleVehicleDrive('armor', true);
-    }
-    return this.autopilotRoute;
+    this.autopilotRoutes[key] = route;
+    this.selectedAutopilotVehicle = key;
+    this._notifyDriveHUD();
+    return route;
   }
 
-  startArmorAutopilotToDynamic(kind) {
+  startCamperAutopilotToDynamic(vehicleKey, kind) {
+    const key = vehicleKey === 'armor' ? 'armor' : 'camper';
     if (kind === 'home') {
-      return this.startArmorAutopilotTo(15.6, -15.0, 'dyn_home');
+      const gx = key === 'camper' ? 7.75 : 15.6;
+      const gz = key === 'camper' ? -12.0 : -15.0;
+      return this.startCamperAutopilotTo(key, gx, gz, 'dyn_home');
     }
     if (kind === 'kei') {
       const kp = this.house.kei.pose;
-      return this.startArmorAutopilotTo(kp.cx, kp.cz, 'dyn_kei');
+      return this.startCamperAutopilotTo(key, kp.cx, kp.cz, 'dyn_kei');
     }
     if (kind === 'container') {
       const tp = this.house.towContainer.pose;
-      return this.startArmorAutopilotTo(tp.cx, tp.cz, 'dyn_container');
+      return this.startCamperAutopilotTo(key, tp.cx, tp.cz, 'dyn_container');
     }
     if (kind === 'camper') {
+      if (key === 'camper') return this.startCamperAutopilotTo(key, 7.75, -12.0, 'dyn_home');
       const cp = this.house.camper.pose;
-      return this.startArmorAutopilotTo(cp.cx, cp.cz, 'dyn_camper');
+      return this.startCamperAutopilotTo(key, cp.cx, cp.cz, 'dyn_camper');
+    }
+    if (kind === 'armor') {
+      if (key === 'armor') return this.startCamperAutopilotTo(key, 15.6, -15.0, 'dyn_home');
+      const ap = this.house.armorCamper.pose;
+      return this.startCamperAutopilotTo(key, ap.cx, ap.cz, 'dyn_armor');
     }
     return null;
+  }
+
+  toggleVehicleAutopilot(vehicleKey = null) {
+    const key = vehicleKey
+      || (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' ? this.drivingVehicle : null)
+      || (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' ? this.activeBuilding : null)
+      || this.selectedAutopilotVehicle
+      || 'camper';
+    if (key !== 'camper' && key !== 'armor') return false;
+    if (this.autopilotRoutes[key]) {
+      this.autopilotRoutes[key] = null;
+      this._notifyDriveHUD();
+      return false;
+    }
+    if (!this.terreno || !this.terreno.autopilot) return false;
+    if (key === 'armor') this._ensureGarageGatesOpenForArmor();
+    const veh = this._getVehicleObj(key);
+    const points = this.terreno.autopilot.buildCruiseAheadRoute(veh.pose.cx, veh.pose.cz, veh.pose.yaw, 2800);
+    const last = points[points.length - 1];
+    this.autopilotRoutes[key] = {
+      targetId: 'cruise',
+      goalX: last[0],
+      goalZ: last[1],
+      points,
+      cursor: 0,
+    };
+    this.selectedAutopilotVehicle = key;
+    this._notifyDriveHUD();
+    return true;
+  }
+
+  startArmorAutopilotTo(goalX, goalZ, targetId = 'custom') {
+    return this.startCamperAutopilotTo('armor', goalX, goalZ, targetId);
+  }
+
+  startArmorAutopilotToDynamic(kind) {
+    return this.startCamperAutopilotToDynamic('armor', kind);
+  }
+
+  _notifyDriveHUD() {
+    if (!this.callbacks.onDriveChange) return;
+    const activeKey = this.drivingVehicle;
+    const activeRiderAuto = (this.activeBuilding === 'camper' && this.autopilotRoutes.camper)
+      ? 'camper'
+      : ((this.activeBuilding === 'armor' && this.autopilotRoutes.armor) ? 'armor' : null);
+    if (!activeKey) {
+      this.callbacks.onDriveChange(false, {
+        vehicle: activeRiderAuto,
+        autopilotActive: Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor),
+        autopilotCamper: Boolean(this.autopilotRoutes.camper),
+        autopilotArmor: Boolean(this.autopilotRoutes.armor),
+        ridingAutopilot: activeRiderAuto,
+        camMode: this.driveCamMode,
+      });
+      return;
+    }
+    const veh = this._getVehicleObj(activeKey);
+    this.callbacks.onDriveChange(true, {
+      vehicle: activeKey,
+      badge: activeKey === 'kei' ? 'KEI-340 660cc' : (activeKey === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
+      speedKmh: Math.round(Math.hypot(veh.velX || 0, veh.velZ || 0) * 3.6),
+      headlightsOn: veh.headlightsOn,
+      colliding: this.vehicleBlockedTimer > 0,
+      autopilotActive: Boolean(this.autopilotRoutes[activeKey]),
+      canAutopilot: activeKey === 'camper' || activeKey === 'armor',
+      camMode: this.driveCamMode,
+    });
   }
 
   toggleVehicleHeadlights(force = null, vehicleKey = null) {
@@ -604,14 +735,8 @@ export class FirstPersonHouseExplorer {
     });
     this.adaptive.markShadowsDirty();
     this.audio.playClick(veh.headlightsOn);
-    if (this.callbacks.onDriveChange && this.drivingVehicle === key) {
-      this.callbacks.onDriveChange(true, {
-        vehicle: key,
-        badge: key === 'kei' ? 'KEI-340 660cc' : (key === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
-        speedKmh: Math.round(Math.abs(veh.speed) * 3.6),
-        headlightsOn: veh.headlightsOn,
-        colliding: this.vehicleBlockedTimer > 0,
-      });
+    if (this.drivingVehicle === key) {
+      this._notifyDriveHUD();
     }
   }
 
@@ -631,6 +756,95 @@ export class FirstPersonHouseExplorer {
     this.toggleVehicleDrive('armor', force);
   }
 
+  _findSafeVehicleExitWorld(activeKey) {
+    const prevFloor = this.currentFloor;
+    this.currentFloor = 1;
+    let chosen = null;
+
+    if (activeKey === 'camper') {
+      // Immediately slide cockpit bulkhead door DC-01 open so player NEVER gets trapped or snagged!
+      const dc01 = this.house.interactiveDoors.find((d) => d.id === 'DC-01');
+      if (dc01) {
+        dc01.isOpen = true;
+        dc01.progress = Math.max(dc01.progress, 0.92);
+        dc01.autoHoldTimer = 2.6;
+        if (dc01.axis === 'x') dc01.pivot.position.x = dc01.closedPos.x + dc01.slideDelta * dc01.progress;
+        else dc01.pivot.position.z = dc01.closedPos.z + dc01.slideDelta * dc01.progress;
+      }
+      const cands = [
+        [1.35, 1.54],
+        [1.35, 1.92],
+        [1.35, 2.48],
+        [1.35, 0.92],
+      ];
+      for (const [lx, lz] of cands) {
+        const w = this.camperLocalToWorld(lx, lz);
+        if (!this._collidesAt(w.x, w.z)) {
+          chosen = { x: w.x, z: w.z, building: 'camper', eye: 1.54, floorY: (this.house.camper.pose.y || 0) + CAMPER.floor1WorldY };
+          break;
+        }
+      }
+      if (!chosen) {
+        const w = this.camperLocalToWorld(1.35, 1.54);
+        chosen = { x: w.x, z: w.z, building: 'camper', eye: 1.54, floorY: (this.house.camper.pose.y || 0) + CAMPER.floor1WorldY };
+      }
+    } else if (activeKey === 'armor') {
+      const cands = [
+        [1.55, 2.15],
+        [1.18, 2.25],
+        [1.12, 2.85],
+        [1.15, 3.60],
+      ];
+      for (const [lx, lz] of cands) {
+        const w = this.armorLocalToWorld(lx, lz);
+        if (!this._collidesAt(w.x, w.z)) {
+          chosen = { x: w.x, z: w.z, building: 'armor', eye: 1.56, floorY: (this.house.armorCamper.pose.y || 0) + ARMOR_CAMPER.floorWorldY };
+          break;
+        }
+      }
+      if (!chosen) {
+        const w = this.armorLocalToWorld(1.55, 2.15);
+        chosen = { x: w.x, z: w.z, building: 'armor', eye: 1.56, floorY: (this.house.armorCamper.pose.y || 0) + ARMOR_CAMPER.floorWorldY };
+      }
+    } else {
+      // KEI-340: Prefer stepping cleanly outside beside the driver's door (opening DK-D),
+      // falling back to left side (DK-L) or clear interior cargo bay so player NEVER gets stuck!
+      const dkD = this.house.interactiveDoors.find((d) => d.id === 'DK-D');
+      const dkL = this.house.interactiveDoors.find((d) => d.id === 'DK-L');
+      const extRight = this.keiLocalToWorld(1.92, 0.78);
+      if (!this._collidesAt(extRight.x, extRight.z)) {
+        if (dkD) {
+          dkD.isOpen = true;
+          dkD.progress = Math.max(dkD.progress, 0.85);
+          dkD.autoHoldTimer = 2.4;
+          dkD.pivot.rotation.y = dkD.openAngle * dkD.progress;
+        }
+        chosen = { x: extRight.x, z: extRight.z, building: 'courtyard', eye: 1.56, floorY: this._computeFloorY(extRight.x, extRight.z) };
+      } else {
+        const extLeft = this.keiLocalToWorld(-0.46, 1.66);
+        if (!this._collidesAt(extLeft.x, extLeft.z)) {
+          if (dkL) {
+            dkL.isOpen = true;
+            dkL.progress = Math.max(dkL.progress, 0.85);
+            dkL.autoHoldTimer = 2.4;
+          }
+          chosen = { x: extLeft.x, z: extLeft.z, building: 'courtyard', eye: 1.56, floorY: this._computeFloorY(extLeft.x, extLeft.z) };
+        } else {
+          if (dkL) {
+            dkL.isOpen = true;
+            dkL.progress = Math.max(dkL.progress, 0.85);
+            dkL.autoHoldTimer = 2.4;
+          }
+          const inCargo = this.keiLocalToWorld(0.64, 1.66);
+          chosen = { x: inCargo.x, z: inCargo.z, building: 'kei', eye: 1.04, floorY: (this.house.kei.pose.y || 0) + KEI.floorWorldY };
+        }
+      }
+    }
+
+    this.currentFloor = prevFloor;
+    return chosen;
+  }
+
   toggleVehicleDrive(vehicleKey, force = null) {
     const isDrivingThis = this.drivingVehicle === vehicleKey;
     const next = force !== null ? force : !isDrivingThis;
@@ -639,15 +853,17 @@ export class FirstPersonHouseExplorer {
 
     const activeKey = next ? vehicleKey : this.drivingVehicle;
     const veh = this._getVehicleObj(activeKey);
+    const keepAutopilotRunning = !next && Boolean(this.autopilotRoutes[activeKey]);
+
     this.drivingVehicle = next ? activeKey : null;
     veh.driveProp.isOn = next;
-    veh.speed = 0;
-    veh.velX = 0;
-    veh.velZ = 0;
-    veh.slipSpeed = 0;
 
-    if (!next && activeKey === 'armor') {
-      this.cancelAutopilot();
+    // Only zero speed when entering manually OR exiting without active autopilot!
+    if (!keepAutopilotRunning) {
+      veh.speed = 0;
+      veh.velX = 0;
+      veh.velZ = 0;
+      veh.slipSpeed = 0;
     }
 
     if (next) {
@@ -659,68 +875,52 @@ export class FirstPersonHouseExplorer {
         const dc1 = this.house.interactiveDoors.find((d) => d.id === 'DC-1');
         if (dc1) dc1.isOpen = false;
         this.activeBuilding = 'camper';
-        const seatW = this.camperLocalToWorld(0.72, 0.88);
+        const seatW = this.camperLocalToWorld(0.72, 0.68);
         this.playerPos.set(seatW.x, 0, seatW.z);
         this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
-        this.eyeHeight = 1.20;
+        this.eyeHeight = 1.44;
         this.yaw = veh.pose.yaw;
-        this.pitch = -0.10;
+        this.pitch = -0.06;
       } else if (activeKey === 'armor') {
         ['DAM-1', 'DAM-R'].forEach((id) => {
           const d = this.house.interactiveDoors.find((x) => x.id === id);
           if (d) d.isOpen = false;
         });
         this.activeBuilding = 'armor';
-        const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, ARMOR_CAMPER.driverSeatLocal.z);
+        const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, 1.06);
         this.playerPos.set(seatW.x, 0, seatW.z);
         this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
-        this.eyeHeight = 1.28;
+        this.eyeHeight = 1.54;
         this.yaw = veh.pose.yaw;
-        this.pitch = -0.09;
+        this.pitch = -0.05;
       } else {
         ['DK-D', 'DK-L', 'DK-R'].forEach((id) => {
           const d = this.house.interactiveDoors.find((x) => x.id === id);
           if (d) d.isOpen = false;
         });
         this.activeBuilding = 'kei';
-        const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, KEI.driverSeatLocal.z);
+        const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, 0.68);
         this.playerPos.set(seatW.x, 0, seatW.z);
         this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
-        this.eyeHeight = 0.98;
+        this.eyeHeight = 1.04;
         this.yaw = veh.pose.yaw;
-        this.pitch = -0.09;
+        this.pitch = -0.06;
       }
       this.toggleVehicleHeadlights(true, activeKey);
     } else {
-      if (activeKey === 'camper') {
-        const standW = this.camperLocalToWorld(1.35, 0.88);
-        this.playerPos.set(standW.x, 0, standW.z);
-        this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
-        this.eyeHeight = 1.54;
-      } else if (activeKey === 'armor') {
-        // Exit smoothly into the open bridge aisle behind the driver seat (100% collision-safe!)
-        const standW = this.armorLocalToWorld(1.55, 2.05);
-        this.playerPos.set(standW.x, 0, standW.z);
-        this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
-        this.eyeHeight = 1.56;
-      } else {
-        const cargoW = this.keiLocalToWorld(0.68, 1.56);
-        this.playerPos.set(cargoW.x, 0, cargoW.z);
-        this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
-        this.eyeHeight = 1.04;
+      const exitInfo = this._findSafeVehicleExitWorld(activeKey);
+      this.playerPos.set(exitInfo.x, 0, exitInfo.z);
+      this.playerVel.set(0, 0, 0);
+      this.activeBuilding = exitInfo.building;
+      this.floorY = exitInfo.floorY;
+      this.eyeHeight = exitInfo.eye;
+      if (!keepAutopilotRunning) {
+        this.audio.updateEngine(false, 0, activeKey === 'kei' ? 'kei' : 'diesel');
       }
-      this.audio.updateEngine(false, 0, activeKey === 'kei' ? 'kei' : 'diesel');
     }
 
-    if (this.callbacks.onDriveChange) {
-      this.callbacks.onDriveChange(Boolean(this.drivingVehicle), {
-        vehicle: activeKey,
-        badge: activeKey === 'kei' ? 'KEI-340 660cc' : (activeKey === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
-        speedKmh: 0,
-        headlightsOn: veh.headlightsOn,
-        colliding: false,
-      });
-    }
+    this._syncCameraFrustum();
+    this._notifyDriveHUD();
   }
 
   _applyVehicleTerrainPose(veh, kind, stepLift = 0) {
@@ -921,9 +1121,8 @@ export class FirstPersonHouseExplorer {
       ) return { hit: true, reason: 'bounds', stepLift: 0 };
     }
 
-    // 1b. Directional Deep River & Flash-Flood Guard (accounts for live +7.5m storm flood surge!)
+    // 1b. Directional Deep River & Flash-Flood Guard
     if (this.terreno) {
-      if (this.terreno.ensureCollidersAt) this.terreno.ensureCollidersAt(ncx, ncz);
       const flood = this.terreno.storm
         ? this.terreno.storm.getFloodInfoAt(ncx, ncz)
         : null;
@@ -952,7 +1151,6 @@ export class FirstPersonHouseExplorer {
           return { hit: true, reason: 'garage', stepLift: 0 };
         }
       }
-      // Dynamically block closed Garage Roll-Up Shutters (DG-N / DG-S) until auto-opened!
       for (let i = 0; i < this.house.interactiveDoors.length; i++) {
         const d = this.house.interactiveDoors[i];
         if (d.isGarageGate && d.progress < 0.62) {
@@ -976,31 +1174,70 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // 4. Exact OBB vs Circle (Lanterns, Boulders, TERRENO Streamed Trees/Rocks, & Active Landslide Boulders!)
+    // 4. Accurate OBB vs Trees, Oriented Ellipsoidal Boulders, Capsule Nurse Logs, Shrubs & Landslides!
     let stepLift = 0;
-    const checkCircles = (arr) => {
+    const testPointCircleAgainstOBB = (px, pz, rad) => {
+      const dx = px - ncx;
+      const dz = pz - ncz;
+      const rx = dx * c - dz * s;
+      const rz = dx * s + dz * c;
+      const clx = rx < -hw ? -hw : (rx > hw ? hw : rx);
+      const clz = rz < -hl ? -hl : (rz > hl ? hl : rz);
+      const ddx = rx - clx;
+      const ddz = rz - clz;
+      return ddx * ddx + ddz * ddz < rad * rad;
+    };
+
+    const checkObstacles = (arr) => {
       for (let i = 0; i < arr.length; i++) {
         const o = arr[i];
         const dx = o.x - ncx;
         const dz = o.z - ncz;
-        const maxRange = hl + o.r + 3.0;
+        const maxRange = hl + (o.r || 1.0) + 3.2;
         if (dx * dx + dz * dz > maxRange * maxRange) continue;
-        const rx = dx * c - dz * s;
-        const rz = dx * s + dz * c;
-        const clx = rx < -hw ? -hw : (rx > hw ? hw : rx);
-        const clz = rz < -hl ? -hl : (rz > hl ? hl : rz);
-        const ddx = rx - clx;
-        const ddz = rz - clz;
-        const r2 = o.r * o.r;
-        if (ddx * ddx + ddz * ddz < r2) {
+
+        let intersects = false;
+        if (o.kind === 'log' && o.ax !== undefined) {
+          // Exact 5-sample full-length oriented capsule test against vehicle OBB!
+          const segR = o.r || 0.24;
+          for (let k = 0; k <= 4; k++) {
+            const u = k * 0.25;
+            if (testPointCircleAgainstOBB(o.ax + (o.bx - o.ax) * u, o.az + (o.bz - o.az) * u, segR)) {
+              intersects = true;
+              break;
+            }
+          }
+        } else if (o.rx && o.rz && o.yaw !== undefined) {
+          // Oriented ellipsoidal boulder vs vehicle OBB nearest point!
+          const rx = dx * c - dz * s;
+          const rz = dx * s + dz * c;
+          const clx = rx < -hw ? -hw : (rx > hw ? hw : rx);
+          const clz = rz < -hl ? -hl : (rz > hl ? hl : rz);
+          // Transform closest OBB point back to world delta from boulder center
+          const nearWdx = (clx * c + clz * s) - dx;
+          const nearWdz = (-clx * s + clz * c) - dz;
+          const bc = Math.cos(o.yaw);
+          const bs = Math.sin(o.yaw);
+          const ex = nearWdx * bc + nearWdz * bs;
+          const ez = -nearWdx * bs + nearWdz * bc;
+          intersects = (ex * ex) / (o.rx * o.rx) + (ez * ez) / (o.rz * o.rz) < 1.0;
+        } else {
+          intersects = testPointCircleAgainstOBB(o.x, o.z, o.r);
+        }
+
+        if (intersects) {
+          // Dense herbaceous/woody low shrubs: vehicles roll cleanly over brush with minor wheel bump!
+          if (o.kind === 'shrub') {
+            stepLift = Math.max(stepLift, Math.min(0.18, (o.height || 0.45) * 0.25));
+            continue;
+          }
           const isNaturalRock = (o.kind === 'boulder' || o.kind === 'log' || o.kind === 'landslide_rock');
           const effMaxStep = isArmored && o.kind === 'landslide_rock' ? maxStepH * 1.25 : maxStepH;
           if (isNaturalRock && o.height !== undefined && o.height <= effMaxStep) {
             stepLift = Math.max(stepLift, o.height * 0.65);
             continue;
           }
-          // Heavy steel-armored ARMOR-155 shrugs off slender saplings/brush (r < 0.24m) in deep mountains!
-          if (isArmored && o.kind === 'tree' && o.r < 0.24) {
+          if (isArmored && o.kind === 'tree' && o.r < 0.20) {
             stepLift = Math.max(stepLift, 0.14);
             continue;
           }
@@ -1011,17 +1248,22 @@ export class FirstPersonHouseExplorer {
     };
 
     if (Math.abs(ncx) < 26 && Math.abs(ncz) < 26) {
-      if (checkCircles(LANTERN_OBSTACLES)) return { hit: true, reason: 'lantern', stepLift: 0 };
-      if (checkCircles(this.house.boulderColliders || [])) return { hit: true, reason: 'boulder', stepLift: 0 };
+      if (checkObstacles(LANTERN_OBSTACLES)) return { hit: true, reason: 'lantern', stepLift: 0 };
+      if (checkObstacles(this.house.boulderColliders || [])) return { hit: true, reason: 'boulder', stepLift: 0 };
     }
     if (this.terreno && this.terreno.storm) {
       const lsCols = this.terreno.storm.getActiveLandslideColliders();
-      if (lsCols.length > 0 && checkCircles(lsCols)) {
+      if (lsCols.length > 0 && checkObstacles(lsCols)) {
         return { hit: true, reason: 'landslide', stepLift: 0 };
       }
     }
-    if (this.terreno && checkCircles(this.terreno.getLocalColliders())) {
-      return { hit: true, reason: 'forest', stepLift: 0 };
+    if (this.terreno) {
+      const forestCols = this.terreno.getCollidersNear
+        ? this.terreno.getCollidersNear(ncx, ncz)
+        : this.terreno.getLocalColliders();
+      if (checkObstacles(forestCols)) {
+        return { hit: true, reason: 'forest', stepLift: 0 };
+      }
     }
     return { hit: false, reason: null, stepLift };
   }
@@ -1030,25 +1272,25 @@ export class FirstPersonHouseExplorer {
     const out = [];
     if (excludeKey !== 'camper' && this.house.camper) {
       const p = this.house.camper.pose;
-      out.push({ cx: p.cx, cz: p.cz, hw: CAMPER.width * 0.5 + 0.02, hl: CAMPER.length * 0.5 + 0.02, yaw: p.yaw });
+      out.push({ cx: p.cx, cz: p.cz, hw: CAMPER.width * 0.5, hl: CAMPER.length * 0.5, yaw: p.yaw });
     }
     if (excludeKey !== 'kei' && this.house.kei) {
       const p = this.house.kei.pose;
-      out.push({ cx: p.cx, cz: p.cz, hw: KEI.width * 0.5 + 0.01, hl: KEI.length * 0.5 + 0.01, yaw: p.yaw });
+      out.push({ cx: p.cx, cz: p.cz, hw: KEI.width * 0.5, hl: KEI.length * 0.5, yaw: p.yaw });
     }
     if (excludeKey !== 'armor' && this.house.armorCamper) {
       const p = this.house.armorCamper.pose;
-      out.push({ cx: p.cx, cz: p.cz, hw: ARMOR_CAMPER.width * 0.5 + 0.02, hl: ARMOR_CAMPER.length * 0.5 + 0.02, yaw: p.yaw });
+      out.push({ cx: p.cx, cz: p.cz, hw: ARMOR_CAMPER.width * 0.5, hl: ARMOR_CAMPER.length * 0.5, yaw: p.yaw });
     }
     if (this.house.towContainer && !(excludeKey === 'armor' && this.house.towContainer.hitched)) {
       const p = this.house.towContainer.pose;
-      out.push({ cx: p.cx, cz: p.cz, hw: TOW_CONTAINER.width * 0.5 + 0.02, hl: TOW_CONTAINER.length * 0.5 + 0.02, yaw: p.yaw });
+      out.push({ cx: p.cx, cz: p.cz, hw: TOW_CONTAINER.width * 0.5, hl: TOW_CONTAINER.length * 0.5, yaw: p.yaw });
     }
     return out;
   }
 
   _camperCollidesAt(ncx, ncz, nyaw, prevCx = ncx, prevCz = ncz) {
-    return this._vehicleCollidesCommon(ncx, ncz, CAMPER.width * 0.5 + 0.02, CAMPER.length * 0.5 + 0.02, nyaw, this._getOtherVehicleObbs('camper'), {
+    return this._vehicleCollidesCommon(ncx, ncz, CAMPER.width * 0.5, CAMPER.length * 0.5, nyaw, this._getOtherVehicleObbs('camper'), {
       maxStepH: 0.62,
       maxFordDepth: 0.92,
       prevCx,
@@ -1057,7 +1299,7 @@ export class FirstPersonHouseExplorer {
   }
 
   _keiCollidesAt(ncx, ncz, nyaw, prevCx = ncx, prevCz = ncz) {
-    return this._vehicleCollidesCommon(ncx, ncz, KEI.width * 0.5 + 0.01, KEI.length * 0.5 + 0.01, nyaw, this._getOtherVehicleObbs('kei'), {
+    return this._vehicleCollidesCommon(ncx, ncz, KEI.width * 0.5, KEI.length * 0.5, nyaw, this._getOtherVehicleObbs('kei'), {
       maxStepH: 0.42,
       maxFordDepth: 0.52,
       prevCx,
@@ -1066,7 +1308,7 @@ export class FirstPersonHouseExplorer {
   }
 
   _armorCollidesAt(ncx, ncz, nyaw, prevCx = ncx, prevCz = ncz) {
-    return this._vehicleCollidesCommon(ncx, ncz, ARMOR_CAMPER.width * 0.5 + 0.02, ARMOR_CAMPER.length * 0.5 + 0.02, nyaw, this._getOtherVehicleObbs('armor'), {
+    return this._vehicleCollidesCommon(ncx, ncz, ARMOR_CAMPER.width * 0.5, ARMOR_CAMPER.length * 0.5, nyaw, this._getOtherVehicleObbs('armor'), {
       maxStepH: 0.95,
       maxFordDepth: 1.95,
       isArmored: true,
@@ -1075,29 +1317,26 @@ export class FirstPersonHouseExplorer {
     });
   }
 
-  _updateVehicleDriving(dt) {
-    const vehicleKey = this.drivingVehicle;
+  _stepVehiclePhysics(vehicleKey, dt, isPlayerDriving) {
     const isKei = vehicleKey === 'kei';
     const isArmor = vehicleKey === 'armor';
     const veh = this._getVehicleObj(vehicleKey);
     if (veh.suspLift === undefined) { veh.suspLift = 0; veh.suspVelY = 0; }
     if (veh.velX === undefined) { veh.velX = 0; veh.velZ = 0; veh.slipSpeed = 0; }
-    if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
-    if (this.vehicleBlockedTimer > 0) this.vehicleBlockedTimer -= dt;
 
     let throttle = 0;
     let steerIn = 0;
-    if (this.keys.has('w') || this.keys.has('arrowup')) throttle += 1;
-    if (this.keys.has('s') || this.keys.has('arrowdown')) throttle -= 1;
-    if (this.keys.has('a') || this.keys.has('arrowleft')) steerIn += 1;
-    if (this.keys.has('d') || this.keys.has('arrowright')) steerIn -= 1;
+    if (isPlayerDriving && !this.mapOpen) {
+      if (this.keys.has('w') || this.keys.has('arrowup')) throttle += 1;
+      if (this.keys.has('s') || this.keys.has('arrowdown')) throttle -= 1;
+      if (this.keys.has('a') || this.keys.has('arrowleft')) steerIn += 1;
+      if (this.keys.has('d') || this.keys.has('arrowright')) steerIn -= 1;
+      if (Math.abs(this.virtualMove.z) > 0.06) throttle -= this.virtualMove.z;
+      if (Math.abs(this.virtualMove.x) > 0.06) steerIn -= this.virtualMove.x;
+      throttle = Math.max(-1, Math.min(1, throttle));
+      steerIn = Math.max(-1, Math.min(1, steerIn));
+    }
 
-    if (Math.abs(this.virtualMove.z) > 0.06) throttle -= this.virtualMove.z;
-    if (Math.abs(this.virtualMove.x) > 0.06) steerIn -= this.virtualMove.x;
-    throttle = Math.max(-1, Math.min(1, throttle));
-    steerIn = Math.max(-1, Math.min(1, steerIn));
-
-    // Query live storm traction μ (0.96 dry -> 0.18..0.38 storm hydroplaning/mud!) & flood state
     const grip = this.terreno && this.terreno.storm
       ? this.terreno.storm.getSurfaceGripAt(veh.pose.cx, veh.pose.cz)
       : 0.96;
@@ -1105,17 +1344,20 @@ export class FirstPersonHouseExplorer {
       ? this.terreno.storm.getFloodInfoAt(veh.pose.cx, veh.pose.cz)
       : { depth: 0, submerged: false, currentX: 0, currentZ: 0 };
 
-    // On-Board Silent Autopilot for ARMOR-155 (ZERO special HUD/banners/indicators!)
+    // Autonomous Driving Controller for BOTH CAMPER-75 & ARMOR-155 (works seated OR while walking freely!)
     let autopilotActive = false;
-    if (isArmor && this.autopilotRoute && this.terreno && this.terreno.autopilot) {
-      if (Math.abs(throttle) > 0.18 || Math.abs(steerIn) > 0.18) {
-        this.cancelAutopilot();
+    const route = (vehicleKey === 'camper' || vehicleKey === 'armor') ? this.autopilotRoutes[vehicleKey] : null;
+    if (route && this.terreno && this.terreno.autopilot) {
+      if (isPlayerDriving && (Math.abs(throttle) > 0.18 || Math.abs(steerIn) > 0.18)) {
+        // Manual steering/throttle override cleanly hands control back to player
+        this.cancelAutopilot(vehicleKey);
       } else {
-        const ctrl = this.terreno.autopilot.evaluateDrivingControl(veh.pose, veh.speed, this.autopilotRoute, grip);
+        const ctrl = this.terreno.autopilot.evaluateDrivingControl(veh.pose, veh.speed, route, grip, vehicleKey);
         if (ctrl.arrived) {
-          this.autopilotRoute = null;
+          this.autopilotRoutes[vehicleKey] = null;
           throttle = 0;
           steerIn = 0;
+          this._notifyDriveHUD();
         } else {
           throttle = ctrl.throttle;
           steerIn = ctrl.steer;
@@ -1124,12 +1366,11 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    const maxSteer = isKei ? 0.54 : (isArmor ? 0.42 : 0.44);
-    const steerRate = isKei ? 8.2 : (isArmor ? 5.6 : 6.5);
+    const maxSteer = isKei ? 0.54 : (isArmor ? 0.42 : 0.46);
+    const steerRate = isKei ? 8.2 : (isArmor ? 5.6 : 6.8);
     const targetSteer = steerIn * maxSteer;
     veh.steerAngle += (targetSteer - veh.steerAngle) * Math.min(1, dt * steerRate);
     veh.frontSteerPivots.forEach((p, idx) => {
-      // On 8×8 ARMOR-155, second steering axle turns at 58% Ackerman ratio for tight mountain switchbacks!
       p.rotation.y = isArmor && idx >= 2 ? veh.steerAngle * 0.58 : veh.steerAngle;
     });
     veh.steerWheelGroup.rotation.z = veh.steerAngle * 2.4;
@@ -1139,12 +1380,11 @@ export class FirstPersonHouseExplorer {
     const towingTrailer = isArmor && this.house.towContainer && this.house.towContainer.hitched;
     const towMassScale = towingTrailer ? 0.86 : 1.0;
 
-    const accelFwd = (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.4 : 4.6) : (openRoad ? 7.6 : 4.2))) * towMassScale;
+    const accelFwd = (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.6 : 4.8) : (openRoad ? 8.0 : 4.8))) * towMassScale;
     const accelRev = (isKei ? 5.2 : (isArmor ? 4.0 : 4.4)) * towMassScale;
-    const maxFwd = (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 6.5) : (openRoad ? 16.0 : 5.8))) * (towingTrailer ? 0.90 : 1.0);
+    const maxFwd = (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 7.0) : (openRoad ? 18.0 : 6.8))) * (towingTrailer ? 0.90 : 1.0);
     const maxRev = isKei ? 5.0 : 4.2;
 
-    // Realistic mountain gravity & steep cliff climbing resistance (smooth macro terrain normal — ZERO invisible walls!)
     let climbGravAccel = 0;
     let cliffMacroSlope = 0;
     let macroNormal = null;
@@ -1160,11 +1400,9 @@ export class FirstPersonHouseExplorer {
       climbGravAccel = -fwdUphill * 12.8;
     }
 
-    // Realistic grade capability: KEI-340 (~24°), CAMPER-75 (~21°), 8×8 ARMOR-155 (~26° heavy torque!)
-    const maxClimbSlope = isArmor ? 0.49 : (isKei ? 0.46 : 0.39);
-    const cliffHardSlope = isArmor ? 0.60 : (isKei ? 0.56 : 0.49);
+    const maxClimbSlope = isArmor ? 0.49 : (isKei ? 0.46 : 0.42);
+    const cliffHardSlope = isArmor ? 0.60 : (isKei ? 0.56 : 0.52);
 
-    // Storm mud/hydroplaning traction multiplier reduces acceleration & lengthens braking distance realistically!
     const tractionAccelScale = 0.42 + 0.58 * grip;
     const coastDrag = 1.4 + 2.5 * grip;
 
@@ -1177,7 +1415,6 @@ export class FirstPersonHouseExplorer {
       if (Math.abs(veh.speed) < 0.03 && Math.abs(climbGravAccel) < 2.2) veh.speed = 0;
     }
 
-    // Hydrodynamic flood water resistance & drag when driving through flooded valley!
     if (flood.depth > 0.12) {
       const waterDrag = Math.min(4.8, flood.depth * (isArmor ? 1.4 : 2.9));
       veh.speed *= Math.max(0, 1 - waterDrag * dt);
@@ -1190,14 +1427,12 @@ export class FirstPersonHouseExplorer {
 
     veh.speed = Math.max(-maxRev, Math.min(maxFwd, veh.speed));
 
-    // Real 2D Tire Grip / Hydroplaning Velocity Blending (Pacejka-style nonlinear grip² drop in storm mud/rain!)
     const targetVx = -Math.sin(veh.pose.yaw) * veh.speed;
     const targetVz = -Math.cos(veh.pose.yaw) * veh.speed;
     const latResponse = Math.min(1, dt * (0.42 + grip * grip * 12.8));
     veh.velX += (targetVx - veh.velX) * latResponse;
     veh.velZ += (targetVz - veh.velZ) * latResponse;
 
-    // Storm hydroplaning outward centrifugal slide & fierce crosswind lateral buffet at speed!
     if (grip < 0.65 && Math.abs(veh.speed) > 1.5) {
       const hydroSeverity = (0.65 - grip) / 0.47;
       const turnSlide = Math.sin(veh.steerAngle) * veh.speed * hydroSeverity * 0.52;
@@ -1213,39 +1448,43 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // Wet side-slope downhill gravity slip when tires lose friction in storm mud/rain!
     if (grip < 0.72 && macroNormal && macroNormal.slope > 0.06 && openRoad) {
       const slopeSlip = (0.72 - grip) * 5.2 * (isArmor ? 0.68 : 1.0);
       veh.velX += macroNormal.x * slopeSlip * dt;
       veh.velZ += macroNormal.z * slopeSlip * dt;
     }
-    // River flood flash-torrent lateral current push!
     if (flood.depth > 0.14) {
       const currentScale = (isArmor ? 0.32 : (isKei ? 0.92 : 0.62)) * Math.min(1.0, flood.depth / 0.85);
       veh.velX += flood.currentX * currentScale * dt * 2.4;
       veh.velZ += flood.currentZ * currentScale * dt * 2.4;
     }
 
-    // Compute measurable lateral slip velocity (perpendicular to vehicle heading)
     const rightX = Math.cos(veh.pose.yaw);
     const rightZ = -Math.sin(veh.pose.yaw);
     veh.slipSpeed = veh.velX * rightX + veh.velZ * rightZ;
 
     let blocked = false;
     let maxStepLift = 0;
+    let totalMoved = 0;
+    let totalDYaw = 0;
     const planarSpeed = Math.hypot(veh.velX, veh.velZ);
+
+    const testVehCollision = (cx, cz, yaw, pcx, pcz) => (
+      isArmor
+        ? this._armorCollidesAt(cx, cz, yaw, pcx, pcz)
+        : (isKei
+          ? this._keiCollidesAt(cx, cz, yaw, pcx, pcz)
+          : this._camperCollidesAt(cx, cz, yaw, pcx, pcz))
+    );
 
     if (planarSpeed > 0.005 || Math.abs(veh.speed) > 0.005) {
       const subSteps = 3;
       const subDt = dt / subSteps;
       const wheelbase = isArmor ? 7.80 : (isKei ? 1.98 : 4.55);
       const wheelRad = isArmor ? ARMOR_CAMPER.wheelRadius : (isKei ? KEI.wheelRadius : CAMPER.wheelRadius);
-      let totalMoved = 0;
-      let totalDYaw = 0;
 
       for (let sIdx = 0; sIdx < subSteps; sIdx++) {
         const distFwd = veh.speed * subDt;
-        // Slippery storm surfaces reduce steering bite slightly & introduce tail-out yaw drift!
         const steerGripFactor = 0.58 + 0.42 * grip;
         const dYaw = (distFwd / wheelbase) * Math.tan(veh.steerAngle) * steerGripFactor;
         const nyaw = veh.pose.yaw + dYaw;
@@ -1283,11 +1522,7 @@ export class FirstPersonHouseExplorer {
           }
         }
 
-        const res = isArmor
-          ? this._armorCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz)
-          : (isKei
-            ? this._keiCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz)
-            : this._camperCollidesAt(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz));
+        const res = testVehCollision(ncx, ncz, nyaw, veh.pose.cx, veh.pose.cz);
 
         if (!res.hit) {
           veh.pose.cx = ncx;
@@ -1297,31 +1532,44 @@ export class FirstPersonHouseExplorer {
           totalDYaw += dYaw;
           if (res.stepLift > maxStepLift) maxStepLift = res.stepLift;
         } else {
-          // If ARMOR-155 autopilot encounters a roadside tree/rock, smoothly nudge yaw around obstacle without freezing!
+          // If autonomous camper encounters a roadside tree/boulder/shutter, smoothly nudge around it!
           if (autopilotActive && (res.reason === 'forest' || res.reason === 'landslide' || res.reason === 'boulder')) {
             const prevY = veh.pose.yaw;
-            const altYaw = prevY + (steerIn >= 0 ? 0.09 : -0.09);
-            const altCx = veh.pose.cx - Math.sin(altYaw) * (distFwd * 0.6);
-            const altCz = veh.pose.cz - Math.cos(altYaw) * (distFwd * 0.6);
-            if (!this._armorCollidesAt(altCx, altCz, altYaw, veh.pose.cx, veh.pose.cz).hit) {
-              veh.pose.cx = altCx;
-              veh.pose.cz = altCz;
-              veh.pose.yaw = altYaw;
-              totalMoved += distFwd * 0.6;
-              totalDYaw += (altYaw - prevY);
-              continue;
+            let dodged = false;
+            for (const dirSign of [steerIn >= 0 ? 1 : -1, steerIn >= 0 ? -1 : 1]) {
+              const altYaw = prevY + dirSign * 0.11;
+              const altCx = veh.pose.cx - Math.sin(altYaw) * (distFwd * 0.65);
+              const altCz = veh.pose.cz - Math.cos(altYaw) * (distFwd * 0.65);
+              if (!testVehCollision(altCx, altCz, altYaw, veh.pose.cx, veh.pose.cz).hit) {
+                veh.pose.cx = altCx;
+                veh.pose.cz = altCz;
+                veh.pose.yaw = altYaw;
+                totalMoved += distFwd * 0.65;
+                totalDYaw += (altYaw - prevY);
+                dodged = true;
+                break;
+              }
             }
+            if (dodged) continue;
           }
-          // Heavy armored ARMOR-155 absorbs impact safely with damped rebound instead of violent crash!
+          if (autopilotActive && res.reason === 'shutter') {
+            // Wait patiently while garage gate rolls open!
+            veh.speed *= 0.4;
+            veh.velX *= 0.4;
+            veh.velZ *= 0.4;
+            break;
+          }
           veh.speed = isArmor ? -Math.sign(veh.speed) * Math.min(0.6, Math.abs(veh.speed) * 0.15) : 0;
           veh.velX *= 0.1;
           veh.velZ *= 0.1;
           blocked = true;
-          this.vehicleBlockedTimer = 0.55;
-          if (this.bumpCooldown <= 0) {
-            this.audio.playBump();
-            if (navigator.vibrate) navigator.vibrate(isArmor ? 14 : 25);
-            this.bumpCooldown = 0.45;
+          if (isPlayerDriving) {
+            this.vehicleBlockedTimer = 0.55;
+            if (this.bumpCooldown <= 0) {
+              this.audio.playBump();
+              if (navigator.vibrate) navigator.vibrate(isArmor ? 14 : 25);
+              this.bumpCooldown = 0.45;
+            }
           }
           break;
         }
@@ -1341,7 +1589,6 @@ export class FirstPersonHouseExplorer {
         if (Math.abs(totalMoved) > 0.0001) {
           const wheelSpin = totalMoved / wheelRad;
           veh.wheelMeshes.forEach((w) => { w.rotation.x -= wheelSpin; });
-          this.yaw += totalDYaw;
           this.adaptive.markShadowsDirty();
         }
       }
@@ -1351,39 +1598,112 @@ export class FirstPersonHouseExplorer {
       this._applyVehicleTerrainPose(veh, vehicleKey, 0);
     }
 
-    if (isKei) {
-      const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, KEI.driverSeatLocal.z);
-      this.playerPos.set(seatW.x, 0, seatW.z);
-      this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
-      this.eyeHeight += (0.98 - this.eyeHeight) * Math.min(1, dt * 10);
-      this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'kei');
-    } else if (isArmor) {
-      const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, ARMOR_CAMPER.driverSeatLocal.z);
-      this.playerPos.set(seatW.x, 0, seatW.z);
-      this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
-      this.eyeHeight += (1.28 - this.eyeHeight) * Math.min(1, dt * 10);
-      this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'diesel');
-    } else {
-      const seatW = this.camperLocalToWorld(0.72, 0.88);
-      this.playerPos.set(seatW.x, 0, seatW.z);
-      this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
-      this.eyeHeight += (1.20 - this.eyeHeight) * Math.min(1, dt * 10);
-      this.audio.updateEngine(true, Math.abs(veh.speed) / maxFwd, 'diesel');
-    }
-    this.bobAmount *= 0.85;
+    return {
+      moved: Math.abs(totalMoved) > 0.0001 || Math.abs(totalDYaw) > 0.00001,
+      totalDYaw,
+      blocked,
+      cliffMacroSlope,
+      grip,
+      maxFwd,
+      speedKmh: Math.round(Math.hypot(veh.velX, veh.velZ) * 3.6),
+      autopilotActive,
+    };
+  }
 
-    if (this.callbacks.onDriveChange) {
-      // Strictly identical payload whether manual OR silent autopilot (ZERO special display!)
-      this.callbacks.onDriveChange(true, {
-        vehicle: this.drivingVehicle,
-        badge: isKei ? 'KEI-340 660cc' : (isArmor ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
-        speedKmh: Math.round(Math.hypot(veh.velX, veh.velZ) * 3.6),
-        headlightsOn: veh.headlightsOn,
-        colliding: blocked || this.vehicleBlockedTimer > 0,
-        cliffSlopeDeg: Math.round((Math.atan(cliffMacroSlope) * 180) / Math.PI),
-        grip: Math.round(grip * 100) / 100,
-        slipMs: Math.round(Math.abs(veh.slipSpeed) * 100) / 100,
-      });
+  _updateAllVehicles(dt) {
+    if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
+    if (this.vehicleBlockedTimer > 0) this.vehicleBlockedTimer -= dt;
+
+    // If player is walking INSIDE a camper or hitched container while it moves autonomously,
+    // record exact vehicle-local rider coordinates before stepping vehicle physics!
+    const riderKey = (!this.drivingVehicle && (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'container'))
+      ? this.activeBuilding
+      : null;
+    let riderLocal = null;
+    if (riderKey === 'camper') riderLocal = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
+    else if (riderKey === 'armor') riderLocal = this.worldToArmorLocal(this.playerPos.x, this.playerPos.z);
+    else if (riderKey === 'container') riderLocal = this.worldToContainerLocal(this.playerPos.x, this.playerPos.z);
+
+    const toStep = new Set();
+    if (this.drivingVehicle) toStep.add(this.drivingVehicle);
+    if (this.autopilotRoutes.camper || Math.abs(this.house.camper.speed || 0) > 0.02) toStep.add('camper');
+    if (this.autopilotRoutes.armor || Math.abs(this.house.armorCamper.speed || 0) > 0.02) toStep.add('armor');
+
+    let playerDriveResult = null;
+    const stepResults = {};
+    for (const key of toStep) {
+      const isDriven = this.drivingVehicle === key;
+      const res = this._stepVehiclePhysics(key, dt, isDriven);
+      stepResults[key] = res;
+      if (isDriven) playerDriveResult = res;
+    }
+
+    // Apply exact rigid-body platform coupling to walking rider inside a moving camper / hitched container!
+    if (riderKey && riderLocal) {
+      const coupledDriverKey = riderKey === 'container'
+        ? (this.house.towContainer?.hitched ? 'armor' : null)
+        : riderKey;
+      const res = coupledDriverKey ? stepResults[coupledDriverKey] : null;
+      if (res && res.moved) {
+        const w = riderKey === 'camper'
+          ? this.camperLocalToWorld(riderLocal.lx, riderLocal.lz)
+          : (riderKey === 'armor'
+            ? this.armorLocalToWorld(riderLocal.lx, riderLocal.lz)
+            : this.containerLocalToWorld(riderLocal.lx, riderLocal.lz));
+        this.playerPos.x = w.x;
+        this.playerPos.z = w.z;
+        this.yaw += res.totalDYaw;
+        this.floorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
+      }
+      if (coupledDriverKey && this.autopilotRoutes[coupledDriverKey]) {
+        const rv = this._getVehicleObj(coupledDriverKey);
+        this.audio.updateEngine(true, Math.abs(rv.speed || 0) / 16.0, 'diesel');
+      }
+    }
+
+    // Update seated driver pose, engine audio & driving HUD
+    if (this.drivingVehicle && playerDriveResult) {
+      const key = this.drivingVehicle;
+      const veh = this._getVehicleObj(key);
+      if (Math.abs(playerDriveResult.totalDYaw) > 0.00001) {
+        this.yaw += playerDriveResult.totalDYaw;
+      }
+      if (key === 'kei') {
+        const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, 0.68);
+        this.playerPos.set(seatW.x, 0, seatW.z);
+        this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
+        this.eyeHeight += (1.04 - this.eyeHeight) * Math.min(1, dt * 10);
+        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'kei');
+      } else if (key === 'armor') {
+        const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, 1.06);
+        this.playerPos.set(seatW.x, 0, seatW.z);
+        this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
+        this.eyeHeight += (1.54 - this.eyeHeight) * Math.min(1, dt * 10);
+        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'diesel');
+      } else {
+        const seatW = this.camperLocalToWorld(0.72, 0.68);
+        this.playerPos.set(seatW.x, 0, seatW.z);
+        this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
+        this.eyeHeight += (1.44 - this.eyeHeight) * Math.min(1, dt * 10);
+        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'diesel');
+      }
+      this.bobAmount *= 0.85;
+
+      if (this.callbacks.onDriveChange) {
+        this.callbacks.onDriveChange(true, {
+          vehicle: key,
+          badge: key === 'kei' ? 'KEI-340 660cc' : (key === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
+          speedKmh: playerDriveResult.speedKmh,
+          headlightsOn: veh.headlightsOn,
+          colliding: playerDriveResult.blocked || this.vehicleBlockedTimer > 0,
+          cliffSlopeDeg: Math.round((Math.atan(playerDriveResult.cliffMacroSlope) * 180) / Math.PI),
+          grip: Math.round(playerDriveResult.grip * 100) / 100,
+          slipMs: Math.round(Math.abs(veh.slipSpeed) * 100) / 100,
+          autopilotActive: Boolean(this.autopilotRoutes[key]),
+          canAutopilot: key === 'camper' || key === 'armor',
+          camMode: this.driveCamMode,
+        });
+      }
     }
   }
 
@@ -1590,6 +1910,11 @@ export class FirstPersonHouseExplorer {
         if (k === 'escape' && this.callbacks.onToggleMap) this.callbacks.onToggleMap();
         return;
       }
+      if (k === 'v' && this.drivingVehicle) { this.cycleDriveCameraMode(); return; }
+      if (k === 'g' && (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' || this.activeBuilding === 'camper' || this.activeBuilding === 'armor')) {
+        this.toggleVehicleAutopilot();
+        return;
+      }
       if (k === 'h') { this.toggleVehicleHeadlights(); return; }
       if (k === 'f') {
         if (this.drivingVehicle) this.toggleVehicleHeadlights();
@@ -1638,6 +1963,9 @@ export class FirstPersonHouseExplorer {
     if (this.house.armorCamper && this.activeBuilding === 'armor') {
       this.house.armorCamper.root.updateMatrixWorld(true);
     }
+    if (this.house.camper && this.activeBuilding === 'camper') {
+      this.house.camper.root.updateMatrixWorld(true);
+    }
     const targets = [
       ...this.house.interactiveProps
         .filter((p) => (
@@ -1655,7 +1983,8 @@ export class FirstPersonHouseExplorer {
     this.raycaster.far = 3.2;
     const hits = this.raycaster.intersectObjects(targets, false);
     if (hits.length === 0) return null;
-    const obj = hits[0].object;
+    const hit0 = hits[0];
+    const obj = hit0.object;
     if (obj.userData.propId) {
       const prop = this.house.interactiveProps.find((p) => p.id === obj.userData.propId);
       if (prop) {
@@ -1670,6 +1999,7 @@ export class FirstPersonHouseExplorer {
       }
     }
     if (obj.userData.doorId) {
+      if (hit0.distance > 1.55) return null;
       const door = this.house.interactiveDoors.find((d) => d.id === obj.userData.doorId);
       if (door) return { kind: 'door', item: door, prompt: door.isOpen ? '閉' : '開' };
     }
@@ -1764,9 +2094,9 @@ export class FirstPersonHouseExplorer {
   }
 
   _computeDesiredEyeHeight(x, z) {
-    if (this.drivingVehicle === 'kei') return 0.98;
-    if (this.drivingVehicle === 'camper') return 1.20;
-    if (this.drivingVehicle === 'armor') return 1.28;
+    if (this.drivingVehicle === 'kei') return 1.04;
+    if (this.drivingVehicle === 'camper') return 1.44;
+    if (this.drivingVehicle === 'armor') return 1.54;
     if (this.inElevator || this.inExtElevator) return this.crouching ? 1.04 : 1.54;
     if (this.activeBuilding === 'kei' && this.currentFloor === 1) {
       return this.crouching ? 0.88 : 1.04;
@@ -2406,12 +2736,43 @@ export class FirstPersonHouseExplorer {
         const localCols = this.terreno.getLocalColliders();
         for (let i = 0; i < localCols.length; i++) {
           const t = localCols[i];
-          const md = r + t.r;
           const dx = x - t.x;
           const dz = z - t.z;
-          if (dx * dx + dz * dz < md * md) {
-            if ((t.kind === 'boulder' || t.kind === 'log') && t.height !== undefined && t.height <= 0.76) {
+          const broadR = r + (t.r || 0.5) + 2.2;
+          if (dx * dx + dz * dz > broadR * broadR) continue;
+
+          let hit = false;
+          if (t.kind === 'log' && t.ax !== undefined) {
+            // Exact point-to-segment distance for full-length fallen nurse log capsule!
+            const vx = t.bx - t.ax;
+            const vz = t.bz - t.az;
+            const lenSq = vx * vx + vz * vz;
+            const proj = lenSq > 1e-6 ? Math.max(0, Math.min(1, ((x - t.ax) * vx + (z - t.az) * vz) / lenSq)) : 0;
+            const px = t.ax + vx * proj;
+            const pz = t.az + vz * proj;
+            const md = r + (t.r || 0.24);
+            hit = (x - px) * (x - px) + (z - pz) * (z - pz) < md * md;
+          } else if (t.rx && t.rz && t.yaw !== undefined) {
+            // Exact oriented ellipse collision for natural faceted granite boulders!
+            const bc = Math.cos(t.yaw);
+            const bs = Math.sin(t.yaw);
+            const ex = dx * bc + dz * bs;
+            const ez = -dx * bs + dz * bc;
+            const erx = t.rx + r;
+            const erz = t.rz + r;
+            hit = (ex * ex) / (erx * erx) + (ez * ez) / (erz * erz) < 1.0;
+          } else {
+            const md = r + t.r;
+            hit = dx * dx + dz * dz < md * md;
+          }
+
+          if (hit) {
+            if ((t.kind === 'boulder' || t.kind === 'log') && t.height !== undefined && t.height <= 0.72) {
               this._lastStepOverH = Math.max(this._lastStepOverH || 0, t.height);
+              continue;
+            }
+            if (t.kind === 'shrub' && t.height !== undefined && t.height <= 0.45) {
+              this._lastStepOverH = Math.max(this._lastStepOverH || 0, t.height * 0.5);
               continue;
             }
             return true;
@@ -2547,11 +2908,9 @@ export class FirstPersonHouseExplorer {
   }
 
   _updateMovement(dt) {
+    this._updateAllVehicles(dt);
     if (this.mapOpen) return;
-    if (this.drivingVehicle) {
-      this._updateVehicleDriving(dt);
-      return;
-    }
+    if (this.drivingVehicle) return;
 
     if (this.autoJumpCooldown > 0) this.autoJumpCooldown = Math.max(0, this.autoJumpCooldown - dt);
 
@@ -2780,6 +3139,46 @@ export class FirstPersonHouseExplorer {
   }
 
   _updateCameraTransform(elapsed) {
+    if (this.drivingVehicle && this.driveCamMode !== 'cockpit') {
+      const key = this.drivingVehicle;
+      const veh = this._getVehicleObj(key);
+      const vp = veh.pose;
+      const fwdX = -Math.sin(vp.yaw);
+      const fwdZ = -Math.cos(vp.yaw);
+      if (this.driveCamMode === 'hood') {
+        // Panoramic forward view mounted right ahead of top windshield — zero interior pillars!
+        const halfL = key === 'armor' ? ARMOR_CAMPER.length * 0.5 : (key === 'kei' ? KEI.length * 0.5 : CAMPER.length * 0.5);
+        const camY = (vp.y || 0) + (key === 'armor' ? 3.25 : (key === 'kei' ? 1.56 : 2.38));
+        this.camera.position.set(
+          vp.cx + fwdX * (halfL + 0.18),
+          camY,
+          vp.cz + fwdZ * (halfL + 0.18),
+        );
+        _euler.set(this.pitch - 0.04, this.yaw, 0, 'YXZ');
+        this.camera.quaternion.setFromEuler(_euler);
+      } else {
+        // Elevated wide chase camera following behind vehicle, respecting user orbit look!
+        const chaseDist = key === 'armor' ? 15.8 : (key === 'kei' ? 5.6 : 9.6);
+        const chaseH = key === 'armor' ? 5.8 : (key === 'kei' ? 2.7 : 4.2);
+        const lookBackX = Math.sin(this.yaw);
+        const lookBackZ = Math.cos(this.yaw);
+        let cx = vp.cx + lookBackX * chaseDist;
+        let cz = vp.cz + lookBackZ * chaseDist;
+        let cy = (vp.y || 0) + chaseH - Math.sin(this.pitch) * chaseDist * 0.45;
+        if (this.terreno) {
+          const groundAtCam = this.terreno.getHeightAt(cx, cz);
+          if (cy < groundAtCam + 1.15) cy = groundAtCam + 1.15;
+        }
+        this.camera.position.set(cx, cy, cz);
+        _euler.set(Math.max(-0.55, Math.min(0.35, this.pitch - 0.18)), this.yaw, 0, 'YXZ');
+        this.camera.quaternion.setFromEuler(_euler);
+      }
+      if (this.flashlightTarget) {
+        this.flashlightTarget.position.set(0, -0.08, -6.0);
+      }
+      return;
+    }
+
     const bobY = Math.sin(this.bobPhase) * 0.023 * this.bobAmount;
     const bobSide = Math.cos(this.bobPhase * 0.5) * 0.010 * this.bobAmount;
     const idleBreath = Math.sin(elapsed * 1.35) * 0.004;
@@ -2822,9 +3221,11 @@ export class FirstPersonHouseExplorer {
     const camLookX = lookX * Math.cos(cp.yaw) - lookZ * Math.sin(cp.yaw);
     const camLookZ = lookX * Math.sin(cp.yaw) + lookZ * Math.cos(cp.yaw);
 
-    // Active driven vehicle nose/center/rear coordinates so Giant Garage Roll-Up Shutters (DG-N / DG-S) auto-open smoothly!
-    const driveVeh = this.drivingVehicle ? this._getVehicleObj(this.drivingVehicle) : null;
-    const driveHalfLen = this.drivingVehicle === 'armor' ? ARMOR_CAMPER.length * 0.5 : (this.drivingVehicle === 'kei' ? KEI.length * 0.5 : CAMPER.length * 0.5);
+    // Collect active/moving vehicles (player-driven OR autonomous) so Garage Gates (DG-N/DG-S) open when approaching!
+    const activeVehicles = [];
+    if (this.drivingVehicle) activeVehicles.push(this.drivingVehicle);
+    if (this.autopilotRoutes.camper && !activeVehicles.includes('camper')) activeVehicles.push('camper');
+    if (this.autopilotRoutes.armor && !activeVehicles.includes('armor')) activeVehicles.push('armor');
 
     for (const d of this.house.interactiveDoors) {
       if (d.forceOpen) continue;
@@ -2833,42 +3234,46 @@ export class FirstPersonHouseExplorer {
       const b = d.collider;
       if (!b) continue;
 
-      // Special Vehicle-Friendly Wide-Range Auto Roll-Up Garage Gates (DG-N / DG-S) — work BOTH walking AND driving!
+      // Narrowed Auto Roll-Up Garage Gates (DG-N / DG-S) — reacts closely for foot traffic & approaching vehicles
       if (d.isGarageGate) {
-        let minDist = Infinity;
-        if (this.currentFloor === 1) {
+        let minFootDist = Infinity;
+        let minVehDist = Infinity;
+        if (this.currentFloor === 1 && !this.drivingVehicle) {
           const cxP = px < b.minX ? b.minX : (px > b.maxX ? b.maxX : px);
           const czP = pz < b.minZ ? b.minZ : (pz > b.maxZ ? b.maxZ : pz);
-          minDist = Math.min(minDist, Math.hypot(px - cxP, pz - czP));
+          minFootDist = Math.hypot(px - cxP, pz - czP);
         }
-        if (driveVeh) {
-          const vp = driveVeh.pose;
+        for (const vKey of activeVehicles) {
+          const vObj = this._getVehicleObj(vKey);
+          const vp = vObj.pose;
+          const halfLen = vKey === 'armor' ? ARMOR_CAMPER.length * 0.5 : (vKey === 'kei' ? KEI.length * 0.5 : CAMPER.length * 0.5);
           const fx = -Math.sin(vp.yaw);
           const fz = -Math.cos(vp.yaw);
           const pts = [
             [vp.cx, vp.cz],
-            [vp.cx + fx * driveHalfLen, vp.cz + fz * driveHalfLen],
-            [vp.cx - fx * driveHalfLen, vp.cz - fz * driveHalfLen],
+            [vp.cx + fx * halfLen, vp.cz + fz * halfLen],
+            [vp.cx - fx * halfLen, vp.cz - fz * halfLen],
           ];
-          if (this.drivingVehicle === 'armor' && this.house.towContainer && this.house.towContainer.hitched) {
+          if (vKey === 'armor' && this.house.towContainer && this.house.towContainer.hitched) {
             pts.push([this.house.towContainer.pose.cx, this.house.towContainer.pose.cz]);
           }
           for (const [vx, vz] of pts) {
             const cxV = vx < b.minX ? b.minX : (vx > b.maxX ? b.maxX : vx);
             const czV = vz < b.minZ ? b.minZ : (vz > b.maxZ ? b.maxZ : vz);
-            minDist = Math.min(minDist, Math.hypot(vx - cxV, vz - czV));
+            minVehDist = Math.min(minVehDist, Math.hypot(vx - cxV, vz - czV));
           }
         }
-        const gateOpenDist = driveVeh ? 6.2 : 2.6;
-        const gateCloseDist = driveVeh ? 8.8 : 4.2;
-        if (!d.isOpen && minDist < gateOpenDist) {
+        const shouldOpenGate = minFootDist < 1.15 || minVehDist < 3.6;
+        const keepOpenGate = minFootDist < 1.45 || minVehDist < 4.2;
+        const closeGateReady = minFootDist > 1.85 && minVehDist > 5.4;
+        if (!d.isOpen && shouldOpenGate) {
           d.isOpen = true;
-          d.autoHoldTimer = 1.2;
+          d.autoHoldTimer = 1.0;
           if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(false);
           this.adaptive.markShadowsDirty();
         } else if (d.isOpen) {
-          if (minDist < gateOpenDist + 0.5) d.autoHoldTimer = 1.0;
-          else if (minDist > gateCloseDist && d.autoHoldTimer <= 0) {
+          if (keepOpenGate) d.autoHoldTimer = 0.8;
+          else if (closeGateReady && d.autoHoldTimer <= 0) {
             d.isOpen = false;
             if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(true);
             this.adaptive.markShadowsDirty();
@@ -2882,38 +3287,39 @@ export class FirstPersonHouseExplorer {
       let sameFloor = false;
       let tx = px;
       let tz = pz;
-      let openDist = 1.25;
-      let closeDist = 1.95;
+      // Tight, realistic close-proximity trigger range for ALL doors!
+      let openDist = 0.62;
+      let closeDist = 1.08;
 
       if (d.isCamper) {
         sameFloor = this.currentFloor === d.floor;
         tx = cl.lx;
         tz = cl.lz;
         if (d.id === 'DC-1') {
-          openDist = 1.15;
-          closeDist = 1.75;
-        } else {
-          openDist = 0.68;
+          openDist = 0.65;
           closeDist = 1.12;
+        } else {
+          openDist = 0.48;
+          closeDist = 0.84;
         }
       } else if (d.isKei) {
         sameFloor = this.currentFloor === 1;
         tx = kl.lx;
         tz = kl.lz;
-        openDist = 0.98;
-        closeDist = 1.55;
+        openDist = 0.60;
+        closeDist = 1.04;
       } else if (d.isArmor) {
         sameFloor = this.currentFloor === 1;
         tx = al.lx;
         tz = al.lz;
-        openDist = (d.id === 'DAM-1' || d.id === 'DAM-R') ? 1.35 : 1.05;
-        closeDist = (d.id === 'DAM-1' || d.id === 'DAM-R') ? 2.05 : 1.60;
+        openDist = (d.id === 'DAM-1' || d.id === 'DAM-R') ? 0.68 : 0.56;
+        closeDist = (d.id === 'DAM-1' || d.id === 'DAM-R') ? 1.18 : 0.96;
       } else if (d.isContainer) {
         sameFloor = this.currentFloor === 1;
         tx = tl.lx;
         tz = tl.lz;
-        openDist = 1.30;
-        closeDist = 2.00;
+        openDist = 0.65;
+        closeDist = 1.12;
       } else {
         sameFloor = (d.floor === this.currentFloor)
           || (this.activeFlight !== null && Math.abs(d.floor - this.currentFloor) <= 1);
@@ -2932,7 +3338,7 @@ export class FirstPersonHouseExplorer {
 
       if (!d.isOpen) {
         let shouldOpen = dist < openDist;
-        if (shouldOpen && d.isCamper && d.id !== 'DC-1' && dist > 0.36) {
+        if (shouldOpen && d.isCamper && d.id !== 'DC-1' && d.id !== 'DC-01' && dist > 0.30) {
           const dmx = (b.minX + b.maxX) * 0.5 - tx;
           const dmz = (b.minZ + b.maxZ) * 0.5 - tz;
           const dmLen = Math.hypot(dmx, dmz) || 1;
@@ -2941,13 +3347,13 @@ export class FirstPersonHouseExplorer {
         }
         if (shouldOpen) {
           d.isOpen = true;
-          d.autoHoldTimer = 0.55;
+          d.autoHoldTimer = 0.50;
           if (this.autoDoorsReadyTimer <= 0) this.audio.playDoor(d.kind === 'pocket');
           this.adaptive.markShadowsDirty();
         }
       } else {
-        if (dist < openDist + 0.15) {
-          d.autoHoldTimer = 0.50;
+        if (dist < openDist + 0.12) {
+          d.autoHoldTimer = 0.45;
         } else if (dist > closeDist && d.autoHoldTimer <= 0) {
           d.isOpen = false;
           if (this.autoDoorsReadyTimer <= 0) this.audio.playDoor(d.kind === 'pocket');
@@ -3341,7 +3747,7 @@ export class FirstPersonHouseExplorer {
         return { id: vhPorch.room.id, code: vhPorch.room.code, floor: 1, building: 'courtyard', nameJp: vhPorch.room.nameJp };
       }
       if (isInVillagePrecinct(x, z)) {
-        return { id: 'village_plaza', code: '杉ノ郷', floor: 1, building: 'courtyard', nameJp: '杉ノ郷集落・石畳広場（標高 +514m・全5棟）' };
+        return { id: 'village_plaza', code: '杉ノ郷', floor: 1, building: 'courtyard', nameJp: '杉ノ郷集落・石畳広場（標高 +119m・全5棟）' };
       }
       const distBase = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
       if (this.terreno && distBase > 28.0) {
@@ -3383,6 +3789,11 @@ export class FirstPersonHouseExplorer {
       prev = now;
 
       if (this.map3dActive && this.map3d) {
+        // Keep autonomous campers cruising live while viewing the 3D map!
+        if (this.autopilotRoutes.camper || this.autopilotRoutes.armor) {
+          this._updateAllVehicles(dt);
+          this._updateAutomaticDoors(dt);
+        }
         this.map3d.syncPlayerPose({
           x: this.playerPos.x,
           z: this.playerPos.z,
@@ -3390,6 +3801,10 @@ export class FirstPersonHouseExplorer {
           camperPose: this.house.camper.pose,
           keiPose: this.house.kei.pose,
           armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
+          autopilotRoutes: {
+            camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
+            armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
+          },
         });
         this.map3d.render(this.renderer, dt, elapsed);
         if (this.callbacks.onAimChange) this.callbacks.onAimChange(null);
@@ -3468,7 +3883,7 @@ export class FirstPersonHouseExplorer {
         // 0..22 = CAD Blueprints, 30 = 3D Map, 31 = 2D Authentic Autopilot Map
         let sheetIndex = farOutdoors ? 30 : (this.currentFloor + 3);
         let floorCode = farOutdoors
-          ? '山岳'
+          ? '平野'
           : (this.activeBuilding === 'courtyard'
             ? '中庭'
             : (this.inExtElevator ? 'ELV-EXT' : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code)));
@@ -3540,6 +3955,7 @@ export class FirstPersonHouseExplorer {
         }
 
         const storm = this.terreno ? this.terreno.storm : null;
+        const activeRoute = this.autopilotRoutes[this.selectedAutopilotVehicle] || this.autopilotRoutes.camper || this.autopilotRoutes.armor;
         this.callbacks.onPoseUpdate({
           x: this.playerPos.x,
           z: this.playerPos.z,
@@ -3561,8 +3977,13 @@ export class FirstPersonHouseExplorer {
           containerHitched: this.house.towContainer.hitched,
           floodRise: storm ? storm.getFloodRise() : 0,
           activeLandslides: storm ? storm.landslides.filter((l) => l.progress > 0.25) : [],
-          autopilotRoute: this.autopilotRoute ? this.autopilotRoute.points : null,
-          autopilotTargetId: this.autopilotRoute ? this.autopilotRoute.targetId : null,
+          selectedAutopilotVehicle: this.selectedAutopilotVehicle,
+          autopilotRoutes: {
+            camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
+            armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
+          },
+          autopilotRoute: activeRoute ? activeRoute.points : null,
+          autopilotTargetId: activeRoute ? activeRoute.targetId : null,
         });
       }
 

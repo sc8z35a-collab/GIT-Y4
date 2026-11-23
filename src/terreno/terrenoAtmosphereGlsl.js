@@ -198,7 +198,7 @@ vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   float avgSunVis = 0.72;
 
   if (volWeight > 0.01) {
-    float marchDist = min(dist, 16500.0);
+    float marchDist = min(dist, 24000.0);
     float dStep = marchDist / 5.0;
     // Screen-space interleaved gradient dither removes any 5-step banding cleanly
     float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
@@ -208,23 +208,21 @@ vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
       float t = (float(i) + 0.18 + jitter * 0.68) * dStep;
       vec3 sp = camPos + rayDir * t;
 
-      // Altitude envelope for billowing mountain Sea-of-Clouds pooled in valleys (strongest near uValleyFogBaseY..+240m)
+      // Altitude envelope for gentle drifting lowland & valley mist
       float hRel = sp.y - uValleyFogBaseY;
       float altBand = exp(-max(0.0, hRel) * B * 0.92) * smoothstep(-140.0, 25.0, hRel);
       float billow = atmoCloudSeaDensity(sp);
 
-      // Query precomputed Mountain Horizon Shadow Atlas -> real mountain sunbeams & shadowed gorges!
+      // Query precomputed Horizon Shadow Atlas
       vec2 hUV = (((sp.xz - uAtmoWorldMin) / uAtmoWorldSize) * (uAtmoAtlasSize - 1.0) + 0.5) / uAtmoAtlasSize;
       vec4 hz = texture2D(uAtmoHorizonMap, clamp(hUV, 0.001, 0.999));
       float horzSin = mix(hz.g, hz.r, uUseEastHorizon);
       float sunVis = mix(1.0, smoothstep(horzSin - 0.035, horzSin + 0.085, sunDir.y), uHorizonShadowBlend);
       sunVisSum += sunVis;
 
-      // Local optical density of billowing 3D cloud wisps
       float sigma = uValleyFogDensity * altBand * billow * 1.45;
       float segExt = 1.0 - exp(-sigma * dStep);
 
-      // Sunlit creamy-gold cloud crests vs cool indigo-blue shadowed gorge mist!
       vec3 shadowMistCol = mix(uAerialFogColor * 0.72, uValleyFogColor * 0.52, 0.45);
       vec3 sunlitMistCol = uValleyFogColor * 1.14 + mieTint * 0.82;
       vec3 stepCol = mix(shadowMistCol, sunlitMistCol, sunVis);
@@ -235,18 +233,16 @@ vec3 applyTerrenoAtmosphere(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
     avgSunVis = sunVisSum * 0.2;
   }
 
-  // Combine smooth physical valley fog modulated by shadowed/sunlit volumetric cloud billows!
   vec3 shadowedValley = mix(uAerialFogColor * 0.74, uValleyFogColor * 0.58, 0.50);
   vec3 sunlitValley   = uValleyFogColor * 1.06 + mieTint * 0.58;
   vec3 valleyCol = mix(shadowedValley, sunlitValley, mix(0.68, avgSunVis, volWeight));
 
   vec3 col = mix(surfaceCol, valleyCol, valleyFog * 0.86);
-  // Layer 3D billowing volumetric Sea-of-Clouds wisps & god-rays seamlessly on top!
   col = mix(col, col * volTrans + volScatter, volWeight * 0.88);
 
-  // Distant ridges shift gently toward sky horizon near the silhouette for seamless 40 km atmospheric blend
-  float horizonBlend = smoothstep(7500.0, 34000.0, dist);
-  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.54) + mieTint * 0.74;
+  // Distant horizons blend seamlessly into sky across 60 km countryside
+  float horizonBlend = smoothstep(10000.0, 54000.0, dist);
+  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.62) + mieTint * 0.74;
   col = mix(col, aerialCol, aerialFog);
 
   return col;
@@ -278,7 +274,6 @@ vec3 applyTerrenoAtmosphereFast(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   float miePhase = pow(cosTheta, 4.5) * 0.58 + pow(cosTheta, 24.0) * 0.62;
   vec3 mieTint = uSkyGlow * (miePhase * uMieStrength);
 
-  // Single midpoint horizon-shadow & cloud-billow modulation (matches terrain 5-step march seamlessly!)
   float sunVis = 0.72;
   if (dist > 75.0) {
     vec3 midP = 0.5 * (camPos + worldPos);
@@ -292,8 +287,8 @@ vec3 applyTerrenoAtmosphereFast(vec3 surfaceCol, vec3 worldPos, vec3 camPos) {
   vec3 valleyCol = mix(shadowedValley, sunlitValley, sunVis);
 
   vec3 col = mix(surfaceCol, valleyCol, valleyFog * 0.92);
-  float horizonBlend = smoothstep(7500.0, 34000.0, dist);
-  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.54) + mieTint * 0.74;
+  float horizonBlend = smoothstep(10000.0, 54000.0, dist);
+  vec3 aerialCol = mix(uAerialFogColor, uSkyHorizon, horizonBlend * 0.62) + mieTint * 0.74;
   col = mix(col, aerialCol, aerialFog);
   return col;
 }

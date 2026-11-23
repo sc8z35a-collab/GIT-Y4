@@ -72,6 +72,9 @@ export class ArchitecturalBlueprint2D {
   exportSVGString() {
     const clone = this.svg.cloneNode(true);
     clone.setAttribute('xmlns', SVG_NS);
+    clone.setAttribute('viewBox', `0 0 ${this.curVW} ${this.curVH}`);
+    clone.setAttribute('width', String(this.curVW));
+    clone.setAttribute('height', String(this.curVH));
     return `<?xml version="1.0" encoding="UTF-8"?>\n${clone.outerHTML}`;
   }
 
@@ -488,6 +491,8 @@ export class ArchitecturalBlueprint2D {
       viewBox: `0 0 ${VW} ${VH}`,
       class: 'blueprint-svg',
       preserveAspectRatio: 'xMidYMid meet',
+      'shape-rendering': 'geometricPrecision',
+      'text-rendering': 'geometricPrecision',
     });
     this.svg = svg;
 
@@ -3257,7 +3262,7 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.1, fill: '#5b5852' }, '全23図面 : 母屋11層 ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 既存RV2層 ｜ 軽 ｜ 巨大車倉庫 ｜ 装甲RV ｜ けん引コンテナ'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.0, fill: '#0f4c81', 'font-weight': 700 }, 'GARAGE-200 & ELV-EXT : 10×20×4.5m鉄骨車倉庫(自動シャッター2基) ｜ 母屋西外壁 屋根裏直通外部ELV(+16.1m)'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.0, fill: '#065f46', 'font-weight': 700 }, 'ARMOR-155 & CON-24 : 15.5×3.1×4.0m 重鉄外装・電動鉄シャッター・木製秘密基地6室＋2×4×3m けん引コンテナ'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.0, fill: '#1d7a8c' }, 'TERRENO 5×19km & A*自律走行 : 2D本格地図より30地点＋自宅/軽/コンテナ/RVへ自律航法・激しい嵐/河川氾濫/土砂崩れ対応'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.0, fill: '#1d7a8c' }, 'TERRENO 60×60km・21路線 & A*自律走行 : 2D/3D地図より自由目的地へRV・装甲車自律航法・嵐/河川氾濫対応'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.0, fill: '#1c1e22' }, floor.building === 'garage' ? '縮尺 : 車庫平面 1/100 ｜ 門型横断面 1/60 ｜ 北立面 1/65 ｜ 単位 : mm' : (floor.building === 'armor' ? '縮尺 : 装甲RV平面 1/75 ｜ 8×8縦断面 1/40 ｜ 横断面 1/26 ｜ 単位 : mm' : (floor.building === 'container' ? '縮尺 : コンテナ平面 1/28 ｜ 側面立面 1/32 ｜ 後部断面 1/26 ｜ 単位 : mm' : '縮尺 : S = 1/50〜1/100 (車庫1/100・装甲RV1/75・コンテナ1/28・軽1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 6.9, fill: '#6c665d' }, 'NARROW-50 全23図面・2本指自由ズーム/パン＆一括SVG/ZIP出力対応'));
 

@@ -71,33 +71,33 @@ export function buildGarage3D(ctx) {
 
   // 1. Reinforced Concrete Slab + North/South Drive-In Aprons + West Walkway to Main House
   addGBox(gStatic, W + 0.4, 0.12, D + 0.4, makeSurfaceMat('warehouse_epoxy_floor', W, D), W / 2, y0 - 0.06, D / 2, false);
-  // North approach concrete apron connecting toward forestry road (Z = -14.5 .. -6.0)
-  addGBox(exteriorGroup, 8.6, 0.07, 8.8, makeSurfaceMat('concrete_clean', 8.6, 8.8, { color: 0x7a8086 }), 4.4, y0 - 0.05, -4.4, false);
-  // South exit concrete apron (Z = 14.0 .. 19.0)
-  addGBox(exteriorGroup, 7.6, 0.07, 5.2, makeSurfaceMat('concrete_clean', 7.6, 5.2, { color: 0x7a8086 }), 3.9, y0 - 0.05, D + 2.6, false);
+  // North approach concrete apron connecting toward forestry road (stopped cleanly at slab North edge lz=-0.20)
+  addGBox(exteriorGroup, 8.6, 0.07, 8.4, makeSurfaceMat('concrete_clean', 8.6, 8.4, { color: 0x7a8086 }), 4.4, y0 - 0.05, -4.41, false);
+  // South exit concrete apron (started cleanly at slab South edge lz=D+0.20)
+  addGBox(exteriorGroup, 7.6, 0.07, 4.8, makeSurfaceMat('concrete_clean', 7.6, 4.8, { color: 0x7a8086 }), 3.9, y0 - 0.05, D + 2.61, false);
   // West walkway linking personnel door DG-W toward Main House & Concrete Storage
-  addGBox(exteriorGroup, 3.2, 0.06, 2.0, makeSurfaceMat('paver_granite_grid', 3.2, 2.0), -1.5, y0 - 0.04, 8.0, false);
+  addGBox(exteriorGroup, 2.9, 0.06, 2.0, makeSurfaceMat('paver_granite_grid', 2.9, 2.0), -1.66, y0 - 0.04, 8.0, false);
 
   // Yellow industrial floor safety stripes separating Bay 1 (ARMOR-155) & Bay 2 (CON-24 + Workshop)
-  addGBox(gStatic, 0.12, 0.008, D - 1.2, safetyYellowMat, 5.80, y0 + 0.004, D / 2, false);
-  addGBox(gStatic, 0.10, 0.008, D - 1.2, safetyYellowMat, 0.72, y0 + 0.004, D / 2, false);
-  addGBox(gStatic, 0.10, 0.008, 12.6, safetyYellowMat, 9.25, y0 + 0.004, 12.8, false);
+  addGBox(gStatic, 0.12, 0.008, D - 1.2, safetyYellowMat, 5.80, y0 + 0.006, D / 2, false);
+  addGBox(gStatic, 0.10, 0.008, D - 1.2, safetyYellowMat, 0.72, y0 + 0.006, D / 2, false);
+  addGBox(gStatic, 0.10, 0.008, 12.6, safetyYellowMat, 9.25, y0 + 0.006, 12.8, false);
   // Central drainage grate strip down Bay 1
-  addGBox(gStatic, 0.28, 0.01, D - 2.4, makeSurfaceMat('metal_grate', 0.28, D - 2.4), 3.60, y0 + 0.005, D / 2, false);
+  addGBox(gStatic, 0.28, 0.01, D - 2.4, makeSurfaceMat('metal_grate', 0.28, D - 2.4), 3.60, y0 + 0.007, D / 2, false);
   // Heavy rubber/yellow wheel stop chocks in Bay 2
-  addGBox(gStatic, 1.85, 0.12, 0.18, safetyYellowMat, 7.85, y0 + 0.06, 9.85, false);
+  addGBox(gStatic, 1.85, 0.12, 0.18, safetyYellowMat, 7.85, y0 + 0.065, 9.85, false);
 
-  // 2. Structural H-Beam Steel Portal Frames (5 bays @ 5m centers) & Roof Trusses
-  const frameZs = [0.18, 5.0, 10.0, 15.0, 19.82];
+  // 2. Structural H-Beam Steel Portal Frames (5 bays @ 5m centers, inset strictly inside corrugated exterior walls)
+  const frameZs = [0.36, 5.0, 10.0, 15.0, 19.64];
   frameZs.forEach((fz) => {
-    // Left & Right H-beam steel columns
-    addGBox(gStatic, 0.22, H - 0.18, 0.22, steelBeamMat, 0.22, y0 + (H - 0.18) / 2, fz, true);
-    addGBox(gStatic, 0.22, H - 0.18, 0.22, steelBeamMat, W - 0.22, y0 + (H - 0.18) / 2, fz, true);
-    // Horizontal steel roof girder spanning full 10m width
-    addGBox(gStatic, W - 0.20, 0.22, 0.18, steelBeamMat, W / 2, yTop - 0.16, fz, true);
+    // Left & Right H-beam steel columns (lx=0.35 and W-0.35 clear of 0.24m wall thickness!)
+    addGBox(gStatic, 0.20, H - 0.28, 0.20, steelBeamMat, 0.35, y0 + (H - 0.28) / 2, fz, true);
+    addGBox(gStatic, 0.20, H - 0.28, 0.20, steelBeamMat, W - 0.35, y0 + (H - 0.28) / 2, fz, true);
+    // Horizontal steel roof girder spanning between interior columns
+    addGBox(gStatic, W - 0.50, 0.22, 0.18, steelBeamMat, W / 2, yTop - 0.16, fz, true);
     // Corner haunch knee braces for authentic warehouse industrial look
-    [0.65, W - 0.65].forEach((bx) => {
-      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.10, 0.10), steelBeamMat);
+    [0.72, W - 0.72].forEach((bx) => {
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.09, 0.09), steelBeamMat);
       brace.position.set(ox + bx, yTop - 0.56, oz + fz);
       brace.rotation.z = bx < W / 2 ? 0.72 : -0.72;
       gStatic.add(brace);
@@ -106,7 +106,7 @@ export function buildGarage3D(ctx) {
 
   // Longitudinal steel purlins + roof corrugated deck
   [1.6, 3.8, 6.2, 8.4].forEach((px) => {
-    addGBox(gStatic, 0.10, 0.12, D - 0.2, steelBeamMat, px, yTop - 0.08, D / 2, false);
+    addGBox(gStatic, 0.10, 0.10, D - 0.52, steelBeamMat, px, yTop - 0.10, D / 2, false);
   });
   addGBox(gStatic, W + 0.30, 0.10, D + 0.30, roofDeckMat, W / 2, yTop, D / 2, true);
 
@@ -136,14 +136,15 @@ export function buildGarage3D(ctx) {
     addCorrugatedSegment(gateW, wallH - gateH, 0.24, (gateX1 + gateX2) / 2, y0 + gateH + (wallH - gateH) / 2, ez);
     // Steel gate guide jambs & yellow hazard bumper bollards
     [gateX1, gateX2].forEach((gx) => {
-      addGBox(gStatic, 0.12, gateH, 0.30, steelBeamMat, gx, y0 + gateH / 2, ez, false);
+      const jambOff = gx === gateX1 ? 0.04 : -0.04;
+      addGBox(gStatic, 0.08, gateH, 0.28, steelBeamMat, gx + jambOff, y0 + gateH / 2, ez, false);
       const bollardZ = endIdx === 0 ? -0.35 : D + 0.35;
       const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.92, 10), safetyYellowMat);
       bollard.position.set(ox + gx + (gx < 3 ? -0.18 : 0.18), y0 + 0.46, oz + bollardZ);
       gStatic.add(bollard);
     });
     // Cylindrical galvanized shutter housing drum box right above doorway
-    addGBox(gStatic, gateW + 0.24, 0.34, 0.36, steelBeamMat, (gateX1 + gateX2) / 2, y0 + gateH + 0.08, ez + (endIdx === 0 ? 0.26 : -0.26), false);
+    addGBox(gStatic, gateW + 0.24, 0.34, 0.32, steelBeamMat, (gateX1 + gateX2) / 2, y0 + gateH + 0.08, ez + (endIdx === 0 ? 0.30 : -0.30), false);
 
     // Motorized Rolling Steel Overhead Shutter Leaf (auto-opens upward for protagonist & vehicles!)
     const doorId = endIdx === 0 ? 'DG-N' : 'DG-S';

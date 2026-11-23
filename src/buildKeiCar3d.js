@@ -228,14 +228,14 @@ export function buildKeiCar3D(ctx) {
     if (isH) {
       addKBox(keiStatic, op.width, f, thick + 0.012, trimBlackMat, mid, yK + op.sill + f / 2, midO, false);
       addKBox(keiStatic, op.width, f, thick + 0.012, trimBlackMat, mid, yK + op.sill + op.height - f / 2, midO, false);
-      addKBox(keiStatic, f, op.height, thick + 0.012, trimBlackMat, op.pos + f / 2, cy, midO, false);
-      addKBox(keiStatic, f, op.height, thick + 0.012, trimBlackMat, op.pos + op.width - f / 2, cy, midO, false);
+      addKBox(keiStatic, f, Math.max(0.02, op.height - f * 2), thick + 0.012, trimBlackMat, op.pos + f / 2, cy, midO, false);
+      addKBox(keiStatic, f, Math.max(0.02, op.height - f * 2), thick + 0.012, trimBlackMat, op.pos + op.width - f / 2, cy, midO, false);
       addKBox(keiStatic, op.width - f * 2, op.height - f * 2, 0.012, mat.glassClear, mid, cy, midO, false);
     } else {
       addKBox(keiStatic, thick + 0.012, f, op.width, trimBlackMat, midO, yK + op.sill + f / 2, mid, false);
       addKBox(keiStatic, thick + 0.012, f, op.width, trimBlackMat, midO, yK + op.sill + op.height - f / 2, mid, false);
-      addKBox(keiStatic, thick + 0.012, op.height, f, trimBlackMat, midO, cy, op.pos + f / 2, false);
-      addKBox(keiStatic, thick + 0.012, op.height, f, trimBlackMat, midO, cy, op.pos + op.width - f / 2, false);
+      addKBox(keiStatic, thick + 0.012, Math.max(0.02, op.height - f * 2), f, trimBlackMat, midO, cy, op.pos + f / 2, false);
+      addKBox(keiStatic, thick + 0.012, Math.max(0.02, op.height - f * 2), f, trimBlackMat, midO, cy, op.pos + op.width - f / 2, false);
       addKBox(keiStatic, 0.012, op.height - f * 2, op.width - f * 2, mat.glassClear, midO, cy, mid, false);
     }
   }
@@ -263,14 +263,15 @@ export function buildKeiCar3D(ctx) {
       return mesh;
     };
 
-    // Dark weatherstrip trim frame around opening
+    // Dark weatherstrip trim frame around opening (jambs stop below header — zero corner Z-fighting!)
+    const jambH = Math.max(0.04, doorH - 0.025);
     if (isH) {
-      addKBox(keiStatic, 0.025, doorH, thick + 0.008, trimBlackMat, op.pos + 0.012, sillY + doorH / 2, midO, false);
-      addKBox(keiStatic, 0.025, doorH, thick + 0.008, trimBlackMat, op.pos + doorW - 0.012, sillY + doorH / 2, midO, false);
+      addKBox(keiStatic, 0.025, jambH, thick + 0.008, trimBlackMat, op.pos + 0.012, sillY + jambH / 2, midO, false);
+      addKBox(keiStatic, 0.025, jambH, thick + 0.008, trimBlackMat, op.pos + doorW - 0.012, sillY + jambH / 2, midO, false);
       addKBox(keiStatic, doorW, 0.025, thick + 0.008, trimBlackMat, op.pos + doorW / 2, sillY + doorH - 0.012, midO, false);
     } else {
-      addKBox(keiStatic, thick + 0.008, doorH, 0.025, trimBlackMat, midO, sillY + doorH / 2, op.pos + 0.012, false);
-      addKBox(keiStatic, thick + 0.008, doorH, 0.025, trimBlackMat, midO, sillY + doorH / 2, op.pos + doorW - 0.012, false);
+      addKBox(keiStatic, thick + 0.008, jambH, 0.025, trimBlackMat, midO, sillY + jambH / 2, op.pos + 0.012, false);
+      addKBox(keiStatic, thick + 0.008, jambH, 0.025, trimBlackMat, midO, sillY + jambH / 2, op.pos + doorW - 0.012, false);
       addKBox(keiStatic, thick + 0.008, 0.025, doorW, trimBlackMat, midO, sillY + doorH - 0.012, op.pos + doorW / 2, false);
     }
 
@@ -412,11 +413,11 @@ export function buildKeiCar3D(ctx) {
   // =========================================================================
   // 1. KEI-VAN CHASSIS, BUMPERS, YELLOW PLATES, LIGHTS, MIRRORS & 4 WHEELS
   // =========================================================================
-  // Underbody monocoque chassis & flat cargo floor sub-deck (yK - 0.12 .. yK)
-  addKBox(keiStatic, 1.38, 0.12, 3.30, trimBlackMat, 0.74, yK - 0.06, 1.70, true);
+  // Underbody monocoque chassis & flat cargo floor sub-deck (strictly stacked — zero Z-fighting!)
+  addKBox(keiStatic, 1.38, 0.114, 3.30, trimBlackMat, 0.74, yK - 0.062, 1.70, true);
   // Finished interior plywood sub-floor + anti-slip black ribbed cargo mat
-  addKBox(keiStatic, 1.36, 0.018, 3.28, plyMat, 0.74, yK + 0.004, 1.70, false);
-  addKBox(keiStatic, 1.32, 0.010, 2.12, rubberMat, 0.74, yK + 0.016, 2.25, false);
+  addKBox(keiStatic, 1.36, 0.012, 3.28, plyMat, 0.74, yK + 0.006, 1.70, false);
+  addKBox(keiStatic, 1.32, 0.008, 2.12, rubberMat, 0.74, yK + 0.017, 2.25, false);
 
   // Rugged Matte-Black Commercial Kei Bumpers (Front & Rear)
   addKBox(keiStatic, 1.50, 0.28, 0.10, trimBlackMat, 0.74, yK + 0.09, -0.05, true);
@@ -425,7 +426,7 @@ export function buildKeiCar3D(ctx) {
   addKBox(keiStatic, 0.86, 0.12, 0.03, archBackMat, 0.74, yK + 0.34, -0.015, false);
   const frontPlate = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.165, 0.016), plateYellowMat);
   frontPlate.position.set(rx(0.74), yK + 0.11, rz(-0.104));
-  frontPlate.rotation.y = Math.PI; // Front face (-Z) displays plate lettering right-side-up!
+  frontPlate.rotation.y = Math.PI;
   frontPlate.userData.noBatch = true;
   keiDynamic.add(frontPlate);
 
@@ -433,13 +434,10 @@ export function buildKeiCar3D(ctx) {
   [0.24, 1.24].forEach((hx) => {
     addKBox(keiStatic, 0.24, 0.14, 0.03, headLensMat, hx, yK + 0.44, -0.015, false);
     addKBox(keiStatic, 0.08, 0.14, 0.03, amberMat, hx < 0.74 ? 0.08 : 1.40, yK + 0.44, -0.015, false);
-    // Rear vertical red/amber combination taillights
-    addKBox(keiStatic, 0.10, 0.34, 0.03, tailRedMat, hx < 0.74 ? 0.08 : 1.40, yK + 0.34, 3.415, false);
+    addKBox(keiStatic, 0.10, 0.33, 0.03, tailRedMat, hx < 0.74 ? 0.08 : 1.40, yK + 0.335, 3.415, false);
     addKBox(keiStatic, 0.10, 0.10, 0.03, amberMat, hx < 0.74 ? 0.08 : 1.40, yK + 0.56, 3.415, false);
   });
-  // High-mount 3rd brake light above rear liftgate
   addKBox(keiStatic, 0.26, 0.035, 0.025, tailRedMat, 0.74, yRoofSoffit + 0.03, 3.412, false);
-  // Twin black windshield wipers
   [0.44, 1.04].forEach((wx) => {
     const wiper = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.016, 0.016), trimBlackMat);
     wiper.position.set(rx(wx), yK + 0.75, rz(-0.012));
@@ -447,9 +445,8 @@ export function buildKeiCar3D(ctx) {
     keiStatic.add(wiper);
   });
 
-  // Recessed Left Sliding Door Track Rail (flush on rear quarter panel BEHIND outboard sliding door DK-L!)
+  // Recessed Left Sliding Door Track Rail & side moldings
   addKBox(keiStatic, 0.012, 0.032, 1.18, trimBlackMat, -0.004, yK + 0.62, 2.70, false);
-  // Split left side bump molding cleanly around DK-L opening (DK-L carries its own moving molding!)
   addKBox(keiStatic, 0.014, 0.042, 1.12, trimBlackMat, -0.005, yK + 0.28, 0.66, false);
   addKBox(keiStatic, 0.014, 0.042, 1.18, trimBlackMat, -0.005, yK + 0.28, 2.70, false);
   addKBox(keiStatic, 0.018, 0.042, 3.16, trimBlackMat, 1.490, yK + 0.28, 1.70, false);
@@ -460,33 +457,31 @@ export function buildKeiCar3D(ctx) {
     addKBox(keiStatic, 0.12, 0.025, 0.025, trimBlackMat, mx < 0.5 ? -0.04 : 1.52, yK + 0.86, 0.34, false);
   });
 
-  // Insulated High-Roof Shell (Y = yRoofSoffit .. yRoofSoffit + 0.08 -> EXACT +1.54m -> 1.800m total height!)
+  // Insulated High-Roof Shell
   addKBox(keiStatic, 1.50, KEI.roofThick, 3.42, bodyPaintMat, 0.74, yRoofSoffit + KEI.roofThick / 2, 1.70, true);
-  // Low-profile black utility roof drip rails + crossbars (within roof chamfer)
   [0.08, 1.40].forEach((rxBar) => {
-    addKBox(keiStatic, 0.03, 0.025, 3.12, trimBlackMat, rxBar, yRoofSoffit + KEI.roofThick + 0.01, 1.72, false);
+    addKBox(keiStatic, 0.03, 0.025, 3.12, trimBlackMat, rxBar, yRoofSoffit + KEI.roofThick + 0.014, 1.72, false);
   });
-  // Interior roof structural stiffener ribs + warm LED cargo dome bar (CH 1,380 mm!)
   [0.95, 1.75, 2.55].forEach((ribZ) => {
-    addKBox(keiStatic, 1.36, 0.03, 0.045, intSteelMat, 0.74, yRoofSoffit - 0.015, ribZ, false);
+    addKBox(keiStatic, 1.36, 0.028, 0.045, intSteelMat, 0.74, yRoofSoffit - 0.015, ribZ, false);
   });
   addKBox(keiStatic, 0.12, 0.022, 0.42, domeLedMat, 0.74, yRoofSoffit - 0.012, 1.90, false);
 
-  // Recessed Matte-Black Wheel-Well Arches + Fender Lips (zero body-panel tire clipping!)
+  // Recessed Matte-Black Wheel-Well Arches + Fender Lips
   const buildKeiFender = (sideX, zCenter) => {
     const wallX = sideX < 0.5 ? -0.012 : 1.492;
     const lipX = sideX < 0.5 ? -0.052 : 1.532;
     addKBox(keiStatic, 0.03, 0.36, 0.64, archBackMat, wallX, yK + 0.10, zCenter, false);
     addKBox(keiStatic, 0.11, 0.04, 0.70, trimBlackMat, lipX, yK + 0.29, zCenter, false);
-    addKBox(keiStatic, 0.10, 0.30, 0.035, trimBlackMat, lipX, yK + 0.12, zCenter - 0.34, false);
-    addKBox(keiStatic, 0.10, 0.30, 0.035, trimBlackMat, lipX, yK + 0.12, zCenter + 0.34, false);
+    addKBox(keiStatic, 0.10, 0.28, 0.035, trimBlackMat, lipX, yK + 0.12, zCenter - 0.34, false);
+    addKBox(keiStatic, 0.10, 0.28, 0.035, trimBlackMat, lipX, yK + 0.12, zCenter + 0.34, false);
   };
   KEI.axlesZ.forEach((az) => {
     buildKeiFender(0, az);
     buildKeiFender(1.48, az);
   });
 
-  // 4 Rotating 145/80R12 Kei-Van Tires (Front Steering + Rear Drive, cleanly tucked inside fender arches!)
+  // 4 Rotating 145/80R12 Kei-Van Tires (staggered lug width — zero cross-bar Z-fighting!)
   const wheelMeshes = [];
   const frontSteerPivots = [];
   const tireGeo = new THREE.CylinderGeometry(KEI.wheelRadius, KEI.wheelRadius, KEI.wheelWidth, 16);
@@ -502,8 +497,8 @@ export function buildKeiCar3D(ctx) {
       const tire = new THREE.Mesh(tireGeo, tireMat);
       tire.castShadow = true;
       const rim = new THREE.Mesh(rimGeo, steelWheelMat);
-      const lugA = new THREE.Mesh(new THREE.BoxGeometry(KEI.wheelWidth + 0.022, 0.035, 0.18), trimBlackMat);
-      const lugB = new THREE.Mesh(new THREE.BoxGeometry(KEI.wheelWidth + 0.022, 0.18, 0.035), trimBlackMat);
+      const lugA = new THREE.Mesh(new THREE.BoxGeometry(KEI.wheelWidth + 0.024, 0.035, 0.18), trimBlackMat);
+      const lugB = new THREE.Mesh(new THREE.BoxGeometry(KEI.wheelWidth + 0.019, 0.18, 0.035), trimBlackMat);
       spinGroup.add(tire, rim, lugA, lugB);
       steerPivot.add(spinGroup);
       keiDynamic.add(steerPivot);
@@ -575,33 +570,25 @@ export function buildKeiCar3D(ctx) {
   // =========================================================================
   // 3. SINGLE RHD DRIVER SEAT ONLY (K01) + PASSENGER-DELETE CARGO DECK (K02)
   // =========================================================================
-  // Compact full-width kei-van dashboard (kz = 0.06..0.34, y = yK + 0.34..0.72)
   addKBox(keiStatic, 1.36, 0.38, 0.28, dashMat, 0.74, yK + 0.53, 0.20, true);
-  // Amber backlit speedometer cluster directly in front of right-hand driver seat (kx = 1.08)
   addKBox(keiStatic, 0.34, 0.13, 0.04, gaugeMat, 1.08, yK + 0.74, 0.31, false);
-  // Center audio/AC dial console + cupholder tray + glovebox
   addKBox(keiStatic, 0.22, 0.16, 0.04, archBackMat, 0.74, yK + 0.62, 0.345, false);
-  // 3-Pedal Box on right floor (Accelerator / Brake / Clutch)
   [0.94, 1.06, 1.18].forEach((px) => {
     addKBox(keiStatic, 0.05, 0.10, 0.02, mat.chrome, px, yK + 0.14, 0.22, false);
   });
-  // Floor-mounted manual shift stick & handbrake beside single driver seat
   addKBox(keiStatic, 0.025, 0.34, 0.025, mat.darkIron, 0.76, yK + 0.22, 0.58, false);
   addKBox(keiStatic, 0.05, 0.05, 0.05, trimBlackMat, 0.76, yK + 0.40, 0.58, false);
   addKBox(keiStatic, 0.03, 0.04, 0.22, trimBlackMat, 0.76, yK + 0.14, 0.84, false);
   addLocalCollider(0.06, 0.06, 1.42, 0.38);
 
-  // ONLY ONE SEAT IN THE ENTIRE CAR: RHD Single Driver Seat (kx = 1.08, kz = 0.84)
-  addKBox(keiStatic, 0.46, 0.16, 0.44, seatFabricMat, 1.08, yK + 0.26, 0.80, true);  // Seat cushion
-  addKBox(keiStatic, 0.42, 0.18, 0.40, trimBlackMat, 1.08, yK + 0.09, 0.80, false);  // Under-seat engine hatch base
-  addKBox(keiStatic, 0.44, 0.52, 0.09, seatFabricMat, 1.08, yK + 0.58, 1.00, true);  // Seat backrest
-  addKBox(keiStatic, 0.22, 0.16, 0.07, seatFabricMat, 1.08, yK + 0.94, 1.01, false); // Headrest
-  // Single-side tubular steel cargo divider bar behind driver's seat ONLY (leaving left side wide open!)
+  addKBox(keiStatic, 0.46, 0.16, 0.44, seatFabricMat, 1.08, yK + 0.26, 0.80, true);
+  addKBox(keiStatic, 0.42, 0.16, 0.40, trimBlackMat, 1.08, yK + 0.095, 0.80, false);
+  addKBox(keiStatic, 0.44, 0.52, 0.09, seatFabricMat, 1.08, yK + 0.58, 1.00, true);
+  addKBox(keiStatic, 0.22, 0.16, 0.07, seatFabricMat, 1.08, yK + 0.94, 1.01, false);
   addKBox(keiStatic, 0.60, 0.035, 0.035, trimBlackMat, 1.09, yK + 0.84, 1.15, false);
-  addKBox(keiStatic, 0.035, 0.84, 0.035, trimBlackMat, 0.80, yK + 0.42, 1.15, false);
+  addKBox(keiStatic, 0.035, 0.81, 0.035, trimBlackMat, 0.80, yK + 0.415, 1.15, false);
   addLocalCollider(0.80, 0.56, 1.38, 1.16);
 
-  // Interactive RHD Steering Wheel (rotates visually when steering + [E] enters Kei Driving Mode!)
   const steerWheelGroup = new THREE.Group();
   steerWheelGroup.position.set(rx(KEI.steerWheelLocal.x), yK + 0.76, rz(KEI.steerWheelLocal.z));
   steerWheelGroup.rotation.x = 0.52;
@@ -617,24 +604,20 @@ export function buildKeiCar3D(ctx) {
   steerWheelGroup.add(wheelTorus, wheelHub, wheelSpoke, driveHitMesh);
   keiDynamic.add(steerWheelGroup);
 
-  // Passenger-Delete Front Cargo Extension (K02: ZERO passenger seat! Compact daily tool tote against left wall)
-  addKBox(keiStatic, 0.26, 0.24, 0.44, oriconNavyMat, 0.21, yK + 0.14, 0.68, true); // Daily tool tote
-  addKBox(keiStatic, 0.06, 0.06, 0.68, trimBlackMat, 0.12, yK + 0.05, 0.82, false); // Folding umbrella / pole
+  addKBox(keiStatic, 0.26, 0.24, 0.44, oriconNavyMat, 0.21, yK + 0.14, 0.68, true);
+  addKBox(keiStatic, 0.06, 0.06, 0.68, trimBlackMat, 0.12, yK + 0.05, 0.82, false);
   addLocalCollider(0.06, 0.44, 0.36, 0.94);
 
   // =========================================================================
   // 4. WALK-IN DAILY CARGO BAY (K03: W 580mm OPEN ALLEY + LIVED-IN CARGO!)
   // =========================================================================
-  // Inner rear wheel-arch humps (kx = 0.06..0.24 & 1.24..1.42 around kz = 2.66)
-  addKBox(keiStatic, 0.18, 0.22, 0.62, intSteelMat, 0.15, yK + 0.12, 2.66, false);
-  addKBox(keiStatic, 0.18, 0.22, 0.62, intSteelMat, 1.33, yK + 0.12, 2.66, false);
+  addKBox(keiStatic, 0.18, 0.22, 0.62, intSteelMat, 0.15, yK + 0.13, 2.66, false);
+  addKBox(keiStatic, 0.18, 0.22, 0.62, intSteelMat, 1.33, yK + 0.13, 2.66, false);
 
-  // Right Wall DIY 2-Tier Birch Utility Shelf & Stacked Daily Cargo (kx = 1.06..1.41, kz = 1.32..3.26)
-  // Leaves kx = 0.42..1.04 (620mm!) WIDE OPEN for the protagonist to walk/crouch all the way inside!
-  addKBox(keiStatic, 0.34, 0.028, 1.88, mat.oak, 1.24, yK + 0.52, 2.30, true);  // Lower shelf deck
-  addKBox(keiStatic, 0.34, 0.028, 1.88, mat.oak, 1.24, yK + 0.96, 2.30, true);  // Upper shelf deck
+  addKBox(keiStatic, 0.34, 0.028, 1.88, mat.oak, 1.24, yK + 0.52, 2.30, true);
+  addKBox(keiStatic, 0.34, 0.028, 1.88, mat.oak, 1.24, yK + 0.96, 2.30, true);
   [1.38, 2.30, 3.22].forEach((pz) => {
-    addKBox(keiStatic, 0.035, 0.96, 0.035, mat.darkIron, 1.08, yK + 0.49, pz, false); // Shelf steel posts
+    addKBox(keiStatic, 0.035, 0.915, 0.035, mat.darkIron, 1.08, yK + 0.482, pz, false); // Stops cleanly below top shelf!
   });
   // Daily-driver cargo items on right rack: Folding containers (オリコン), cardboard box, red emergency kit
   addKBox(keiStatic, 0.30, 0.28, 0.46, oriconOliveMat, 1.24, yK + 0.16, 1.66, true); // Floor olive oricon

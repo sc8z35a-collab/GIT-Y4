@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { TERRENO_WORLD, evalMainRiver } from './terrenoConfig.js';
+import { TERRENO_WORLD, evalMainRiver, evalRegionWeights } from './terrenoConfig.js';
+import { isInsideSouthRect } from './terrenoGeomorphology.js';
 import { isInsideVillageClearing, isInsideVillagePaving } from '../villageData.js';
 import {
   TERRENO_ATMO_UNIFORMS_GLSL,
@@ -677,6 +678,10 @@ function createBotanicalFoliageMaterial(geomorph, atmoUniforms, foliageAtlas, op
     varying vec3 vColor;
     varying float vAo;
     varying float vCamDist;
+    #ifdef USE_LOGDEPTHBUF
+      varying float vFragDepth;
+      varying float vIsPerspective;
+    #endif
 
     void main() {
       vec3 localPos = position;
@@ -721,6 +726,10 @@ function createBotanicalFoliageMaterial(geomorph, atmoUniforms, foliageAtlas, op
       #endif
 
       gl_Position = projectionMatrix * viewMatrix * wp;
+      #ifdef USE_LOGDEPTHBUF
+        vFragDepth = 1.0 + gl_Position.w;
+        vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+      #endif
     }
   `;
 
@@ -746,6 +755,7 @@ function createBotanicalFoliageMaterial(geomorph, atmoUniforms, foliageAtlas, op
     varying vec3 vColor;
     varying float vAo;
     varying float vCamDist;
+    #include <logdepthbuf_pars_fragment>
 
     ${TERRENO_ATMO_FUNCTIONS_GLSL}
 
@@ -814,6 +824,7 @@ function createBotanicalFoliageMaterial(geomorph, atmoUniforms, foliageAtlas, op
       vec3 finalCol = applyTerrenoAtmosphereFast(lit, vWorldPos, cameraPosition);
 
       gl_FragColor = vec4(finalCol, 1.0);
+      #include <logdepthbuf_fragment>
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }
@@ -863,6 +874,10 @@ function createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, opts) {
     varying vec3 vColor;
     varying float vLocalY;
     varying float vCamDist;
+    #ifdef USE_LOGDEPTHBUF
+      varying float vFragDepth;
+      varying float vIsPerspective;
+    #endif
 
     void main() {
       vec3 localPos = position;
@@ -889,6 +904,10 @@ function createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, opts) {
       vCamDist = length(wp.xyz - cameraPosition);
 
       gl_Position = projectionMatrix * viewMatrix * wp;
+      #ifdef USE_LOGDEPTHBUF
+        vFragDepth = 1.0 + gl_Position.w;
+        vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+      #endif
     }
   `;
 
@@ -911,6 +930,7 @@ function createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, opts) {
     varying vec3 vColor;
     varying float vLocalY;
     varying float vCamDist;
+    #include <logdepthbuf_pars_fragment>
 
     float eHash(vec3 p) {
       p = fract(p * 0.3183099 + 0.1);
@@ -1012,6 +1032,7 @@ function createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, opts) {
       vec3 finalCol = applyTerrenoAtmosphereFast(lit, vWorldPos, cameraPosition);
 
       gl_FragColor = vec4(finalCol, 1.0);
+      #include <logdepthbuf_fragment>
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }
@@ -1155,246 +1176,314 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   let lastGroundTx = 999999, lastGroundTz = 999999;
   let lastMidTx = 999999, lastMidTz = 999999;
   let localColliders = [];
+  let localShrubColliders = [];
+  let mergedLocalColliders = [];
+  const remoteTileColliderCache = new Map();
   let stats = { sugi: 0, abies: 0, buna: 0, ferns: 0, grass: 0, sasa: 0, boulders: 0, logs: 0, midConifers: 0, midBroad: 0 };
 
+  function syncMergedColliders() {
+    mergedLocalColliders = localShrubColliders.length > 0
+      ? localColliders.concat(localShrubColliders)
+      : localColliders;
+  }
+
+  // Deterministic regional forest stem probability (dense woods in valley & plateau, dappled on hills & south plain, open in meadows & wetlands!)
+  function evalRegionTreeKeepProb(wx, wz, rw) {
+    const grove = 0.5 + 0.5 * Math.sin(wx * 0.0014 + Math.cos(wz * 0.0011) * 1.4) * Math.cos(wz * 0.0013 - wx * 0.0008);
+    return (
+      rw.valley * 0.96 +
+      rw.plateau * 0.94 +
+      rw.hills * (0.28 + 0.62 * grove) +
+      rw.wetland * (0.12 + 0.36 * grove) +
+      rw.meadow * (0.06 + 0.30 * grove) +
+      rw.southPlain * (0.30 + 0.44 * grove)
+    );
+  }
+
+  function pickSpeciesForRegion(rw, spRoll) {
+    const pBuna = rw.plateau * 0.72 + rw.hills * 0.46 + rw.valley * 0.14 + rw.wetland * 0.32 + rw.meadow * 0.45 + rw.southPlain * 0.18;
+    const pSugi = rw.valley * 0.66 + rw.southPlain * 0.54 + rw.hills * 0.32 + rw.plateau * 0.14 + rw.wetland * 0.28 + rw.meadow * 0.28;
+    if (spRoll < pBuna) return 2;
+    if (spRoll < pBuna + pSugi) return 0;
+    return 1;
+  }
+
+  // Shared deterministic tile generator: builds visual instances (when emitVisuals=true) AND millimeter-accurate colliders!
+  function generateNearTile(tx, tz, isDetailTile, emitVisuals, outCounters, outColliders) {
+    const tileX0 = tx * NEAR_TILE_SIZE;
+    const tileZ0 = tz * NEAR_TILE_SIZE;
+    if (
+      tileX0 + NEAR_TILE_SIZE < TERRENO_WORLD.minX || tileX0 > TERRENO_WORLD.maxX ||
+      tileZ0 + NEAR_TILE_SIZE < TERRENO_WORLD.minZ || tileZ0 > TERRENO_WORLD.maxZ
+    ) return;
+
+    const rng = makeTileRng(tx, tz, 9011);
+
+    // --- 1. Trees (46 candidate stems per 64m×64m tile) ---
+    for (let c = 0; c < 46; c++) {
+      const wx = tileX0 + rng() * NEAR_TILE_SIZE;
+      const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
+      if (wx < TERRENO_WORLD.minX + 12 || wx > TERRENO_WORLD.maxX - 12 || wz < TERRENO_WORLD.minZ + 12 || wz > TERRENO_WORLD.maxZ - 12) continue;
+      if (isInsideCompoundClearing(wx, wz, 1.0)) continue;
+      if (isInsideSouthRect(wx, wz, 3.0)) continue;
+
+      const rq = geomorph.roadIndex.queryDist(wx, wz);
+      if (rq.dist < rq.width * 0.5 + 3.2) continue;
+
+      const rv = evalMainRiver(wz);
+      if (Math.abs(wx - rv.x) < rv.halfWidth * 1.45 + 6.5) continue;
+
+      const rw = evalRegionWeights(wx, wz);
+      const keepProb = evalRegionTreeKeepProb(wx, wz, rw);
+      if (rng() > keepProb) continue;
+
+      const y = geomorph.getHeightAt(wx, wz);
+      const nrm = geomorph.getNormalAt(wx, wz, 2.2);
+      if (nrm.slope > 0.72) continue;
+
+      const in6fVistaCorridor = wx > -9.0 && wx < 13.0 && wz >= 10.0 && wz < 46.0;
+      if (in6fVistaCorridor && rng() < 0.45) continue;
+
+      const species = pickSpeciesForRegion(rw, rng());
+      const yaw = rng() * Math.PI * 2.0;
+      const leanX = (rng() - 0.5) * 0.055;
+      const leanZ = (rng() - 0.5) * 0.055;
+      let sizeScale = 0.88 + rw.valley * 0.16 + rw.plateau * 0.10 - rw.wetland * 0.16;
+      if (in6fVistaCorridor) sizeScale *= 0.42;
+
+      if (species === 0) {
+        const h = (17.5 + rng() * 15.5) * sizeScale;
+        const rS = h * (0.94 + rng() * 0.24);
+        const gVar = rng();
+        if (emitVisuals && outCounters.nSugi < CAP_SUGI) {
+          dummyObj.position.set(wx, y - 0.48, wz);
+          dummyObj.rotation.set(leanX, yaw, leanZ);
+          dummyObj.scale.set(rS, h, rS);
+          dummyObj.updateMatrix();
+          imSugiTrunk.setMatrixAt(outCounters.nSugi, dummyObj.matrix);
+          imSugiLeaf.setMatrixAt(outCounters.nSugi, dummyObj.matrix);
+          tmpColor.setRGB(0.095 + gVar * 0.068, 0.108 + gVar * 0.068, 0.115 + gVar * 0.064);
+          imSugiLeaf.setColorAt(outCounters.nSugi, tmpColor);
+          tmpColor.setRGB(0.84 + gVar * 0.26, 0.80 + gVar * 0.22, 0.76 + gVar * 0.20);
+          imSugiTrunk.setColorAt(outCounters.nSugi, tmpColor);
+          outCounters.nSugi++;
+        }
+        if (isDetailTile) {
+          // Exact visual trunk radius at waist/bumper height (buildSugiTrunkGeo base 0.032..0.056 * rS)
+          const trunkR = Math.max(0.28, rS * 0.038);
+          outColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
+        }
+      } else if (species === 1) {
+        const h = (13.0 + rng() * 12.5) * sizeScale;
+        const rS = h * (0.90 + rng() * 0.24);
+        const gVar = rng();
+        if (emitVisuals && outCounters.nAbies < CAP_ABIES) {
+          dummyObj.position.set(wx, y - 0.42, wz);
+          dummyObj.rotation.set(leanX, yaw, leanZ);
+          dummyObj.scale.set(rS, h, rS);
+          dummyObj.updateMatrix();
+          imAbiesTrunk.setMatrixAt(outCounters.nAbies, dummyObj.matrix);
+          imAbiesLeaf.setMatrixAt(outCounters.nAbies, dummyObj.matrix);
+          tmpColor.setRGB(0.095 + gVar * 0.062, 0.118 + gVar * 0.070, 0.135 + gVar * 0.070);
+          imAbiesLeaf.setColorAt(outCounters.nAbies, tmpColor);
+          tmpColor.setRGB(0.82 + gVar * 0.25, 0.82 + gVar * 0.20, 0.80 + gVar * 0.20);
+          imAbiesTrunk.setColorAt(outCounters.nAbies, tmpColor);
+          outCounters.nAbies++;
+        }
+        if (isDetailTile) {
+          // Exact visual trunk radius at waist/bumper height (buildAbiesTrunkGeo base 0.028 * rS)
+          const trunkR = Math.max(0.22, rS * 0.027);
+          outColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
+        }
+      } else {
+        const h = (13.5 + rng() * 11.5) * sizeScale;
+        const rS = h * (0.98 + rng() * 0.30);
+        const tint = rng();
+        if (emitVisuals && outCounters.nBuna < CAP_BUNA) {
+          dummyObj.position.set(wx, y - 0.42, wz);
+          dummyObj.rotation.set(leanX, yaw, leanZ);
+          dummyObj.scale.set(rS, h, rS);
+          dummyObj.updateMatrix();
+          imBunaTrunk.setMatrixAt(outCounters.nBuna, dummyObj.matrix);
+          imBunaLeaf.setMatrixAt(outCounters.nBuna, dummyObj.matrix);
+          if (tint < 0.66) {
+            tmpColor.setRGB(0.13 + tint * 0.12, 0.17 + tint * 0.11, 0.13 + tint * 0.08);
+          } else if (tint < 0.89) {
+            tmpColor.setRGB(0.24 + (tint - 0.66) * 0.32, 0.22 + (tint - 0.66) * 0.16, 0.12);
+          } else {
+            tmpColor.setRGB(0.42, 0.21, 0.10);
+          }
+          imBunaLeaf.setColorAt(outCounters.nBuna, tmpColor);
+          tmpColor.setRGB(0.88 + tint * 0.18, 0.88 + tint * 0.18, 0.84 + tint * 0.16);
+          imBunaTrunk.setColorAt(outCounters.nBuna, tmpColor);
+          outCounters.nBuna++;
+        }
+        if (isDetailTile) {
+          // Exact visual trunk radius at waist/bumper height (buildBunaTrunkGeo base 0.052..0.035 * rS)
+          const trunkR = Math.max(0.30, rS * 0.044);
+          outColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
+        }
+      }
+    }
+
+    if (!isDetailTile) return;
+
+    // 2a. Lacy Pinnate Japanese Wood-Ferns (keep exact RNG sequence for boulders/logs below!)
+    for (let f = 0; f < 165; f++) {
+      const wx = tileX0 + rng() * NEAR_TILE_SIZE;
+      const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
+      if (isInsideCompoundPaving(wx, wz) || isInsideSouthRect(wx, wz, 2.0)) continue;
+      const rq = geomorph.roadIndex.queryDist(wx, wz);
+      if (rq.dist < rq.width * 0.5 + 0.6) continue;
+      const rv = evalMainRiver(wz);
+      const y = geomorph.getHeightAt(wx, wz);
+      if (Math.abs(wx - rv.x) < rv.halfWidth * 1.16 || y < rv.waterY + 0.35) continue;
+      const nrm = geomorph.getNormalAt(wx, wz, 1.5);
+      if (nrm.slope > 0.66) continue;
+      const sc = 0.72 + rng() * 1.05;
+      const rotY = rng() * Math.PI * 2;
+      const scY = sc * (0.78 + rng() * 0.38);
+      const fv = rng();
+      if (emitVisuals && outCounters.nFern < CAP_FERN) {
+        dummyObj.position.set(wx, y - 0.04, wz);
+        dummyObj.rotation.set(0, rotY, 0);
+        dummyObj.scale.set(sc, scY, sc);
+        dummyObj.updateMatrix();
+        imFern.setMatrixAt(outCounters.nFern, dummyObj.matrix);
+        tmpColor.setRGB(0.14 + fv * 0.12, 0.17 + fv * 0.12, 0.13 + fv * 0.08);
+        imFern.setColorAt(outCounters.nFern, tmpColor);
+        outCounters.nFern++;
+      }
+    }
+
+    // 2b. Deeply Embedded Mossy Boulders with Exact Ellipsoidal Footprint Colliders!
+    for (let b = 0; b < 42; b++) {
+      const wx = tileX0 + rng() * NEAR_TILE_SIZE;
+      const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
+      if (isInsideCompoundClearing(wx, wz, 1.5) || isInsideSouthRect(wx, wz, 3.0)) continue;
+      const rq = geomorph.roadIndex.queryDist(wx, wz);
+      if (rq.dist < rq.width * 0.5 + 3.0) continue;
+
+      const nrm = geomorph.getNormalAt(wx, wz, 2.2);
+      if (nrm.slope > 0.52) continue;
+
+      const geo = geomorph.sampleGeoBilinear(wx, wz);
+      const rv = evalMainRiver(wz);
+      const distRiv = Math.abs(wx - rv.x);
+      const nearRiver = distRiv > rv.halfWidth * 0.85 && distRiv < rv.halfWidth * 1.55 + 16.0;
+      if (!nearRiver && geo.wetness < 0.40 && rng() > 0.20) continue;
+
+      const y = geomorph.getHeightAt(wx, wz);
+      const rScale = nearRiver ? (1.05 + rng() * 2.05) : (0.70 + rng() * 1.35);
+      const scaleY = rScale * (0.62 + rng() * 0.40);
+      const scaleZ = rScale * (0.82 + rng() * 0.36);
+      const rotX = (rng() - 0.5) * 0.24;
+      const rotY = rng() * Math.PI * 2;
+      const rotZ = (rng() - 0.5) * 0.24;
+      const bv = 0.78 + rng() * 0.36;
+
+      if (emitVisuals && outCounters.nBoulder < CAP_BOULDER) {
+        dummyObj.position.set(wx, y - rScale * 0.46, wz);
+        dummyObj.rotation.set(rotX, rotY, rotZ);
+        dummyObj.scale.set(rScale, scaleY, scaleZ);
+        dummyObj.updateMatrix();
+        imBoulder.setMatrixAt(outCounters.nBoulder, dummyObj.matrix);
+        tmpColor.setRGB(bv, bv * 1.02, bv * 1.05);
+        imBoulder.setColorAt(outCounters.nBoulder, tmpColor);
+        outCounters.nBoulder++;
+      }
+
+      const protrudeH = 0.92 * scaleY - rScale * 0.46;
+      if (protrudeH > 0.20) {
+        // Exact horizontal cross-section of buildBoulderGeo (scale 1.18, 0.64, 0.96, translate +0.28)
+        const yNorm = Math.max(-0.85, Math.min(0.85, ((0.46 * rScale) / Math.max(0.1, scaleY) - 0.28) / 0.64));
+        const sliceF = Math.sqrt(Math.max(0.36, 1.0 - yNorm * yNorm * 0.65));
+        const rx = 1.14 * rScale * sliceF;
+        const rz = 0.94 * scaleZ * sliceF;
+        outColliders.push({
+          x: wx,
+          z: wz,
+          r: Math.max(rx, rz),
+          rx,
+          rz,
+          yaw: rotY,
+          kind: 'boulder',
+          height: protrudeH,
+        });
+      }
+    }
+
+    // 2c. Fallen Mossy Nurse Logs with Exact Full-Length Oriented Capsule Colliders!
+    for (let l = 0; l < 6; l++) {
+      const wx = tileX0 + rng() * NEAR_TILE_SIZE;
+      const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
+      if (isInsideCompoundClearing(wx, wz, 3.0) || isInsideSouthRect(wx, wz, 4.0)) continue;
+      const rq = geomorph.roadIndex.queryDist(wx, wz);
+      if (rq.dist < rq.width * 0.5 + 3.2) continue;
+      const rv = evalMainRiver(wz);
+      if (Math.abs(wx - rv.x) < rv.halfWidth * 1.42 + 6.0) continue;
+      const rw = evalRegionWeights(wx, wz);
+      if (rw.meadow + rw.wetland > 0.68) continue;
+      const y = geomorph.getHeightAt(wx, wz);
+      const nrm = geomorph.getNormalAt(wx, wz, 2.0);
+      if (nrm.slope > 0.34) continue;
+
+      const sc = 0.75 + rng() * 0.85;
+      const logYaw = rng() * Math.PI * 2;
+      const logTilt = (rng() - 0.5) * 0.10;
+      const lv = 0.78 + rng() * 0.32;
+
+      if (emitVisuals && outCounters.nLog < CAP_LOG) {
+        dummyObj.position.set(wx, y - 0.04, wz);
+        dummyObj.rotation.set(0, logYaw, logTilt);
+        dummyObj.scale.set(sc, sc, sc);
+        dummyObj.updateMatrix();
+        imLog.setMatrixAt(outCounters.nLog, dummyObj.matrix);
+        tmpColor.setRGB(lv, lv * 0.96, lv * 0.90);
+        imLog.setColorAt(outCounters.nLog, tmpColor);
+        outCounters.nLog++;
+      }
+
+      // Exact visual log span: buildNurseLogGeo is length 4.2 along local +X, rotated by logYaw around Y
+      const halfLen = 2.04 * sc;
+      const cosY = Math.cos(logYaw);
+      const sinY = Math.sin(logYaw);
+      outColliders.push({
+        x: wx,
+        z: wz,
+        ax: wx - cosY * halfLen,
+        az: wz + sinY * halfLen,
+        bx: wx + cosY * halfLen,
+        bz: wz - sinY * halfLen,
+        r: sc * 0.27,
+        kind: 'log',
+        height: sc * 0.42,
+      });
+    }
+  }
+
   function rebuildNearForest(centerTx, centerTz) {
-    let nSugi = 0, nAbies = 0, nBuna = 0, nFern = 0, nBoulder = 0, nLog = 0;
+    const counters = { nSugi: 0, nAbies: 0, nBuna: 0, nFern: 0, nBoulder: 0, nLog: 0 };
     const newColliders = [];
 
     for (let dtz = -NEAR_TILE_RADIUS; dtz <= NEAR_TILE_RADIUS; dtz++) {
       for (let dtx = -NEAR_TILE_RADIUS; dtx <= NEAR_TILE_RADIUS; dtx++) {
         const tx = centerTx + dtx;
         const tz = centerTz + dtz;
-        const tileX0 = tx * NEAR_TILE_SIZE;
-        const tileZ0 = tz * NEAR_TILE_SIZE;
-
-        if (
-          tileX0 + NEAR_TILE_SIZE < TERRENO_WORLD.minX || tileX0 > TERRENO_WORLD.maxX ||
-          tileZ0 + NEAR_TILE_SIZE < TERRENO_WORLD.minZ || tileZ0 > TERRENO_WORLD.maxZ
-        ) continue;
-
         const isDetailTile = Math.abs(dtx) <= DETAIL_TILE_RADIUS && Math.abs(dtz) <= DETAIL_TILE_RADIUS;
-        const rng = makeTileRng(tx, tz, 9011);
-
-        // --- 1. Trees (46 stems per 64m×64m tile) ---
-        for (let c = 0; c < 46; c++) {
-          const wx = tileX0 + rng() * NEAR_TILE_SIZE;
-          const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
-          if (wx < TERRENO_WORLD.minX + 12 || wx > TERRENO_WORLD.maxX - 12 || wz < TERRENO_WORLD.minZ + 12 || wz > TERRENO_WORLD.maxZ - 12) continue;
-
-          if (isInsideCompoundClearing(wx, wz, 1.0)) continue;
-
-          // Keep widened 19km Forestry Road 100% unobstructed for CAMPER-75 & KEI-340!
-          const rq = geomorph.roadIndex.queryDist(wx, wz);
-          if (rq.dist < 8.2) continue;
-
-          // Keep wide 19km River Channel + 1.38x ribbon skirt completely clear of tree trunks!
-          const rv = evalMainRiver(wz);
-          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.45 + 6.5) continue;
-
-          const geo = geomorph.sampleGeoBilinear(wx, wz);
-          const y = geomorph.getHeightAt(wx, wz);
-          const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1540.0) continue;
-
-          const nrm = geomorph.getNormalAt(wx, wz, 2.2);
-          if (nrm.slope > 0.78) continue;
-
-          if (asl > 1360.0 && rng() < (asl - 1360.0) / 185.0) continue;
-
-          const in6fVistaCorridor = wx > -9.0 && wx < 13.0 && wz >= 10.0 && wz < 46.0;
-          if (in6fVistaCorridor && rng() < 0.45) continue;
-
-          const spRoll = rng();
-          let species = 0;
-          if (asl < 780.0) {
-            species = spRoll < 0.72 ? 0 : (spRoll < 0.92 ? 1 : 2);
-          } else if (asl < 1140.0) {
-            const bunaProb = 0.56 - geo.wetness * 0.25;
-            if (spRoll < bunaProb) species = 2;
-            else if (spRoll < bunaProb + 0.26) species = 0;
-            else species = 1;
-          } else {
-            species = spRoll < 0.82 ? 1 : 2;
-          }
-
-          const yaw = rng() * Math.PI * 2.0;
-          const leanX = (rng() - 0.5) * 0.055;
-          const leanZ = (rng() - 0.5) * 0.055;
-          let altScale = asl > 1220.0 ? Math.max(0.45, 1.0 - (asl - 1220.0) / 340.0) : 1.0;
-          if (in6fVistaCorridor) altScale *= 0.42;
-
-          if (species === 0 && nSugi < CAP_SUGI) {
-            const h = (18.5 + rng() * 16.5) * altScale;
-            const rS = h * (0.94 + rng() * 0.24);
-            dummyObj.position.set(wx, y - 0.48, wz);
-            dummyObj.rotation.set(leanX, yaw, leanZ);
-            dummyObj.scale.set(rS, h, rS);
-            dummyObj.updateMatrix();
-            imSugiTrunk.setMatrixAt(nSugi, dummyObj.matrix);
-            imSugiLeaf.setMatrixAt(nSugi, dummyObj.matrix);
-            const gVar = rng();
-            // Deep authentic Yakushima ancient Japanese Cedar evergreen linear reflectance!
-            tmpColor.setRGB(0.095 + gVar * 0.068, 0.105 + gVar * 0.065, 0.118 + gVar * 0.068);
-            imSugiLeaf.setColorAt(nSugi, tmpColor);
-            tmpColor.setRGB(0.84 + gVar * 0.26, 0.80 + gVar * 0.22, 0.76 + gVar * 0.20);
-            imSugiTrunk.setColorAt(nSugi, tmpColor);
-            nSugi++;
-            if (isDetailTile) {
-              const trunkR = Math.max(0.24, Math.min(rS * 0.025, h * 0.026));
-              newColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
-            }
-          } else if (species === 1 && nAbies < CAP_ABIES) {
-            const h = (13.5 + rng() * 13.0) * altScale;
-            const rS = h * (0.90 + rng() * 0.24);
-            dummyObj.position.set(wx, y - 0.42, wz);
-            dummyObj.rotation.set(leanX, yaw, leanZ);
-            dummyObj.scale.set(rS, h, rS);
-            dummyObj.updateMatrix();
-            imAbiesTrunk.setMatrixAt(nAbies, dummyObj.matrix);
-            imAbiesLeaf.setMatrixAt(nAbies, dummyObj.matrix);
-            const gVar = rng();
-            tmpColor.setRGB(0.090 + gVar * 0.060, 0.112 + gVar * 0.068, 0.142 + gVar * 0.075);
-            imAbiesLeaf.setColorAt(nAbies, tmpColor);
-            tmpColor.setRGB(0.82 + gVar * 0.25, 0.82 + gVar * 0.20, 0.80 + gVar * 0.20);
-            imAbiesTrunk.setColorAt(nAbies, tmpColor);
-            nAbies++;
-            if (isDetailTile) {
-              const trunkR = Math.max(0.22, Math.min(rS * 0.022, h * 0.023));
-              newColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
-            }
-          } else if (species === 2 && nBuna < CAP_BUNA) {
-            const h = (14.0 + rng() * 11.5) * altScale;
-            const rS = h * (0.98 + rng() * 0.30);
-            dummyObj.position.set(wx, y - 0.42, wz);
-            dummyObj.rotation.set(leanX, yaw, leanZ);
-            dummyObj.scale.set(rS, h, rS);
-            dummyObj.updateMatrix();
-            imBunaTrunk.setMatrixAt(nBuna, dummyObj.matrix);
-            imBunaLeaf.setMatrixAt(nBuna, dummyObj.matrix);
-            const tint = rng();
-            if (tint < 0.66) {
-              tmpColor.setRGB(0.13 + tint * 0.12, 0.16 + tint * 0.11, 0.14 + tint * 0.09);
-            } else if (tint < 0.89) {
-              tmpColor.setRGB(0.24 + (tint - 0.66) * 0.32, 0.22 + (tint - 0.66) * 0.16, 0.13);
-            } else {
-              tmpColor.setRGB(0.44, 0.20, 0.10);
-            }
-            imBunaLeaf.setColorAt(nBuna, tmpColor);
-            tmpColor.setRGB(0.88 + tint * 0.18, 0.88 + tint * 0.18, 0.84 + tint * 0.16);
-            imBunaTrunk.setColorAt(nBuna, tmpColor);
-            nBuna++;
-            if (isDetailTile) {
-              const trunkR = Math.max(0.26, Math.min(rS * 0.032, h * 0.032));
-              newColliders.push({ x: wx, z: wz, r: trunkR, kind: 'tree', height: h });
-            }
-          }
-        }
-
-        if (!isDetailTile) continue;
-
-        // 2a. Lacy Pinnate Japanese Wood-Ferns (イノデ羊歯)
-        for (let f = 0; f < 165 && nFern < CAP_FERN; f++) {
-          const wx = tileX0 + rng() * NEAR_TILE_SIZE;
-          const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
-          if (isInsideCompoundPaving(wx, wz)) continue;
-          if (geomorph.roadIndex.queryDist(wx, wz).dist < 4.6) continue;
-          const rv = evalMainRiver(wz);
-          const y = geomorph.getHeightAt(wx, wz);
-          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.16 || y < rv.waterY + 0.35) continue;
-
-          const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1410.0) continue;
-          const nrm = geomorph.getNormalAt(wx, wz, 1.5);
-          if (nrm.slope > 0.66) continue;
-
-          const sc = 0.72 + rng() * 1.05;
-          dummyObj.position.set(wx, y - 0.04, wz);
-          dummyObj.rotation.set(0, rng() * Math.PI * 2, 0);
-          dummyObj.scale.set(sc, sc * (0.78 + rng() * 0.38), sc);
-          dummyObj.updateMatrix();
-          imFern.setMatrixAt(nFern, dummyObj.matrix);
-          const fv = rng();
-          tmpColor.setRGB(0.14 + fv * 0.12, 0.17 + fv * 0.12, 0.13 + fv * 0.08);
-          imFern.setColorAt(nFern, tmpColor);
-          nFern++;
-        }
-
-        // 2b. Deeply Embedded Mossy Granite Boulders (STRICT slope < 0.52 -> ZERO floating rocks!)
-        for (let b = 0; b < 42 && nBoulder < CAP_BOULDER; b++) {
-          const wx = tileX0 + rng() * NEAR_TILE_SIZE;
-          const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
-          if (isInsideCompoundClearing(wx, wz, 1.5)) continue;
-          if (geomorph.roadIndex.queryDist(wx, wz).dist < 7.8) continue;
-
-          const nrm = geomorph.getNormalAt(wx, wz, 2.2);
-          if (nrm.slope > 0.52) continue;
-
-          const geo = geomorph.sampleGeoBilinear(wx, wz);
-          const rv = evalMainRiver(wz);
-          const distRiv = Math.abs(wx - rv.x);
-          const nearRiver = distRiv > rv.halfWidth * 0.85 && distRiv < rv.halfWidth * 1.55 + 16.0;
-          if (!nearRiver && geo.wetness < 0.36 && rng() > 0.24) continue;
-
-          const y = geomorph.getHeightAt(wx, wz);
-          const rScale = nearRiver ? (1.05 + rng() * 2.15) : (0.70 + rng() * 1.45);
-          const scaleY = rScale * (0.62 + rng() * 0.42);
-          const scaleZ = rScale * (0.82 + rng() * 0.38);
-          dummyObj.position.set(wx, y - rScale * 0.46, wz);
-          dummyObj.rotation.set((rng() - 0.5) * 0.28, rng() * Math.PI * 2, (rng() - 0.5) * 0.28);
-          dummyObj.scale.set(rScale, scaleY, scaleZ);
-          dummyObj.updateMatrix();
-          imBoulder.setMatrixAt(nBoulder, dummyObj.matrix);
-          const bv = 0.78 + rng() * 0.36;
-          tmpColor.setRGB(bv, bv * 1.02, bv * 1.05);
-          imBoulder.setColorAt(nBoulder, tmpColor);
-          nBoulder++;
-          // Exact protruding height above terrain: NEVER collide with buried pebbles hidden under grass!
-          const protrudeH = 0.92 * scaleY - rScale * 0.46;
-          if (protrudeH > 0.22) {
-            const coreR = Math.min(rScale, scaleZ) * 0.66;
-            newColliders.push({ x: wx, z: wz, r: coreR, kind: 'boulder', height: protrudeH });
-          }
-        }
-
-        // 2c. Fallen Mossy Nurse Logs (gentle forest floor only)
-        for (let l = 0; l < 6 && nLog < CAP_LOG; l++) {
-          const wx = tileX0 + rng() * NEAR_TILE_SIZE;
-          const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
-          if (isInsideCompoundClearing(wx, wz, 3.0)) continue;
-          if (geomorph.roadIndex.queryDist(wx, wz).dist < 8.0) continue;
-          const rv = evalMainRiver(wz);
-          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.42 + 6.0) continue;
-          const y = geomorph.getHeightAt(wx, wz);
-          if (TERRENO_WORLD.baseElevationASL + y > 1280.0) continue;
-          const nrm = geomorph.getNormalAt(wx, wz, 2.0);
-          if (nrm.slope > 0.34) continue;
-
-          const sc = 0.75 + rng() * 0.90;
-          dummyObj.position.set(wx, y - 0.04, wz);
-          dummyObj.rotation.set(0, rng() * Math.PI * 2, (rng() - 0.5) * 0.10);
-          dummyObj.scale.set(sc, sc, sc);
-          dummyObj.updateMatrix();
-          imLog.setMatrixAt(nLog, dummyObj.matrix);
-          const lv = 0.78 + rng() * 0.32;
-          tmpColor.setRGB(lv, lv * 0.96, lv * 0.90);
-          imLog.setColorAt(nLog, tmpColor);
-          nLog++;
-          // Low natural log step-over metadata (player auto-jumps, vehicles smoothly roll over!)
-          newColliders.push({ x: wx, z: wz, r: sc * 0.30, kind: 'log', height: sc * 0.34 });
-        }
+        generateNearTile(tx, tz, isDetailTile, true, counters, newColliders);
       }
     }
 
-    imSugiTrunk.count = nSugi;
-    imSugiLeaf.count = nSugi;
-    imAbiesTrunk.count = nAbies;
-    imAbiesLeaf.count = nAbies;
-    imBunaTrunk.count = nBuna;
-    imBunaLeaf.count = nBuna;
-    imFern.count = nFern;
-    imBoulder.count = nBoulder;
-    imLog.count = nLog;
+    imSugiTrunk.count = counters.nSugi;
+    imSugiLeaf.count = counters.nSugi;
+    imAbiesTrunk.count = counters.nAbies;
+    imAbiesLeaf.count = counters.nAbies;
+    imBunaTrunk.count = counters.nBuna;
+    imBunaLeaf.count = counters.nBuna;
+    imFern.count = counters.nFern;
+    imBoulder.count = counters.nBoulder;
+    imLog.count = counters.nLog;
 
     [imSugiTrunk, imSugiLeaf, imAbiesTrunk, imAbiesLeaf, imBunaTrunk, imBunaLeaf, imFern, imBoulder, imLog].forEach((im) => {
       im.instanceMatrix.needsUpdate = true;
@@ -1402,17 +1491,19 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     });
 
     localColliders = newColliders;
-    stats.sugi = nSugi;
-    stats.abies = nAbies;
-    stats.buna = nBuna;
-    stats.ferns = nFern;
-    stats.boulders = nBoulder;
-    stats.logs = nLog;
+    syncMergedColliders();
+    stats.sugi = counters.nSugi;
+    stats.abies = counters.nAbies;
+    stats.buna = counters.nBuna;
+    stats.ferns = counters.nFern;
+    stats.boulders = counters.nBoulder;
+    stats.logs = counters.nLog;
   }
 
-  // ---- BREAKTHROUGH TR-GROUNDCOVER: Ultra-Dense Near-Field Grass, Sedge & Kumazasa Carpet (32m micro-tiles!) ----
+  // ---- BREAKTHROUGH TR-GROUNDCOVER: Multi-Biome Grass, Susuki Prairies, Wetland Reeds & Kumazasa ----
   function rebuildGroundCover(centerGx, centerGz) {
     let nGrass = 0, nSasa = 0;
+    const newShrubCols = [];
 
     for (let dgz = -GROUND_TILE_RADIUS; dgz <= GROUND_TILE_RADIUS; dgz++) {
       for (let dgx = -GROUND_TILE_RADIUS; dgx <= GROUND_TILE_RADIUS; dgx++) {
@@ -1428,30 +1519,28 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
 
         const rng = makeTileRng(gx, gz, 55109);
 
-        // 1. Wild Mountain Sedge & Forest Grass Tufts (350 attempts per 32m×32m micro-tile!)
+        // 1. Wild Grass, Prairie Susuki & Meadow Sedge (350 attempts per 32m×32m tile)
         for (let i = 0; i < 350 && nGrass < CAP_GRASS; i++) {
           const wx = tileX0 + rng() * GROUND_TILE_SIZE;
           const wz = tileZ0 + rng() * GROUND_TILE_SIZE;
           if (wx < TERRENO_WORLD.minX + 6 || wx > TERRENO_WORLD.maxX - 6 || wz < TERRENO_WORLD.minZ + 6 || wz > TERRENO_WORLD.maxZ - 6) continue;
-          if (isInsideCompoundPaving(wx, wz)) continue;
+          if (isInsideCompoundPaving(wx, wz) || isInsideSouthRect(wx, wz, 1.5)) continue;
 
-          // Allow lush grass right up to the Forestry Road verge (dist > 4.2m)!
           const rq = geomorph.roadIndex.queryDist(wx, wz);
-          if (rq.dist < 4.2) continue;
+          if (rq.dist < rq.width * 0.5 + 0.5) continue;
 
           const rv = evalMainRiver(wz);
           const y = geomorph.getHeightAt(wx, wz);
-          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.12 || y < rv.waterY + 0.18) continue;
-
-          const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1495.0) continue;
+          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.12 || y < rv.waterY + 0.16) continue;
 
           const nrm = geomorph.getNormalAt(wx, wz, 1.2);
           if (nrm.slope > 0.62) continue;
 
+          const rw = evalRegionWeights(wx, wz);
           const inOuterYard = isInsideCompoundClearing(wx, wz, 2.0);
+          const prairieTall = 1.0 + rw.meadow * 0.55 + rw.wetland * 0.42;
           const scXZ = inOuterYard ? (0.48 + rng() * 0.45) : (0.78 + rng() * 1.05);
-          const scY  = inOuterYard ? (0.36 + rng() * 0.36) : (0.72 + rng() * 0.95);
+          const scY  = inOuterYard ? (0.36 + rng() * 0.36) : (0.72 + rng() * 0.95) * prairieTall;
 
           dummyObj.position.set(wx, y - 0.04, wz);
           dummyObj.rotation.set(nrm.z * 0.38, rng() * Math.PI * 2.0, -nrm.x * 0.38);
@@ -1460,48 +1549,52 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           imGrass.setMatrixAt(nGrass, dummyObj.matrix);
 
           const v = rng();
-          if (asl > 1180.0) {
-            tmpColor.setRGB(0.24 + v * 0.16, 0.22 + v * 0.14, 0.13 + v * 0.08);
-          } else {
-            tmpColor.setRGB(0.14 + v * 0.13, 0.17 + v * 0.13, 0.12 + v * 0.08);
-          }
+          const goldMix = rw.meadow * 0.85 + rw.southPlain * 0.35;
+          const rCol = (0.14 + v * 0.13) * (1 - goldMix) + (0.28 + v * 0.16) * goldMix;
+          const gCol = (0.18 + v * 0.13) * (1 - goldMix) + (0.25 + v * 0.14) * goldMix;
+          const bCol = (0.11 + v * 0.07) * (1 - goldMix) + (0.11 + v * 0.06) * goldMix;
+          tmpColor.setRGB(rCol, gCol, bCol);
           imGrass.setColorAt(nGrass, tmpColor);
           nGrass++;
         }
 
-        // 2. Kumazasa Dwarf Bamboo Thickets (クマザサ)
+        // 2. Kumazasa Bamboo & Dense Wetland Reed/Shrub Thickets
         for (let i = 0; i < 130 && nSasa < CAP_SASA; i++) {
           const wx = tileX0 + rng() * GROUND_TILE_SIZE;
           const wz = tileZ0 + rng() * GROUND_TILE_SIZE;
-          if (isInsideCompoundClearing(wx, wz, -0.5)) continue;
+          if (isInsideCompoundClearing(wx, wz, -0.5) || isInsideSouthRect(wx, wz, 1.5)) continue;
 
           const rq = geomorph.roadIndex.queryDist(wx, wz);
-          if (rq.dist < 4.7) continue;
+          if (rq.dist < rq.width * 0.5 + 0.9) continue;
 
           const rv = evalMainRiver(wz);
           const y = geomorph.getHeightAt(wx, wz);
-          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.18 || y < rv.waterY + 0.35) continue;
-
-          const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1385.0) continue;
+          if (Math.abs(wx - rv.x) < rv.halfWidth * 1.16 || y < rv.waterY + 0.25) continue;
 
           const nrm = geomorph.getNormalAt(wx, wz, 1.4);
           if (nrm.slope > 0.58) continue;
 
+          const rw = evalRegionWeights(wx, wz);
           const cluster = Math.sin(wx * 0.11 + wz * 0.09) * Math.cos(wx * 0.07 - wz * 0.13);
-          if (cluster < -0.15 && asl < 1020.0) continue;
+          if (cluster < -0.15 && rw.wetland < 0.35) continue;
 
           const sc = 0.72 + rng() * 0.92;
+          const scY = sc * (0.78 + rng() * 0.42 + rw.wetland * 0.35);
           dummyObj.position.set(wx, y - 0.05, wz);
           dummyObj.rotation.set(nrm.z * 0.32, rng() * Math.PI * 2.0, -nrm.x * 0.32);
-          dummyObj.scale.set(sc, sc * (0.78 + rng() * 0.42), sc);
+          dummyObj.scale.set(sc, scY, sc);
           dummyObj.updateMatrix();
           imSasa.setMatrixAt(nSasa, dummyObj.matrix);
 
           const v = rng();
-          tmpColor.setRGB(0.20 + v * 0.16, 0.22 + v * 0.15, 0.16 + v * 0.10);
+          tmpColor.setRGB(0.19 + v * 0.15, 0.22 + v * 0.15, 0.15 + v * 0.09);
           imSasa.setColorAt(nSasa, tmpColor);
           nSasa++;
+
+          // Exact root-stem tactile collider for mature dense bamboo/shrub thickets only (never wispy grass!)
+          if (sc >= 1.25 && Math.abs(dgx) <= 1 && Math.abs(dgz) <= 1) {
+            newShrubCols.push({ x: wx, z: wz, r: sc * 0.24, kind: 'shrub', height: scY * 0.75 });
+          }
         }
       }
     }
@@ -1512,6 +1605,8 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     imGrass.instanceColor.needsUpdate = true;
     imSasa.instanceMatrix.needsUpdate = true;
     imSasa.instanceColor.needsUpdate = true;
+    localShrubColliders = newShrubCols;
+    syncMergedColliders();
     stats.grass = nGrass;
     stats.sasa = nSasa;
   }
@@ -1539,22 +1634,22 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           const wx = tileX0 + rng() * MID_TILE_SIZE;
           const wz = tileZ0 + rng() * MID_TILE_SIZE;
           if (wx < TERRENO_WORLD.minX + 10 || wx > TERRENO_WORLD.maxX - 10 || wz < TERRENO_WORLD.minZ + 10 || wz > TERRENO_WORLD.maxZ - 10) continue;
-          if (isInsideCompoundClearing(wx, wz, 2.0)) continue;
+          if (isInsideCompoundClearing(wx, wz, 2.0) || isInsideSouthRect(wx, wz, 6.0)) continue;
 
           const geo = geomorph.sampleGeoBilinear(wx, wz);
-          if (geo.roadPad > 0.35) continue;
+          if (geo.roadPad > 0.30) continue;
           const rv = evalMainRiver(wz);
           if (Math.abs(wx - rv.x) < rv.halfWidth * 1.45 + 6.0) continue;
 
-          // Use exact getHeightAt() & deep anchor (-2.6m) so ZERO impostors ever float above distant ridges!
-          const y = geomorph.getHeightAt(wx, wz);
-          const asl = TERRENO_WORLD.baseElevationASL + y;
-          if (asl > 1530.0) continue;
-          const nrm = geomorph.getNormalAt(wx, wz, 4.0);
-          if (nrm.slope > 0.76) continue;
+          const rw = evalRegionWeights(wx, wz);
+          if (rng() > evalRegionTreeKeepProb(wx, wz, rw)) continue;
 
-          const isBroad = asl > 770.0 && asl < 1210.0 && rng() < 0.55;
-          const h = (21.0 + rng() * 17.0) * (asl > 1250.0 ? 0.70 : 1.0);
+          const y = geomorph.getHeightAt(wx, wz);
+          const nrm = geomorph.getNormalAt(wx, wz, 4.0);
+          if (nrm.slope > 0.72) continue;
+
+          const isBroad = (rw.plateau * 0.75 + rw.hills * 0.50 + rw.meadow * 0.45) > rng();
+          const h = 19.0 + rng() * 16.0;
           const wS = h * (1.05 + rng() * 0.38);
           dummyObj.position.set(wx, y - 2.6, wz);
           dummyObj.rotation.set(0, rng() * Math.PI * 2, 0);
@@ -1564,13 +1659,13 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           const v = rng();
           if (isBroad && nBrd < CAP_MID_BROAD) {
             imMidBroad.setMatrixAt(nBrd, dummyObj.matrix);
-            if (v < 0.78) tmpColor.setRGB(0.15 + v * 0.14, 0.18 + v * 0.13, 0.15 + v * 0.08);
-            else tmpColor.setRGB(0.42, 0.20, 0.11);
+            if (v < 0.78) tmpColor.setRGB(0.15 + v * 0.14, 0.18 + v * 0.13, 0.14 + v * 0.08);
+            else tmpColor.setRGB(0.40, 0.21, 0.11);
             imMidBroad.setColorAt(nBrd, tmpColor);
             nBrd++;
           } else if (nCon < CAP_MID_CONIFER) {
             imMidConifer.setMatrixAt(nCon, dummyObj.matrix);
-            tmpColor.setRGB(0.10 + v * 0.07, 0.11 + v * 0.07, 0.12 + v * 0.07);
+            tmpColor.setRGB(0.10 + v * 0.07, 0.12 + v * 0.07, 0.12 + v * 0.06);
             imMidConifer.setColorAt(nCon, tmpColor);
             nCon++;
           }
@@ -1615,14 +1710,34 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     }
   }
 
-  function ensureCollidersAt(wx, wz) {
+  // Non-destructive cached collider query for ANY (wx, wz) in the 60 km world (never hijacks camera's visual meshes!)
+  function getCollidersNear(wx, wz) {
     const ntx = Math.floor(wx / NEAR_TILE_SIZE);
     const ntz = Math.floor(wz / NEAR_TILE_SIZE);
-    if (ntx !== lastNearTx || ntz !== lastNearTz) {
-      lastNearTx = ntx;
-      lastNearTz = ntz;
-      rebuildNearForest(ntx, ntz);
+    if (Math.abs(ntx - lastNearTx) <= DETAIL_TILE_RADIUS && Math.abs(ntz - lastNearTz) <= DETAIL_TILE_RADIUS) {
+      return mergedLocalColliders;
     }
+    const cacheKey = `${ntx},${ntz}`;
+    let cached = remoteTileColliderCache.get(cacheKey);
+    if (!cached) {
+      cached = [];
+      const dummyC = { nSugi: 0, nAbies: 0, nBuna: 0, nFern: 0, nBoulder: 0, nLog: 0 };
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          generateNearTile(ntx + dx, ntz + dz, true, false, dummyC, cached);
+        }
+      }
+      if (remoteTileColliderCache.size > 36) {
+        const firstKey = remoteTileColliderCache.keys().next().value;
+        remoteTileColliderCache.delete(firstKey);
+      }
+      remoteTileColliderCache.set(cacheKey, cached);
+    }
+    return cached;
+  }
+
+  function ensureCollidersAt(wx, wz) {
+    return getCollidersNear(wx, wz);
   }
 
   function setSurfaceSuper(enabled, maxAniso = 8) {
@@ -1632,7 +1747,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   }
 
   function getLocalColliders() {
-    return localColliders;
+    return mergedLocalColliders;
   }
 
   function getStats() {
@@ -1643,6 +1758,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     group,
     update,
     ensureCollidersAt,
+    getCollidersNear,
     setSurfaceSuper,
     getLocalColliders,
     getStats,

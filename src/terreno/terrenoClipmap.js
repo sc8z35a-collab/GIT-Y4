@@ -19,7 +19,7 @@ import {
  */
 
 const CLIPMAP_HALF = 28;
-const CLIPMAP_LEVELS = 13;
+const CLIPMAP_LEVELS = 14;
 
 function makeSeededRand(seed) {
   let s = seed >>> 0;
@@ -252,11 +252,18 @@ uniform vec2 uVillageCenter;
 uniform float uVillageFlatR;
 uniform float uVillageGroundY;
 uniform float uBaseElevationASL;
+uniform vec4 uSouthRect;
+uniform float uSouthRectY;
+uniform float uSouthRectBlend;
 
 varying vec3 vWorldPos;
 varying vec4 vGeo;
 varying float vOutRim;
 varying float vCamDist;
+#ifdef USE_LOGDEPTHBUF
+  varying float vFragDepth;
+  varying float vIsPerspective;
+#endif
 
 float sinHash2(vec2 p) {
   return fract(sin(p.x * 127.1 + p.y * 311.7) * 43758.5453123);
@@ -275,11 +282,18 @@ float glslNoise(vec2 p) {
 
 float evalSharedMicroRelief(vec2 xz, float suppressFactor) {
   if (suppressFactor >= 0.999) return 0.0;
-  float n1 = glslNoise(xz * 0.048) - 0.5;
-  float n2 = glslNoise(xz * 0.17 + vec2(19.3, -7.1)) - 0.5;
-  float crag = 1.0 - abs(glslNoise(xz * 0.026 + vec2(-4.2, 11.8)) * 2.0 - 1.0);
-  float micro = n1 * 0.62 + n2 * 0.24 + (crag * crag - 0.35) * 0.95;
+  float n1 = glslNoise(xz * 0.042) - 0.5;
+  float n2 = glslNoise(xz * 0.14 + vec2(19.3, -7.1)) - 0.5;
+  float swell = glslNoise(xz * 0.018 + vec2(-4.2, 11.8)) - 0.5;
+  float micro = n1 * 0.44 + n2 * 0.14 + swell * 0.56;
   return micro * (1.0 - suppressFactor);
+}
+
+float evalSouthRectWeight(vec2 xz) {
+  vec2 d = max(max(uSouthRect.xz - xz, xz - uSouthRect.yw), vec2(0.0));
+  float dist = length(d);
+  float t = clamp(dist / max(uSouthRectBlend, 0.001), 0.0, 1.0);
+  return 1.0 - t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
 }
 
 vec4 sampleGeoBilinear(vec2 xz) {
@@ -305,51 +319,44 @@ void main() {
 
   vec2 xz = uRingOrigin + gMorphed * uGridStep;
 
-  // 2. Sample Geomorphology Atlas + Exact Shared Micro-Relief
+  // 2. Sample Geomorphology Atlas + Exact Shared Micro-Relief (100% non-mountainous natural contours!)
   vec4 geo = sampleGeoBilinear(xz);
   float y = geo.r + evalSharedMicroRelief(xz, geo.a);
 
-  // Subtle Distant High-Alpine Craggy Skyline Ridge Sculpting (strictly far from player/road/compound/village!)
   float dComp = length(xz - uCompoundCenter);
   float dVill = length(xz - uVillageCenter);
-  float approxCamDist = length(xz - cameraPosition.xz);
-  float asl = uBaseElevationASL + y;
-  float alpineCragMask = smoothstep(1040.0, 1420.0, asl)
-                       * smoothstep(180.0, 480.0, approxCamDist)
-                       * (1.0 - smoothstep(0.02, 0.12, geo.a))
-                       * smoothstep(120.0, 260.0, dComp)
-                       * smoothstep(120.0, 260.0, dVill);
-  if (alpineCragMask > 0.005) {
-    float r1 = 1.0 - abs(glslNoise(xz * 0.0046 + vec2(3.7, -8.1)) * 2.0 - 1.0);
-    float r2 = 1.0 - abs(glslNoise(xz * 0.0115 - vec2(11.4, 5.2)) * 2.0 - 1.0);
-    float jagged = (r1 * r1 * 22.0 + r2 * r2 * 9.5 - 9.0) * (0.45 + 0.55 * clamp(geo.b + 0.3, 0.0, 1.0));
-    y += jagged * alpineCragMask;
-  }
-
-  // Exact compound & Suginosato 5-house village terrace flat locks (bit-exact parity with CPU getHeightAt!)
   if (dComp <= uCompoundFlatR - 2.0) {
     y = uCompoundGroundY;
   } else if (dVill <= uVillageFlatR - 2.0) {
     y = uVillageGroundY;
+  } else {
+    float sW = evalSouthRectWeight(xz);
+    if (sW > 0.0001) {
+      y = mix(y, uSouthRectY, sW);
+    }
   }
 
-  // 3. Seamless Distant Alpine Foothill Skirt beyond 15km × 40km world rim
+  // 3. Seamless Gentle Countryside Horizon Skirt beyond 60 km × 60 km world rim
   vec2 over = max(vec2(0.0), max(uWorldMin - xz, xz - uWorldMax));
   float outDist = length(over);
   if (outDist > 0.0) {
-    float skirtDrop = outDist * 0.028 + smoothstep(0.0, 6000.0, outDist) * 195.0;
-    float farWave = (sin(xz.x * 0.00072 + 0.7) * cos(xz.y * 0.00062 - 0.4) * 78.0
-                   + sin((xz.x - xz.y) * 0.00035) * 56.0) * smoothstep(0.0, 2200.0, outDist);
+    float farWave = (sin(xz.x * 0.00045 + 0.7) * cos(xz.y * 0.00042 - 0.4) * 14.0
+                   + sin((xz.x - xz.y) * 0.00024) * 9.0) * smoothstep(0.0, 2600.0, outDist);
+    float skirtDrop = smoothstep(0.0, 14000.0, outDist) * 18.0;
     y = y - skirtDrop + farWave;
   }
 
   vec3 worldPos = vec3(xz.x, y, xz.y);
   vWorldPos = worldPos;
   vGeo = geo;
-  vOutRim = smoothstep(0.0, 900.0, outDist);
+  vOutRim = smoothstep(0.0, 1200.0, outDist);
   vCamDist = length(worldPos - cameraPosition);
 
   gl_Position = projectionMatrix * viewMatrix * vec4(worldPos, 1.0);
+  #ifdef USE_LOGDEPTHBUF
+    vFragDepth = 1.0 + gl_Position.w;
+    vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+  #endif
 }
 `;
 
@@ -370,6 +377,9 @@ uniform vec2 uCompoundCenter;
 uniform vec2 uVillageCenter;
 uniform float uBaseElevationASL;
 uniform float uSurfaceSuper;
+uniform vec4 uSouthRect;
+uniform float uSouthRectY;
+uniform float uSouthRectBlend;
 
 ${TERRENO_ATMO_UNIFORMS_GLSL}
 
@@ -377,6 +387,7 @@ varying vec3 vWorldPos;
 varying vec4 vGeo;
 varying float vOutRim;
 varying float vCamDist;
+#include <logdepthbuf_pars_fragment>
 
 float sinHash2(vec2 p) {
   return fract(sin(p.x * 127.1 + p.y * 311.7) * 43758.5453123);
@@ -474,11 +485,48 @@ float fbm2(vec2 p) {
 
 float evalSharedMicroRelief(vec2 xz, float suppressFactor) {
   if (suppressFactor >= 0.999) return 0.0;
-  float n1 = glslNoise(xz * 0.048) - 0.5;
-  float n2 = glslNoise(xz * 0.17 + vec2(19.3, -7.1)) - 0.5;
-  float crag = 1.0 - abs(glslNoise(xz * 0.026 + vec2(-4.2, 11.8)) * 2.0 - 1.0);
-  float micro = n1 * 0.62 + n2 * 0.24 + (crag * crag - 0.35) * 0.95;
+  float n1 = glslNoise(xz * 0.042) - 0.5;
+  float n2 = glslNoise(xz * 0.14 + vec2(19.3, -7.1)) - 0.5;
+  float swell = glslNoise(xz * 0.018 + vec2(-4.2, 11.8)) - 0.5;
+  float micro = n1 * 0.44 + n2 * 0.14 + swell * 0.56;
   return micro * (1.0 - suppressFactor);
+}
+
+float evalSouthRectWeight(vec2 xz) {
+  vec2 d = max(max(uSouthRect.xz - xz, xz - uSouthRect.yw), vec2(0.0));
+  float dist = length(d);
+  float t = clamp(dist / max(uSouthRectBlend, 0.001), 0.0, 1.0);
+  return 1.0 - t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float qSmooth(float e0, float e1, float x) {
+  float t = clamp((x - e0) / (e1 - e0), 0.0, 1.0);
+  return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+// Mirrors evalRegionWeights(wx, wz) in terrenoConfig.js 1:1 for seamless 6-region countryside transitions
+void evalRegionWeightsGLSL(vec2 xz, out float wValley, out float wHills, out float wPlateau, out float wWetland, out float wMeadow, out float wSouthPlain) {
+  float uX = xz.x + sin(xz.y * 0.00014 + 0.6) * 3600.0 + cos((xz.x + xz.y) * 0.00009) * 1900.0;
+  float uZ = xz.y + cos(xz.x * 0.00013 - 0.8) * 3600.0 + sin((xz.x - xz.y) * 0.00008) * 1900.0;
+  float rivX = 340.0 + sin(xz.y * 0.00016 + 0.18) * 2800.0 + sin(xz.y * 0.00042 - 0.55) * 950.0
+             + cos(xz.y * 0.00009 + 0.35) * 1150.0 - 1205.0 * exp(-(xz.y * xz.y) / (2600.0 * 2600.0));
+  float dxRiv = abs(xz.x - rivX);
+  float dCenter = length(xz - vec2(400.0, 600.0));
+
+  float v = exp(-(dxRiv * dxRiv) / (6800.0 * 6800.0)) * 0.95 + exp(-(dCenter * dCenter) / (6200.0 * 6200.0)) * 0.85 + 0.14;
+  float hi = qSmooth(2800.0, -14500.0, uX) * qSmooth(13500.0, -7500.0, uZ);
+  float pl = qSmooth(-1800.0, -17500.0, uZ) * qSmooth(-15000.0, 9500.0, uX);
+  float we = qSmooth(2600.0, 15500.0, uX) * qSmooth(-18500.0, -3500.0, uZ) * qSmooth(20500.0, 6500.0, uZ);
+  float me = qSmooth(10500.0, -8500.0, uX) * qSmooth(2000.0, 15500.0, uZ) * qSmooth(27500.0, 15000.0, uZ);
+  float sp = qSmooth(11500.0, 23000.0, uZ);
+
+  float inv = 1.0 / (v + hi + pl + we + me + sp + 1e-5);
+  wValley = v * inv;
+  wHills = hi * inv;
+  wPlateau = pl * inv;
+  wWetland = we * inv;
+  wMeadow = me * inv;
+  wSouthPlain = sp * inv;
 }
 
 vec4 sampleGeoBilinear(vec2 xz) {
@@ -496,7 +544,10 @@ vec4 sampleGeoBilinear(vec2 xz) {
 
 float sampleExactHeight(vec2 xz, float microFade) {
   vec4 g = sampleGeoBilinear(xz);
-  return g.r + evalSharedMicroRelief(xz, g.a) * microFade;
+  float h = g.r + evalSharedMicroRelief(xz, g.a) * microFade;
+  float sW = evalSouthRectWeight(xz);
+  if (sW > 0.0001) h = mix(h, uSouthRectY, sW);
+  return h;
 }
 
 vec3 toLinear(vec3 srgb) {
@@ -602,21 +653,21 @@ void main() {
   float asl = uBaseElevationASL + vWorldPos.y;
   float slopeMacro = 1.0 - clamp(N.y, 0.0, 1.0);
 
-  // 2. BREAKTHROUGH TR-HYPERDETAIL: 5-Octave Analytical-Derivative Alpine Crag & Gully Synthesis!
+  // 2. Subtle Organic Surface Micro-Normal Detail (smooth pastoral soil & gravel — zero alpine crags!)
   vec3 hyper = evalAlpineHyperDetail(xz, dist);
   float dComp = length(xz - uCompoundCenter);
   float dVill = length(xz - uVillageCenter);
   float isCompoundYard = 1.0 - smoothstep(21.0, 35.0, dComp);
   float isVillageYard  = 1.0 - smoothstep(38.0, 56.0, dVill);
   float isSettledPad   = max(isCompoundYard, isVillageYard);
-  float isRoad = smoothstep(0.32, 0.68, roadPad) * (1.0 - isSettledPad);
+  float isRoad = smoothstep(0.30, 0.66, roadPad) * (1.0 - isSettledPad);
 
-  float hyperBoost = mix(1.0, 1.24, uSurfaceSuper);
-  float hyperDistFade = 1.0 - smoothstep(140.0, 2200.0, dist) * 0.45;
+  float hyperBoost = mix(1.0, 1.22, uSurfaceSuper);
+  float hyperDistFade = 1.0 - smoothstep(140.0, 1800.0, dist) * 0.55;
   float hyperStrength = (1.0 - isSettledPad) * (1.0 - isRoad * 0.88)
-                      * mix(0.24, 0.92, smoothstep(0.10, 0.44, slopeMacro) + smoothstep(1040.0, 1620.0, asl) * 0.42)
+                      * mix(0.14, 0.42, smoothstep(0.06, 0.30, slopeMacro))
                       * hyperBoost * hyperDistFade;
-  N = normalize(N + vec3(-hyper.y, 0.0, -hyper.z) * (hyperStrength * 26.0));
+  N = normalize(N + vec3(-hyper.y, 0.0, -hyper.z) * (hyperStrength * 14.0));
 
   float slope = 1.0 - clamp(N.y, 0.0, 1.0);
   float slopeRad = acos(clamp(N.y, 0.0, 1.0));
@@ -635,7 +686,6 @@ void main() {
   vec4 texGravel = sampleSeamlessPbr(uTexGravel, gravelUv, macroBlend);
   vec4 texRock   = sampleTriplanarGranite(vWorldPos, N, 0.078);
 
-  // Micro POM self-shadowing right under your boots (pebbles & mossy soil humps cast crisp tiny shadows!)
   float pomMicroShadow = 1.0;
   if (pomFade > 0.02) {
     vec2 sunUvStep = sunDir.xz * 0.014;
@@ -645,136 +695,121 @@ void main() {
     pomMicroShadow = 1.0 - occl * pomFade;
   }
 
-  float macroVar = fbm2(xz * 0.0022);
-  float microVar = fbm2(xz * 0.025);
+  float macroVar = fbm2(xz * 0.0018);
+  float microVar = fbm2(xz * 0.022);
 
-  // 4. Build 10 Physically Calibrated Linear Japanese Mountain Ecological Layers!
-  // Layer A: Deep Cedar/Hinoki Forest Floor (rich humus loam + mossy patches + crisp needle litter)
-  vec3 colLowForest = texForest.rgb * vec3(0.72, 0.84, 0.56);
-  colLowForest = mix(colLowForest, vec3(0.014, 0.036, 0.014), 0.26 + 0.18 * (1.0 - N.z * 0.5));
+  // 4. Seamless 6-Region Non-Mountainous Countryside Ground Layers (C2 continuous, zero seams!)
+  float wValley, wHills, wPlateau, wWetland, wMeadow, wSouthPlain;
+  evalRegionWeightsGLSL(xz, wValley, wHills, wPlateau, wWetland, wMeadow, wSouthPlain);
 
-  // Layer B: Montane Buna Beech & Mizunara Oak Autumn-Leaf Humus (EL 780..1,280m)
-  float bunaZone = smoothstep(780.0, 960.0, asl) * (1.0 - smoothstep(1220.0, 1380.0, asl));
-  vec3 colBunaFloor = mix(texForest.rgb * vec3(0.92, 0.80, 0.44), vec3(0.044, 0.060, 0.018), 0.36 + 0.18 * macroVar);
+  // 4A. Central River Valley & Cedar/Hinoki Forest Floor (rich mossy humus & warm needle litter)
+  vec3 colValley = texForest.rgb * vec3(0.72, 0.85, 0.54);
+  colValley = mix(colValley, vec3(0.016, 0.040, 0.014), 0.24 + 0.16 * macroVar);
 
-  // Layer C: Subalpine Kumazasa Dwarf Bamboo Carpet (EL 1,120..1,540m)
-  float sasaZone = smoothstep(1120.0, 1280.0, asl) * (1.0 - smoothstep(1440.0, 1580.0, asl));
-  float sasaPatch = smoothstep(0.32, 0.68, macroVar * 0.7 + microVar * 0.3) * smoothstep(-0.2, 0.35, ridge);
-  vec3 colSasa = vec3(0.040, 0.074, 0.020) * (0.70 + 0.56 * texForest.a);
+  // 4B. Rolling Green Hills & Pastoral Uplands (lush sunlit emerald-sage meadow turf + wildflower grass)
+  vec3 colHills = mix(texForest.rgb * vec3(0.66, 0.96, 0.44), vec3(0.048, 0.095, 0.022), 0.34 + 0.22 * macroVar);
+  colHills = mix(colHills, vec3(0.088, 0.112, 0.032), smoothstep(0.45, 0.82, microVar) * 0.35);
 
-  // Layer D: High Alpine Haimatsu Creeping Pine & Lichen Granite Tundra (EL > 1,380m)
-  float alpineZone = smoothstep(1380.0, 1580.0, asl);
-  vec3 colHaimatsu = texForest.rgb * vec3(0.34, 0.50, 0.28) * (0.72 + 0.48 * microVar);
-  vec3 colAlpineScree = mix(texRock.rgb * vec3(0.46, 0.46, 0.44), texGravel.rgb * vec3(0.42, 0.42, 0.39), 0.52);
-  vec3 colAlpine = mix(colHaimatsu, colAlpineScree, smoothstep(0.24, 0.76, macroVar * 0.72 + microVar * 0.28 + slope * 1.15));
+  // 4C. Broadleaf Beech & Birch Woodland Plateau (warm olive-amber leaf litter & sunlit glades)
+  vec3 colPlateau = mix(texForest.rgb * vec3(0.90, 0.82, 0.46), vec3(0.046, 0.064, 0.020), 0.32 + 0.20 * macroVar);
 
-  vec3 albedo = mix(colLowForest, colBunaFloor, bunaZone * 0.78);
-  albedo = mix(albedo, colSasa, sasaZone * (0.35 + 0.55 * sasaPatch));
-  albedo = mix(albedo, colAlpine, alpineZone * 0.86);
+  // 4D. Misty Wetlands, Reed Marshes & Quiet Lakes (rich damp peat, mossy sedge & reed flats)
+  vec3 colWetland = mix(texForest.rgb * vec3(0.42, 0.62, 0.38), vec3(0.014, 0.038, 0.022), 0.42 + 0.22 * wetness);
+  colWetland = mix(colWetland, vec3(0.046, 0.056, 0.024), smoothstep(0.42, 0.78, macroVar) * 0.32);
 
-  // Layer E: Phacelle Ravine Deep Damp Moss
-  float dampRavine = smoothstep(0.36, 0.82, wetness) * (1.0 - smoothstep(0.25, 0.55, slopeRad));
-  albedo = mix(albedo, vec3(0.011, 0.026, 0.012) * (0.72 + 0.56 * texForest.a), dampRavine * 0.58);
+  // 4E. Expansive Sunlit Susuki Grasslands & Open Prairies (warm golden-green sweeping plains)
+  vec3 colMeadow = mix(texForest.rgb * vec3(0.96, 0.92, 0.48), vec3(0.115, 0.112, 0.034), 0.40 + 0.24 * macroVar);
+  colMeadow = mix(colMeadow, vec3(0.056, 0.086, 0.024), smoothstep(0.32, 0.72, microVar) * 0.35);
 
-  // Layer F: Riverbank Wet Dark Slate Cobbles & Glossy Wet-Rock Shoreline Band (TR-WETSHORE!)
-  float riverCobble = smoothstep(0.62, 0.90, wetness) * smoothstep(980.0, 620.0, asl);
-  float wetShoreBand = smoothstep(0.76, 0.95, wetness) * smoothstep(920.0, 560.0, asl);
-  vec3 colWetCobble = texGravel.rgb * vec3(0.32, 0.35, 0.34) * (0.68 + 0.50 * microVar);
-  colWetCobble *= mix(1.0, 0.44, wetShoreBand); // Dark saturated wet granite right at waterline!
-  albedo = mix(albedo, colWetCobble, riverCobble * 0.86);
+  // 4F. Southern Alluvial Plains & Coastal Pine Flats (warm sandy loam & sunlit pine needles)
+  vec3 colSouthPlain = mix(texGravel.rgb * vec3(0.68, 0.62, 0.46), texForest.rgb * vec3(0.76, 0.80, 0.50), 0.55 + 0.25 * macroVar);
 
-  // Layer G: Talus Scree Apron (harmonized with local weathered alpine granite)
-  float talusMask = smoothstep(0.42, 0.66, slopeRad) * (1.0 - smoothstep(0.68, 0.92, slopeRad))
-                  * (0.45 + 0.55 * smoothstep(0.15, -0.35, ridge));
-  vec3 colTalus = mix(texRock.rgb * 0.52, texGravel.rgb * vec3(0.44, 0.45, 0.46), 0.52);
-  albedo = mix(albedo, colTalus, talusMask * 0.64);
+  vec3 albedo = colValley * wValley
+              + colHills * wHills
+              + colPlateau * wPlateau
+              + colWetland * wWetland
+              + colMeadow * wMeadow
+              + colSouthPlain * wSouthPlain;
 
-  // Layer H: True Triplanar Stratified Japanese Granite Cliffs (smooth organic blend on road cutbanks!)
-  float rockSlopeThresh = mix(0.56, 0.36, alpineZone);
-  float rockMask = smoothstep(rockSlopeThresh, rockSlopeThresh + 0.32, slopeRad + (texRock.a - 0.5) * 0.14 + (hyper.x - 0.45) * 0.14);
-  vec3 colGranite = texRock.rgb * mix(vec3(0.40, 0.42, 0.43), vec3(0.54, 0.54, 0.52), alpineZone);
-  colGranite *= mix(0.66, 1.16, clamp(hyper.x * 1.15, 0.0, 1.0));
-  float ledgeMoss = smoothstep(0.62, 0.88, N.y) * (1.0 - alpineZone) * 0.58;
-  colGranite = mix(colGranite, vec3(0.016, 0.042, 0.015), ledgeMoss);
-  albedo = mix(albedo, colGranite, rockMask);
+  // Damp drainage swales & wetland pools sheen
+  float dampSwale = smoothstep(0.46, 0.86, wetness) * (1.0 - smoothstep(0.22, 0.48, slopeRad));
+  albedo = mix(albedo, vec3(0.014, 0.032, 0.018) * (0.72 + 0.50 * texForest.a), dampSwale * 0.46);
 
-  // Layer I: BREAKTHROUGH TR-SNOW — Authentic Japanese Northern Alps Gully Snow Couloirs (残雪 / 雪渓)!
-  float snowAlt = smoothstep(1380.0, 1680.0, asl);
-  float snowMask = 0.0;
-  if (snowAlt > 0.005) {
-    float gullyTrap = smoothstep(0.10, -0.24, ridge - (hyper.x - 0.45) * 0.24);
-    float coolAspect = smoothstep(0.55, -0.48, N.z * 0.72 + N.x * 0.28);
-    float snowSlope = 1.0 - smoothstep(0.64, 1.02, slopeRad);
-    float snowRaw = snowAlt * (0.10 + 1.05 * gullyTrap) * (0.38 + 0.62 * coolAspect) * snowSlope;
-    snowMask = smoothstep(0.28, 0.56, snowRaw + (microVar - 0.5) * 0.12) * (1.0 - isRoad);
-    vec3 snowAlbedo = mix(vec3(0.70, 0.72, 0.75), vec3(0.84, 0.85, 0.86), smoothstep(0.3, 0.8, microVar));
-    albedo = mix(albedo, snowAlbedo, snowMask);
-  }
+  // Riverbank Smooth Cobbles & Wet Shoreline Band (TR-WETSHORE!)
+  float riverCobble = smoothstep(0.66, 0.92, wetness) * (1.0 - wWetland * 0.55);
+  float wetShoreBand = smoothstep(0.78, 0.96, wetness);
+  vec3 colWetCobble = texGravel.rgb * vec3(0.36, 0.38, 0.36) * (0.70 + 0.46 * microVar);
+  colWetCobble *= mix(1.0, 0.52, wetShoreBand);
+  albedo = mix(albedo, colWetCobble, riverCobble * 0.78);
 
-  // Layer J: 40 km Graded Forestry Road (奥山林道), NARROW-50 Pad & Suginosato 5-House Village Meadow!
-  float rutPattern = 0.84 + 0.16 * sin(roadPad * 18.0);
-  vec3 colRoad = texGravel.rgb * vec3(0.52, 0.47, 0.40) * rutPattern;
-  albedo = mix(albedo, colRoad, isRoad * 0.92);
+  // Gentle earthen slope bank exposure (only on rare steeper riverbanks — no jagged alpine cliffs!)
+  float rockMask = smoothstep(0.48, 0.78, slopeRad + (texRock.a - 0.5) * 0.10);
+  vec3 colLoamBank = mix(texRock.rgb * vec3(0.42, 0.40, 0.36), texGravel.rgb * vec3(0.40, 0.36, 0.28), 0.55);
+  albedo = mix(albedo, colLoamBank, rockMask * 0.52);
+
+  // 21 Natural Terrain-Conforming Countryside Roads + NARROW-50 & Suginosato Village Yards
+  float rutPattern = 0.86 + 0.14 * sin(roadPad * 16.0);
+  vec3 colRoad = texGravel.rgb * vec3(0.56, 0.51, 0.43) * rutPattern;
+  albedo = mix(albedo, colRoad, isRoad * 0.90);
   vec3 colCompYard = mix(texForest.rgb * vec3(0.62, 0.72, 0.48), vec3(0.018, 0.032, 0.015), 0.30);
   albedo = mix(albedo, colCompYard, isCompoundYard * 0.88);
   vec3 colVillageYard = mix(texForest.rgb * vec3(0.68, 0.78, 0.48), texGravel.rgb * vec3(0.42, 0.40, 0.34), 0.24);
   albedo = mix(albedo, colVillageYard, isVillageYard * 0.86);
 
-  // 5. Far-Distance (> 180m .. 40,000m) Multi-Species Forest Canopy Mosaic (Linear Calibrated!)
-  float farCanopyBlend = smoothstep(165.0, 480.0, dist) * canopyDensity * (1.0 - rockMask * 0.82) * (1.0 - isRoad) * (1.0 - snowMask) * (1.0 - isVillageYard * 0.92);
+  // 5. Far-Distance (> 180m .. 60,000m) Multi-Biome Canopy & Open Prairie Mosaic
+  float farCanopyBlend = smoothstep(165.0, 480.0, dist) * canopyDensity * (1.0 - rockMask * 0.65) * (1.0 - isRoad) * (1.0 - isVillageYard * 0.92);
   if (farCanopyBlend > 0.01) {
     float c1 = glslNoise(xz * 0.095);
     float c2 = glslNoise(xz * 0.24 + vec2(31.2, -19.7));
     float c3 = glslNoise(xz * 0.024 - vec2(11.4, 22.8));
     float crownBump = c1 * 0.58 + c2 * 0.28 + c3 * 0.14;
 
-    vec3 colSugiCrown  = mix(vec3(0.008, 0.025, 0.012), vec3(0.019, 0.048, 0.020), crownBump);
-    vec3 colBunaCrown  = mix(vec3(0.022, 0.054, 0.013), vec3(0.068, 0.084, 0.018), smoothstep(0.25, 0.85, c3 * 0.6 + c1 * 0.4));
-    vec3 colAbiesCrown = mix(vec3(0.008, 0.023, 0.018), vec3(0.020, 0.048, 0.032), crownBump);
+    vec3 colSugiCrown  = mix(vec3(0.009, 0.028, 0.013), vec3(0.022, 0.052, 0.020), crownBump);
+    vec3 colBunaCrown  = mix(vec3(0.024, 0.058, 0.014), vec3(0.070, 0.088, 0.020), smoothstep(0.25, 0.85, c3 * 0.6 + c1 * 0.4));
+    vec3 colPineCrown  = mix(vec3(0.014, 0.036, 0.018), vec3(0.034, 0.062, 0.024), crownBump);
 
-    vec3 farTreeCol = mix(colSugiCrown, colBunaCrown, smoothstep(760.0, 980.0, asl) * (1.0 - smoothstep(1200.0, 1360.0, asl)));
-    farTreeCol = mix(farTreeCol, colAbiesCrown, smoothstep(1180.0, 1360.0, asl));
-    farTreeCol *= (0.52 + 0.68 * smoothstep(0.18, 0.86, crownBump));
+    vec3 farTreeCol = colSugiCrown * (wValley + wWetland * 0.7)
+                    + colBunaCrown * (wPlateau + wHills * 0.8)
+                    + colPineCrown * (wSouthPlain + wMeadow + wHills * 0.2 + wWetland * 0.3);
+    farTreeCol *= (0.56 + 0.64 * smoothstep(0.18, 0.86, crownBump));
 
-    albedo = mix(albedo, farTreeCol, farCanopyBlend * 0.90);
+    albedo = mix(albedo, farTreeCol, farCanopyBlend * 0.88);
 
-    float cnX = (glslNoise((xz + vec2(3.5, 0.0)) * 0.095) - c1) * 1.45;
-    float cnZ = (glslNoise((xz + vec2(0.0, 3.5)) * 0.095) - c1) * 1.45;
-    N = normalize(N + vec3(cnX, 0.0, cnZ) * farCanopyBlend * 0.62);
+    float cnX = (glslNoise((xz + vec2(3.5, 0.0)) * 0.095) - c1) * 1.35;
+    float cnZ = (glslNoise((xz + vec2(0.0, 3.5)) * 0.095) - c1) * 1.35;
+    N = normalize(N + vec3(cnX, 0.0, cnZ) * farCanopyBlend * 0.55);
   }
 
-  // Smooth Analytical Near-Field Micro-Normal Perturbation (tactile stones, soil, road gravel!)
+  // Smooth Analytical Near-Field Micro-Normal Perturbation
   float nearDetailFade = 1.0 - smoothstep(28.0, 180.0, dist);
   if (nearDetailFade > 0.01) {
-    float fFreq = mix(0.75, 0.36, rockMask);
+    float fFreq = mix(0.75, 0.42, rockMask);
     vec2 pN = vec2(vWorldPos.x + vWorldPos.y * 0.22, vWorldPos.z - vWorldPos.y * 0.18) * fFreq;
     vec3 nd = noiseDeriv(pN);
-    float bumpStr = (0.34 + 0.72 * rockMask + 0.28 * isRoad) * nearDetailFade * (1.0 - snowMask * 0.65);
-    N = normalize(N + vec3(-nd.y, 0.0, -nd.z) * bumpStr * 1.25);
+    float bumpStr = (0.30 + 0.45 * rockMask + 0.28 * isRoad) * nearDetailFade;
+    N = normalize(N + vec3(-nd.y, 0.0, -nd.z) * bumpStr * 1.15);
   }
 
-  // 6. Dual-Azimuth Mountain Horizon Shadowing + TR-KOMOREBI Forest Canopy Dappled Sunlight!
+  // 6. Horizon Shadowing + TR-KOMOREBI Forest Canopy Dappled Sunlight!
   float horizonSin = mix(horz.g, horz.r, uUseEastHorizon);
   float horizonShadow = smoothstep(horizonSin - 0.045, horizonSin + 0.095, sunDir.y);
   horizonShadow = mix(1.0, horizonShadow, uHorizonShadowBlend);
 
-  float komorebi = evalKomorebiDapple(vWorldPos, canopyDensity * (1.0 - rockMask * 0.80) * (1.0 - isRoad * 0.42) * (1.0 - isVillageYard), sunDir, dist);
+  float komorebi = evalKomorebiDapple(vWorldPos, canopyDensity * (1.0 - rockMask * 0.60) * (1.0 - isRoad * 0.45) * (1.0 - isVillageYard), sunDir, dist);
 
   float NdotL = max(0.0, dot(N, sunDir));
-  float wrapAmt = 0.12 * farCanopyBlend + 0.22 * snowMask;
+  float wrapAmt = 0.14 * farCanopyBlend;
   float wrapNdotL = max(0.0, (dot(N, sunDir) + wrapAmt) / (1.0 + wrapAmt));
 
   vec3 directLight = uSunColor * (uSunIntensity * wrapNdotL * horizonShadow * komorebi * pomMicroShadow * 0.94);
 
   float hemiMix = N.y * 0.5 + 0.5;
-  float skyLum = dot(uHemiSkyColor, vec3(0.299, 0.587, 0.114));
-  vec3 neutralSnowSky = mix(uHemiSkyColor, vec3(skyLum * 0.94, skyLum * 0.98, skyLum * 1.08), 0.62);
-  vec3 skyAmbTint = mix(uHemiSkyColor, neutralSnowSky, snowMask);
-  vec3 ambientLight = mix(uHemiGroundColor, skyAmbTint, hemiMix) * (uHemiIntensity * (0.40 + 0.60 * skyViewAO) * 0.95);
+  vec3 ambientLight = mix(uHemiGroundColor, uHemiSkyColor, hemiMix) * (uHemiIntensity * (0.44 + 0.56 * skyViewAO) * 0.96);
 
   vec3 H = normalize(sunDir + V);
-  float specPow = mix(24.0, 88.0, clamp(wetShoreBand + riverCobble * 0.5 + snowMask * 0.45, 0.0, 1.0));
-  float specStr = (0.025 + 0.12 * rockMask + 0.22 * riverCobble + 0.36 * wetShoreBand + 0.18 * snowMask) * (1.0 - farCanopyBlend * 0.90);
+  float wetlandSheen = wWetland * smoothstep(0.55, 0.90, wetness) * 0.55;
+  float specPow = mix(24.0, 78.0, clamp(wetShoreBand + riverCobble * 0.5 + wetlandSheen, 0.0, 1.0));
+  float specStr = (0.024 + 0.08 * rockMask + 0.20 * riverCobble + 0.34 * wetShoreBand + 0.24 * wetlandSheen) * (1.0 - farCanopyBlend * 0.90);
   float spec = pow(max(0.0, dot(N, H)), specPow) * specStr * horizonShadow * komorebi * smoothstep(0.0, 0.12, NdotL);
 
   float compGlow = max(exp(-dComp * 0.075), exp(-dVill * 0.045) * 0.85) * (1.0 - smoothstep(0.35, 0.75, uHemiIntensity)) * 0.22;
@@ -783,10 +818,11 @@ void main() {
   vec3 litColor = albedo * (directLight + ambientLight + compWarmBounce) + uSunColor * (spec * uSunIntensity * 0.58);
   litColor += evalTerrenoFlashlight(vWorldPos, N, albedo);
 
-  // 7. BREAKTHROUGH TR-VOLUMETRIC-ATMO: Horizon-Shadowed Volumetric Sea-of-Clouds & Aerial Perspective!
+  // 7. Volumetric Atmospheric Perspective & Countryside Haze
   vec3 finalColor = applyTerrenoAtmosphere(litColor, vWorldPos, cameraPosition);
 
   gl_FragColor = vec4(finalColor, 1.0);
+  #include <logdepthbuf_fragment>
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -938,7 +974,7 @@ void main() {
 
 export function createTerrenoClipmap(geomorph, atmoUniforms) {
   const group = new THREE.Group();
-  group.name = 'TERRENO_Clipmap_13Ring';
+  group.name = 'TERRENO_Clipmap_14Ring';
 
   const texForest = createSeamlessPbrTexture('forest');
   const texRock = createSeamlessPbrTexture('rock');
@@ -953,6 +989,7 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     buildClipmapLTrimGeometry(CLIPMAP_HALF, 1, 1),
   ];
 
+  const sr = TERRENO_WORLD.southRect;
   const surfaceSuperUniform = { value: 0.0 };
   const baseUniforms = {
     ...atmoUniforms,
@@ -972,6 +1009,9 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     uVillageFlatR: { value: TERRENO_WORLD.villageFlatRadius },
     uVillageGroundY: { value: TERRENO_WORLD.villageGroundY },
     uBaseElevationASL: { value: TERRENO_WORLD.baseElevationASL },
+    uSouthRect: { value: new THREE.Vector4(sr.minX, sr.maxX, sr.minZ, sr.maxZ) },
+    uSouthRectY: { value: geomorph.southRectY },
+    uSouthRectBlend: { value: sr.blend },
     uHalfExtent: { value: CLIPMAP_HALF },
     uSurfaceSuper: surfaceSuperUniform,
   };
@@ -1026,13 +1066,13 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     fragmentShader: SKY_FRAGMENT_SHADER,
     side: THREE.BackSide,
     depthWrite: false,
-    depthTest: true,
+    depthTest: false,
     fog: false,
   });
   const skyDome = new THREE.Mesh(skyGeo, skyMat);
   skyDome.frustumCulled = false;
   skyDome.renderOrder = -100;
-  skyDome.name = 'TERRENO_SkyDome_52km';
+  skyDome.name = 'TERRENO_SkyDome_90km';
   group.add(skyDome);
 
   function setSurfaceSuper(enabled, maxAniso = 8) {

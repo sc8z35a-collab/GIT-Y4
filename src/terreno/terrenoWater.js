@@ -32,6 +32,10 @@ uniform float uFloodMud;
 varying vec3 vWorldPos;
 varying vec4 vWaterMeta;
 varying vec3 vFlowTangent;
+#ifdef USE_LOGDEPTHBUF
+  varying float vFragDepth;
+  varying float vIsPerspective;
+#endif
 
 void main() {
   vec3 pos = position;
@@ -42,13 +46,16 @@ void main() {
   float heave = sin(aWaterMeta.x * 0.42 - uTime * (3.8 + uFloodMud * 2.8)) * 0.048 * floodWave
               + cos(aWaterMeta.x * 0.95 + aWaterMeta.y * 5.2 - uTime * 5.1) * 0.022 * floodWave;
   pos.y += uFloodRise + heave * midFactor * clamp((aWaterMeta.z + uFloodRise) * 0.5, 0.0, 1.4);
-  // Massive flood bank spillover across low-lying valley terraces & roads during severe storms!
   pos.xz += bankDir.xz * (aWaterMeta.y * uFloodRise * 10.5);
 
   vWorldPos = pos;
   vWaterMeta = aWaterMeta;
   vFlowTangent = ft;
   gl_Position = projectionMatrix * viewMatrix * vec4(pos, 1.0);
+  #ifdef USE_LOGDEPTHBUF
+    vFragDepth = 1.0 + gl_Position.w;
+    vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+  #endif
 }
 `;
 
@@ -64,6 +71,7 @@ ${TERRENO_ATMO_UNIFORMS_GLSL}
 varying vec3 vWorldPos;
 varying vec4 vWaterMeta;
 varying vec3 vFlowTangent;
+#include <logdepthbuf_pars_fragment>
 
 float wHash(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -319,13 +327,14 @@ void main() {
   float depthOpacity = 1.0 - exp(-depth * 2.2);
   float finalAlpha = clamp(max(shoreAlpha * edgeNoise * (0.52 + 0.46 * depthOpacity + fresnel * 0.40), foamMask * 0.90), 0.0, 0.98);
   gl_FragColor = vec4(col, finalAlpha);
+  #include <logdepthbuf_fragment>
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
 `;
 
 function buildMainRiverGeometry(geomorph) {
-  const segsZ = 1600;
+  const segsZ = 2200;
   const segsX = 16;
   const zMin = TERRENO_WORLD.minZ + 20;
   const zMax = TERRENO_WORLD.maxZ - 20;
@@ -359,7 +368,7 @@ function buildMainRiverGeometry(geomorph) {
     const ftz = tz / tLen;
     const bx = -ftz;
     const bz = ftx;
-    const slope = Math.max(0.005, (pPrev.waterY - pNext.waterY) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
+    const slope = Math.max(0.002, (pPrev.waterY - pNext.waterY) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
 
     const ribbonHW = p.halfWidth * 1.38;
     for (let j = 0; j <= segsX; j++) {
@@ -368,7 +377,7 @@ function buildMainRiverGeometry(geomorph) {
       const wz = p.z + bz * crossT * ribbonHW;
       const bedY = geomorph.getHeightAt(wx, wz);
       const centerBed = geomorph.getHeightAt(p.x, p.z);
-      const safeWaterY = Math.max(p.waterY, centerBed + 1.15);
+      const safeWaterY = Math.max(p.waterY, Math.min(p.waterY + 0.4, centerBed + 0.95));
       const depth = Math.max(0.0, safeWaterY - bedY);
 
       positions.push(wx, safeWaterY, wz);
@@ -398,7 +407,7 @@ function buildMainRiverGeometry(geomorph) {
 }
 
 function buildTributaryGeometry(geomorph, tr, ti) {
-  const segs = 72;
+  const segs = 80;
   const segsX = 4;
   const rv0 = evalMainRiver(tr.z0);
   const startLen = tr.len * 0.72;
@@ -408,7 +417,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
   for (let i = 0; i <= segs; i++) {
     const u = 1.0 - i / segs;
     const along = u * startLen;
-    const meander = Math.sin(along * 0.0028 + ti * 2.1) * 95.0 + Math.cos(along * 0.0072) * 32.0;
+    const meander = Math.sin(along * 0.0014 + ti * 2.1) * 160.0 + Math.cos(along * 0.0036) * 52.0;
     const perpX = -tr.dirZ;
     const perpZ = tr.dirX;
     const wx = rv0.x + tr.dirX * along + perpX * meander;
@@ -417,12 +426,12 @@ function buildTributaryGeometry(geomorph, tr, ti) {
     if (i > 0) {
       accumDist += Math.hypot(wx - pts[i - 1].x, wz - pts[i - 1].z);
     }
-    const hw = Math.max(5.5, tr.width * 0.22 * (1.25 - 0.60 * u));
-    pts.push({ x: wx, z: wz, y: terrainY + 0.72, hw, flowDist: accumDist });
+    const hw = Math.max(5.5, tr.width * 0.16 * (1.25 - 0.55 * u));
+    pts.push({ x: wx, z: wz, y: terrainY + 0.42, hw, flowDist: accumDist });
   }
   for (let i = 1; i < pts.length; i++) {
-    if (pts[i].y > pts[i - 1].y - 0.1) {
-      pts[i].y = pts[i - 1].y - 0.1;
+    if (pts[i].y > pts[i - 1].y - 0.04) {
+      pts[i].y = pts[i - 1].y - 0.04;
     }
   }
   pts[pts.length - 1].y = rv0.waterY - 0.15;
@@ -443,14 +452,14 @@ function buildTributaryGeometry(geomorph, tr, ti) {
     const ftz = tz / tLen;
     const bx = -ftz;
     const bz = ftx;
-    const slope = Math.max(0.028, (pPrev.y - pNext.y) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
+    const slope = Math.max(0.010, (pPrev.y - pNext.y) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
 
     for (let j = 0; j <= segsX; j++) {
       const crossT = (j / segsX) * 2.0 - 1.0;
       const wx = p.x + bx * crossT * p.hw;
       const wz = p.z + bz * crossT * p.hw;
       const bedY = geomorph.getHeightAt(wx, wz);
-      const depth = Math.max(0.0, p.y - bedY + (1.0 - Math.abs(crossT)) * 0.45);
+      const depth = Math.max(0.0, p.y - bedY + (1.0 - Math.abs(crossT)) * 0.35);
       positions.push(wx, p.y, wz);
       normals.push(ftx, 0.0, ftz);
       metas.push(p.flowDist, crossT, depth, slope);
@@ -479,7 +488,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
 
 export function createTerrenoWater(geomorph, atmoUniforms) {
   const group = new THREE.Group();
-  group.name = 'TERRENO_Hydrology_40km';
+  group.name = 'TERRENO_Hydrology_60km';
 
   const waterMat = new THREE.ShaderMaterial({
     uniforms: {

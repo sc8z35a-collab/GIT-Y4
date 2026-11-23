@@ -35,6 +35,11 @@ const perfGrid = document.getElementById('perf-grid');
 
 const driveHudEl = document.getElementById('drive-hud');
 const driveSpeedValEl = document.getElementById('drive-speed-val');
+const btnDriveAuto = document.getElementById('btn-drive-auto');
+const btnDriveCam = document.getElementById('btn-drive-cam');
+const btnDriveExit = document.getElementById('btn-drive-exit');
+const autopilotStopChip = document.getElementById('autopilot-stop-chip');
+const autopilotStopLabel = document.getElementById('autopilot-stop-label');
 
 const mobileActionsEl = document.getElementById('mobile-actions');
 const mobCrouch = document.getElementById('mob-crouch');
@@ -45,6 +50,8 @@ const terreno2dPanel = document.getElementById('terreno-2d-panel');
 const map3dControls = document.getElementById('map3d-controls');
 const btnMap3dFocus = document.getElementById('btn-map3d-focus');
 const btnMap3dOrbit = document.getElementById('btn-map3d-orbit');
+const btnMap3dVehRv = document.getElementById('btn-map3d-veh-rv');
+const btnMap3dVehArmor = document.getElementById('btn-map3d-veh-armor');
 const cadMapBody = document.getElementById('cad-map-body');
 const blueprintViewport = document.getElementById('blueprint-viewport');
 const bpToolsGroup = document.getElementById('bp-tools-group');
@@ -57,6 +64,8 @@ let mapVisible = false;
 let settingsVisible = false;
 let perfVisible = false;
 let isDriving = false;
+let hasActiveAutopilot = false;
+let selectedAutopilotVehicle = 'camper'; // 'camper' | 'armor'
 let activeSheetIdx = 30; // 30 = Full-Screen 3D Map, 31 = Authentic 2D Route Map, 0..22 = 23 CAD Blueprints
 let map3dOrbitMode = false;
 let terrenoMap2d = null;
@@ -64,6 +73,18 @@ let bpScale = 1.0;
 let bpPanX = 0;
 let bpPanY = 0;
 let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, yaw: Math.PI, todId: 'day', dx: 0, dz: 1 };
+
+function setSelectedAutopilotVehicle(v) {
+  selectedAutopilotVehicle = v === 'armor' ? 'armor' : 'camper';
+  if (btnMap3dVehRv) btnMap3dVehRv.classList.toggle('active', selectedAutopilotVehicle === 'camper');
+  if (btnMap3dVehArmor) btnMap3dVehArmor.classList.toggle('active', selectedAutopilotVehicle === 'armor');
+  if (explorer && explorer.setSelectedAutopilotVehicle) {
+    explorer.setSelectedAutopilotVehicle(selectedAutopilotVehicle);
+  }
+  if (terrenoMap2d && terrenoMap2d.getSelectedVehicle && terrenoMap2d.getSelectedVehicle() !== selectedAutopilotVehicle) {
+    terrenoMap2d.setSelectedVehicle(selectedAutopilotVehicle);
+  }
+}
 
 // ---- Service Worker Registration ----
 if ('serviceWorker' in navigator) {
@@ -151,25 +172,53 @@ btnInstall.addEventListener('click', async () => {
   btnInstall.classList.add('hidden');
 });
 
-// ---- CAD Blueprint 2D Controller + Silky 2-Finger Multi-Touch Pinch Zoom-Out/In & Omnidirectional Pan ----
+// ---- High-Resolution Native Vector SVG ViewBox CAD Blueprint Controller (Up to 12× Crisp Zoom!) ----
 const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {});
 
-function clampBlueprintPan() {
+function getBlueprintFitMetrics() {
   const rect = blueprintViewport.getBoundingClientRect();
-  const vw = rect.width || window.innerWidth || 924;
-  const vh = rect.height || window.innerHeight || 427;
-  // Generous omnidirectional freedom whether zoomed out (0.35x) or deeply zoomed in (5.0x)
-  const maxPanX = Math.max(vw * 0.85, vw * bpScale * 0.78);
-  const maxPanY = Math.max(vh * 0.85, vh * bpScale * 0.78);
+  const vpW = Math.max(200, rect.width || window.innerWidth || 924);
+  const vpH = Math.max(160, rect.height || window.innerHeight || 427);
+  const padT = 12;
+  const padB = 46;
+  const padX = 12;
+  const availW = Math.max(120, vpW - padX * 2);
+  const availH = Math.max(100, vpH - padT - padB);
+  const curVW = blueprint.curVW || 840;
+  const curVH = blueprint.curVH || 1590;
+  const fitScale = Math.min(availW / curVW, availH / curVH);
+  return { vpW, vpH, curVW, curVH, fitScale };
+}
+
+function clampBlueprintPan() {
+  const { vpW, vpH, curVW, curVH, fitScale } = getBlueprintFitMetrics();
+  const maxPanX = Math.max(vpW * 0.48, 0.56 * curVW * fitScale * bpScale);
+  const maxPanY = Math.max(vpH * 0.48, 0.56 * curVH * fitScale * bpScale);
   bpPanX = Math.max(-maxPanX, Math.min(maxPanX, bpPanX));
   bpPanY = Math.max(-maxPanY, Math.min(maxPanY, bpPanY));
 }
 
 function applyBlueprintTransform() {
-  bpScale = Math.max(0.35, Math.min(5.0, bpScale));
+  bpScale = Math.max(0.5, Math.min(12.0, bpScale));
   clampBlueprintPan();
-  blueprintMount.style.transform = `translate3d(${bpPanX.toFixed(2)}px, ${bpPanY.toFixed(2)}px, 0) scale(${bpScale.toFixed(4)})`;
+  // Pure native SVG viewBox zooming — zero blurry CSS raster scaling at any zoom level!
+  blueprintMount.style.transform = '';
+  const svg = blueprint.svg;
+  if (!svg) return;
+  const { vpW, vpH, curVW, curVH, fitScale } = getBlueprintFitMetrics();
+  const pxPerSvg = Math.max(1e-4, fitScale * bpScale);
+  const vbW = vpW / pxPerSvg;
+  const vbH = vpH / pxPerSvg;
+  const centerSvgX = curVW * 0.5 - bpPanX / pxPerSvg;
+  const centerSvgY = curVH * 0.5 - (bpPanY - 14) / pxPerSvg;
+  const vx = centerSvgX - vbW * 0.5;
+  const vy = centerSvgY - vbH * 0.5;
+  svg.setAttribute('viewBox', `${vx.toFixed(2)} ${vy.toFixed(2)} ${vbW.toFixed(2)} ${vbH.toFixed(2)}`);
 }
+
+window.addEventListener('resize', () => {
+  if (mapVisible && activeSheetIdx < 30) applyBlueprintTransform();
+});
 
 function setBlueprintView(scale = 1.0, panX = 0, panY = 0) {
   bpScale = Number(scale) || 1.0;
@@ -190,7 +239,7 @@ function zoomBlueprintAtPoint(factor, clientX = null, clientY = null) {
   const rx = clientX !== null ? (clientX - cx) : 0;
   const ry = clientY !== null ? (clientY - cy) : 0;
   const oldScale = bpScale;
-  const nextScale = Math.max(0.35, Math.min(5.0, oldScale * factor));
+  const nextScale = Math.max(0.5, Math.min(12.0, oldScale * factor));
   const u = (rx - bpPanX) / oldScale;
   const v = (ry - bpPanY) / oldScale;
   bpScale = nextScale;
@@ -199,8 +248,8 @@ function zoomBlueprintAtPoint(factor, clientX = null, clientY = null) {
   applyBlueprintTransform();
 }
 
-document.getElementById('btn-zoom-in').addEventListener('click', () => zoomBlueprintAtPoint(1.30));
-document.getElementById('btn-zoom-out').addEventListener('click', () => zoomBlueprintAtPoint(1 / 1.30));
+document.getElementById('btn-zoom-in').addEventListener('click', () => zoomBlueprintAtPoint(1.38));
+document.getElementById('btn-zoom-out').addEventListener('click', () => zoomBlueprintAtPoint(1 / 1.38));
 
 // Multi-Touch 2-Finger Pinch Zoom-Out/In + 1/2-Finger Omnidirectional Pan + Double-Tap Reset
 const bpPointers = new Map();
@@ -261,9 +310,8 @@ blueprintViewport.addEventListener('pointermove', (e) => {
     const oldScale = bpScale;
     let nextScale = oldScale;
     if (bpPrevDist > 10 && dist > 10) {
-      nextScale = Math.max(0.35, Math.min(5.0, oldScale * (dist / bpPrevDist)));
+      nextScale = Math.max(0.5, Math.min(12.0, oldScale * (dist / bpPrevDist)));
     }
-    // Simultaneous anchor-preserving pinch zoom + omnidirectional 2-finger pan!
     const u = (rxOld - bpPanX) / oldScale;
     const v = (ryOld - bpPanY) / oldScale;
     bpScale = nextScale;
@@ -307,30 +355,34 @@ blueprintViewport.addEventListener('dblclick', () => setBlueprintView(1.0, 0, 0)
 blueprintViewport.addEventListener('wheel', (e) => {
   if (!mapVisible || activeSheetIdx >= 30) return;
   e.preventDefault();
-  zoomBlueprintAtPoint(e.deltaY > 0 ? 0.88 : 1.14, e.clientX, e.clientY);
+  zoomBlueprintAtPoint(e.deltaY > 0 ? 0.86 : 1.18, e.clientX, e.clientY);
 }, { passive: false });
 
-// ---- Authentic 2D Topographic & 30-Waypoint Silent Autopilot Map Mount ----
+// ---- Authentic 2D Topographic & Dual-Camper Free-Destination Autopilot Map Mount ----
 function ensureMap2D() {
   if (terrenoMap2d || !explorer || !explorer.terreno) return terrenoMap2d;
   terrenoMap2d = explorer.terreno.getOrCreateMap2D({
-    onSelectWaypoint: (wp) => {
+    onChangeAutopilotVehicle: (vehKey) => {
+      setSelectedAutopilotVehicle(vehKey);
+    },
+    onSelectWaypoint: (wp, vehKey) => {
       if (!explorer || !wp) return;
-      explorer.startArmorAutopilotTo(wp.x, wp.z, wp.id);
-      toggleMap(false);
+      const key = vehKey || selectedAutopilotVehicle;
+      explorer.startCamperAutopilotTo(key, wp.x, wp.z, wp.id);
     },
-    onSelectDynamicTarget: (kind) => {
+    onSelectDynamicTarget: (kind, vehKey) => {
       if (!explorer || !kind) return;
-      explorer.startArmorAutopilotToDynamic(kind);
-      toggleMap(false);
+      const key = vehKey || selectedAutopilotVehicle;
+      explorer.startCamperAutopilotToDynamic(key, kind);
     },
-    onSelectWorldPoint: (wx, wz) => {
+    onSelectWorldPoint: (wx, wz, vehKey) => {
       if (!explorer) return;
-      explorer.startArmorAutopilotTo(wx, wz, 'custom');
-      toggleMap(false);
+      const key = vehKey || selectedAutopilotVehicle;
+      explorer.startCamperAutopilotTo(key, wx, wz, 'custom');
     },
   });
   terrenoMap2d.mount(terreno2dPanel);
+  terrenoMap2d.setSelectedVehicle(selectedAutopilotVehicle);
   return terrenoMap2d;
 }
 
@@ -362,8 +414,9 @@ function selectBlueprintFloor(sheetIdx) {
       requestAnimationFrame(() => m2d.render(lastPose));
     }
   } else if (!is3DMap) {
-    setBlueprintView(1.0, 0, 0);
     blueprint.setFloor(activeSheetIdx);
+    setBlueprintView(1.0, 0, 0);
+    requestAnimationFrame(() => applyBlueprintTransform());
     if (lastPose) blueprint.updateCameraPose(lastPose);
   }
 }
@@ -381,9 +434,11 @@ function syncGameplayOverlayVisibility() {
     interactPromptEl.classList.add('hidden');
     mobileActionsEl.classList.add('hidden');
     driveHudEl.classList.add('hidden');
+    if (autopilotStopChip) autopilotStopChip.classList.add('hidden');
   } else {
     driveHudEl.classList.toggle('hidden', !isDriving);
     mobileActionsEl.classList.toggle('hidden', isDriving);
+    if (autopilotStopChip) autopilotStopChip.classList.toggle('hidden', isDriving || !hasActiveAutopilot);
   }
 }
 
@@ -400,8 +455,15 @@ function toggleMap(force = null) {
   btnMap.classList.toggle('active', mapVisible);
   if (mapVisible) {
     if (settingsVisible) toggleSettings(false);
-    if (explorer) explorer.setMapOpen(true);
-    // Open into the High-Precision Full-Screen 3D Topographic Map (user can switch to 2D or any of 23 CAD sheets)
+    if (explorer) {
+      explorer.setMapOpen(true);
+      // Pre-select whichever camper the player is driving or inside!
+      if (explorer.drivingVehicle === 'armor' || explorer.activeBuilding === 'armor') {
+        setSelectedAutopilotVehicle('armor');
+      } else if (explorer.drivingVehicle === 'camper' || explorer.activeBuilding === 'camper') {
+        setSelectedAutopilotVehicle('camper');
+      }
+    }
     selectBlueprintFloor(activeSheetIdx === 31 ? 31 : 30);
   } else {
     if (explorer) {
@@ -436,16 +498,34 @@ function togglePerf(force = null) {
 
 function updateDriveHUD(driving, state = {}) {
   isDriving = driving;
+  hasActiveAutopilot = Boolean(state.autopilotActive);
   if (!mapVisible) {
-    // STRICTLY identical minimal speed pill in both manual and autonomous driving — ZERO extra indicators!
     driveHudEl.classList.toggle('hidden', !driving);
     mobileActionsEl.classList.toggle('hidden', driving);
+    if (autopilotStopChip) {
+      autopilotStopChip.classList.toggle('hidden', driving || !hasActiveAutopilot);
+    }
   }
   btnDriveExitSettings.classList.toggle('hidden', !driving);
   if (driving) {
     driveSpeedValEl.textContent = String(state.speedKmh ?? 0);
+    if (btnDriveAuto) {
+      const canAuto = state.canAutopilot !== false && (state.vehicle === 'camper' || state.vehicle === 'armor');
+      btnDriveAuto.classList.toggle('hidden', !canAuto);
+      btnDriveAuto.classList.toggle('active', Boolean(state.autopilotActive));
+      btnDriveAuto.textContent = state.autopilotActive ? '自動ON' : '自動運転';
+    }
+    if (btnDriveCam) {
+      const modeLabel = state.camMode === 'hood' ? '前方' : (state.camMode === 'chase' ? '後方' : '運転席');
+      btnDriveCam.textContent = `視点:${modeLabel}`;
+    }
     if (toggleLight) toggleLight.checked = Boolean(state.headlightsOn);
   } else {
+    if (autopilotStopLabel && hasActiveAutopilot) {
+      autopilotStopLabel.textContent = state.ridingAutopilot
+        ? '自動走行中（乗船中）・停止'
+        : 'キャンピングカー自動走行中・停止';
+    }
     if (toggleLight && explorer) toggleLight.checked = Boolean(explorer.flashlightOn);
   }
 }
@@ -566,13 +646,46 @@ btnDriveExitSettings.addEventListener('click', () => {
   }
 });
 
-driveHudEl.addEventListener('click', () => {
-  if (explorer && isDriving) explorer.interact();
-});
+if (btnDriveAuto) {
+  btnDriveAuto.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer && isDriving) explorer.toggleVehicleAutopilot();
+  });
+}
+if (btnDriveCam) {
+  btnDriveCam.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer && isDriving) explorer.cycleDriveCameraMode();
+  });
+}
+if (btnDriveExit) {
+  btnDriveExit.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer && isDriving) explorer.interact();
+  });
+}
+if (autopilotStopChip) {
+  autopilotStopChip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer) explorer.cancelAutopilot();
+  });
+}
+if (btnMap3dVehRv) {
+  btnMap3dVehRv.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelectedAutopilotVehicle('camper');
+  });
+}
+if (btnMap3dVehArmor) {
+  btnMap3dVehArmor.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelectedAutopilotVehicle('armor');
+  });
+}
 interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
 mobCrouch.addEventListener('click', () => explorer && !isDriving && explorer.toggleCrouch());
 
-// ---- High-Precision 3D Map Touch / Mouse Orbit, Pan, Pinch-Zoom & Tap-to-Teleport ----
+// ---- High-Precision 3D Map Touch / Mouse Orbit, Pan, Pinch-Zoom & Free-Destination Autopilot (NO Player Teleport!) ----
 btnMap3dFocus.addEventListener('click', () => {
   if (!explorer || !explorer.map3d) return;
   const focused = explorer.map3d.toggleFocusMode();
@@ -657,16 +770,17 @@ function releaseMapPointer(e) {
     mapHadMultiTouch = false;
   }
 
+  // Tap anywhere on 3D map sets free autonomous destination for the selected camper — NEVER teleports player!
   if (wasSingleTap && mapVisible && activeSheetIdx === 30 && explorer && explorer.map3d) {
     const rect = map3dGestureLayer.getBoundingClientRect();
     const hit = explorer.map3d.pickAtScreenPoint(e.clientX, e.clientY, rect);
     if (hit) {
-      if (hit.kind === 'landmark') {
-        explorer.teleportToLandmark(hit.id);
-      } else {
-        explorer.teleportToWorld(hit.worldX, hit.worldZ);
-      }
-      toggleMap(false);
+      explorer.startCamperAutopilotTo(
+        selectedAutopilotVehicle,
+        hit.worldX,
+        hit.worldZ,
+        hit.kind === 'landmark' ? hit.id : 'custom'
+      );
     }
   }
 }
