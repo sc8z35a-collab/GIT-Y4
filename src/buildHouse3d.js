@@ -14,6 +14,8 @@ import { buildArmorCamperAndContainer3D } from './buildArmorCamper3d.js';
 import { buildExtElevator3D } from './buildExtElevator3d.js';
 import { createTerrenoEngine } from './terreno/terrenoEngine.js';
 import { buildVillage3D } from './buildVillage3d.js';
+import { buildNullErea3D } from './buildNullErea3d.js';
+import { buildAirshipK113D } from './buildAirshipK113d.js';
 
 export function buildHouse3D(scene) {
   const mat = createSharedMaterials();
@@ -38,8 +40,8 @@ export function buildHouse3D(scene) {
   exteriorGroup.name = 'DeepForestExterior';
   root.add(exteriorGroup);
 
-  // 11 Main Tower levels: -3=B4F, -2=B3F, -1=B2F, 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=5F, 6=6F, 7=RF/Attic
-  const collidersByFloor = { '-3': [], '-2': [], '-1': [], 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
+  // 12 Levels: -40=NULL EREA B40F Hangar, -3=B4F, -2=B3F, -1=B2F, 0=B1F, 1=1F, 2=2F, 3=3F, 4=4F, 5=5F, 6=6F, 7=RF/Attic
+  const collidersByFloor = { '-40': [], '-3': [], '-2': [], '-1': [], 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
   const treeColliders = [];
   const boulderColliders = [];
   const interactiveDoors = [];
@@ -2345,6 +2347,49 @@ export function buildHouse3D(scene) {
   });
 
   // =========================================================================
+  // 10i. NULL EREA — 40m HIGH-SPEED ELEVATOR + 44-PLATE MECHANICAL SILO-40 + B40F HANGAR + AIRSHIP K-11
+  // =========================================================================
+  const nullGroundY = terreno ? terreno.geomorph.southRectY : -18.0;
+  const nullErea = buildNullErea3D({
+    scene,
+    interactiveProps,
+    interiorLights,
+    groundY: nullGroundY,
+  });
+  const airshipK11 = buildAirshipK113D({
+    scene,
+    interactiveDoors,
+    interactiveProps,
+    interiorLights,
+    b40Y: nullErea.b40Y,
+  });
+
+  // Static Colliders for NULL EREA Surface (floor 1) & B40F Underground Hangar (floor -40)
+  // Surface ELV-NULL Pavilion walls (open East face at X = -22.2!) & shaft walls
+  addCollider(1, -28.15, 29906.70, -27.85, 29913.30); // Pavilion Back West wall
+  addCollider(1, -28.00, 29906.70, -22.20, 29906.98); // Pavilion North glass wall
+  addCollider(1, -28.00, 29913.02, -22.20, 29913.30); // Pavilion South glass wall
+  addCollider(1, -26.35, 29908.65, -26.05, 29911.35); // ELV shaft West
+  addCollider(1, -26.35, 29908.65, -23.75, 29908.95); // ELV shaft North
+  addCollider(1, -26.35, 29911.05, -23.75, 29911.35); // ELV shaft South
+  addCollider(1, -14.65, 29909.30, -13.75, 29910.70); // Surface Silo Control Pedestal
+
+  // B40F (-40) Underground Hangar Perimeter Walls, ELV Shaft, Consoles & Fuel Silos
+  addCollider(-40, -26.35, 29908.65, -26.05, 29911.35); // ELV shaft West
+  addCollider(-40, -26.35, 29908.65, -23.75, 29908.95); // ELV shaft North
+  addCollider(-40, -26.35, 29911.05, -23.75, 29911.35); // ELV shaft South
+  addCollider(-40, -24.10, 29882.80, -23.45, 29909.30); // Hangar West-North wall
+  addCollider(-40, -24.10, 29910.70, -23.45, 29937.20); // Hangar West-South wall
+  addCollider(-40, +23.45, 29882.80, +24.10, 29937.20); // Hangar East wall
+  addCollider(-40, -23.80, 29882.50, +23.80, 29883.15); // Hangar North wall
+  addCollider(-40, -23.80, 29936.85, +23.80, 29937.50); // Hangar South wall
+  addCollider(-40, -14.90, 29904.50, -13.50, 29907.50); // Hangar Launch Command Console
+  // East 100L Fuel Tanks
+  [29904.0, 29910.0, 29916.0].forEach((fz) => {
+    addCollider(-40, 18.0, fz - 1.5, 21.0, fz + 1.5);
+  });
+
+  // =========================================================================
   // 11. POCO F7 (ADRENO 825) UV-BAKED CANONICAL STATIC GEOMETRY BATCHING
   // =========================================================================
   const { batchedGroup, stats: batchStats } = batchStaticGroups(
@@ -2353,7 +2398,7 @@ export function buildHouse3D(scene) {
   );
   root.add(batchedGroup);
 
-  // Combine batching stats across static buildings + deep basement + elevators + garage + vehicles + 5-house village
+  // Combine batching stats across static buildings + deep basement + elevators + garage + vehicles + 5-house village + NULL EREA + K-11
   const combinedBefore = batchStats.beforeMeshes
     + deepBasement.batchStats.beforeMeshes
     + elevator.batchStats.beforeMeshes
@@ -2363,7 +2408,9 @@ export function buildHouse3D(scene) {
     + towContainer.batchStats.beforeMeshes
     + camper.batchStats.beforeMeshes
     + kei.batchStats.beforeMeshes
-    + village.batchStats.beforeMeshes;
+    + village.batchStats.beforeMeshes
+    + nullErea.batchStats.beforeMeshes
+    + airshipK11.batchStats.beforeMeshes;
   const combinedAfter = batchStats.afterDrawCalls
     + deepBasement.batchStats.afterDrawCalls
     + elevator.batchStats.afterDrawCalls
@@ -2373,7 +2420,9 @@ export function buildHouse3D(scene) {
     + towContainer.batchStats.afterDrawCalls
     + camper.batchStats.afterDrawCalls
     + kei.batchStats.afterDrawCalls
-    + village.batchStats.afterDrawCalls;
+    + village.batchStats.afterDrawCalls
+    + nullErea.batchStats.afterDrawCalls
+    + airshipK11.batchStats.afterDrawCalls;
   const combinedBatchStats = {
     beforeMeshes: combinedBefore,
     afterDrawCalls: combinedAfter,
@@ -2387,7 +2436,9 @@ export function buildHouse3D(scene) {
       + towContainer.batchStats.totalTriangles
       + camper.batchStats.totalTriangles
       + kei.batchStats.totalTriangles
-      + village.batchStats.totalTriangles,
+      + village.batchStats.totalTriangles
+      + nullErea.batchStats.totalTriangles
+      + airshipK11.batchStats.totalTriangles,
   };
 
   return {
@@ -2409,6 +2460,9 @@ export function buildHouse3D(scene) {
     elevator,
     extElevator,
     village,
+    nullErea,
+    nullElevator: nullErea.elevator,
+    airshipK11,
     b3Thermal: deepBasement.b3Thermal,
     b4Lab: deepBasement.b4Lab,
     terreno,

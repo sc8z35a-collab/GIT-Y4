@@ -619,6 +619,16 @@ export const TERRENO_LANDMARKS = [
     yaw: 0.10,
     pitch: -0.02,
   },
+  {
+    id: 'null_erea',
+    code: 'NULL',
+    nameJp: 'NULL EREA・地下40m飛行船基地 SILO-40',
+    desc: '南端空白地帯 NULL EREA（40m高速ELV・4層44枚可動屋根・巨大高昇機・飛行船K-11格納庫）',
+    x: -20.5,
+    z: 29910.0,
+    yaw: -Math.PI * 0.5,
+    pitch: -0.04,
+  },
 ];
 
 /**

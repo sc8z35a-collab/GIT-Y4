@@ -446,4 +446,121 @@ export class SpatialForestAudio {
     g.connect(this.ctx.destination);
     src.start(t, Math.random() * 1.2, 0.48);
   }
+
+  updateAirshipEngine(active, speedNorm = 0) {
+    if (!this.ctx || this.muted) {
+      if (this.airGain && this.ctx) {
+        this.airGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.14);
+      }
+      if (this.airTurbGain && this.ctx) {
+        this.airTurbGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.14);
+      }
+      return;
+    }
+    if (!this.airOsc) {
+      // Layer 1: Smooth TF-E11 rotary-turbo hybrid low harmonic thrum
+      this.airOsc = this.ctx.createOscillator();
+      this.airOsc.type = 'triangle';
+      this.airOsc.frequency.value = 54;
+      this.airFilt = this.ctx.createBiquadFilter();
+      this.airFilt.type = 'lowpass';
+      this.airFilt.frequency.value = 180;
+      this.airGain = this.ctx.createGain();
+      this.airGain.gain.value = 0.0;
+      this.airOsc.connect(this.airFilt);
+      this.airFilt.connect(this.airGain);
+      this.airGain.connect(this.ctx.destination);
+      this.airOsc.start();
+
+      // Layer 2: Sleek coaxial ducted-fan high-efficiency turbine whistle
+      this.airTurbOsc = this.ctx.createOscillator();
+      this.airTurbOsc.type = 'sine';
+      this.airTurbOsc.frequency.value = 210;
+      this.airTurbGain = this.ctx.createGain();
+      this.airTurbGain.gain.value = 0.0;
+      this.airTurbOsc.connect(this.airTurbGain);
+      this.airTurbGain.connect(this.ctx.destination);
+      this.airTurbOsc.start();
+    }
+    const t = this.ctx.currentTime;
+    const s = Math.max(0, Math.min(1, speedNorm));
+    this.airGain.gain.setTargetAtTime(active ? (0.026 + s * 0.042) : 0.0, t, 0.12);
+    this.airOsc.frequency.setTargetAtTime(52 + s * 64, t, 0.10);
+    this.airFilt.frequency.setTargetAtTime(160 + s * 290, t, 0.10);
+    this.airTurbGain.gain.setTargetAtTime(active ? (0.005 + s * 0.016) : 0.0, t, 0.12);
+    this.airTurbOsc.frequency.setTargetAtTime(205 + s * 420, t, 0.10);
+  }
+
+  playSiloHydraulic(stage = 'unlock') {
+    if (!this.ctx || this.muted || !this.noiseBuffer) return;
+    const t = this.ctx.currentTime;
+    // Deep heavy hydraulic mecha thrum + metallic latch clank
+    const sub = this.ctx.createOscillator();
+    const sg = this.ctx.createGain();
+    sub.type = 'sawtooth';
+    const f0 = stage === 'surface_lock' ? 96 : (stage === 'roof_open' ? 68 : 82);
+    sub.frequency.setValueAtTime(f0, t);
+    sub.frequency.exponentialRampToValueAtTime(28, t + 0.55);
+    sg.gain.setValueAtTime(0.001, t);
+    sg.gain.linearRampToValueAtTime(0.11, t + 0.04);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 0.62);
+    const lpf = this.ctx.createBiquadFilter();
+    lpf.type = 'lowpass';
+    lpf.frequency.value = 180;
+    sub.connect(lpf);
+    lpf.connect(sg);
+    sg.connect(this.ctx.destination);
+    sub.start(t);
+    sub.stop(t + 0.65);
+
+    // Pneumatic hiss layer for mecha blast plates
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(stage === 'roof_open' ? 680 : 420, t);
+    bp.frequency.linearRampToValueAtTime(240, t + 0.72);
+    bp.Q.value = 2.4;
+    const ng = this.ctx.createGain();
+    ng.gain.setValueAtTime(0.09, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.75);
+    src.connect(bp);
+    bp.connect(ng);
+    ng.connect(this.ctx.destination);
+    src.start(t, Math.random() * 1.1, 0.78);
+
+    // Warning / Confirmation aerospace chime on launch unlock or lock
+    if (stage === 'unlock' || stage === 'surface_lock') {
+      const notes = stage === 'unlock' ? [523.25, 659.25, 783.99] : [783.99, 1046.5];
+      notes.forEach((freq, idx) => {
+        const osc = this.ctx.createOscillator();
+        const og = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t + idx * 0.14);
+        og.gain.setValueAtTime(0.055, t + idx * 0.14);
+        og.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.14 + 0.24);
+        osc.connect(og);
+        og.connect(this.ctx.destination);
+        osc.start(t + idx * 0.14);
+        osc.stop(t + idx * 0.14 + 0.26);
+      });
+    }
+  }
+
+  playRefuelSound() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    [587.33, 880.0, 1174.66].forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t + idx * 0.09);
+      g.gain.setValueAtTime(0.07, t + idx * 0.09);
+      g.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.09 + 0.25);
+      osc.connect(g);
+      g.connect(this.ctx.destination);
+      osc.start(t + idx * 0.09);
+      osc.stop(t + idx * 0.09 + 0.27);
+    });
+  }
 }

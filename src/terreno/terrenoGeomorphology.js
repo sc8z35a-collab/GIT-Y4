@@ -922,8 +922,10 @@ export function buildTerrenoGeomorphology() {
     const isRoad = g.roadPad > 0.42 && dComp > 22.0 && !inVillage;
     const rw = evalRegionWeights(wx, wz);
 
+    const inNullErea = isInsideSouthRect(wx, wz, 2.0);
     let zoneJp = 'スギ・ヒノキ平地林';
-    if (inVillage) zoneJp = '杉ノ郷集落';
+    if (inNullErea) zoneJp = 'NULL EREA・地下40m飛行船基地';
+    else if (inVillage) zoneJp = '杉ノ郷集落';
     else if (inRiver) zoneJp = '黒杉川の清流';
     else if (isRoad) zoneJp = 'カントリーロード';
     else {

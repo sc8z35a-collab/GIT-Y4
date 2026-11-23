@@ -10,6 +10,7 @@ import {
   STORAGE, STORAGE_FLOORS, CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN, SHEET_OFFSETS, getAtticCeilingY,
   ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F, getFloorByPhysicalIndex,
   GARAGE, GARAGE_PLAN, ARMOR_CAMPER, ARMOR_CAMPER_PLAN, TOW_CONTAINER, TOW_CONTAINER_PLAN, EXT_ELEVATOR,
+  NULL_EREA, NULL_ELEVATOR, NULL_HANGAR_PLAN, AIRSHIP_K11, AIRSHIP_K11_PLAN,
 } from './planData.js';
 import { TERRENO_WORLD, TERRENO_LANDMARKS, evalMainRiver } from './terreno/terrenoConfig.js';
 import { AUTOPILOT_WAYPOINTS } from './terreno/terrenoAutopilot.js';
@@ -47,15 +48,18 @@ export class FirstPersonHouseExplorer {
     this.container = container;
     this.callbacks = callbacks;
 
-    // Multi-Unit Forest Compound + Deep Basement Expansion + Giant Garage + Armor Camper + Exterior Attic Elevator:
+    // Multi-Unit Forest Compound + Deep Basement Expansion + Giant Garage + Armor Camper + NULL EREA Silo-40 & Airship K-11:
     this.currentFloor = HOUSE.spawnFloor; // 1 (1F LDK)
     this.activeFlight = null;
-    this.activeBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper' | 'kei' | 'garage' | 'armor' | 'container' | 'courtyard'
+    this.activeBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper' | 'kei' | 'garage' | 'armor' | 'container' | 'null_hangar' | 'k11' | 'courtyard'
     this.activeStairBuilding = 'main'; // 'main' | 'annex' | 'storage' | 'camper'
     this.inElevator = false;
     this.nearElevator = false;
     this.inExtElevator = false;
     this.nearExtElevator = false;
+    this.inNullElevator = false;
+    this.nearNullElevator = false;
+    this.onNullLift = false;
     this.lastElvHudSig = '';
     this.playerPos = new THREE.Vector3(1.62, 0.0, 6.25);
     this.playerVel = new THREE.Vector3();
@@ -71,13 +75,14 @@ export class FirstPersonHouseExplorer {
     this.autoJumpCooldown = 0.0;
     this.autoDoorsReadyTimer = 0.55;
 
-    this.drivingVehicle = null; // null | 'camper' | 'kei' | 'armor'
+    this.drivingVehicle = null; // null | 'camper' | 'kei' | 'armor' | 'k11'
     this.driveCamMode = 'cockpit'; // 'cockpit' | 'hood' | 'chase'
+    this.k11ClimbInput = 0; // -1 descend, 0 hold, +1 climb (touch HUD buttons)
     this.bumpCooldown = 0;
     this.vehicleBlockedTimer = 0;
 
-    // Dual-Camper Autonomous Navigation State (CAMPER-75 & ARMOR-155, decoupled from player seat!)
-    this.autopilotRoutes = { camper: null, armor: null };
+    // Autonomous Navigation State (CAMPER-75, ARMOR-155, & Flagship Airship K-11!)
+    this.autopilotRoutes = { camper: null, armor: null, k11: null };
     this.selectedAutopilotVehicle = 'camper';
     this.stormEnabled = false;
 
@@ -493,7 +498,38 @@ export class FirstPersonHouseExplorer {
     };
   }
 
+  worldToK11Local(wx, wz) {
+    const kp = this.house.airshipK11.pose;
+    const dx = wx - kp.cx;
+    const dz = wz - kp.cz;
+    const c = Math.cos(kp.yaw);
+    const s = Math.sin(kp.yaw);
+    return {
+      lx: dx * c - dz * s + AIRSHIP_K11.cabin.outerWidth * 0.5,
+      lz: dx * s + dz * c + AIRSHIP_K11.cabin.outerLength * 0.5,
+    };
+  }
+
+  k11LocalToWorld(lx, lz) {
+    const kp = this.house.airshipK11.pose;
+    const rx = lx - AIRSHIP_K11.cabin.outerWidth * 0.5;
+    const rz = lz - AIRSHIP_K11.cabin.outerLength * 0.5;
+    const c = Math.cos(kp.yaw);
+    const s = Math.sin(kp.yaw);
+    return {
+      x: kp.cx + rx * c + rz * s,
+      z: kp.cz - rx * s + rz * c,
+    };
+  }
+
+  _notifyStatus(text, tone = 'info') {
+    if (this.callbacks.onStatusToast) {
+      this.callbacks.onStatusToast(text, tone);
+    }
+  }
+
   _getVehicleObj(key) {
+    if (key === 'k11') return this.house.airshipK11;
     if (key === 'kei') return this.house.kei;
     if (key === 'armor') return this.house.armorCamper;
     return this.house.camper;
@@ -557,26 +593,197 @@ export class FirstPersonHouseExplorer {
     return cont.hitched;
   }
 
+  toggleNullSilo(force = null) {
+    const ne = this.house.nullErea;
+    if (!ne || !ne.silo) return false;
+    const ok = force === true
+      ? ne.silo.startLaunchSequence()
+      : (force === false ? ne.silo.startStowSequence() : ne.silo.toggleSequence());
+    if (ok) {
+      this.audio.playSiloHydraulic(ne.silo.state === 'LAUNCH_OPENING' ? 'unlock' : 'stow_start');
+      this._notifyStatus(
+        ne.silo.state === 'LAUNCH_OPENING'
+          ? 'SILO-40：44枚装甲屋根開放 → 巨大高昇機40m上昇開始'
+          : 'SILO-40：地下40mへ格納降下 → 44枚屋根閉鎖',
+        'info',
+      );
+    }
+    return ok;
+  }
+
+  snapNullSilo(open = true) {
+    const ne = this.house.nullErea;
+    if (!ne || !ne.silo) return;
+    ne.silo.snapState(open);
+    if (this.house.airshipK11 && this.house.airshipK11.dockedInSilo) {
+      this.house.airshipK11.pose.y = ne.silo.liftY;
+      this.house.airshipK11.syncTransform();
+    }
+  }
+
+  snapNullElevator(floor = 1, open = true) {
+    if (this.house.nullElevator) {
+      this.house.nullElevator.snapToFloor(floor, open);
+    }
+  }
+
+  setK11ClimbInput(v) {
+    this.k11ClimbInput = Math.max(-1, Math.min(1, Number(v) || 0));
+  }
+
+  setK11Pose(cx, y, cz, yaw = 0, dockedInSilo = false) {
+    const k11 = this.house.airshipK11;
+    if (!k11) return;
+    k11.pose.cx = cx;
+    k11.pose.y = y;
+    k11.pose.cz = cz;
+    k11.pose.yaw = yaw;
+    k11.dockedInSilo = Boolean(dockedInSilo);
+    k11.velX = 0; k11.velY = 0; k11.velZ = 0; k11.speed = 0;
+    const surfY = this.terreno ? this.terreno.getHeightAt(cx, cz) : 0;
+    k11.altitudeAGL = Math.max(0, y - surfY);
+    k11.syncTransform();
+  }
+
+  isK11AtRefuelStation() {
+    const k11 = this.house.airshipK11;
+    if (!k11) return { canRefuel: false, stationName: null };
+    const { cx, cz } = k11.pose;
+    const distNull = Math.hypot(cx - NULL_EREA.originX, cz - NULL_EREA.originZ);
+    if (distNull < NULL_EREA.refuelRadius && (k11.dockedInSilo || k11.altitudeAGL <= 14.0)) {
+      return { canRefuel: true, stationName: 'NULL EREA 車庫 (SILO-40)' };
+    }
+    const hc = NULL_EREA.homeRefuelCenter;
+    const distHome = Math.hypot(cx - hc.x, cz - hc.z);
+    if (distHome < hc.radius && k11.altitudeAGL <= 14.0) {
+      return { canRefuel: true, stationName: '自宅 (NARROW-50 拠点)' };
+    }
+    return { canRefuel: false, stationName: null };
+  }
+
+  refuelK11() {
+    const k11 = this.house.airshipK11;
+    if (!k11) return false;
+    const check = this.isK11AtRefuelStation();
+    if (!check.canRefuel) {
+      this.audio.playBump();
+      this._notifyStatus('給油不可：車庫(NULL EREA)または自宅に戻って着陸してください', 'error');
+      return false;
+    }
+    k11.fuelL = AIRSHIP_K11.maxFuelL;
+    this.audio.playRefuelSound();
+    this._notifyStatus(`給油完了 (${check.stationName})：100.0L / 航続 300km`, 'ok');
+    this._notifyDriveHUD();
+    return true;
+  }
+
+  /**
+   * Breakthrough #4 — Summon selected camper ('camper' = CAMPER-75 or 'armor' = ARMOR-155)
+   * unmanned to K-11's current horizontal position (X, Z excluding altitude)!
+   * Strictly rejects rivers, floods, steep cliffs, buildings, open silo pit, and A* unreachable spots!
+   */
+  summonCamperToK11(vehicleKey = 'camper') {
+    const k11 = this.house.airshipK11;
+    if (!k11 || !this.terreno || !this.terreno.autopilot) return { valid: false, reasonJp: 'ナビ初期化中' };
+    const key = vehicleKey === 'armor' ? 'armor' : 'camper';
+    const veh = this._getVehicleObj(key);
+    const goalX = k11.pose.cx;
+    const goalZ = k11.pose.cz;
+    const siloOpen = Boolean(this.house.nullErea && !this.house.nullErea.silo.isRoofSealed());
+
+    const check = this.terreno.autopilot.validateCamperDestination(
+      key,
+      veh.pose.cx,
+      veh.pose.cz,
+      goalX,
+      goalZ,
+      { siloOpen },
+    );
+
+    if (!check.valid) {
+      this.audio.playBump();
+      this._notifyStatus(check.reasonJp, 'error');
+      return check;
+    }
+
+    if (key === 'armor') this._ensureGarageGatesOpenForArmor();
+    const label = key === 'armor' ? '装甲RV (ARMOR-155)' : 'RV (CAMPER-75)';
+    const route = {
+      targetId: 'k11_summon',
+      goalX,
+      goalZ,
+      points: check.points,
+      cursor: 0,
+      isSummon: true,
+      stuckTimer: 0,
+      stuckStage: 0,
+      recoverTimer: 0,
+      recoverDir: 1,
+      lastCheckX: veh.pose.cx,
+      lastCheckZ: veh.pose.cz,
+      checkClock: 0,
+    };
+    this.autopilotRoutes[key] = route;
+    this.audio.playElevatorChime(1);
+    const distKm = (check.distM / 1000).toFixed(2);
+    this._notifyStatus(`${label} 呼出発進 → K-11直下 (${distKm} km・自律スタック修正ON)`, 'ok');
+    this._notifyDriveHUD();
+    return { valid: true, route, distM: check.distM };
+  }
+
+  /**
+   * Breakthrough #3 — Free-Point Map Autopilot for Airship K-11!
+   */
+  startK11AutopilotTo(goalX, goalZ, targetId = 'custom') {
+    const k11 = this.house.airshipK11;
+    if (!k11 || !this.terreno || !this.terreno.autopilot) return null;
+    if (k11.fuelL <= 0.1) {
+      this.audio.playBump();
+      this._notifyStatus('燃料切れ(0L)：車庫または自宅で給油してください', 'error');
+      return null;
+    }
+    const points = this.terreno.autopilot.computeAirshipRoute(k11.pose.cx, k11.pose.cz, goalX, goalZ);
+    const route = {
+      targetId,
+      goalX,
+      goalZ,
+      points,
+      cursor: 0,
+      isAirship: true,
+    };
+    this.autopilotRoutes.k11 = route;
+    this.selectedAutopilotVehicle = 'k11';
+    if (k11.dockedInSilo && this.house.nullErea && !this.house.nullErea.silo.isSurfaceReady()) {
+      this.house.nullErea.silo.startLaunchSequence();
+      this.audio.playSiloHydraulic('unlock');
+    }
+    const distKm = (Math.hypot(goalX - k11.pose.cx, goalZ - k11.pose.cz) / 1000).toFixed(2);
+    this._notifyStatus(`K-11 自動飛行開始 (目標まで ${distKm} km)`, 'ok');
+    this._notifyDriveHUD();
+    return route;
+  }
+
   cancelAutopilot(vehicleKey = null) {
     if (vehicleKey) {
       if (this.autopilotRoutes[vehicleKey]) this.autopilotRoutes[vehicleKey] = null;
     } else {
       this.autopilotRoutes.camper = null;
       this.autopilotRoutes.armor = null;
+      this.autopilotRoutes.k11 = null;
     }
     this._notifyDriveHUD();
   }
 
   isAutopilotActive(vehicleKey = null) {
     if (vehicleKey) return Boolean(this.autopilotRoutes[vehicleKey]);
-    if (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor') {
+    if (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' || this.drivingVehicle === 'k11') {
       return Boolean(this.autopilotRoutes[this.drivingVehicle]);
     }
-    return Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor);
+    return Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11);
   }
 
   setSelectedAutopilotVehicle(vehicleKey) {
-    this.selectedAutopilotVehicle = vehicleKey === 'armor' ? 'armor' : 'camper';
+    this.selectedAutopilotVehicle = vehicleKey === 'k11' ? 'k11' : (vehicleKey === 'armor' ? 'armor' : 'camper');
     return this.selectedAutopilotVehicle;
   }
 
@@ -593,11 +800,6 @@ export class FirstPersonHouseExplorer {
     return this.driveCamMode;
   }
 
-  /**
-   * Start autonomous driving for CAMPER-75 ('camper') or ARMOR-155 ('armor') to ANY free world destination.
-   * NEVER teleports the player! If player is already seated in that camper, autopilot takes over seamlessly;
-   * otherwise the camper drives autonomously on its own (and player can ride inside freely!).
-   */
   _ensureGarageGatesOpenForArmor() {
     const ap = this.house.armorCamper?.pose;
     if (!ap || ap.cx < 11.0 || ap.cx > 23.0 || ap.cz < -10.0 || ap.cz > 16.0) return;
@@ -613,6 +815,9 @@ export class FirstPersonHouseExplorer {
 
   startCamperAutopilotTo(vehicleKey, goalX, goalZ, targetId = 'custom') {
     if (!this.terreno || !this.terreno.autopilot) return null;
+    if (vehicleKey === 'k11') {
+      return this.startK11AutopilotTo(goalX, goalZ, targetId);
+    }
     const key = vehicleKey === 'armor' ? 'armor' : 'camper';
     if (key === 'armor') this._ensureGarageGatesOpenForArmor();
     const veh = this._getVehicleObj(key);
@@ -623,6 +828,13 @@ export class FirstPersonHouseExplorer {
       goalZ,
       points,
       cursor: 0,
+      stuckTimer: 0,
+      stuckStage: 0,
+      recoverTimer: 0,
+      recoverDir: 1,
+      lastCheckX: veh.pose.cx,
+      lastCheckZ: veh.pose.cz,
+      checkClock: 0,
     };
     this.autopilotRoutes[key] = route;
     this.selectedAutopilotVehicle = key;
@@ -631,11 +843,27 @@ export class FirstPersonHouseExplorer {
   }
 
   startCamperAutopilotToDynamic(vehicleKey, kind) {
+    if (vehicleKey === 'k11') {
+      if (kind === 'home') return this.startK11AutopilotTo(1.5, -24.0, 'dyn_home');
+      if (kind === 'null_erea' || kind === 'k11') return this.startK11AutopilotTo(NULL_EREA.originX, NULL_EREA.originZ, 'dyn_null');
+      if (kind === 'kei') return this.startK11AutopilotTo(this.house.kei.pose.cx, this.house.kei.pose.cz, 'dyn_kei');
+      if (kind === 'container') return this.startK11AutopilotTo(this.house.towContainer.pose.cx, this.house.towContainer.pose.cz, 'dyn_container');
+      if (kind === 'camper') return this.startK11AutopilotTo(this.house.camper.pose.cx, this.house.camper.pose.cz, 'dyn_camper');
+      if (kind === 'armor') return this.startK11AutopilotTo(this.house.armorCamper.pose.cx, this.house.armorCamper.pose.cz, 'dyn_armor');
+      return null;
+    }
     const key = vehicleKey === 'armor' ? 'armor' : 'camper';
     if (kind === 'home') {
       const gx = key === 'camper' ? 7.75 : 15.6;
       const gz = key === 'camper' ? -12.0 : -15.0;
       return this.startCamperAutopilotTo(key, gx, gz, 'dyn_home');
+    }
+    if (kind === 'null_erea') {
+      return this.startCamperAutopilotTo(key, NULL_EREA.camperDock.cx, NULL_EREA.camperDock.cz, 'dyn_null');
+    }
+    if (kind === 'k11') {
+      const res = this.summonCamperToK11(key);
+      return res.valid ? res.route : null;
     }
     if (kind === 'kei') {
       const kp = this.house.kei.pose;
@@ -660,17 +888,25 @@ export class FirstPersonHouseExplorer {
 
   toggleVehicleAutopilot(vehicleKey = null) {
     const key = vehicleKey
-      || (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' ? this.drivingVehicle : null)
-      || (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' ? this.activeBuilding : null)
+      || (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' || this.drivingVehicle === 'k11' ? this.drivingVehicle : null)
+      || (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'k11' ? this.activeBuilding : null)
       || this.selectedAutopilotVehicle
       || 'camper';
-    if (key !== 'camper' && key !== 'armor') return false;
+    if (key !== 'camper' && key !== 'armor' && key !== 'k11') return false;
     if (this.autopilotRoutes[key]) {
       this.autopilotRoutes[key] = null;
       this._notifyDriveHUD();
       return false;
     }
     if (!this.terreno || !this.terreno.autopilot) return false;
+    if (key === 'k11') {
+      const k11 = this.house.airshipK11;
+      const fx = -Math.sin(k11.pose.yaw);
+      const fz = -Math.cos(k11.pose.yaw);
+      const gx = Math.max(TERRENO_WORLD.playMinX + 80, Math.min(TERRENO_WORLD.playMaxX - 80, k11.pose.cx + fx * 6000));
+      const gz = Math.max(TERRENO_WORLD.playMinZ + 80, Math.min(TERRENO_WORLD.playMaxZ - 80, k11.pose.cz + fz * 6000));
+      return Boolean(this.startK11AutopilotTo(gx, gz, 'cruise'));
+    }
     if (key === 'armor') this._ensureGarageGatesOpenForArmor();
     const veh = this._getVehicleObj(key);
     const points = this.terreno.autopilot.buildCruiseAheadRoute(veh.pose.cx, veh.pose.cz, veh.pose.yaw, 2800);
@@ -681,6 +917,13 @@ export class FirstPersonHouseExplorer {
       goalZ: last[1],
       points,
       cursor: 0,
+      stuckTimer: 0,
+      stuckStage: 0,
+      recoverTimer: 0,
+      recoverDir: 1,
+      lastCheckX: veh.pose.cx,
+      lastCheckZ: veh.pose.cz,
+      checkClock: 0,
     };
     this.selectedAutopilotVehicle = key;
     this._notifyDriveHUD();
@@ -698,21 +941,45 @@ export class FirstPersonHouseExplorer {
   _notifyDriveHUD() {
     if (!this.callbacks.onDriveChange) return;
     const activeKey = this.drivingVehicle;
-    const activeRiderAuto = (this.activeBuilding === 'camper' && this.autopilotRoutes.camper)
-      ? 'camper'
-      : ((this.activeBuilding === 'armor' && this.autopilotRoutes.armor) ? 'armor' : null);
+    const activeRiderAuto = (this.activeBuilding === 'k11' && this.autopilotRoutes.k11)
+      ? 'k11'
+      : ((this.activeBuilding === 'camper' && this.autopilotRoutes.camper)
+        ? 'camper'
+        : ((this.activeBuilding === 'armor' && this.autopilotRoutes.armor) ? 'armor' : null));
     if (!activeKey) {
       this.callbacks.onDriveChange(false, {
         vehicle: activeRiderAuto,
-        autopilotActive: Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor),
+        autopilotActive: Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11),
         autopilotCamper: Boolean(this.autopilotRoutes.camper),
         autopilotArmor: Boolean(this.autopilotRoutes.armor),
+        autopilotK11: Boolean(this.autopilotRoutes.k11),
         ridingAutopilot: activeRiderAuto,
         camMode: this.driveCamMode,
       });
       return;
     }
     const veh = this._getVehicleObj(activeKey);
+    if (activeKey === 'k11') {
+      const refuelCheck = this.isK11AtRefuelStation();
+      const nearSilo = Math.hypot(veh.pose.cx - NULL_EREA.originX, veh.pose.cz - NULL_EREA.originZ) < 42.0;
+      this.callbacks.onDriveChange(true, {
+        vehicle: 'k11',
+        badge: 'K-11 TECNICA FORCES',
+        speedKmh: Math.round(veh.groundSpeedKmh || 0),
+        altAgl: Math.round(veh.altitudeAGL || 0),
+        fuelL: Number((veh.fuelL ?? 100).toFixed(1)),
+        rangeKm: Math.round((veh.fuelL ?? 100) * AIRSHIP_K11.kmPerLiter),
+        windKmh: Math.round(veh.windSpeedKmh || 0),
+        canRefuel: refuelCheck.canRefuel && veh.fuelL < 99.9,
+        nearSilo,
+        siloState: this.house.nullErea ? this.house.nullErea.silo.state : 'STORED_B40',
+        headlightsOn: veh.headlightsOn,
+        autopilotActive: Boolean(this.autopilotRoutes.k11),
+        canAutopilot: true,
+        camMode: this.driveCamMode,
+      });
+      return;
+    }
     this.callbacks.onDriveChange(true, {
       vehicle: activeKey,
       badge: activeKey === 'kei' ? 'KEI-340 660cc' : (activeKey === 'armor' ? 'ARMOR-155 8×8' : 'CAMPER-75 6×6'),
@@ -729,7 +996,7 @@ export class FirstPersonHouseExplorer {
     const key = vehicleKey || this.drivingVehicle || 'camper';
     const veh = this._getVehicleObj(key);
     veh.headlightsOn = force !== null ? force : !veh.headlightsOn;
-    const beamInt = key === 'kei' ? 8.2 : (key === 'armor' ? 12.0 : 9.5);
+    const beamInt = key === 'k11' ? 16.0 : (key === 'kei' ? 8.2 : (key === 'armor' ? 12.0 : 9.5));
     veh.headlights.forEach((h) => {
       h.intensity = veh.headlightsOn ? beamInt : 0.0;
     });
@@ -754,6 +1021,45 @@ export class FirstPersonHouseExplorer {
 
   toggleArmorDrive(force = null) {
     this.toggleVehicleDrive('armor', force);
+  }
+
+  toggleK11Pilot(force = null) {
+    const k11 = this.house.airshipK11;
+    if (!k11) return;
+    const isPiloting = this.drivingVehicle === 'k11';
+    const next = force !== null ? Boolean(force) : !isPiloting;
+    if (next && isPiloting) return;
+    if (!next && !isPiloting) return;
+
+    this.drivingVehicle = next ? 'k11' : null;
+    this.k11ClimbInput = 0;
+    if (next) {
+      this.inElevator = false;
+      this.inExtElevator = false;
+      this.inNullElevator = false;
+      this.activeFlight = null;
+      this.activeBuilding = 'k11';
+      this.currentFloor = k11.dockedInSilo && this.house.nullErea && this.house.nullErea.silo.liftProgress < 0.5 ? -40 : 1;
+      const seatW = this.k11LocalToWorld(AIRSHIP_K11.pilotSeatLocal.x, AIRSHIP_K11.pilotSeatLocal.z);
+      this.playerPos.set(seatW.x, 0, seatW.z);
+      this.floorY = k11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
+      this.eyeHeight = 1.48;
+      this.yaw = k11.pose.yaw;
+      this.pitch = -0.05;
+    } else {
+      const standW = this.k11LocalToWorld(2.40, 2.85);
+      this.playerPos.set(standW.x, 0, standW.z);
+      this.playerVel.set(0, 0, 0);
+      this.activeBuilding = 'k11';
+      this.currentFloor = k11.dockedInSilo && this.house.nullErea && this.house.nullErea.silo.liftProgress < 0.5 ? -40 : 1;
+      this.floorY = k11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
+      this.eyeHeight = 1.56;
+      if (!this.autopilotRoutes.k11 && k11.altitudeAGL < 1.5) {
+        this.audio.updateAirshipEngine(false, 0);
+      }
+    }
+    this._syncCameraFrustum();
+    this._notifyDriveHUD();
   }
 
   _findSafeVehicleExitWorld(activeKey) {
@@ -846,6 +1152,9 @@ export class FirstPersonHouseExplorer {
   }
 
   toggleVehicleDrive(vehicleKey, force = null) {
+    if (vehicleKey === 'k11' || (!force && this.drivingVehicle === 'k11')) {
+      return this.toggleK11Pilot(force);
+    }
     const isDrivingThis = this.drivingVehicle === vehicleKey;
     const next = force !== null ? force : !isDrivingThis;
     if (next && this.drivingVehicle === vehicleKey) return;
@@ -1165,6 +1474,22 @@ export class FirstPersonHouseExplorer {
           return { hit: true, reason: 'building', stepLift: 0 };
         }
       }
+    } else if (Math.hypot(ncx - NULL_EREA.originX, ncz - NULL_EREA.originZ) < 62.0) {
+      // ELV-NULL surface pavilion & control pedestal
+      if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, { minX: -28.2, maxX: -22.0, minZ: 29906.5, maxZ: 29913.5 })) {
+        return { hit: true, reason: 'building', stepLift: 0 };
+      }
+      if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, { minX: -14.7, maxX: -13.7, minZ: 29909.2, maxZ: 29910.8 })) {
+        return { hit: true, reason: 'building', stepLift: 0 };
+      }
+      // Open 40m-deep Launch Silo Aperture guard whenever 44-plate roof is open!
+      const silo = this.house.nullErea ? this.house.nullErea.silo : null;
+      if (silo && !silo.isRoofSealed()) {
+        const sa = NULL_EREA.siloAperture;
+        if (this._obbIntersectsAABB(ncx, ncz, hw, hl, nyaw, { minX: sa.minX - 0.5, maxX: sa.maxX + 0.5, minZ: sa.minZ - 0.5, maxZ: sa.maxZ + 0.5 })) {
+          return { hit: true, reason: 'silo_pit', stepLift: 0 };
+        }
+      }
     }
 
     // 3. Exact SAT OBB vs Other Movable Vehicles & Unhitched Container
@@ -1344,8 +1669,9 @@ export class FirstPersonHouseExplorer {
       ? this.terreno.storm.getFloodInfoAt(veh.pose.cx, veh.pose.cz)
       : { depth: 0, submerged: false, currentX: 0, currentZ: 0 };
 
-    // Autonomous Driving Controller for BOTH CAMPER-75 & ARMOR-155 (works seated OR while walking freely!)
+    // Autonomous Driving Controller for BOTH CAMPER-75 & ARMOR-155 (works seated OR unmanned with 4-Stage Anti-Stuck!)
     let autopilotActive = false;
+    let unmannedFarTransit = false;
     const route = (vehicleKey === 'camper' || vehicleKey === 'armor') ? this.autopilotRoutes[vehicleKey] : null;
     if (route && this.terreno && this.terreno.autopilot) {
       if (isPlayerDriving && (Math.abs(throttle) > 0.18 || Math.abs(steerIn) > 0.18)) {
@@ -1354,14 +1680,33 @@ export class FirstPersonHouseExplorer {
       } else {
         const ctrl = this.terreno.autopilot.evaluateDrivingControl(veh.pose, veh.speed, route, grip, vehicleKey);
         if (ctrl.arrived) {
+          const wasSummon = Boolean(route.isSummon);
           this.autopilotRoutes[vehicleKey] = null;
           throttle = 0;
           steerIn = 0;
+          if (wasSummon) {
+            this.audio.playElevatorChime(1);
+            this._notifyStatus(
+              vehicleKey === 'armor' ? '装甲RV (ARMOR-155) がK-11直下に到着しました！' : 'RV (CAMPER-75) がK-11直下に到着しました！',
+              'ok',
+            );
+          }
           this._notifyDriveHUD();
         } else {
-          throttle = ctrl.throttle;
-          steerIn = ctrl.steer;
+          // Stage 1 Active Recovery Override: smooth reverse + counter-steer extraction away from obstacle!
+          if (route.recoverTimer > 0) {
+            route.recoverTimer = Math.max(0, route.recoverTimer - dt);
+            throttle = -0.95;
+            steerIn = route.recoverDir || 1;
+          } else {
+            throttle = ctrl.throttle;
+            steerIn = ctrl.steer;
+          }
           autopilotActive = true;
+          const distToPlayer = Math.hypot(veh.pose.cx - this.playerPos.x, veh.pose.cz - this.playerPos.z);
+          if (!isPlayerDriving && this.activeBuilding !== vehicleKey && distToPlayer > 320.0 && route.isSummon) {
+            unmannedFarTransit = true;
+          }
         }
       }
     }
@@ -1380,9 +1725,9 @@ export class FirstPersonHouseExplorer {
     const towingTrailer = isArmor && this.house.towContainer && this.house.towContainer.hitched;
     const towMassScale = towingTrailer ? 0.86 : 1.0;
 
-    const accelFwd = (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.6 : 4.8) : (openRoad ? 8.0 : 4.8))) * towMassScale;
+    const accelFwd = (unmannedFarTransit ? 18.0 : (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.6 : 4.8) : (openRoad ? 8.0 : 4.8)))) * towMassScale;
     const accelRev = (isKei ? 5.2 : (isArmor ? 4.0 : 4.4)) * towMassScale;
-    const maxFwd = (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 7.0) : (openRoad ? 18.0 : 6.8))) * (towingTrailer ? 0.90 : 1.0);
+    const maxFwd = (unmannedFarTransit ? 48.0 : (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 7.0) : (openRoad ? 18.0 : 6.8)))) * (towingTrailer ? 0.90 : 1.0);
     const maxRev = isKei ? 5.0 : 4.2;
 
     let climbGravAccel = 0;
@@ -1598,6 +1943,101 @@ export class FirstPersonHouseExplorer {
       this._applyVehicleTerrainPose(veh, vehicleKey, 0);
     }
 
+    // ---- 4-STAGE SELF-HEALING ANTI-STUCK RECOVERY CONTROLLER (Breakthrough #4 Guarantee!) ----
+    if (autopilotActive && route) {
+      route.checkClock = (route.checkClock || 0) + dt;
+      if (blocked) route.stuckTimer = (route.stuckTimer || 0) + dt * 1.45;
+      if (route.checkClock >= 0.95) {
+        const netMoved = Math.hypot(veh.pose.cx - (route.lastCheckX ?? veh.pose.cx), veh.pose.cz - (route.lastCheckZ ?? veh.pose.cz));
+        route.lastCheckX = veh.pose.cx;
+        route.lastCheckZ = veh.pose.cz;
+        route.checkClock = 0;
+        if (netMoved < 0.95) {
+          route.stuckTimer = (route.stuckTimer || 0) + 1.15;
+        } else {
+          route.stuckTimer = Math.max(0, (route.stuckTimer || 0) - 1.4);
+          if (route.stuckTimer < 0.2) route.stuckStage = 0;
+        }
+      }
+
+      if ((route.stuckTimer || 0) >= 1.5 && (route.stuckStage || 0) === 0) {
+        // Stage 1: Smart Reverse + Counter-Steer Extraction away from obstacle!
+        route.stuckStage = 1;
+        route.recoverDir = (route.recoverDir || 1) * -1;
+        route.recoverTimer = 1.65;
+        if (vehicleKey === 'armor') this._ensureGarageGatesOpenForArmor();
+      } else if ((route.stuckTimer || 0) >= 4.2 && route.stuckStage === 1) {
+        // Stage 2: Lateral Sidestep Detour + Live A* Re-Route around cluster/landslide!
+        route.stuckStage = 2;
+        const sideSign = route.recoverDir || 1;
+        const perpX = Math.cos(veh.pose.yaw) * sideSign * 14.0;
+        const perpZ = -Math.sin(veh.pose.yaw) * sideSign * 14.0;
+        const midX = Math.max(TERRENO_WORLD.playMinX + 10, Math.min(TERRENO_WORLD.playMaxX - 10, veh.pose.cx + perpX));
+        const midZ = Math.max(TERRENO_WORLD.playMinZ + 10, Math.min(TERRENO_WORLD.playMaxZ - 10, veh.pose.cz + perpZ));
+        const leg2 = this.terreno.autopilot.computeSafeRoute(midX, midZ, route.goalX, route.goalZ);
+        route.points = [[veh.pose.cx, veh.pose.cz], [midX, midZ], ...leg2.slice(1)];
+        route.cursor = 0;
+        route.recoverTimer = 1.15;
+      } else if ((route.stuckTimer || 0) >= 7.8 && route.stuckStage === 2) {
+        // Stage 3: 16-Ray Free-Corridor Heading Probe & Escape Alignment!
+        route.stuckStage = 3;
+        let escaped = false;
+        for (let k = 0; k < 16; k++) {
+          const probeYaw = veh.pose.yaw + (k * Math.PI * 2) / 16;
+          const px = veh.pose.cx - Math.sin(probeYaw) * 5.2;
+          const pz = veh.pose.cz - Math.cos(probeYaw) * 5.2;
+          if (!testVehCollision(px, pz, probeYaw, veh.pose.cx, veh.pose.cz).hit) {
+            veh.pose.cx = px;
+            veh.pose.cz = pz;
+            veh.pose.yaw = probeYaw;
+            veh.speed = 4.2;
+            this._applyVehicleTerrainPose(veh, vehicleKey, 0);
+            escaped = true;
+            break;
+          }
+        }
+        if (escaped) route.stuckTimer = 3.0;
+      } else if ((route.stuckTimer || 0) >= 11.5) {
+        // Stage 4: Guaranteed Clear-Path Self-Correction onto Next Verified Safe Route Node!
+        const nextIdx = Math.min(route.points.length - 1, (route.cursor || 0) + 2);
+        const nxt = route.points[nextIdx];
+        const lookIdx = Math.min(route.points.length - 1, nextIdx + 1);
+        const lookPt = route.points[lookIdx];
+        if (nxt) {
+          const aimYaw = Math.atan2(-(lookPt[0] - nxt[0]), -(lookPt[1] - nxt[1]));
+          // Probe small radius around safe route node so it never lands inside a tree or building!
+          let placed = false;
+          const offsets = [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4], [6, 6], [-6, -6]];
+          for (let oi = 0; oi < offsets.length; oi++) {
+            const tx = nxt[0] + offsets[oi][0];
+            const tz = nxt[1] + offsets[oi][1];
+            const checkCol = testVehCollision(tx, tz, aimYaw, tx, tz);
+            if (!checkCol.hit || checkCol.reason === 'forest') {
+              veh.pose.cx = tx;
+              veh.pose.cz = tz;
+              veh.pose.yaw = aimYaw;
+              veh.speed = 5.0;
+              veh.velX = -Math.sin(aimYaw) * 5.0;
+              veh.velZ = -Math.cos(aimYaw) * 5.0;
+              this._applyVehicleTerrainPose(veh, vehicleKey, 0);
+              if (isArmor && this.house.towContainer && this.house.towContainer.hitched) {
+                this._updateTowedContainer(0);
+              }
+              placed = true;
+              break;
+            }
+          }
+          if (placed) {
+            route.cursor = nextIdx;
+            route.stuckTimer = 0;
+            route.stuckStage = 0;
+            route.lastCheckX = veh.pose.cx;
+            route.lastCheckZ = veh.pose.cz;
+          }
+        }
+      }
+    }
+
     return {
       moved: Math.abs(totalMoved) > 0.0001 || Math.abs(totalDYaw) > 0.00001,
       totalDYaw,
@@ -1610,27 +2050,324 @@ export class FirstPersonHouseExplorer {
     };
   }
 
-  _updateAllVehicles(dt) {
+  /**
+   * Flagship Airship K-11 Flight Physics Engine (tecnica forces):
+   *  - Exact 250.0 km/h (69.444 m/s) max speed in zero wind!
+   *  - Live Storm Wind Resistance / Headwind Drag & Gentle Crosswind Drift
+   *  - Exact 1L / 3.0 km (max 100.0 L = 300.0 km range) fuel consumption & auto-refuel in underground hangar
+   *  - Seamless Silo-40 44-plate auto-launch when taking off or starting autopilot from -40m!
+   *  - Breakthrough #3: Free-Point Map Autopilot flight & smooth landing/hover at destination!
+   */
+  _stepAirshipK11(dt, elapsed) {
+    const k11 = this.house.airshipK11;
+    const ne = this.house.nullErea;
+    if (!k11) return { moved: false, totalDYaw: 0 };
+
+    const isPiloted = this.drivingVehicle === 'k11';
+    const route = this.autopilotRoutes.k11;
+    const silo = ne ? ne.silo : null;
+
+    // 1. Gather Pilot Manual Controls (WASD / Virtual Stick + Space/R Climb & Shift/F Descend + HUD Climb Buttons)
+    let fwdIn = 0;
+    let yawIn = 0;
+    let altIn = 0;
+    if (isPiloted && !this.mapOpen) {
+      if (this.keys.has('w') || this.keys.has('arrowup')) fwdIn += 1;
+      if (this.keys.has('s') || this.keys.has('arrowdown')) fwdIn -= 1;
+      if (this.keys.has('a') || this.keys.has('arrowleft')) yawIn += 1;
+      if (this.keys.has('d') || this.keys.has('arrowright')) yawIn -= 1;
+      if (this.keys.has(' ') || this.keys.has('r') || this.keys.has('q')) altIn += 1;
+      if (this.keys.has('shift') || this.keys.has('f')) altIn -= 1;
+      if (Math.abs(this.virtualMove.z) > 0.06) fwdIn -= this.virtualMove.z;
+      if (Math.abs(this.virtualMove.x) > 0.06) yawIn -= this.virtualMove.x;
+      altIn += this.k11ClimbInput;
+      fwdIn = Math.max(-1, Math.min(1, fwdIn));
+      yawIn = Math.max(-1, Math.min(1, yawIn));
+      altIn = Math.max(-1, Math.min(1, altIn));
+    }
+
+    // Manual override cancels K-11 autopilot cleanly
+    if (route && isPiloted && (Math.abs(fwdIn) > 0.18 || Math.abs(yawIn) > 0.18 || Math.abs(altIn) > 0.18)) {
+      this.cancelAutopilot('k11');
+    }
+
+    const prevX = k11.pose.cx;
+    const prevY = k11.pose.y;
+    const prevZ = k11.pose.cz;
+    const prevYaw = k11.pose.yaw;
+
+    // 2. Silo-40 Docked State Handling (Rides 40m Mega-Lift & Auto-Launches on Thrust/Autopilot!)
+    if (k11.dockedInSilo && silo) {
+      k11.pose.cx = NULL_EREA.originX;
+      k11.pose.cz = NULL_EREA.originZ;
+      k11.pose.y = silo.liftY;
+      k11.velX = 0; k11.velY = 0; k11.velZ = 0; k11.speed = 0;
+      k11.groundSpeedKmh = 0;
+      k11.altitudeAGL = 0;
+      k11.pitchAngle *= 0.85;
+      k11.rollAngle *= 0.85;
+
+      // Auto-refuel cleanly when fully stowed underground at -40m!
+      if (silo.state === 'STORED_B40' && k11.fuelL < AIRSHIP_K11.maxFuelL) {
+        k11.fuelL = Math.min(AIRSHIP_K11.maxFuelL, k11.fuelL + dt * 25.0);
+      }
+
+      const wantsLaunch = (isPiloted && (altIn > 0.2 || fwdIn > 0.25)) || Boolean(this.autopilotRoutes.k11);
+      if (wantsLaunch) {
+        if (k11.fuelL <= 0.05) {
+          k11.fuelL = AIRSHIP_K11.maxFuelL; // Instant silo fuel top-up before launch!
+        }
+        if (!silo.isSurfaceReady()) {
+          if (silo.state !== 'LAUNCH_OPENING') {
+            this.toggleNullSilo(true);
+          }
+        } else {
+          // Lift is flush at Surface GL 0m & all 44 roof plates open -> CLEARED FOR TAKEOFF!
+          k11.dockedInSilo = false;
+          k11.velY = 7.5;
+          k11.pose.y += 0.35;
+          this._notifyStatus('K-11 発進完了！無風最大 250 km/h', 'ok');
+        }
+      }
+
+      k11.updateVisuals(dt, elapsed, {
+        isPiloted,
+        autopilotActive: Boolean(this.autopilotRoutes.k11),
+        siloState: silo.state,
+      });
+      return {
+        moved: Math.abs(k11.pose.y - prevY) > 0.0001,
+        totalDYaw: 0,
+      };
+    }
+
+    // 3. Free Flight & Aerial Autopilot Physics!
+    const overSiloWell = Math.abs(k11.pose.cx - NULL_EREA.originX) < 12.0 && Math.abs(k11.pose.cz - NULL_EREA.originZ) < 23.0;
+    const terrainSurfY = this.terreno ? this.terreno.getHeightAt(k11.pose.cx, k11.pose.cz) : 0;
+    const surfY = (overSiloWell && silo && silo.isSurfaceReady()) ? silo.groundY : terrainSurfY;
+    k11.altitudeAGL = Math.max(0, k11.pose.y - surfY);
+
+    // Real-time Wind Vector (Zero wind in calm weather => exact 250.0 km/h max speed!)
+    const stormInt = this.terreno && this.terreno.storm ? this.terreno.storm.getIntensity() : 0;
+    let windX = 0;
+    let windZ = 0;
+    if (stormInt > 0.02 && this.terreno && this.terreno.storm) {
+      const w = this.terreno.storm.getWind();
+      windX = w.x * 1.15;
+      windZ = w.z * 1.15;
+    }
+    k11.windSpeedKmh = Math.hypot(windX, windZ) * 3.6;
+
+    const hasFuel = k11.fuelL > 0.001;
+    let desiredVx = 0;
+    let desiredVz = 0;
+    let desiredVy = 0;
+    let targetYawRate = 0;
+
+    if (!hasFuel) {
+      // Fuel Empty: Safe controlled emergency auto-glide descent (never crashes!)
+      if (this.autopilotRoutes.k11) {
+        this.autopilotRoutes.k11 = null;
+        this._notifyStatus('燃料切れ (0.0L)：緊急緩降下着陸 — 車庫または自宅で給油してください', 'error');
+      }
+      desiredVx = k11.velX * 0.90;
+      desiredVz = k11.velZ * 0.90;
+      desiredVy = k11.altitudeAGL > 0.2 ? -4.5 : 0;
+    } else if (this.autopilotRoutes.k11) {
+      // Breakthrough #3: K-11 Autonomous Flight to Marked Map Destination!
+      const rt = this.autopilotRoutes.k11;
+      const dxG = rt.goalX - k11.pose.cx;
+      const dzG = rt.goalZ - k11.pose.cz;
+      const distG = Math.hypot(dxG, dzG);
+
+      // If approaching NULL EREA Silo destination, open 44-plate roof & raise lift to receive K-11!
+      const goingToNullSilo = Math.hypot(rt.goalX - NULL_EREA.originX, rt.goalZ - NULL_EREA.originZ) < 25.0;
+      if (goingToNullSilo && distG < 900 && silo && !silo.isSurfaceReady() && silo.state !== 'LAUNCH_OPENING') {
+        silo.startLaunchSequence();
+      }
+
+      if (distG < 10.0) {
+        // Smooth terminal descent / hover at marked destination
+        const rvDest = evalMainRiver(k11.pose.cz);
+        const overWater = Math.abs(k11.pose.cx - rvDest.x) < rvDest.halfWidth * 1.1 && terrainSurfY < rvDest.waterY + 0.8;
+        const targetLandingY = overWater ? (surfY + 18.0) : surfY;
+        const dyDest = targetLandingY - k11.pose.y;
+        desiredVx = dxG * 0.8;
+        desiredVz = dzG * 0.8;
+        desiredVy = Math.max(-9.0, Math.min(9.0, dyDest * 0.95));
+        if (Math.abs(dyDest) < 0.45 && Math.hypot(k11.velX, k11.velZ) < 1.2) {
+          this.autopilotRoutes.k11 = null;
+          k11.velX = 0; k11.velY = 0; k11.velZ = 0;
+          if (!overWater) k11.pose.y = targetLandingY;
+          if (goingToNullSilo && silo && silo.isSurfaceReady()) {
+            k11.dockedInSilo = true;
+            k11.pose.cx = NULL_EREA.originX;
+            k11.pose.cz = NULL_EREA.originZ;
+            k11.pose.y = silo.liftY;
+          }
+          // Auto-refuel if arrived at Home Base or NULL EREA!
+          const rf = this.isK11AtRefuelStation();
+          if (rf.canRefuel && k11.fuelL < 99.9) {
+            k11.fuelL = AIRSHIP_K11.maxFuelL;
+            this.audio.playRefuelSound();
+            this._notifyStatus(`K-11 到着＆自動給油完了 (${rf.stationName}：100.0L)`, 'ok');
+          } else {
+            this._notifyStatus('K-11 目的地に到着しました！', 'ok');
+          }
+          this._notifyDriveHUD();
+        }
+      } else {
+        // High-speed 250 km/h cruise toward destination!
+        const targetYaw = Math.atan2(-dxG, -dzG);
+        let yawDiff = targetYaw - k11.pose.yaw;
+        while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        targetYawRate = Math.max(-1.05, Math.min(1.05, yawDiff * 1.9));
+
+        const brakeDist = 420.0;
+        const approachFactor = Math.min(1.0, Math.max(0.12, distG / brakeDist));
+        const alignFactor = Math.max(0.25, Math.cos(Math.min(Math.PI * 0.5, Math.abs(yawDiff))));
+        const targetCruiseSpeed = AIRSHIP_K11.maxSpeedMs * approachFactor * alignFactor; // Up to 69.444 m/s = 250 km/h!
+        const dirX = dxG / distG;
+        const dirZ = dzG / distG;
+        desiredVx = dirX * targetCruiseSpeed;
+        desiredVz = dirZ * targetCruiseSpeed;
+
+        // Maintain safe high-altitude cruise clearance well above all terrain/trees, descending smoothly on final 350m
+        const cruiseAlt = distG > 260 ? Math.max(surfY + 68.0, 95.0) : (surfY + Math.max(12.0, (distG / 260.0) * 68.0));
+        desiredVy = Math.max(-12.0, Math.min(14.0, (cruiseAlt - k11.pose.y) * 0.65));
+      }
+    } else if (isPiloted) {
+      // Manual Captain Flight Controls (Exact 250 km/h zero wind!)
+      targetYawRate = yawIn * 0.92;
+      const fx = -Math.sin(k11.pose.yaw);
+      const fz = -Math.cos(k11.pose.yaw);
+      const maxSpd = fwdIn >= 0 ? AIRSHIP_K11.maxSpeedMs : 22.0; // 69.444 m/s = 250.0 km/h forward!
+      // Smooth takeoff lift assist if pressing forward on ground
+      if (k11.altitudeAGL < 1.5 && fwdIn > 0.25 && altIn >= 0) {
+        altIn = Math.max(altIn, 0.55);
+      }
+      desiredVx = fx * (fwdIn * maxSpd);
+      desiredVz = fz * (fwdIn * maxSpd);
+      desiredVy = altIn * 16.0;
+    } else {
+      // Hovering autonomously while player walks freely inside the 4.5×15×3.2m cabin!
+      desiredVx = 0;
+      desiredVz = 0;
+      desiredVy = 0;
+    }
+
+    // Apply Aerodynamic Wind Resistance & Thrust Integration
+    // In zero wind: thrust overcomes drag cleanly to exact 250.0 km/h (69.444 m/s).
+    // With wind: headwind opposes groundspeed proportionally to aerodynamic wind drag!
+    const windEffectVx = windX * 0.68;
+    const windEffectVz = windZ * 0.68;
+    const effectiveTargetVx = (hasFuel && (Math.abs(desiredVx) > 0.1 || Math.abs(desiredVz) > 0.1))
+      ? desiredVx + windEffectVx
+      : desiredVx + (k11.altitudeAGL > 2.0 ? windX * 0.12 : 0);
+    const effectiveTargetVz = (hasFuel && (Math.abs(desiredVx) > 0.1 || Math.abs(desiredVz) > 0.1))
+      ? desiredVz + windEffectVz
+      : desiredVz + (k11.altitudeAGL > 2.0 ? windZ * 0.12 : 0);
+
+    // Clamp max airspeed with aerodynamic drag envelope (never exceeds 250 km/h in zero wind!)
+    const targetPlanar = Math.hypot(effectiveTargetVx, effectiveTargetVz);
+    const windDotDir = targetPlanar > 0.1
+      ? (windX * (effectiveTargetVx / targetPlanar) + windZ * (effectiveTargetVz / targetPlanar))
+      : 0;
+    // Headwind (windDotDir < 0) reduces max speed realistically; calm wind = EXACT 250.0 km/h!
+    const aeroCapMs = Math.max(25.0, AIRSHIP_K11.maxSpeedMs + Math.min(0, windDotDir * 0.72) + Math.max(0, windDotDir * 0.22));
+    let clampedTx = effectiveTargetVx;
+    let clampedTz = effectiveTargetVz;
+    if (targetPlanar > aeroCapMs) {
+      const s = aeroCapMs / targetPlanar;
+      clampedTx *= s;
+      clampedTz *= s;
+    }
+
+    const horizAccel = Math.min(1, dt * 1.45);
+    const vertAccel = Math.min(1, dt * 2.8);
+    k11.velX += (clampedTx - k11.velX) * horizAccel;
+    k11.velZ += (clampedTz - k11.velZ) * horizAccel;
+    k11.velY += (desiredVy - k11.velY) * vertAccel;
+    k11.yawRate += (targetYawRate - k11.yawRate) * Math.min(1, dt * 4.5);
+
+    k11.pose.yaw += k11.yawRate * dt;
+    k11.pose.cx = Math.max(TERRENO_WORLD.playMinX + 20, Math.min(TERRENO_WORLD.playMaxX - 20, k11.pose.cx + k11.velX * dt));
+    k11.pose.cz = Math.max(TERRENO_WORLD.playMinZ + 20, Math.min(TERRENO_WORLD.playMaxZ - 20, k11.pose.cz + k11.velZ * dt));
+    k11.pose.y = Math.max(surfY, Math.min(surfY + AIRSHIP_K11.maxAltitudeAGL, k11.pose.y + k11.velY * dt));
+
+    // Smooth Touchdown & Silo-40 Re-Docking!
+    if (k11.pose.y <= surfY + 0.05 && k11.velY <= 0) {
+      k11.pose.y = surfY;
+      k11.velY = 0;
+      k11.velX *= 0.85;
+      k11.velZ *= 0.85;
+      if (overSiloWell && silo && silo.isSurfaceReady() && Math.hypot(k11.velX, k11.velZ) < 2.2) {
+        k11.dockedInSilo = true;
+        k11.pose.cx = NULL_EREA.originX;
+        k11.pose.cz = NULL_EREA.originZ;
+        k11.pose.y = silo.liftY;
+      }
+    }
+
+    // Exact 1L = 3.000 km Fuel Consumption (Breakthrough #1!)
+    const dxMoved = k11.pose.cx - prevX;
+    const dyMoved = k11.pose.y - prevY;
+    const dzMoved = k11.pose.cz - prevZ;
+    const distMovedM = Math.hypot(dxMoved, dyMoved, dzMoved);
+    if (distMovedM > 0.001) {
+      k11.totalDistKm += distMovedM / 1000.0;
+      k11.fuelL = Math.max(0.0, k11.fuelL - distMovedM / (AIRSHIP_K11.kmPerLiter * 1000.0));
+    }
+
+    const planarV = Math.hypot(k11.velX, k11.velZ);
+    k11.speed = planarV;
+    k11.groundSpeedKmh = planarV * 3.6;
+    k11.altitudeAGL = Math.max(0, k11.pose.y - surfY);
+
+    // Smooth Aerodynamic Banking Roll & Pitch Attitude
+    const speedRatio = Math.min(1, planarV / AIRSHIP_K11.maxSpeedMs);
+    const targetRoll = Math.max(-0.24, Math.min(0.24, k11.yawRate * 0.24 * (0.25 + speedRatio * 0.75)));
+    const targetPitch = Math.max(-0.14, Math.min(0.14, k11.velY * 0.009 - speedRatio * 0.03));
+    k11.rollAngle += (targetRoll - k11.rollAngle) * Math.min(1, dt * 3.8);
+    k11.pitchAngle += (targetPitch - k11.pitchAngle) * Math.min(1, dt * 3.8);
+
+    k11.updateVisuals(dt, elapsed, {
+      isPiloted,
+      autopilotActive: Boolean(this.autopilotRoutes.k11),
+      siloState: silo ? silo.state : 'FREE FLIGHT',
+    });
+
+    return {
+      moved: distMovedM > 0.0001 || Math.abs(k11.pose.yaw - prevYaw) > 0.00001,
+      totalDYaw: k11.pose.yaw - prevYaw,
+    };
+  }
+
+  _updateAllVehicles(dt, elapsed = 0) {
     if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
     if (this.vehicleBlockedTimer > 0) this.vehicleBlockedTimer -= dt;
 
-    // If player is walking INSIDE a camper or hitched container while it moves autonomously,
-    // record exact vehicle-local rider coordinates before stepping vehicle physics!
-    const riderKey = (!this.drivingVehicle && (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'container'))
+    // Record exact vehicle-local rider coordinates before stepping vehicle / airship physics!
+    const riderKey = (!this.drivingVehicle && (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'container' || this.activeBuilding === 'k11'))
       ? this.activeBuilding
       : null;
     let riderLocal = null;
     if (riderKey === 'camper') riderLocal = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
     else if (riderKey === 'armor') riderLocal = this.worldToArmorLocal(this.playerPos.x, this.playerPos.z);
     else if (riderKey === 'container') riderLocal = this.worldToContainerLocal(this.playerPos.x, this.playerPos.z);
+    else if (riderKey === 'k11') riderLocal = this.worldToK11Local(this.playerPos.x, this.playerPos.z);
+
+    // Step Flagship Airship K-11!
+    const k11Res = this._stepAirshipK11(dt, elapsed);
 
     const toStep = new Set();
-    if (this.drivingVehicle) toStep.add(this.drivingVehicle);
+    if (this.drivingVehicle && this.drivingVehicle !== 'k11') toStep.add(this.drivingVehicle);
     if (this.autopilotRoutes.camper || Math.abs(this.house.camper.speed || 0) > 0.02) toStep.add('camper');
     if (this.autopilotRoutes.armor || Math.abs(this.house.armorCamper.speed || 0) > 0.02) toStep.add('armor');
 
     let playerDriveResult = null;
-    const stepResults = {};
+    const stepResults = { k11: k11Res };
     for (const key of toStep) {
       const isDriven = this.drivingVehicle === key;
       const res = this._stepVehiclePhysics(key, dt, isDriven);
@@ -1638,31 +2375,57 @@ export class FirstPersonHouseExplorer {
       if (isDriven) playerDriveResult = res;
     }
 
-    // Apply exact rigid-body platform coupling to walking rider inside a moving camper / hitched container!
+    // Apply exact rigid-body platform coupling to walking rider inside a moving camper, container, OR flying Airship K-11!
     if (riderKey && riderLocal) {
       const coupledDriverKey = riderKey === 'container'
         ? (this.house.towContainer?.hitched ? 'armor' : null)
         : riderKey;
       const res = coupledDriverKey ? stepResults[coupledDriverKey] : null;
       if (res && res.moved) {
-        const w = riderKey === 'camper'
-          ? this.camperLocalToWorld(riderLocal.lx, riderLocal.lz)
-          : (riderKey === 'armor'
-            ? this.armorLocalToWorld(riderLocal.lx, riderLocal.lz)
-            : this.containerLocalToWorld(riderLocal.lx, riderLocal.lz));
+        const w = riderKey === 'k11'
+          ? this.k11LocalToWorld(riderLocal.lx, riderLocal.lz)
+          : (riderKey === 'camper'
+            ? this.camperLocalToWorld(riderLocal.lx, riderLocal.lz)
+            : (riderKey === 'armor'
+              ? this.armorLocalToWorld(riderLocal.lx, riderLocal.lz)
+              : this.containerLocalToWorld(riderLocal.lx, riderLocal.lz)));
         this.playerPos.x = w.x;
         this.playerPos.z = w.z;
         this.yaw += res.totalDYaw;
-        this.floorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
+        if (riderKey === 'k11') {
+          this.floorY = this.house.airshipK11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
+          if (!this.house.airshipK11.dockedInSilo || (this.house.nullErea && this.house.nullErea.silo.liftProgress > 0.5)) {
+            this.currentFloor = 1;
+          }
+        } else {
+          this.floorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
+        }
       }
-      if (coupledDriverKey && this.autopilotRoutes[coupledDriverKey]) {
+      if (riderKey === 'k11') {
+        const k11 = this.house.airshipK11;
+        this.audio.updateAirshipEngine(
+          !k11.dockedInSilo || Boolean(this.autopilotRoutes.k11),
+          Math.min(1, (k11.groundSpeedKmh || 0) / 250.0),
+        );
+      } else if (coupledDriverKey && this.autopilotRoutes[coupledDriverKey]) {
         const rv = this._getVehicleObj(coupledDriverKey);
         this.audio.updateEngine(true, Math.abs(rv.speed || 0) / 16.0, 'diesel');
       }
     }
 
-    // Update seated driver pose, engine audio & driving HUD
-    if (this.drivingVehicle && playerDriveResult) {
+    // Update seated K-11 Captain Pose, Airship Audio & Flight HUD!
+    if (this.drivingVehicle === 'k11') {
+      const k11 = this.house.airshipK11;
+      if (Math.abs(k11Res.totalDYaw) > 0.00001) this.yaw += k11Res.totalDYaw;
+      const seatW = this.k11LocalToWorld(AIRSHIP_K11.pilotSeatLocal.x, AIRSHIP_K11.pilotSeatLocal.z);
+      this.playerPos.set(seatW.x, 0, seatW.z);
+      this.floorY = k11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
+      this.currentFloor = (k11.dockedInSilo && this.house.nullErea && this.house.nullErea.silo.liftProgress < 0.5) ? -40 : 1;
+      this.eyeHeight += (1.48 - this.eyeHeight) * Math.min(1, dt * 10);
+      this.bobAmount *= 0.85;
+      this.audio.updateAirshipEngine(true, Math.min(1, (k11.groundSpeedKmh || 0) / 250.0));
+      this._notifyDriveHUD();
+    } else if (this.drivingVehicle && playerDriveResult) {
       const key = this.drivingVehicle;
       const veh = this._getVehicleObj(key);
       if (Math.abs(playerDriveResult.totalDYaw) > 0.00001) {
@@ -1732,6 +2495,12 @@ export class FirstPersonHouseExplorer {
         camperPose: this.house.camper.pose,
         keiPose: this.house.kei.pose,
         armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
+        k11Pose: this.house.airshipK11 ? this.house.airshipK11.pose : null,
+        autopilotRoutes: {
+          camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
+          armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
+          k11: this.autopilotRoutes.k11 ? this.autopilotRoutes.k11.points : null,
+        },
       });
       if (firstInit) {
         this.map3d.resetOverview(true);
@@ -1813,7 +2582,7 @@ export class FirstPersonHouseExplorer {
   }
 
   setPose(x, z, yaw, pitch = -0.04, floorIdx = null) {
-    if (floorIdx !== null && floorIdx >= -3 && floorIdx < FLOORS.length) {
+    if (floorIdx !== null && ((floorIdx >= -3 && floorIdx < FLOORS.length) || floorIdx === -40)) {
       this.currentFloor = floorIdx;
       this.activeFlight = null;
     }
@@ -1821,6 +2590,12 @@ export class FirstPersonHouseExplorer {
     this.activeBuilding = this._getBuildingAt(x, z);
     this.inElevator = this._isPointInElevatorCab(x, z, this.currentFloor);
     this.inExtElevator = this._isPointInExtElevatorCab(x, z, this.currentFloor);
+    this.inNullElevator = this._isPointInNullElevatorCab(x, z, this.currentFloor);
+    const sa = NULL_EREA.siloAperture;
+    this.onNullLift = (this.currentFloor === -40 || this.currentFloor === 1)
+      && x >= sa.minX && x <= sa.maxX && z >= sa.minZ && z <= sa.maxZ
+      && this.activeBuilding !== 'k11'
+      && Boolean(this.house.nullErea && !this.house.nullErea.silo.isRoofSealed());
     if (this.adaptive) this.adaptive.snapFloorLights(this.currentFloor, this.activeBuilding, this.inElevator, x, z, this.inExtElevator);
     this.floorY = this._computeFloorY(x, z);
     this.eyeHeight = this._computeDesiredEyeHeight(x, z);
@@ -1911,21 +2686,22 @@ export class FirstPersonHouseExplorer {
         return;
       }
       if (k === 'v' && this.drivingVehicle) { this.cycleDriveCameraMode(); return; }
-      if (k === 'g' && (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' || this.activeBuilding === 'camper' || this.activeBuilding === 'armor')) {
+      if (k === 'g' && (this.drivingVehicle === 'camper' || this.drivingVehicle === 'armor' || this.drivingVehicle === 'k11' || this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'k11')) {
         this.toggleVehicleAutopilot();
         return;
       }
       if (k === 'h') { this.toggleVehicleHeadlights(); return; }
-      if (k === 'f') {
+      if (k === 'f' && this.drivingVehicle !== 'k11') {
         if (this.drivingVehicle) this.toggleVehicleHeadlights();
         else this.toggleFlashlight();
         return;
       }
       if (k === 'c' && !this.drivingVehicle) { this.toggleCrouch(); return; }
-      if (k === 'e' || k === ' ') { if (this.interact()) e.preventDefault(); return; }
-      if (['w', 'a', 's', 'd', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
+      if (k === 'e' || (k === ' ' && this.drivingVehicle !== 'k11')) { if (this.interact()) e.preventDefault(); return; }
+      if (['w', 'a', 's', 'd', 'shift', ' ', 'r', 'q', 'f', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
         this.audio.init();
         this.keys.add(k);
+        if (k === ' ' && this.drivingVehicle === 'k11') e.preventDefault();
       }
     });
 
@@ -1951,6 +2727,12 @@ export class FirstPersonHouseExplorer {
     if (this.map3d) this.map3d.resize(w, h);
   }
 
+  _isPointInNullElevatorCab(x, z, floorIdx) {
+    if (floorIdx !== 1 && floorIdx !== -40) return false;
+    const C = NULL_ELEVATOR.cab;
+    return x >= C.minX - 0.05 && x <= C.maxX + 0.05 && z >= C.minZ - 0.05 && z <= C.maxZ + 0.05;
+  }
+
   _raycastInteractable(ndc = this.centerNDC, includeDoors = false) {
     if (this.drivingVehicle) return null;
     this.camera.updateMatrixWorld();
@@ -1959,6 +2741,12 @@ export class FirstPersonHouseExplorer {
     }
     if (this.house.extElevator && (this.inExtElevator || this.nearExtElevator)) {
       this.house.extElevator.cabGroup.updateMatrixWorld(true);
+    }
+    if (this.house.nullElevator && (this.inNullElevator || this.nearNullElevator)) {
+      this.house.nullElevator.cabGroup.updateMatrixWorld(true);
+    }
+    if (this.house.airshipK11 && this.activeBuilding === 'k11') {
+      this.house.airshipK11.root.updateMatrixWorld(true);
     }
     if (this.house.armorCamper && this.activeBuilding === 'armor') {
       this.house.armorCamper.root.updateMatrixWorld(true);
@@ -1972,15 +2760,20 @@ export class FirstPersonHouseExplorer {
           (p.isElevatorBtn && (this.inElevator || this.nearElevator))
           || (p.isExtElevatorBtn && (this.inExtElevator || this.nearExtElevator))
           || (p.isExtElevatorCall && p.floor === this.currentFloor)
+          || (p.isNullElevatorBtn && (this.inNullElevator || this.nearNullElevator))
+          || (p.isNullElevatorCall && p.floor === this.currentFloor)
+          || (p.isNullSiloBtn && (p.floor === this.currentFloor))
+          || (p.isK11RefuelBtn && (p.floor === this.currentFloor))
+          || (p.isK11Prop && this.activeBuilding === 'k11')
           || p.floor === this.currentFloor
         ))
         .map((p) => p.mesh),
       ...(includeDoors
-        ? this.house.interactiveDoors.filter((d) => Math.abs(d.floor - this.currentFloor) <= 1).map((d) => d.mesh)
+        ? this.house.interactiveDoors.filter((d) => (d.isK11 && this.activeBuilding === 'k11') || Math.abs(d.floor - this.currentFloor) <= 1).map((d) => d.mesh)
         : []),
     ];
     this.raycaster.setFromCamera(ndc, this.camera);
-    this.raycaster.far = 3.2;
+    this.raycaster.far = 3.6;
     const hits = this.raycaster.intersectObjects(targets, false);
     if (hits.length === 0) return null;
     const hit0 = hits[0];
@@ -1990,7 +2783,10 @@ export class FirstPersonHouseExplorer {
       if (prop) {
         let shortPrompt = prop.getLabel();
         if (prop.id === 'camper_drive' || prop.id === 'kei_drive' || prop.id === 'armor_drive') shortPrompt = '運転';
-        else if (prop.id === 'armor_shutter') shortPrompt = prop.getLabel();
+        else if (prop.id === 'k11_pilot') shortPrompt = 'K-11 操縦';
+        else if (prop.isK11Prop || prop.isNullSiloBtn || prop.isK11RefuelBtn || prop.isNullElevatorBtn || prop.isNullElevatorCall) {
+          shortPrompt = prop.getLabel();
+        } else if (prop.id === 'armor_shutter') shortPrompt = prop.getLabel();
         else if (prop.id === 'armor_hitch' || prop.id === 'armor_hitch_cab') shortPrompt = prop.getLabel();
         else if (!prop.isElevatorBtn && !prop.isElevatorCall && !prop.isExtElevatorBtn && !prop.isExtElevatorCall) {
           shortPrompt = prop.isOn ? '消灯' : '点灯';
@@ -2020,6 +2816,24 @@ export class FirstPersonHouseExplorer {
         this.toggleVehicleDrive('kei');
       } else if (hit.item.id === 'armor_drive') {
         this.toggleVehicleDrive('armor');
+      } else if (hit.item.id === 'k11_pilot') {
+        this.toggleK11Pilot(true);
+      } else if (hit.item.id === 'k11_btn_silo' || hit.item.isNullSiloBtn) {
+        this.toggleNullSilo();
+      } else if (hit.item.id === 'k11_btn_call_rv') {
+        this.summonCamperToK11('camper');
+      } else if (hit.item.id === 'k11_btn_call_armor') {
+        this.summonCamperToK11('armor');
+      } else if (hit.item.isK11RefuelBtn) {
+        this.refuelK11();
+      } else if (hit.item.isNullElevatorBtn && this.house.nullElevator) {
+        if (hit.item.elvAction === 'open') this.house.nullElevator.openDoorsNow();
+        else if (hit.item.elvAction === 'close') this.house.nullElevator.closeDoorsNow();
+        else this.house.nullElevator.selectFloor(hit.item.targetFloor);
+        this.audio.playElevatorButton();
+      } else if (hit.item.isNullElevatorCall && this.house.nullElevator) {
+        this.house.nullElevator.callToFloor(hit.item.callFloor);
+        this.audio.playElevatorButton();
       } else if (hit.item.id === 'armor_shutter') {
         this.toggleArmorShutters();
       } else if (hit.item.id === 'armor_hitch' || hit.item.id === 'armor_hitch_cab') {
@@ -2050,6 +2864,17 @@ export class FirstPersonHouseExplorer {
 
   _getBuildingAt(x, z) {
     if (this.drivingVehicle) return this.drivingVehicle;
+    // Check Flagship Airship K-11 walkable 4.50×15.00×3.20m cabin FIRST (works at -40m, 0m, AND airborne!)
+    if (this.house.airshipK11) {
+      const k11 = this.house.airshipK11;
+      const kl11 = this.worldToK11Local(x, z);
+      const inK11Fp = kl11.lx >= 0.0 && kl11.lx <= AIRSHIP_K11.cabin.outerWidth && kl11.lz >= 0.0 && kl11.lz <= AIRSHIP_K11.cabin.outerLength;
+      const k11FloorY = k11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
+      if (inK11Fp && (this.activeBuilding === 'k11' || Math.abs(this.floorY - k11FloorY) < 2.2)) {
+        return 'k11';
+      }
+    }
+    if (this.currentFloor === -40) return 'null_hangar';
     if (this.currentFloor < 0) return 'main';
     if (this.activeFlight !== null) return this.activeStairBuilding;
 
@@ -2094,10 +2919,13 @@ export class FirstPersonHouseExplorer {
   }
 
   _computeDesiredEyeHeight(x, z) {
+    if (this.drivingVehicle === 'k11') return 1.48;
     if (this.drivingVehicle === 'kei') return 1.04;
     if (this.drivingVehicle === 'camper') return 1.44;
     if (this.drivingVehicle === 'armor') return 1.54;
-    if (this.inElevator || this.inExtElevator) return this.crouching ? 1.04 : 1.54;
+    if (this.inElevator || this.inExtElevator || this.inNullElevator) return this.crouching ? 1.04 : 1.54;
+    if (this.activeBuilding === 'k11') return this.crouching ? 1.04 : 1.58;
+    if (this.activeBuilding === 'null_hangar') return this.crouching ? 1.04 : 1.58;
     if (this.activeBuilding === 'kei' && this.currentFloor === 1) {
       return this.crouching ? 0.88 : 1.04;
     }
@@ -2149,6 +2977,34 @@ export class FirstPersonHouseExplorer {
     if (this.inExtElevator && this.house.extElevator) {
       return this.house.extElevator.cabY;
     }
+    if (this.inNullElevator && this.house.nullElevator) {
+      return this.house.nullElevator.cabY;
+    }
+    if (this.house.airshipK11) {
+      const k11 = this.house.airshipK11;
+      const kl11 = this.worldToK11Local(x, z);
+      const k11FloorY = k11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
+      const inK11 = kl11.lx >= 0.0 && kl11.lx <= AIRSHIP_K11.cabin.outerWidth && kl11.lz >= 0.0 && kl11.lz <= AIRSHIP_K11.cabin.outerLength;
+      if (this.activeBuilding === 'k11' && inK11) {
+        return k11FloorY;
+      }
+      if (Math.abs(this.floorY - k11.pose.y) < 2.2 || Math.abs(this.floorY - k11FloorY) < 2.2) {
+        if (inK11) return k11FloorY;
+        // Smooth West Hatch boarding step (DK11-W: lx -0.85..0.0, lz 12.8..14.4)
+        if (kl11.lx >= -0.85 && kl11.lx < 0.0 && kl11.lz >= 12.8 && kl11.lz <= 14.4) {
+          const t = Math.max(0, Math.min(1, (kl11.lx + 0.85) / 0.85));
+          return k11.pose.y + AIRSHIP_K11.cabin.floorLocalY * t;
+        }
+        // Smooth Rear Deployable Airstair Ramp (DK11-R: lz 15.6..17.2, lx 1.6..3.2)
+        if (kl11.lz > AIRSHIP_K11.cabin.outerLength && kl11.lz <= AIRSHIP_K11.cabin.outerLength + 1.65 && kl11.lx >= 1.60 && kl11.lx <= 3.20) {
+          const t = Math.max(0, Math.min(1, (AIRSHIP_K11.cabin.outerLength + 1.65 - kl11.lz) / 1.65));
+          return k11.pose.y + AIRSHIP_K11.cabin.floorLocalY * t;
+        }
+      }
+    }
+    if (this.onNullLift && this.house.nullErea) {
+      return this.house.nullErea.silo.liftY;
+    }
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2') {
         const t = Math.max(0, Math.min(1, (z - STAIR_B1_B2.topZ) / (STAIR_B1_B2.bottomZ - STAIR_B1_B2.topZ)));
@@ -2183,6 +3039,9 @@ export class FirstPersonHouseExplorer {
       return y0 + (y1 - y0) * t;
     }
 
+    if (this.currentFloor === -40 && this.house.nullErea) {
+      return this.house.nullErea.b40Y;
+    }
     if (this.currentFloor === -3) {
       return FLOOR_B4F.baseY;
     }
@@ -2249,6 +3108,13 @@ export class FirstPersonHouseExplorer {
       if (x >= -2.30 && x <= -1.42 && z >= 0.45 && z <= 1.75) {
         const t = Math.max(0, Math.min(1, (x + 2.30) / 0.88));
         return -0.18 + 0.18 * t;
+      }
+      // NULL EREA Surface Titanium Launch Apron & Raised Silo Deck
+      if (this.house.nullErea) {
+        const ap = NULL_EREA.apron;
+        if (x >= ap.minX && x <= ap.maxX && z >= ap.minZ && z <= ap.maxZ) {
+          return this.house.nullErea.groundY + 0.03;
+        }
       }
       // Giant 10×20m Steel Vehicle Warehouse (GARAGE-200) level epoxy floor
       if (x >= GARAGE.originX && x <= GARAGE.originX + GARAGE.width && z >= GARAGE.originZ && z <= GARAGE.originZ + GARAGE.depth) {
@@ -2319,7 +3185,9 @@ export class FirstPersonHouseExplorer {
   }
 
   _getSurfaceMaterial(x, z) {
-    if (this.inElevator || this.inExtElevator) return 'tile';
+    if (this.inElevator || this.inExtElevator || this.inNullElevator) return 'tile';
+    if (this.activeBuilding === 'k11') return 'wood';
+    if (this.currentFloor === -40 || this.activeBuilding === 'null_hangar' || this.onNullLift) return 'tile';
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2' || this.activeFlight === 'st_b3') return 'tile';
       if (this.activeStairBuilding === 'storage') return 'tile';
@@ -2513,9 +3381,48 @@ export class FirstPersonHouseExplorer {
     return false;
   }
 
+  _collidesInK11Local(lx, lz) {
+    const k11 = this.house.airshipK11;
+    if (!k11) return false;
+    const r = this.playerRadius;
+    const r2 = r * r;
+    const cols = k11.localColliders || [];
+    for (let i = 0; i < cols.length; i++) {
+      const b = cols[i];
+      const cx = lx < b.minX ? b.minX : (lx > b.maxX ? b.maxX : lx);
+      const cz = lz < b.minZ ? b.minZ : (lz > b.maxZ ? b.maxZ : lz);
+      if ((lx - cx) * (lx - cx) + (lz - cz) * (lz - cz) < r2) return true;
+    }
+    const airborneSeal = !k11.dockedInSilo && k11.altitudeAGL > 2.2;
+    const doors = this.house.interactiveDoors;
+    for (let i = 0; i < doors.length; i++) {
+      const d = doors[i];
+      if (d.isK11 && (d.progress < 0.55 || (airborneSeal && d.isExteriorAirlock))) {
+        const b = d.collider;
+        const cx = lx < b.minX ? b.minX : (lx > b.maxX ? b.maxX : lx);
+        const cz = lz < b.minZ ? b.minZ : (lz > b.maxZ ? b.maxZ : lz);
+        if ((lx - cx) * (lx - cx) + (lz - cz) * (lz - cz) < r2) return true;
+      }
+    }
+    return false;
+  }
+
   _collidesAt(x, z) {
     const r = this.playerRadius;
     const r2 = r * r;
+
+    // Airborne / Riding Inside Airship K-11: strictly keep player safely inside 4.50×15.00×3.20m cabin!
+    if (this.activeBuilding === 'k11' && this.house.airshipK11) {
+      const k11 = this.house.airshipK11;
+      const airborneSeal = !k11.dockedInSilo && k11.altitudeAGL > 2.2;
+      const kl11 = this.worldToK11Local(x, z);
+      if (airborneSeal) {
+        if (kl11.lx < AIRSHIP_K11.cabin.minX + r || kl11.lx > AIRSHIP_K11.cabin.maxX - r || kl11.lz < AIRSHIP_K11.cabin.minZ + r || kl11.lz > AIRSHIP_K11.cabin.maxZ - r) {
+          return true;
+        }
+        return this._collidesInK11Local(kl11.lx, kl11.lz);
+      }
+    }
 
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2') {
@@ -2540,7 +3447,7 @@ export class FirstPersonHouseExplorer {
     }
 
     // Dynamic Mechanical Safety Door Interlock & Infrared Light-Curtain Re-Open for ELV-1 Mk2 (floors B4F..1F)
-    if (this.currentFloor <= 1 && this.house.elevator) {
+    if (this.currentFloor <= 1 && this.currentFloor > -40 && this.house.elevator) {
       const elv = this.house.elevator;
       const elvMoving = elv.phase === 'RUNNING' || elv.phase === 'RELEVELING' || elv.phase === 'BRAKE_RELEASE';
       const doorPassable = elv.currentStopFloor === this.currentFloor && !elvMoving && elv.doorProgress > 0.62;
@@ -2589,7 +3496,47 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    if (this.currentFloor === -3) {
+    // Dynamic Safety Door Interlock for NULL EREA 40m High-Speed Elevator (ELV-NULL: GL 0m <-> B40F -40m!)
+    if ((this.currentFloor === 1 || this.currentFloor === -40) && this.house.nullElevator) {
+      const ne = this.house.nullElevator;
+      const neDoorPassable = ne.currentStopFloor === this.currentFloor && ne.phase !== 'RUNNING' && ne.doorProgress > 0.60;
+      const C = NULL_ELEVATOR.cab;
+      const D = NULL_ELEVATOR.door;
+      if (!neDoorPassable) {
+        const bx1 = D.x - 0.14; const bx2 = D.x + 0.16;
+        const cx = x < bx1 ? bx1 : (x > bx2 ? bx2 : x);
+        const cz = z < D.minZ ? D.minZ : (z > D.maxZ ? D.maxZ : z);
+        if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r2) return true;
+      }
+      if (this.inNullElevator) {
+        if (x < C.minX + r || z < C.minZ + r || z > C.maxZ - r) return true;
+        const inDoorZ = z >= D.minZ + r * 0.5 && z <= D.maxZ - r * 0.5;
+        if (x > C.maxX - r && (!neDoorPassable || !inDoorZ)) return true;
+      }
+    }
+
+    if (this.currentFloor === -40) {
+      if (x < -26.2 || x > 23.5 - r || z < 29883.0 + r || z > 29937.0 - r) return true;
+      const silo = this.house.nullErea ? this.house.nullErea.silo : null;
+      const sa = NULL_EREA.siloAperture;
+      // When lift has left -40m, keep players standing on the hangar gallery safely behind the yellow pit railings!
+      if (silo && silo.liftProgress > 0.06 && !this.onNullLift && this.activeBuilding !== 'k11') {
+        if (x > sa.minX - 0.45 && x < sa.maxX + 0.45 && z > sa.minZ - 0.35 && z < sa.maxZ + 0.35) {
+          return true;
+        }
+      }
+      // If riding ON the Mega-Lift while ascending/descending, keep safely on lift platform!
+      if (this.onNullLift && silo && silo.liftProgress > 0.06 && silo.liftProgress < 0.94 && this.activeBuilding !== 'k11') {
+        if (x < sa.minX + 0.65 || x > sa.maxX - 0.65 || z < sa.minZ + 0.85 || z > sa.maxZ - 0.85) return true;
+      }
+      // Airship K-11 local cabin collision when docked at -40m!
+      if (this.house.airshipK11 && this.house.airshipK11.dockedInSilo) {
+        const kl11 = this.worldToK11Local(x, z);
+        if (kl11.lx >= -r - 0.15 && kl11.lx <= AIRSHIP_K11.cabin.outerWidth + r + 0.15 && kl11.lz >= -r - 0.15 && kl11.lz <= AIRSHIP_K11.cabin.outerLength + r + 0.15) {
+          if (this._collidesInK11Local(kl11.lx, kl11.lz)) return true;
+        }
+      }
+    } else if (this.currentFloor === -3) {
       if (x < 0.55 + r * 0.5 || x > 4.75 || z < 0.85 + r * 0.5 || z > 16.35 - r * 0.5) return true;
     } else if (this.currentFloor === -2) {
       if (x < -3.25 || x > 11.70 || z < 0.85 || z > 29.55) return true;
@@ -2602,6 +3549,26 @@ export class FirstPersonHouseExplorer {
         x < TERRENO_WORLD.playMinX || x > TERRENO_WORLD.playMaxX ||
         z < TERRENO_WORLD.playMinZ || z > TERRENO_WORLD.playMaxZ
       ) return true;
+      // NULL EREA Surface Open 40m Silo Pit Safety Guard (passable when 44-plate roof sealed OR Mega-Lift flush at 0m!)
+      if (this.house.nullErea) {
+        const silo = this.house.nullErea.silo;
+        const sa = NULL_EREA.siloAperture;
+        if (!silo.isRoofSealed() && !silo.isSurfaceReady() && !this.onNullLift && this.activeBuilding !== 'k11') {
+          if (x > sa.minX - 0.35 && x < sa.maxX + 0.35 && z > sa.minZ - 0.35 && z < sa.maxZ + 0.35) {
+            return true;
+          }
+        }
+      }
+      // Airship K-11 local cabin collision when landed on surface / raised lift!
+      if (this.house.airshipK11 && this.house.airshipK11.altitudeAGL < 2.2) {
+        const k11 = this.house.airshipK11;
+        if (!k11.dockedInSilo || (this.house.nullErea && this.house.nullErea.silo.isSurfaceReady())) {
+          const kl11 = this.worldToK11Local(x, z);
+          if (kl11.lx >= -r - 0.15 && kl11.lx <= AIRSHIP_K11.cabin.outerWidth + r + 0.15 && kl11.lz >= -r - 0.15 && kl11.lz <= AIRSHIP_K11.cabin.outerLength + r + 0.15) {
+            if (this._collidesInK11Local(kl11.lx, kl11.lz)) return true;
+          }
+        }
+      }
       // Strict Movable Giant Camper 1F collision
       const cl = this.worldToCamperLocal(x, z);
       if (cl.lx >= -r - 0.16 && cl.lx <= CAMPER.width + r + 0.16 && cl.lz >= -r - 0.18 && cl.lz <= CAMPER.length + r + 0.18) {
@@ -2710,7 +3677,7 @@ export class FirstPersonHouseExplorer {
     const doors = this.house.interactiveDoors;
     for (let i = 0; i < doors.length; i++) {
       const d = doors[i];
-      if (!d.isCamper && !d.isKei && !d.isArmor && !d.isContainer && d.floor === this.currentFloor && d.progress < 0.55) {
+      if (!d.isCamper && !d.isKei && !d.isArmor && !d.isContainer && !d.isK11 && d.floor === this.currentFloor && d.progress < 0.55) {
         const b = d.collider;
         const cx = x < b.minX ? b.minX : (x > b.maxX ? b.maxX : x);
         const cz = z < b.minZ ? b.minZ : (z > b.maxZ ? b.maxZ : z);
@@ -2907,8 +3874,8 @@ export class FirstPersonHouseExplorer {
     }
   }
 
-  _updateMovement(dt) {
-    this._updateAllVehicles(dt);
+  _updateMovement(dt, elapsed = 0) {
+    this._updateAllVehicles(dt, elapsed);
     if (this.mapOpen) return;
     if (this.drivingVehicle) return;
 
@@ -2987,23 +3954,33 @@ export class FirstPersonHouseExplorer {
     const prevGroundY = this._computeFloorY(prevX, prevZ);
     this._lastStepOverH = 0;
 
-    if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei' || this.activeBuilding === 'armor' || this.activeBuilding === 'container') {
+    if (
+      this.activeBuilding === 'camper' || this.activeBuilding === 'kei' ||
+      this.activeBuilding === 'armor' || this.activeBuilding === 'container' ||
+      this.activeBuilding === 'k11'
+    ) {
       const bld = this.activeBuilding;
-      const pose = bld === 'kei'
-        ? this.house.kei.pose
-        : (bld === 'armor'
-          ? this.house.armorCamper.pose
-          : (bld === 'container' ? this.house.towContainer.pose : this.house.camper.pose));
-      const toLocal = (wx, wz) => (bld === 'kei'
-        ? this.worldToKeiLocal(wx, wz)
-        : (bld === 'armor'
-          ? this.worldToArmorLocal(wx, wz)
-          : (bld === 'container' ? this.worldToContainerLocal(wx, wz) : this.worldToCamperLocal(wx, wz))));
-      const toWorld = (lx, lz) => (bld === 'kei'
-        ? this.keiLocalToWorld(lx, lz)
-        : (bld === 'armor'
-          ? this.armorLocalToWorld(lx, lz)
-          : (bld === 'container' ? this.containerLocalToWorld(lx, lz) : this.camperLocalToWorld(lx, lz))));
+      const pose = bld === 'k11'
+        ? this.house.airshipK11.pose
+        : (bld === 'kei'
+          ? this.house.kei.pose
+          : (bld === 'armor'
+            ? this.house.armorCamper.pose
+            : (bld === 'container' ? this.house.towContainer.pose : this.house.camper.pose)));
+      const toLocal = (wx, wz) => (bld === 'k11'
+        ? this.worldToK11Local(wx, wz)
+        : (bld === 'kei'
+          ? this.worldToKeiLocal(wx, wz)
+          : (bld === 'armor'
+            ? this.worldToArmorLocal(wx, wz)
+            : (bld === 'container' ? this.worldToContainerLocal(wx, wz) : this.worldToCamperLocal(wx, wz)))));
+      const toWorld = (lx, lz) => (bld === 'k11'
+        ? this.k11LocalToWorld(lx, lz)
+        : (bld === 'kei'
+          ? this.keiLocalToWorld(lx, lz)
+          : (bld === 'armor'
+            ? this.armorLocalToWorld(lx, lz)
+            : (bld === 'container' ? this.containerLocalToWorld(lx, lz) : this.camperLocalToWorld(lx, lz)))));
       const c = Math.cos(pose.yaw);
       const s = Math.sin(pose.yaw);
       const curL = toLocal(this.playerPos.x, this.playerPos.z);
@@ -3081,12 +4058,52 @@ export class FirstPersonHouseExplorer {
       this.nearExtElevator = false;
     }
 
+    // Update NULL EREA 40m High-Speed Elevator (ELV-NULL) Presence & Proximity
+    const nullElv = this.house.nullElevator;
+    if (nullElv && (this.currentFloor === 1 || this.currentFloor === -40)) {
+      const inNullFootprint = this._isPointInNullElevatorCab(this.playerPos.x, this.playerPos.z, this.currentFloor);
+      if (inNullFootprint && (this.inNullElevator || Math.abs(this.floorY - nullElv.cabY) < 1.65)) {
+        this.inNullElevator = true;
+      } else if (!inNullFootprint) {
+        this.inNullElevator = false;
+      }
+      this.nearNullElevator = !this.inNullElevator
+        && Math.hypot(this.playerPos.x - NULL_ELEVATOR.shaft.cx, this.playerPos.z - NULL_ELEVATOR.shaft.cz) < 6.0;
+    } else {
+      this.inNullElevator = false;
+      this.nearNullElevator = false;
+    }
+
+    // Update SILO-40 40m Giant Mega-Lift Riding Presence!
+    const silo = this.house.nullErea ? this.house.nullErea.silo : null;
+    const sa = NULL_EREA.siloAperture;
+    if (silo && (this.currentFloor === -40 || this.currentFloor === 1) && this.activeBuilding !== 'k11' && !this.inNullElevator) {
+      const inAperture = this.playerPos.x >= sa.minX + 0.15 && this.playerPos.x <= sa.maxX - 0.15
+        && this.playerPos.z >= sa.minZ + 0.15 && this.playerPos.z <= sa.maxZ - 0.15;
+      if (inAperture && (this.onNullLift || Math.abs(this.floorY - silo.liftY) < 1.6)) {
+        this.onNullLift = true;
+      } else if (!inAperture) {
+        this.onNullLift = false;
+      }
+    } else {
+      this.onNullLift = false;
+    }
+
     if (this.inElevator && elv) {
       this.floorY = elv.cabY;
       this.jumpOffset = 0;
       this.jumpVelY = 0;
     } else if (this.inExtElevator && extElv) {
       this.floorY = extElv.cabY;
+      this.jumpOffset = 0;
+      this.jumpVelY = 0;
+    } else if (this.inNullElevator && nullElv) {
+      this.floorY = nullElv.cabY;
+      this.jumpOffset = 0;
+      this.jumpVelY = 0;
+    } else if (this.onNullLift && silo) {
+      this.floorY = silo.liftY;
+      this.currentFloor = silo.liftProgress >= 0.5 ? 1 : -40;
       this.jumpOffset = 0;
       this.jumpVelY = 0;
     } else {
@@ -3146,9 +4163,11 @@ export class FirstPersonHouseExplorer {
       const fwdX = -Math.sin(vp.yaw);
       const fwdZ = -Math.cos(vp.yaw);
       if (this.driveCamMode === 'hood') {
-        // Panoramic forward view mounted right ahead of top windshield — zero interior pillars!
-        const halfL = key === 'armor' ? ARMOR_CAMPER.length * 0.5 : (key === 'kei' ? KEI.length * 0.5 : CAMPER.length * 0.5);
-        const camY = (vp.y || 0) + (key === 'armor' ? 3.25 : (key === 'kei' ? 1.56 : 2.38));
+        // Panoramic forward view mounted right ahead of top windshield / K-11 composite nosecone!
+        const halfL = key === 'k11'
+          ? 17.2
+          : (key === 'armor' ? ARMOR_CAMPER.length * 0.5 : (key === 'kei' ? KEI.length * 0.5 : CAMPER.length * 0.5));
+        const camY = (vp.y || 0) + (key === 'k11' ? 3.2 : (key === 'armor' ? 3.25 : (key === 'kei' ? 1.56 : 2.38)));
         this.camera.position.set(
           vp.cx + fwdX * (halfL + 0.18),
           camY,
@@ -3157,15 +4176,16 @@ export class FirstPersonHouseExplorer {
         _euler.set(this.pitch - 0.04, this.yaw, 0, 'YXZ');
         this.camera.quaternion.setFromEuler(_euler);
       } else {
-        // Elevated wide chase camera following behind vehicle, respecting user orbit look!
-        const chaseDist = key === 'armor' ? 15.8 : (key === 'kei' ? 5.6 : 9.6);
-        const chaseH = key === 'armor' ? 5.8 : (key === 'kei' ? 2.7 : 4.2);
+        // Elevated wide chase camera following behind vehicle / K-11 airship, respecting user orbit look!
+        const k11InSilo = key === 'k11' && veh.dockedInSilo && this.house.nullErea && this.house.nullErea.silo.liftProgress < 0.72;
+        const chaseDist = key === 'k11' ? (k11InSilo ? 19.5 : 38.0) : (key === 'armor' ? 15.8 : (key === 'kei' ? 5.6 : 9.6));
+        const chaseH = key === 'k11' ? (k11InSilo ? 8.5 : 14.5) : (key === 'armor' ? 5.8 : (key === 'kei' ? 2.7 : 4.2));
         const lookBackX = Math.sin(this.yaw);
         const lookBackZ = Math.cos(this.yaw);
         let cx = vp.cx + lookBackX * chaseDist;
         let cz = vp.cz + lookBackZ * chaseDist;
         let cy = (vp.y || 0) + chaseH - Math.sin(this.pitch) * chaseDist * 0.45;
-        if (this.terreno) {
+        if (this.terreno && !k11InSilo) {
           const groundAtCam = this.terreno.getHeightAt(cx, cz);
           if (cy < groundAtCam + 1.15) cy = groundAtCam + 1.15;
         }
@@ -3215,15 +4235,16 @@ export class FirstPersonHouseExplorer {
     const kl = this.worldToKeiLocal(px, pz);
     const al = this.worldToArmorLocal(px, pz);
     const tl = this.worldToContainerLocal(px, pz);
+    const k11l = this.house.airshipK11 ? this.worldToK11Local(px, pz) : { lx: -999, lz: -999 };
     const lookX = -Math.sin(this.yaw);
     const lookZ = -Math.cos(this.yaw);
     const cp = this.house.camper.pose;
     const camLookX = lookX * Math.cos(cp.yaw) - lookZ * Math.sin(cp.yaw);
     const camLookZ = lookX * Math.sin(cp.yaw) + lookZ * Math.cos(cp.yaw);
 
-    // Collect active/moving vehicles (player-driven OR autonomous) so Garage Gates (DG-N/DG-S) open when approaching!
+    // Collect active/moving ground vehicles (player-driven OR autonomous) so Garage Gates (DG-N/DG-S) open when approaching!
     const activeVehicles = [];
-    if (this.drivingVehicle) activeVehicles.push(this.drivingVehicle);
+    if (this.drivingVehicle && this.drivingVehicle !== 'k11') activeVehicles.push(this.drivingVehicle);
     if (this.autopilotRoutes.camper && !activeVehicles.includes('camper')) activeVehicles.push('camper');
     if (this.autopilotRoutes.armor && !activeVehicles.includes('armor')) activeVehicles.push('armor');
 
@@ -3282,7 +4303,10 @@ export class FirstPersonHouseExplorer {
         continue;
       }
 
-      if (this.drivingVehicle) continue;
+      if (this.drivingVehicle) {
+        if (d.isK11 && d.isExteriorAirlock && d.isOpen) d.isOpen = false;
+        continue;
+      }
 
       let sameFloor = false;
       let tx = px;
@@ -3291,7 +4315,25 @@ export class FirstPersonHouseExplorer {
       let openDist = 0.62;
       let closeDist = 1.08;
 
-      if (d.isCamper) {
+      if (d.isK11) {
+        const k11 = this.house.airshipK11;
+        const airborne = Boolean(k11 && !k11.dockedInSilo && k11.altitudeAGL > 2.2);
+        if (airborne && d.isExteriorAirlock) {
+          // Pressurized cabin safety interlock: exterior airlock hatch & airstair ramp stay sealed while flying!
+          if (d.isOpen) d.isOpen = false;
+          continue;
+        }
+        const silo = this.house.nullErea ? this.house.nullErea.silo : null;
+        const k11AtB40 = Boolean(k11 && k11.dockedInSilo && silo && silo.liftProgress < 0.35);
+        const k11AtSurf = Boolean(k11 && (!k11.dockedInSilo || (silo && silo.liftProgress > 0.72)));
+        sameFloor = this.activeBuilding === 'k11'
+          || (this.currentFloor === -40 && k11AtB40)
+          || (this.currentFloor === 1 && k11AtSurf && k11.altitudeAGL < 2.2);
+        tx = k11l.lx;
+        tz = k11l.lz;
+        openDist = d.isExteriorAirlock ? 1.50 : 0.72;
+        closeDist = d.isExteriorAirlock ? 2.35 : 1.24;
+      } else if (d.isCamper) {
         sameFloor = this.currentFloor === d.floor;
         tx = cl.lx;
         tz = cl.lz;
@@ -3461,6 +4503,53 @@ export class FirstPersonHouseExplorer {
       }
     }
 
+    // NULL EREA 40m High-Speed Underground Elevator (ELV-NULL: GL 0m <-> B40F -40.0m!)
+    const nullElv = this.house.nullElevator;
+    if (nullElv) {
+      const prevPhase = nullElv.phase;
+      nullElv.update(dt);
+      if (nullElv.phase !== 'IDLE_OPEN') anyDoorAnimating = true;
+      if (prevPhase === 'RUNNING' && nullElv.phase === 'DOOR_OPENING') {
+        this.audio.playElevatorChime(nullElv.currentStopFloor === 1 ? 1 : -1);
+        this.audio.playElevatorDoor(true);
+      } else if (prevPhase !== 'DOOR_CLOSING' && nullElv.phase === 'DOOR_CLOSING') {
+        this.audio.playElevatorDoor(false);
+      }
+      if (this.inNullElevator) {
+        this.floorY = nullElv.cabY;
+        if (nullElv.phase === 'DOOR_OPENING' || nullElv.phase === 'IDLE_OPEN') {
+          this.currentFloor = nullElv.currentStopFloor;
+        } else if (nullElv.phase === 'RUNNING') {
+          this.currentFloor = nullElv.cabY < nullElv.groundY - 20.0 ? -40 : 1;
+        }
+      }
+    }
+
+    // NULL EREA SILO-40: 44-Plate Multi-Layer Articulated Roof & 40m Giant Hydraulic Mega-Lift!
+    const nullSilo = this.house.nullErea ? this.house.nullErea.silo : null;
+    if (nullSilo) {
+      const windVec = this.terreno && this.terreno.storm && this.terreno.storm.getIntensity() > 0.02
+        ? this.terreno.storm.getWind()
+        : null;
+      const siloMoving = nullSilo.update(dt, elapsed, windVec);
+      if (siloMoving) anyDoorAnimating = true;
+      if (nullSilo.stageEventPending) {
+        const stg = nullSilo.stageEventPending;
+        nullSilo.stageEventPending = null;
+        if (Math.hypot(this.playerPos.x - NULL_EREA.originX, this.playerPos.z - NULL_EREA.originZ) < 160.0) {
+          this.audio.playSiloHydraulic(stg);
+        }
+      }
+      if (this.house.airshipK11 && this.house.airshipK11.dockedInSilo) {
+        this.house.airshipK11.pose.y = nullSilo.liftY;
+        this.house.airshipK11.syncTransform();
+      }
+    }
+
+    if (this.drivingVehicle !== 'k11' && this.activeBuilding !== 'k11') {
+      this.audio.updateAirshipEngine(false, 0);
+    }
+
     if (this.house.b4Lab && this.currentFloor === -3) {
       this.house.b4Lab.update(dt, elapsed);
     }
@@ -3522,8 +4611,14 @@ export class FirstPersonHouseExplorer {
 
       // Spatial Storm Rain & Wind Howl Audio with realistic acoustic shelter muffling!
       let stormMuffle = 1.0;
-      if (this.currentFloor <= 0) stormMuffle = 0.02;
-      else if (this.activeBuilding === 'armor') {
+      if (this.currentFloor === -40) {
+        const roofOpen = nullSilo ? nullSilo.roofProgress : 0;
+        stormMuffle = 0.02 + roofOpen * 0.62;
+      } else if (this.currentFloor <= 0) stormMuffle = 0.02;
+      else if (this.activeBuilding === 'k11') {
+        const hatchOpen = doorOpenMap['DK11-W'] || doorOpenMap['DK11-R'];
+        stormMuffle = hatchOpen ? 0.54 : 0.16;
+      } else if (this.activeBuilding === 'armor') {
         const shClosed = this.house.armorCamper?.shutters?.shuttersClosed;
         stormMuffle = shClosed ? 0.08 : 0.24;
       } else if (this.activeBuilding === 'garage' || this.activeBuilding === 'container') stormMuffle = 0.34;
@@ -3563,9 +4658,15 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all compound units, vehicles, garage & Suginosato 5-House Village
-    if (this.currentFloor <= 0) {
+    // Acoustic occlusion across all compound units, vehicles, garage, NULL EREA & K-11
+    if (this.currentFloor === -40) {
+      const roofOpen = nullSilo ? nullSilo.roofProgress : 0;
+      this.audio.updateOcclusion(0.015 + roofOpen * 0.58);
+    } else if (this.currentFloor <= 0) {
       this.audio.updateOcclusion(0.015);
+    } else if (this.activeBuilding === 'k11') {
+      const hatchOpen = doorOpenMap['DK11-W'] || doorOpenMap['DK11-R'];
+      this.audio.updateOcclusion(hatchOpen ? 0.56 : 0.18);
     } else if (this.activeBuilding === 'armor') {
       const shClosed = this.house.armorCamper?.shutters?.shuttersClosed;
       const doorOpen = doorOpenMap['DAM-1'] || doorOpenMap['DAM-R'];
@@ -3628,6 +4729,15 @@ export class FirstPersonHouseExplorer {
   _detectCurrentRoom() {
     const x = this.playerPos.x;
     const z = this.playerPos.z;
+    if (this.inNullElevator && this.house.nullElevator) {
+      const ne = this.house.nullElevator;
+      const relDepth = Math.min(0, ne.cabY - ne.groundY);
+      const kmh = Math.round(Math.abs(ne.velY || 0) * 3.6);
+      const label = ne.phase === 'RUNNING'
+        ? `ELV-NULL 高速昇降中 (${relDepth.toFixed(1)}m / ${kmh}km/h)`
+        : `ELV-NULL 地下40m直通 (${ne.currentStopFloor === -40 ? 'B40F -40.0m' : 'GL ±0.0m'})`;
+      return { id: 'null_elevator', code: 'ELV-NULL', floor: this.currentFloor, building: 'null_hangar', nameJp: label };
+    }
     if (this.inExtElevator && this.house.extElevator) {
       return { id: 'ext_elevator', code: 'ELV-EXT', floor: this.currentFloor, building: 'main', nameJp: '外部屋根裏直通エレベーター' };
     }
@@ -3639,6 +4749,18 @@ export class FirstPersonHouseExplorer {
       else if (st.phase === 'RUNNING') msg = `リアルELV 昇降中 (${st.speedMs.toFixed(1)}m/s → ${targetCode} / ${st.cabY.toFixed(1)}m)`;
       else if (st.phase === 'RELEVELING') msg = `精密微速着床中 (${targetCode} レベリング)`;
       return { id: 'elevator_cab', code: 'ELV-1', floor: this.currentFloor, building: 'main', nameJp: msg };
+    }
+    if (this.drivingVehicle === 'k11' && this.house.airshipK11) {
+      const k11 = this.house.airshipK11;
+      const kmh = Math.round(k11.groundSpeedKmh || 0);
+      const alt = Math.round(k11.altitudeAGL || 0);
+      return {
+        id: 'k11_piloting',
+        code: 'K-11',
+        floor: this.currentFloor,
+        building: 'k11',
+        nameJp: `飛行船 K-11 操縦中 (${kmh}km/h・高度${alt}m・残${k11.fuelL.toFixed(1)}L)`,
+      };
     }
     if (this.drivingVehicle === 'kei') {
       const kmh = Math.round(Math.abs(this.house.kei.speed) * 3.6);
@@ -3671,6 +4793,23 @@ export class FirstPersonHouseExplorer {
       return { id: 'stair', code: `ST${this.activeFlight}`, floor: this.currentFloor, building: 'main', nameJp: '母屋 階段' };
     }
 
+    if (this.activeBuilding === 'k11' && this.house.airshipK11) {
+      const kl11 = this.worldToK11Local(x, z);
+      for (let i = AIRSHIP_K11_PLAN.rooms.length - 1; i >= 0; i--) {
+        const r = AIRSHIP_K11_PLAN.rooms[i];
+        if (kl11.lx >= r.x && kl11.lx <= r.x + r.w && kl11.lz >= r.z && kl11.lz <= r.z + r.d) return r;
+      }
+      return AIRSHIP_K11_PLAN.rooms[0];
+    }
+    if (this.currentFloor === -40 || this.activeBuilding === 'null_hangar') {
+      const nx = x - NULL_EREA.originX + 23.5;
+      const nz = z - NULL_EREA.originZ + 27.0;
+      for (let i = NULL_HANGAR_PLAN.rooms.length - 1; i >= 0; i--) {
+        const r = NULL_HANGAR_PLAN.rooms[i];
+        if (nx >= r.x && nx <= r.x + r.w && nz >= r.z && nz <= r.z + r.d) return r;
+      }
+      return NULL_HANGAR_PLAN.rooms[0];
+    }
     if (this.activeBuilding === 'armor') {
       const al = this.worldToArmorLocal(x, z);
       for (let i = ARMOR_CAMPER_PLAN.rooms.length - 1; i >= 0; i--) {
@@ -3789,9 +4928,12 @@ export class FirstPersonHouseExplorer {
       prev = now;
 
       if (this.map3dActive && this.map3d) {
-        // Keep autonomous campers cruising live while viewing the 3D map!
-        if (this.autopilotRoutes.camper || this.autopilotRoutes.armor) {
-          this._updateAllVehicles(dt);
+        // Keep autonomous campers & K-11 airship (plus Silo-40 launch sequence!) cruising live while viewing the 3D map!
+        if (this.house.nullErea?.silo && (this.house.nullErea.silo.state === 'LAUNCH_OPENING' || this.house.nullErea.silo.state === 'STOW_CLOSING')) {
+          this.house.nullErea.silo.update(dt, elapsed, null);
+        }
+        if (this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11) {
+          this._updateAllVehicles(dt, elapsed);
           this._updateAutomaticDoors(dt);
         }
         this.map3d.syncPlayerPose({
@@ -3801,9 +4943,11 @@ export class FirstPersonHouseExplorer {
           camperPose: this.house.camper.pose,
           keiPose: this.house.kei.pose,
           armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
+          k11Pose: this.house.airshipK11 ? this.house.airshipK11.pose : null,
           autopilotRoutes: {
             camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
             armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
+            k11: this.autopilotRoutes.k11 ? this.autopilotRoutes.k11.points : null,
           },
         });
         this.map3d.render(this.renderer, dt, elapsed);
@@ -3811,7 +4955,7 @@ export class FirstPersonHouseExplorer {
         return;
       }
 
-      this._updateMovement(dt);
+      this._updateMovement(dt, elapsed);
       this._updateCameraTransform(elapsed);
       const { anyDoorAnimating, doorOpenMap, propStates } = this._updateWorldSystems(dt, elapsed);
 
@@ -3827,7 +4971,11 @@ export class FirstPersonHouseExplorer {
 
       this.adaptive.update(rawDtMs, dt, {
         anyDoorAnimating,
-        flashlightOn: this.flashlightOn || this.house.camper.headlightsOn || this.house.kei.headlightsOn || this.house.armorCamper.headlightsOn,
+        flashlightOn: this.flashlightOn
+          || this.house.camper.headlightsOn
+          || this.house.kei.headlightsOn
+          || this.house.armorCamper.headlightsOn
+          || Boolean(this.house.airshipK11 && this.house.airshipK11.headlightsOn),
         cameraMoved,
         currentFloor: this.currentFloor,
         activeFlight: this.activeFlight,
@@ -3842,9 +4990,14 @@ export class FirstPersonHouseExplorer {
 
       if (this.scene.fog) {
         const stormInt = this.terreno && this.terreno.storm ? this.terreno.storm.getIntensity() : 0;
-        const targetFog = this.currentFloor < 0 || this.inElevator
-          ? 0.0035
-          : (0.00018 + stormInt * 0.0018);
+        const outdoorFog = 0.00018 + stormInt * 0.0018;
+        let targetFog = outdoorFog;
+        if (this.currentFloor === -40) {
+          const roofOpen = this.house.nullErea ? this.house.nullErea.silo.roofProgress : 0;
+          targetFog = 0.0016 * (1.0 - roofOpen) + outdoorFog * roofOpen;
+        } else if (this.currentFloor < 0 || this.inElevator) {
+          targetFog = 0.0035;
+        }
         this.scene.fog.density += (targetFog - this.scene.fog.density) * Math.min(1, dt * 8);
       }
 
@@ -3852,11 +5005,13 @@ export class FirstPersonHouseExplorer {
       const outdoorExp = todPreset ? todPreset.exposure : 1.12;
       let targetExposure = 1.15;
       if (this.flashlightOn) targetExposure = 1.06;
-      else if (this.inElevator || this.inExtElevator) targetExposure = 1.18;
+      else if (this.inElevator || this.inExtElevator || this.inNullElevator) targetExposure = 1.18;
+      else if (this.currentFloor === -40) targetExposure = 1.18;
       else if (this.currentFloor === -3) targetExposure = 1.18;
       else if (this.currentFloor === -1) targetExposure = 1.14;
       else if (this.currentFloor === -2) targetExposure = 1.16;
       else if (this.currentFloor === 0) targetExposure = 1.02;
+      else if (this.activeBuilding === 'k11') targetExposure = 1.14;
       else if (this.activeBuilding === 'storage' || this.activeBuilding === 'garage') targetExposure = 1.12;
       else if (this.activeBuilding === 'armor' || this.activeBuilding === 'container') targetExposure = 1.16;
       else if (this.activeBuilding === 'camper' || this.activeBuilding === 'kei') targetExposure = outdoorExp;
@@ -3870,6 +5025,8 @@ export class FirstPersonHouseExplorer {
 
       if (this.callbacks.onPoseUpdate) {
         this.camera.getWorldDirection(_lookDir);
+        const inK11 = this.activeBuilding === 'k11';
+        const inNullHangar = this.currentFloor === -40 || this.activeBuilding === 'null_hangar' || this.inNullElevator;
         const inKei = this.activeBuilding === 'kei';
         const inCamper = this.activeBuilding === 'camper';
         const inArmor = this.activeBuilding === 'armor';
@@ -3878,21 +5035,41 @@ export class FirstPersonHouseExplorer {
         const inAnnex = this.activeBuilding === 'annex';
         const inStorage = this.activeBuilding === 'storage';
         const distFromComp = Math.hypot(this.playerPos.x - TERRENO_WORLD.compoundCenterX, this.playerPos.z - TERRENO_WORLD.compoundCenterZ);
-        const farOutdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && distFromComp > 28.0;
+        const distFromNull = Math.hypot(this.playerPos.x - NULL_EREA.originX, this.playerPos.z - NULL_EREA.originZ);
+        const nearNullSurface = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && distFromNull < 52.0;
+        const farOutdoors = this.currentFloor === 1 && this.activeBuilding === 'courtyard' && distFromComp > 28.0 && !nearNullSurface;
 
-        // 0..22 = CAD Blueprints, 30 = 3D Map, 31 = 2D Authentic Autopilot Map
-        let sheetIndex = farOutdoors ? 30 : (this.currentFloor + 3);
+        // 0..24 = CAD Blueprints (incl. 23=NULL車庫, 24=K-11), 30 = 3D Map, 31 = 2D Authentic Autopilot Map
+        let sheetIndex = farOutdoors ? 30 : (nearNullSurface ? SHEET_OFFSETS.nullHangar : (this.currentFloor + 3));
         let floorCode = farOutdoors
           ? '平野'
-          : (this.activeBuilding === 'courtyard'
-            ? '中庭'
-            : (this.inExtElevator ? 'ELV-EXT' : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code)));
-        let localX = this.playerPos.x;
-        let localZ = this.playerPos.z;
+          : (nearNullSurface
+            ? 'NULL EREA'
+            : (this.activeBuilding === 'courtyard'
+              ? '中庭'
+              : (this.inExtElevator ? 'ELV-EXT' : (this.inElevator ? 'ELV-1' : getFloorByPhysicalIndex(this.currentFloor).code))));
+        let localX = nearNullSurface ? (this.playerPos.x - NULL_EREA.originX + 23.5) : this.playerPos.x;
+        let localZ = nearNullSurface ? (this.playerPos.z - NULL_EREA.originZ + 27.0) : this.playerPos.z;
         let localDx = _lookDir.x;
         let localDz = _lookDir.z;
 
-        if (inArmor) {
+        if (inK11 && this.house.airshipK11) {
+          sheetIndex = this.drivingVehicle === 'k11' ? 31 : SHEET_OFFSETS.k11;
+          floorCode = this.drivingVehicle === 'k11' ? 'K-11飛行' : 'K-11船内';
+          const kl11 = this.worldToK11Local(this.playerPos.x, this.playerPos.z);
+          localX = kl11.lx;
+          localZ = kl11.lz;
+          const kp = this.house.airshipK11.pose;
+          const c = Math.cos(kp.yaw);
+          const s = Math.sin(kp.yaw);
+          localDx = _lookDir.x * c - _lookDir.z * s;
+          localDz = _lookDir.x * s + _lookDir.z * c;
+        } else if (inNullHangar) {
+          sheetIndex = SHEET_OFFSETS.nullHangar;
+          floorCode = this.inNullElevator ? 'ELV-NULL' : 'B40F車庫';
+          localX = this.playerPos.x - NULL_EREA.originX + 23.5;
+          localZ = this.playerPos.z - NULL_EREA.originZ + 27.0;
+        } else if (inArmor) {
           sheetIndex = distFromComp > 30.0 ? 31 : SHEET_OFFSETS.armor;
           floorCode = '装甲RV';
           const al = this.worldToArmorLocal(this.playerPos.x, this.playerPos.z);
@@ -3955,7 +5132,7 @@ export class FirstPersonHouseExplorer {
         }
 
         const storm = this.terreno ? this.terreno.storm : null;
-        const activeRoute = this.autopilotRoutes[this.selectedAutopilotVehicle] || this.autopilotRoutes.camper || this.autopilotRoutes.armor;
+        const activeRoute = this.autopilotRoutes[this.selectedAutopilotVehicle] || this.autopilotRoutes.k11 || this.autopilotRoutes.camper || this.autopilotRoutes.armor;
         this.callbacks.onPoseUpdate({
           x: this.playerPos.x,
           z: this.playerPos.z,
@@ -3973,6 +5150,7 @@ export class FirstPersonHouseExplorer {
           camperPose: this.house.camper.pose,
           keiPose: this.house.kei.pose,
           armorPose: this.house.armorCamper.pose,
+          k11Pose: this.house.airshipK11 ? this.house.airshipK11.pose : null,
           containerPose: this.house.towContainer.pose,
           containerHitched: this.house.towContainer.hitched,
           floodRise: storm ? storm.getFloodRise() : 0,
@@ -3981,6 +5159,7 @@ export class FirstPersonHouseExplorer {
           autopilotRoutes: {
             camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
             armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
+            k11: this.autopilotRoutes.k11 ? this.autopilotRoutes.k11.points : null,
           },
           autopilotRoute: activeRoute ? activeRoute.points : null,
           autopilotTargetId: activeRoute ? activeRoute.targetId : null,

@@ -506,15 +506,86 @@ html, body {
   color: #fee2e2;
 }
 
-/* Minimal Driving Control Bar & Speedometer */
+/* Minimal Auto-Fading Status Notification Pill */
+.status-toast {
+  position: absolute;
+  left: 50%;
+  top: max(48px, calc(env(safe-area-inset-top) + 38px));
+  transform: translateX(-50%);
+  max-width: min(92vw, 520px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  background: rgba(8, 15, 26, 0.82);
+  backdrop-filter: blur(10px);
+  color: #e0f2fe;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-align: center;
+  z-index: 40;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.36);
+}
+
+.status-toast.toast-warn {
+  border-color: rgba(248, 113, 113, 0.78);
+  background: rgba(38, 10, 14, 0.88);
+  color: #fecaca;
+}
+
+.status-toast.toast-ok {
+  border-color: rgba(52, 211, 153, 0.75);
+  background: rgba(6, 28, 22, 0.86);
+  color: #a7f3d0;
+}
+
+/* Minimal Driving & K-11 Flight Control Bar */
 .drive-hud-bar {
   position: absolute;
   right: max(12px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  max-width: calc(100vw - 24px);
   z-index: 18;
+}
+
+.k11-flight-controls {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.drive-tele-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgba(8, 16, 28, 0.68);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  backdrop-filter: blur(8px);
+  color: #bae6fd;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.drive-tele-pill strong {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.drive-tele-pill .tele-sep {
+  opacity: 0.35;
 }
 
 .drive-action-btn {
@@ -530,6 +601,9 @@ html, body {
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
   transition: background 0.14s, border-color 0.14s, color 0.14s;
 }
 
@@ -537,6 +611,23 @@ html, body {
   background: rgba(14, 165, 233, 0.78);
   border-color: rgba(125, 211, 252, 0.85);
   color: #ffffff;
+}
+
+.drive-action-k11 {
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #e0f2fe;
+}
+
+.drive-action-amber {
+  border-color: rgba(245, 158, 11, 0.68);
+  background: rgba(120, 53, 15, 0.54);
+  color: #fde68a;
+}
+
+.drive-action-emerald {
+  border-color: rgba(16, 185, 129, 0.72);
+  background: rgba(6, 78, 59, 0.58);
+  color: #a7f3d0;
 }
 
 .drive-action-exit {
@@ -965,5 +1056,23 @@ html, body {
 
 .floor-tab-cont.active {
   background: #d97706;
+  color: #ffffff;
+}
+
+.floor-tab-null {
+  color: #fde68a;
+}
+
+.floor-tab-null.active {
+  background: #f59e0b;
+  color: #0f172a;
+}
+
+.floor-tab-k11 {
+  color: #38bdf8;
+}
+
+.floor-tab-k11.active {
+  background: #0284c7;
   color: #ffffff;
 }

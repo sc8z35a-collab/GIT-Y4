@@ -1,8 +1,10 @@
 import {
   HOUSE, ANNEX, STORAGE, CAMPER, KEI, ELEVATOR, STAIR_B1_B2, STAIR_B2_B3,
   GARAGE, ARMOR_CAMPER, TOW_CONTAINER, EXT_ELEVATOR,
+  NULL_EREA, AIRSHIP_K11,
   BLUEPRINT_SHEETS, GRID_AXES, COLUMNS,
 } from './planData.js';
+import { buildNullHangarBlueprintSVG, buildAirshipK11BlueprintSVG } from './blueprintAirship2d.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -290,13 +292,31 @@ export class ArchitecturalBlueprint2D {
     const isGarageSheet = floor.building === 'garage';
     const isArmorSheet = floor.building === 'armor';
     const isContainerSheet = floor.building === 'container';
+    const isNullHangarSheet = Boolean(floor.isNullHangar);
+    const isAirshipK11Sheet = Boolean(floor.isAirshipK11);
     const poseSheet = pose.sheetIndex !== undefined ? pose.sheetIndex : (pose.floor + 3);
     const sameSheet = poseSheet === this.activeFloor;
     this.camGroup.setAttribute('opacity', sameSheet ? '1' : '0.24');
 
     let mapX = pose.x;
     let mapZ = pose.z;
-    if (isGarageSheet) {
+    if (isNullHangarSheet) {
+      mapX = pose.x - NULL_EREA.originX + 23.5;
+      mapZ = pose.z - NULL_EREA.originZ + 27.0;
+    } else if (isAirshipK11Sheet) {
+      if (pose.building === 'k11' && pose.localX !== undefined) {
+        mapX = pose.localX;
+        mapZ = pose.localZ;
+      } else if (pose.k11Pose) {
+        const kp = pose.k11Pose;
+        const dx = pose.x - kp.cx;
+        const dz = pose.z - kp.cz;
+        const c = Math.cos(kp.yaw);
+        const s = Math.sin(kp.yaw);
+        mapX = dx * c - dz * s + AIRSHIP_K11.cabin.outerWidth * 0.5;
+        mapZ = dx * s + dz * c + AIRSHIP_K11.cabin.outerLength * 0.5;
+      }
+    } else if (isGarageSheet) {
       mapX = pose.x - GARAGE.originX;
       mapZ = pose.z - GARAGE.originZ;
     } else if (isArmorSheet) {
@@ -361,7 +381,8 @@ export class ArchitecturalBlueprint2D {
 
     const maxW = floor.isDeepB4 ? 4.95 : (floor.width || HOUSE.width);
     const maxD = floor.isDeepB4 ? 16.65 : (floor.depth || HOUSE.depth);
-    const cx = this.px(Math.max(-1.6, Math.min(maxW + 1.0, mapX)));
+    const minX = isNullHangarSheet ? -3.0 : -1.6;
+    const cx = this.px(Math.max(minX, Math.min(maxW + 1.0, mapX)));
     const cz = this.pz(Math.max(-1.2, Math.min(maxD + 1.0, mapZ)));
     const ang = (Math.atan2(pose.dz, pose.dx) * 180) / Math.PI;
     this.camDot.setAttribute('cx', cx);
@@ -552,6 +573,19 @@ export class ArchitecturalBlueprint2D {
       defs.appendChild(m);
     });
     svg.appendChild(defs);
+
+    if (floor.isNullHangar) {
+      buildNullHangarBlueprintSVG(this, svg, defs);
+      this.container.appendChild(svg);
+      this.syncLayerVisibility();
+      return;
+    }
+    if (floor.isAirshipK11) {
+      buildAirshipK11BlueprintSVG(this, svg, defs);
+      this.container.appendChild(svg);
+      this.syncLayerVisibility();
+      return;
+    }
 
     svg.appendChild(el('rect', { x: 0, y: 0, width: VW, height: VH, fill: '#faf7f1' }));
     svg.appendChild(el('rect', { x: 14, y: 14, width: VW - 28, height: VH - 28, fill: 'none', stroke: '#2c2f36', 'stroke-width': 1.4 }));
@@ -3257,14 +3291,14 @@ export class ArchitecturalBlueprint2D {
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 82, x2: tbX + tbW, y2: baseTop + 82, stroke: '#2c2f36', 'stroke-width': 0.8 }));
     g.appendChild(el('line', { x1: tbX, y1: baseTop + 144, x2: tbX + tbW, y2: baseTop + 144, stroke: '#2c2f36', 'stroke-width': 0.8 }));
 
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 7.8, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 (母屋11層+外部ELV-EXT+車倉庫10×20×4.5m+装甲RV15.5m+コンテナ+隣棟+軽)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 21, 'font-size': 7.8, 'font-weight': 700, fill: '#1c1e22' }, 'PROJECT : NARROW-50 & NULL EREA (母屋11層+外部ELV+車倉庫+装甲RV+コンテナ+地下40m飛行船車庫+K-11)'));
     g.appendChild(el('text', { x: tbX + 10, y: baseTop + 51, 'font-size': 8.0, 'font-weight': 700, fill: floor.isDeepB4 ? '#991b1b' : '#9c4722' }, `図面名称 : ${floor.titleJp}`));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.1, fill: '#5b5852' }, '全23図面 : 母屋11層 ｜ 隣棟4層 ｜ RC倉庫2層 ｜ 既存RV2層 ｜ 軽 ｜ 巨大車倉庫 ｜ 装甲RV ｜ けん引コンテナ'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.0, fill: '#0f4c81', 'font-weight': 700 }, 'GARAGE-200 & ELV-EXT : 10×20×4.5m鉄骨車倉庫(自動シャッター2基) ｜ 母屋西外壁 屋根裏直通外部ELV(+16.1m)'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.0, fill: '#065f46', 'font-weight': 700 }, 'ARMOR-155 & CON-24 : 15.5×3.1×4.0m 重鉄外装・電動鉄シャッター・木製秘密基地6室＋2×4×3m けん引コンテナ'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.0, fill: '#1d7a8c' }, 'TERRENO 60×60km・21路線 & A*自律走行 : 2D/3D地図より自由目的地へRV・装甲車自律航法・嵐/河川氾濫対応'));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.0, fill: '#1c1e22' }, floor.building === 'garage' ? '縮尺 : 車庫平面 1/100 ｜ 門型横断面 1/60 ｜ 北立面 1/65 ｜ 単位 : mm' : (floor.building === 'armor' ? '縮尺 : 装甲RV平面 1/75 ｜ 8×8縦断面 1/40 ｜ 横断面 1/26 ｜ 単位 : mm' : (floor.building === 'container' ? '縮尺 : コンテナ平面 1/28 ｜ 側面立面 1/32 ｜ 後部断面 1/26 ｜ 単位 : mm' : '縮尺 : S = 1/50〜1/100 (車庫1/100・装甲RV1/75・コンテナ1/28・軽1/20) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
-    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 6.9, fill: '#6c665d' }, 'NARROW-50 全23図面・2本指自由ズーム/パン＆一括SVG/ZIP出力対応'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 69, 'font-size': 7.1, fill: '#5b5852' }, '全25図面 : 母屋11層 ｜ 隣棟4層 ｜ RC倉庫2層 ｜ RV2層 ｜ 軽 ｜ 車倉庫 ｜ 装甲RV ｜ コンテナ ｜ NULL車庫(-40m) ｜ K-11'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 98, 'font-size': 7.0, fill: '#0f4c81', 'font-weight': 700 }, 'GARAGE-200 & NULL SILO-40 : 10×20×4.5m車倉庫 ｜ NULL EREA地下40m格納庫(44枚開閉屋根+40m高昇機+高速ELV)'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 114, 'font-size': 7.0, fill: '#065f46', 'font-weight': 700 }, 'AIRSHIP K-11 (TECNICA FORCES) : 無風250km/h・1L/3km(100L)・室内4.5×15×3.2m・マップ自動航行・RV無人呼出'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 131, 'font-size': 7.0, fill: '#1d7a8c' }, 'TERRENO 60×60km・21路線 & A*自律走行 : 2D/3D地図より自由目的地へK-11・RV・装甲車自律航法・嵐/氾濫対応'));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 161, 'font-size': 7.0, fill: '#1c1e22' }, floor.building === 'garage' ? '縮尺 : 車庫平面 1/100 ｜ 門型横断面 1/60 ｜ 北立面 1/65 ｜ 単位 : mm' : (floor.building === 'armor' ? '縮尺 : 装甲RV平面 1/75 ｜ 8×8縦断面 1/40 ｜ 横断面 1/26 ｜ 単位 : mm' : (floor.building === 'container' ? '縮尺 : コンテナ平面 1/28 ｜ 側面立面 1/32 ｜ 後部断面 1/26 ｜ 単位 : mm' : '縮尺 : S = 1/50〜1/100 (車庫1/100・装甲RV1/75・コンテナ1/28・軽1/20・K-11 1/45) ｜ 単位 : mm ｜ 赤点 = 現在地'))));
+    g.appendChild(el('text', { x: tbX + 10, y: baseTop + 178, 'font-size': 6.9, fill: '#6c665d' }, 'NARROW-50 & NULL EREA 全25図面・2本指自由ズーム/パン＆一括SVG/ZIP出力対応'));
 
     svg.appendChild(g);
   }

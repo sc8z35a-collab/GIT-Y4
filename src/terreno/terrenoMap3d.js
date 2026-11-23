@@ -486,6 +486,7 @@ export function createTerrenoMap3D(geomorph) {
   const routeViz = {
     camper: createRouteViz(0x38bdf8),
     armor: createRouteViz(0x34d399),
+    k11: createRouteViz(0xc084fc),
   };
 
   function updateRouteViz(key, pts) {
@@ -502,10 +503,12 @@ export function createTerrenoMap3D(geomorph) {
     if (sig !== viz.lastSig) {
       viz.lastSig = sig;
       const v3 = [];
+      const liftY = key === 'k11' ? 2.4 : 0.42;
       for (let i = 0; i < pts.length; i++) {
         const py = geomorph.sampleGeoBilinear(pts[i][0], pts[i][1]).hMacro;
         const mp = worldToMap3D(pts[i][0], pts[i][1], py);
-        v3.push(new THREE.Vector3(mp.x, mp.y + 0.42, mp.z));
+        const arcBoost = key === 'k11' ? Math.sin((i / Math.max(1, pts.length - 1)) * Math.PI) * 2.2 : 0;
+        v3.push(new THREE.Vector3(mp.x, mp.y + liftY + arcBoost, mp.z));
       }
       viz.line.geometry.dispose();
       viz.line.geometry = new THREE.BufferGeometry().setFromPoints(v3);
@@ -517,7 +520,7 @@ export function createTerrenoMap3D(geomorph) {
   }
 
   // =========================================================================
-  // 5. 3D MINIATURE NARROW-50 COMPOUND + SUGINOSATO 5-HOUSE VILLAGE + BEACONS
+  // 5. 3D MINIATURE NARROW-50 COMPOUND + SUGINOSATO 5-HOUSE VILLAGE + NULL EREA + BEACONS
   // =========================================================================
   const compPos = worldToMap3D(
     TERRENO_WORLD.compoundCenterX,
@@ -550,6 +553,25 @@ export function createTerrenoMap3D(geomorph) {
   compoundMini.add(miniAnnex);
   scene.add(compoundMini);
 
+  // NULL EREA Miniature Underground Airship Launch Complex at South Edge (0, 29910)
+  const nullPos = worldToMap3D(0.0, 29910.0, geomorph.southRectY);
+  const nullMini = new THREE.Group();
+  nullMini.position.set(nullPos.x, nullPos.y, nullPos.z);
+  const nullPad = new THREE.Mesh(
+    new THREE.BoxGeometry(2.1, 0.16, 1.15),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, emissive: 0x0ea5e9, emissiveIntensity: 0.55, roughness: 0.35 })
+  );
+  nullPad.position.y = 0.14;
+  nullMini.add(nullPad);
+  const nullRing = new THREE.Mesh(
+    new THREE.RingGeometry(1.15, 1.65, 32),
+    new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+  );
+  nullRing.rotation.x = -Math.PI * 0.5;
+  nullRing.position.y = 0.24;
+  nullMini.add(nullRing);
+  scene.add(nullMini);
+
   const villPos = worldToMap3D(VILLAGE.centerX, VILLAGE.centerZ, VILLAGE.groundY);
   const villageMini = new THREE.Group();
   villageMini.position.set(villPos.x, villPos.y, villPos.z);
@@ -577,7 +599,7 @@ export function createTerrenoMap3D(geomorph) {
   });
   scene.add(villageMini);
 
-  // 8 Tappable 3D Landmark Beacons (Sets Autonomous Camper Destination — NO teleport!)
+  // 9 Tappable 3D Landmark Beacons (Sets Autonomous Camper or K-11 Destination — NO teleport!)
   const beaconTargets = [];
   const beaconMeshes = [];
   TERRENO_LANDMARKS.forEach((lm) => {
@@ -585,9 +607,10 @@ export function createTerrenoMap3D(geomorph) {
     const p = worldToMap3D(lm.x, lm.z, wy);
     const isBase = lm.id === 'compound';
     const isVillage = lm.id === 'village';
-    const colHex = isBase ? 0x38bdf8 : (isVillage ? 0x34d399 : 0xf59e0b);
-    const orbHex = isBase ? 0x7dd3fc : (isVillage ? 0x6ee7b7 : 0xfde68a);
-    const tall = isBase || isVillage;
+    const isNull = lm.id === 'null_erea';
+    const colHex = isBase ? 0x38bdf8 : (isNull ? 0x22d3ee : (isVillage ? 0x34d399 : 0xf59e0b));
+    const orbHex = isBase ? 0x7dd3fc : (isNull ? 0xa5f3fc : (isVillage ? 0x6ee7b7 : 0xfde68a));
+    const tall = isBase || isVillage || isNull;
 
     const grp = new THREE.Group();
     grp.position.set(p.x, p.y, p.z);
@@ -677,6 +700,13 @@ export function createTerrenoMap3D(geomorph) {
     new THREE.MeshBasicMaterial({ color: 0xfacc15 })
   );
   scene.add(keiDot);
+
+  const k11Dot = new THREE.Mesh(
+    new THREE.SphereGeometry(0.65, 14, 10),
+    new THREE.MeshBasicMaterial({ color: 0xc084fc })
+  );
+  k11Dot.scale.set(0.75, 0.65, 2.2);
+  scene.add(k11Dot);
 
   const tapRipple = new THREE.Mesh(
     new THREE.RingGeometry(0.8, 1.5, 28),
@@ -806,9 +836,17 @@ export function createTerrenoMap3D(geomorph) {
       keiDot.position.set(kp.x, kp.y + 0.28, kp.z);
       keiDot.rotation.y = pose.keiPose.yaw || 0;
     }
+    if (pose.k11Pose) {
+      const kSurfY = geomorph.sampleGeoBilinear(pose.k11Pose.cx, pose.k11Pose.cz).hMacro;
+      const kAlt = Math.max(0, (pose.k11Pose.y ?? kSurfY) - kSurfY);
+      const kp11 = worldToMap3D(pose.k11Pose.cx, pose.k11Pose.cz, kSurfY);
+      k11Dot.position.set(kp11.x, kp11.y + 0.95 + Math.min(5.0, kAlt * 0.025), kp11.z);
+      k11Dot.rotation.y = pose.k11Pose.yaw || 0;
+    }
     if (pose.autopilotRoutes) {
       updateRouteViz('camper', pose.autopilotRoutes.camper);
       updateRouteViz('armor', pose.autopilotRoutes.armor);
+      updateRouteViz('k11', pose.autopilotRoutes.k11);
     }
   }
 

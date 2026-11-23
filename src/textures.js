@@ -61,6 +61,10 @@ const NORMAL_STRENGTH = {
   iron_shutter_slat: 2.9,
   container_corrugated: 2.9,
   secret_cedar_plank: 1.85,
+  airship_composite_hull: 1.45,
+  silo_blast_armor: 2.6,
+  silo_hazard_deck: 2.1,
+  airship_cabin_teak: 1.55,
 };
 
 function buildProceduralTextureCanvas(name) {
@@ -258,6 +262,122 @@ function buildProceduralTextureCanvas(name) {
       const jx = Math.round(((i * 193 + 77) % 420) + 46);
       ctx.fillStyle = 'rgba(42,20,8,0.48)';
       ctx.fillRect(jx, y0, 2, Math.ceil(pH));
+    }
+    return c;
+  }
+
+  if (name === 'airship_composite_hull') {
+    // Sleek matte titanium-white carbon-composite aerospace geodesic hull skin
+    ctx.fillStyle = '#dde3ea';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 1600; i++) {
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(255,255,255,0.06)' : 'rgba(120,136,154,0.05)';
+      ctx.fillRect(rng() * S, rng() * S, 10 + rng() * 28, 2);
+    }
+    // Crisp geodesic composite tile seams + micro titanium flush rivets
+    const stepX = 128, stepY = 64;
+    ctx.strokeStyle = 'rgba(84,98,116,0.34)';
+    ctx.lineWidth = 2;
+    for (let y = 0; y < S; y += stepY) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(S, y); ctx.stroke();
+      const xOff = ((y / stepY) % 2) * 64;
+      for (let x = xOff; x < S; x += stepX) {
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + stepY); ctx.stroke();
+        ctx.fillStyle = 'rgba(98,112,128,0.45)';
+        ctx.beginPath();
+        ctx.arc(x + 7, y + 7, 1.8, 0, Math.PI * 2);
+        ctx.arc(x + stepX - 7, y + 7, 1.8, 0, Math.PI * 2);
+        ctx.arc(x + 7, y + stepY - 7, 1.8, 0, Math.PI * 2);
+        ctx.arc(x + stepX - 7, y + stepY - 7, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    return c;
+  }
+
+  if (name === 'silo_blast_armor') {
+    // Heavy mecha blast-hatch gunmetal titanium armor with reinforced structural ribs & bolts
+    ctx.fillStyle = '#2b323b';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 1800; i++) {
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.08)';
+      ctx.fillRect(rng() * S, rng() * S, 4 + rng() * 34, 2 + rng() * 4);
+    }
+    // Reinforced panel bays
+    for (let gy = 0; gy < 4; gy++) {
+      for (let gx = 0; gx < 2; gx++) {
+        const px = gx * 256, py = gy * 128;
+        ctx.fillStyle = (gx + gy) % 2 === 0 ? 'rgba(62,74,88,0.28)' : 'rgba(24,30,38,0.28)';
+        ctx.fillRect(px + 6, py + 6, 244, 116);
+        ctx.strokeStyle = 'rgba(11,15,20,0.85)';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(px + 3, py + 3, 250, 122);
+        ctx.strokeStyle = 'rgba(154,174,196,0.20)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(px + 7, py + 7, 242, 114);
+        // Heavy hex corner bolts
+        [[px + 18, py + 18], [px + 238, py + 18], [px + 18, py + 110], [px + 238, py + 110]].forEach(([bx, by]) => {
+          ctx.fillStyle = '#141920';
+          ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#6f7e8f';
+          ctx.beginPath(); ctx.arc(bx - 1, by - 1, 3.6, 0, Math.PI * 2); ctx.fill();
+        });
+      }
+    }
+    return c;
+  }
+
+  if (name === 'silo_hazard_deck') {
+    // Aerospace launch pad & mega-lift reinforced dark steel-concrete deck with expansion joints
+    ctx.fillStyle = '#31373f';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 2400; i++) {
+      ctx.fillStyle = rng() > 0.5 ? 'rgba(210,220,235,0.04)' : 'rgba(0,0,0,0.09)';
+      ctx.fillRect(rng() * S, rng() * S, 2 + rng() * 5, 2 + rng() * 5);
+    }
+    // Anti-slip diamond tread grid
+    ctx.strokeStyle = 'rgba(148,163,184,0.10)';
+    ctx.lineWidth = 1.2;
+    for (let y = 0; y < S; y += 32) {
+      for (let x = 0; x < S; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x + 8, y + 16); ctx.lineTo(x + 16, y + 8);
+        ctx.lineTo(x + 24, y + 16); ctx.lineTo(x + 16, y + 24);
+        ctx.closePath();
+        ctx.stroke();
+      }
+    }
+    // Major deck slab joint lines
+    ctx.strokeStyle = 'rgba(12,16,22,0.72)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 2, S - 4, S - 4);
+    ctx.beginPath();
+    ctx.moveTo(S * 0.5, 0); ctx.lineTo(S * 0.5, S);
+    ctx.moveTo(0, S * 0.5); ctx.lineTo(S, S * 0.5);
+    ctx.stroke();
+    return c;
+  }
+
+  if (name === 'airship_cabin_teak') {
+    // Luxury aviation yacht teak deck planking with brushed titanium caulk inlays
+    ctx.fillStyle = '#5c3c24';
+    ctx.fillRect(0, 0, S, S);
+    const plankCount = 8;
+    const pH = S / plankCount;
+    for (let i = 0; i < plankCount; i++) {
+      const y0 = i * pH;
+      const tone = Math.round((rng() - 0.5) * 18);
+      ctx.fillStyle = `rgb(${98 + tone},${66 + Math.round(tone * 0.7)},${40 + Math.round(tone * 0.5)})`;
+      ctx.fillRect(0, y0, S, pH);
+      for (let g = 0; g < 18; g++) {
+        ctx.fillStyle = rng() > 0.5 ? 'rgba(54,32,16,0.18)' : 'rgba(196,150,96,0.12)';
+        ctx.fillRect(0, y0 + rng() * pH, S, 1 + rng() * 2);
+      }
+      // Sleek brushed titanium inlay seam
+      ctx.fillStyle = 'rgba(176,190,206,0.52)';
+      ctx.fillRect(0, y0, S, 2.5);
+      ctx.fillStyle = 'rgba(26,16,8,0.68)';
+      ctx.fillRect(0, y0 + 2.5, S, 1.5);
     }
     return c;
   }
