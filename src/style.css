@@ -506,23 +506,57 @@ html, body {
   color: #fee2e2;
 }
 
-/* Minimalist Driving Speedometer ONLY (Bottom-Right Corner) */
-.drive-speed-pill {
+/* Minimal Driving Control Bar & Speedometer */
+.drive-hud-bar {
   position: absolute;
-  right: max(14px, env(safe-area-inset-right));
+  right: max(12px, env(safe-area-inset-right));
   bottom: max(14px, env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 18;
+}
+
+.drive-action-btn {
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(8, 12, 18, 0.56);
+  backdrop-filter: blur(8px);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+
+.drive-action-btn.active {
+  background: rgba(14, 165, 233, 0.78);
+  border-color: rgba(125, 211, 252, 0.85);
+  color: #ffffff;
+}
+
+.drive-action-exit {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+}
+
+.drive-speed-pill {
   display: inline-flex;
   align-items: baseline;
   gap: 4px;
-  padding: 5px 11px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
-  background: var(--glass);
+  background: rgba(8, 12, 18, 0.56);
   border: 1px solid var(--border);
   backdrop-filter: blur(8px);
   color: var(--ink);
   font-family: var(--font-mono);
-  cursor: pointer;
-  z-index: 18;
+  align-items: center;
 }
 
 .drive-speed-pill strong {
@@ -537,6 +571,26 @@ html, body {
 .drive-speed-pill span {
   font-size: 9.5px;
   color: var(--ink-muted);
+}
+
+.autopilot-stop-chip {
+  position: absolute;
+  left: 50%;
+  top: max(12px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.65);
+  background: rgba(8, 22, 36, 0.74);
+  backdrop-filter: blur(8px);
+  color: #bae6fd;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 17;
+  white-space: nowrap;
 }
 
 /* Single Minimalist Crouch Icon (On-Foot Touch Only, Hidden While Driving) */
@@ -610,7 +664,7 @@ html, body {
   cursor: grabbing;
 }
 
-/* Full-Bleed Authentic 2D Topographic & 30-Waypoint Autopilot Map Stage */
+/* Full-Bleed Authentic 2D Topographic & Autopilot Map Stage */
 .terreno-2d-panel {
   position: absolute;
   inset: 0;
@@ -646,7 +700,9 @@ html, body {
   z-index: 12;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 5px;
+  max-width: calc(100vw - 80px);
 }
 
 .map2d-dyn-btn {
@@ -658,7 +714,22 @@ html, body {
   color: #e0f2fe !important;
 }
 
-/* Full-Bleed CAD Architectural Paper Stage (Smooth GPU 2-Finger Pinch Zoom Out/In & Omnidirectional Pan) */
+.map2d-veh-btn {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+  background: rgba(8, 14, 22, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.45) !important;
+  color: #cbd5e1 !important;
+}
+
+.map2d-veh-btn.active {
+  background: rgba(14, 165, 233, 0.88) !important;
+  border-color: rgba(186, 230, 253, 0.9) !important;
+  color: #ffffff !important;
+}
+
+/* Full-Bleed Native Vector ViewBox CAD Architectural Paper Stage (Razor-Sharp at 12× Zoom!) */
 .cad-fullscreen {
   position: absolute;
   inset: 0;
@@ -678,9 +749,8 @@ html, body {
   -webkit-user-select: none;
   cursor: grab;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: max(6px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(42px, calc(env(safe-area-inset-bottom) + 38px)) max(8px, env(safe-area-inset-left));
+  align-items: stretch;
+  justify-content: stretch;
   background: #ebe6db;
 }
 
@@ -689,22 +759,19 @@ html, body {
 }
 
 .blueprint-mount {
-  transform-origin: center center;
-  will-change: transform;
   width: 100%;
-  max-width: 1180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  height: 100%;
+  display: block;
   pointer-events: none;
 }
 
 .blueprint-svg {
   width: 100%;
-  height: auto;
-  max-height: calc(100dvh - 50px);
+  height: 100%;
   display: block;
   pointer-events: none;
+  shape-rendering: geometricPrecision;
+  text-rendering: geometricPrecision;
 }
 
 /* Floating Whisper-Minimal Corner Controls */

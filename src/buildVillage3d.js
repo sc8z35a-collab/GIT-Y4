@@ -18,9 +18,10 @@ import { batchStaticGroups } from './mobileBatcher.js';
 
 function createVillageSignTexture(title, lines, bgHex = '#d8c5a0', inkHex = '#231a12') {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 1024;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
 
   // Weathered hinoki/cedar wood grain background
   ctx.fillStyle = bgHex;
@@ -97,7 +98,7 @@ export function buildVillage3D(ctx) {
   staticGroup.name = 'VillageStaticArchitecture';
   villageRoot.add(staticGroup);
 
-  const gy = VILLAGE.groundY; // -6.0m exact terrace elevation
+  const gy = VILLAGE.groundY; // -1.20m exact natural river terrace elevation
   const cx = VILLAGE.centerX; // 820.0
   const cz = VILLAGE.centerZ; // 1280.0
 
@@ -163,12 +164,13 @@ export function buildVillage3D(ctx) {
     return addBox(staticGroup, w, h, d, mats, x, y, z, true);
   }
 
-  // Helper: add glass/lattice framed window on an exterior wall (using local house coordinates)
+  // Helper: add glass/lattice framed window on an exterior wall (mitered corners & staggered mullions)
   function addVillageWindow(h, side, pos, width, height, sillRel, frosted = false) {
     const t = 0.18;
     const baseY = h.domaY;
     const sillY = baseY + sillRel;
     const frameT = 0.045;
+    const innerH = Math.max(0.06, height - frameT * 2);
     const glassMat = frosted ? mat.glassFrosted : mat.glassClear;
     const isH = side === 'north' || side === 'south';
     const ortho = side === 'north'
@@ -179,29 +181,29 @@ export function buildVillage3D(ctx) {
     if (isH) {
       addBox(staticGroup, width, frameT, t + 0.03, darkTimberMat, startW + width * 0.5, sillY + frameT * 0.5, ortho, false);
       addBox(staticGroup, width, frameT, t + 0.03, darkTimberMat, startW + width * 0.5, sillY + height - frameT * 0.5, ortho, false);
-      addBox(staticGroup, frameT, height, t + 0.03, darkTimberMat, startW + frameT * 0.5, sillY + height * 0.5, ortho, false);
-      addBox(staticGroup, frameT, height, t + 0.03, darkTimberMat, startW + width - frameT * 0.5, sillY + height * 0.5, ortho, false);
-      // Mullion grid bars for authentic Japanese kumiko/lattice feel
+      addBox(staticGroup, frameT, innerH, t + 0.03, darkTimberMat, startW + frameT * 0.5, sillY + height * 0.5, ortho, false);
+      addBox(staticGroup, frameT, innerH, t + 0.03, darkTimberMat, startW + width - frameT * 0.5, sillY + height * 0.5, ortho, false);
+      // Mullion grid bars for authentic Japanese kumiko/lattice feel (depth staggered)
       const bars = Math.max(1, Math.floor(width / 0.55));
       for (let b = 1; b <= bars; b++) {
         const bx = startW + (width * b) / (bars + 1);
-        addBox(staticGroup, 0.024, height - frameT * 2, 0.03, darkTimberMat, bx, sillY + height * 0.5, ortho, false);
+        addBox(staticGroup, 0.024, innerH, 0.028, darkTimberMat, bx, sillY + height * 0.5, ortho, false);
       }
-      addBox(staticGroup, width - frameT * 2, 0.024, 0.03, darkTimberMat, startW + width * 0.5, sillY + height * 0.5, ortho, false);
-      const g = addBox(dynamicGroup, width - 0.07, height - 0.07, 0.016, glassMat, startW + width * 0.5, sillY + height * 0.5, ortho, false);
+      addBox(staticGroup, width - frameT * 2, 0.024, 0.034, darkTimberMat, startW + width * 0.5, sillY + height * 0.5, ortho, false);
+      const g = addBox(dynamicGroup, width - frameT * 2 - 0.008, innerH - 0.008, 0.016, glassMat, startW + width * 0.5, sillY + height * 0.5, ortho, false);
       g.userData.noBatch = true;
     } else {
       addBox(staticGroup, t + 0.03, frameT, width, darkTimberMat, ortho, sillY + frameT * 0.5, startW + width * 0.5, false);
       addBox(staticGroup, t + 0.03, frameT, width, darkTimberMat, ortho, sillY + height - frameT * 0.5, startW + width * 0.5, false);
-      addBox(staticGroup, t + 0.03, height, frameT, darkTimberMat, ortho, sillY + height * 0.5, startW + frameT * 0.5, false);
-      addBox(staticGroup, t + 0.03, height, frameT, darkTimberMat, ortho, sillY + height * 0.5, startW + width - frameT * 0.5, false);
+      addBox(staticGroup, t + 0.03, innerH, frameT, darkTimberMat, ortho, sillY + height * 0.5, startW + frameT * 0.5, false);
+      addBox(staticGroup, t + 0.03, innerH, frameT, darkTimberMat, ortho, sillY + height * 0.5, startW + width - frameT * 0.5, false);
       const bars = Math.max(1, Math.floor(width / 0.55));
       for (let b = 1; b <= bars; b++) {
         const bz = startW + (width * b) / (bars + 1);
-        addBox(staticGroup, 0.03, height - frameT * 2, 0.024, darkTimberMat, ortho, sillY + height * 0.5, bz, false);
+        addBox(staticGroup, 0.028, innerH, 0.024, darkTimberMat, ortho, sillY + height * 0.5, bz, false);
       }
-      addBox(staticGroup, 0.03, 0.024, width - frameT * 2, darkTimberMat, ortho, sillY + height * 0.5, startW + width * 0.5, false);
-      const g = addBox(dynamicGroup, 0.016, height - 0.07, width - 0.07, glassMat, ortho, sillY + height * 0.5, startW + width * 0.5, false);
+      addBox(staticGroup, 0.034, 0.024, width - frameT * 2, darkTimberMat, ortho, sillY + height * 0.5, startW + width * 0.5, false);
+      const g = addBox(dynamicGroup, 0.016, innerH - 0.008, width - frameT * 2 - 0.008, glassMat, ortho, sillY + height * 0.5, startW + width * 0.5, false);
       g.userData.noBatch = true;
     }
   }
@@ -251,12 +253,17 @@ export function buildVillage3D(ctx) {
       } else {
         addVillageWallBox(t, upperH, segW, ortho, baseY + lowerH + upperH * 0.5, mid, fUp, bUp, 'v');
       }
-      // Horizontal cedar belt-course trim on exterior
-      const trimOff = extIsFront ? -(t * 0.5 + 0.015) : (t * 0.5 + 0.015);
-      if (isH) {
-        addBox(staticGroup, segW, 0.075, 0.035, darkTimberMat, mid, baseY + lowerH, ortho + trimOff, false);
-      } else {
-        addBox(staticGroup, 0.035, 0.075, segW, darkTimberMat, ortho + trimOff, baseY + lowerH, mid, false);
+      // Horizontal cedar belt-course trim on exterior (shortened at ends to clear corner timber pillars)
+      const trimOff = extIsFront ? -(t * 0.5 + 0.016) : (t * 0.5 + 0.016);
+      const t0 = Math.max(s0, 0.22);
+      const t1 = Math.min(s1, len - 0.22);
+      if (t1 - t0 > 0.04) {
+        const tMid = startOrigin + (t0 + t1) * 0.5;
+        if (isH) {
+          addBox(staticGroup, t1 - t0, 0.075, 0.032, darkTimberMat, tMid, baseY + lowerH, ortho + trimOff, false);
+        } else {
+          addBox(staticGroup, 0.032, 0.075, t1 - t0, darkTimberMat, ortho + trimOff, baseY + lowerH, tMid, false);
+        }
       }
       // Exact wall collider
       if (isH) addCollider(1, startOrigin + s0, ortho - t * 0.5, startOrigin + s1, ortho + t * 0.5);
@@ -347,10 +354,10 @@ export function buildVillage3D(ctx) {
     const soffitMat = makeSurfaceMat('wood_planks_dark', roofW * 0.5, slopeLen * 0.5, { roughness: 0.85 });
     const roofMats = [darkTimberMat, darkTimberMat, roofMat, soffitMat, darkTimberMat, darkTimberMat];
 
-    // North & South pitched roof planes meeting cleanly at ridgeY
+    // North & South pitched roof planes meeting cleanly inside the ceramic ridge cap (no ridge interpenetration)
     const slopeDropY = (slopeRun * 0.5) * Math.tan(slopeAngle);
     const centerY = ridgeY - slopeDropY + roofT * 0.4;
-    const halfOffsetZ = slopeRun * 0.5;
+    const halfOffsetZ = slopeRun * 0.5 + 0.024;
 
     const northSlope = new THREE.Mesh(new THREE.BoxGeometry(roofW, roofT, slopeLen), roofMats);
     northSlope.position.set(midX, centerY, midZ - halfOffsetZ);
@@ -360,7 +367,7 @@ export function buildVillage3D(ctx) {
     staticGroup.add(northSlope);
 
     const southSlope = new THREE.Mesh(new THREE.BoxGeometry(roofW, roofT, slopeLen), roofMats);
-    southSlope.position.set(midX, centerY, midZ + halfOffsetZ);
+    southSlope.position.set(midX, centerY + 0.002, midZ + halfOffsetZ);
     southSlope.rotation.x = slopeAngle;
     southSlope.castShadow = true;
     southSlope.receiveShadow = true;
@@ -368,8 +375,8 @@ export function buildVillage3D(ctx) {
 
     // Heavy Japanese ceramic ridge cap beam (大棟) + oni-gawara end tiles!
     addBox(staticGroup, roofW + 0.14, 0.24, 0.28, charcoalTileMat, midX, ridgeY + 0.12, midZ, true);
-    addBox(staticGroup, 0.16, 0.36, 0.34, darkTimberMat, h.ox - overX - 0.04, ridgeY + 0.20, midZ, true);
-    addBox(staticGroup, 0.16, 0.36, 0.34, darkTimberMat, h.ox + h.w + overX + 0.04, ridgeY + 0.20, midZ, true);
+    addBox(staticGroup, 0.16, 0.36, 0.34, darkTimberMat, h.ox - overX - 0.05, ridgeY + 0.20, midZ, true);
+    addBox(staticGroup, 0.16, 0.36, 0.34, darkTimberMat, h.ox + h.w + overX + 0.05, ridgeY + 0.20, midZ, true);
 
     // Triangular Gable End Walls (West & East)
     const gableGeo = buildGableTriangleGeo(h.d - 0.04, rise + 0.04, 0.18);
@@ -388,21 +395,21 @@ export function buildVillage3D(ctx) {
     eastGable.receiveShadow = true;
     staticGroup.add(eastGable);
 
-    // Exposed structural corner timber pillars (柱) & perimeter top plate beam (桁)
+    // Exposed structural corner timber pillars (柱) positioned proud of corner wall faces
     const pillarH = h.eaveH - 0.14;
     const py = gy + 0.14 + pillarH * 0.5;
     [
-      [h.ox + 0.09, h.oz + 0.09],
-      [h.ox + h.w - 0.09, h.oz + 0.09],
-      [h.ox + 0.09, h.oz + h.d - 0.09],
-      [h.ox + h.w - 0.09, h.oz + h.d - 0.09],
+      [h.ox + 0.07, h.oz + 0.07],
+      [h.ox + h.w - 0.07, h.oz + 0.07],
+      [h.ox + 0.07, h.oz + h.d - 0.07],
+      [h.ox + h.w - 0.07, h.oz + h.d - 0.07],
     ].forEach(([px, pz]) => {
       addBox(staticGroup, 0.22, pillarH, 0.22, darkTimberMat, px, py, pz, true);
     });
     // Interior exposed cedar ceiling & crossbeams (梁)
-    addBox(staticGroup, h.w - 0.22, 0.08, h.d - 0.22, makeSurfaceMat('wood_planks_dark', h.w * 0.5, h.d * 0.5), midX, eaveY - 0.04, midZ, false);
+    addBox(staticGroup, h.w - 0.36, 0.08, h.d - 0.36, makeSurfaceMat('wood_planks_dark', h.w * 0.5, h.d * 0.5), midX, eaveY - 0.04, midZ, false);
     for (let bx = h.ox + 1.4; bx < h.ox + h.w - 0.9; bx += 1.8) {
-      addBox(staticGroup, 0.16, 0.18, h.d - 0.30, darkTimberMat, bx, eaveY - 0.14, midZ, false);
+      addBox(staticGroup, 0.16, 0.18, h.d - 0.36, darkTimberMat, bx, eaveY - 0.17, midZ, false);
     }
   }
 
@@ -849,13 +856,13 @@ export function buildVillage3D(ctx) {
   [[-1.18, -1.18], [1.18, -1.18], [-1.18, 1.18], [1.18, 1.18]].forEach(([dx, dz]) => {
     addBox(staticGroup, 0.14, 2.55, 0.14, darkTimberMat, wx + dx, gy + 1.27, wz + dz, true);
   });
-  const wellRoof1 = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.10, 1.95), charcoalTileMat);
-  wellRoof1.position.set(wx, gy + 2.86, wz - 0.76);
+  const wellRoof1 = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.10, 1.85), charcoalTileMat);
+  wellRoof1.position.set(wx, gy + 2.86, wz - 0.85);
   wellRoof1.rotation.x = -0.44;
   wellRoof1.castShadow = true;
   staticGroup.add(wellRoof1);
-  const wellRoof2 = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.10, 1.95), charcoalTileMat);
-  wellRoof2.position.set(wx, gy + 2.86, wz + 0.76);
+  const wellRoof2 = new THREE.Mesh(new THREE.BoxGeometry(3.15, 0.10, 1.85), charcoalTileMat);
+  wellRoof2.position.set(wx, gy + 2.86, wz + 0.85);
   wellRoof2.rotation.x = 0.44;
   wellRoof2.castShadow = true;
   staticGroup.add(wellRoof2);
@@ -876,9 +883,9 @@ export function buildVillage3D(ctx) {
   addBox(staticGroup, 0.16, 2.45, 0.16, darkTimberMat, sx - 1.15, gy + 1.22, sz, true);
   addBox(staticGroup, 0.16, 2.45, 0.16, darkTimberMat, sx + 1.15, gy + 1.22, sz, true);
   const signMat = createVillageSignTexture('杉ノ郷 集落', [
-    '標高 +514m  黒杉渓谷段丘（全5棟）',
+    '標高 +119m  黒杉川河岸段丘（全5棟）',
     '1号棟 古民家 / 2号棟 茶房 / 3号棟 工房',
-    '4号棟 山荘 / 5号棟 蔵造り・山の社',
+    '4号棟 苔庭の家 / 5号棟 蔵造り・社の祠',
   ]);
   const signBoard = new THREE.Mesh(
     new THREE.BoxGeometry(2.12, 1.06, 0.08),
@@ -905,7 +912,7 @@ export function buildVillage3D(ctx) {
   // 5 Raised soil crop ridges + leafy vegetable clusters + bamboo bean poles
   for (let row = 0; row < 5; row++) {
     const rz = gd.minZ + 0.78 + row * 1.22;
-    addBox(staticGroup, gdW - 0.9, 0.16, 0.62, makeSurfaceMat('forest_mulch_ground', 3, 0.6), gdCX, gy + 0.16, rz, true);
+    addBox(staticGroup, gdW - 0.9, 0.16, 0.62, makeSurfaceMat('forest_mulch_ground', 3, 0.6), gdCX, gy + 0.19, rz, true);
     for (let px = gd.minX + 0.95; px < gd.maxX - 0.75; px += 0.88) {
       const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), cropLeafMat);
       bush.scale.set(1.15, 0.78, 1.05);
@@ -915,16 +922,16 @@ export function buildVillage3D(ctx) {
     }
     if (row === 0 || row === 4) {
       for (let bx = gd.minX + 1.2; bx < gd.maxX - 0.8; bx += 1.6) {
-        addBox(staticGroup, 0.04, 1.45, 0.04, bambooMat, bx, gy + 0.82, rz, false);
+        addBox(staticGroup, 0.04, 1.35, 0.04, bambooMat, bx, gy + 0.75, rz, false);
       }
-      addBox(staticGroup, gdW - 1.2, 0.04, 0.04, bambooMat, gdCX, gy + 1.38, rz, false);
+      addBox(staticGroup, gdW - 1.2, 0.04, 0.04, bambooMat, gdCX, gy + 1.445, rz, false);
     }
   }
-  // Low rustic cedar garden perimeter fence
-  addBox(staticGroup, gdW, 0.62, 0.08, warmCedarMat, gdCX, gy + 0.31, gd.minZ, true);
-  addBox(staticGroup, gdW, 0.62, 0.08, warmCedarMat, gdCX, gy + 0.31, gd.maxZ, true);
-  addBox(staticGroup, 0.08, 0.62, gdD, warmCedarMat, gd.minX, gy + 0.31, gdCZ, true);
-  addBox(staticGroup, 0.08, 0.62, gdD, warmCedarMat, gd.maxX, gy + 0.31, gdCZ, true);
+  // Low rustic cedar garden perimeter fence (mitered corners)
+  addBox(staticGroup, gdW + 0.08, 0.62, 0.08, warmCedarMat, gdCX, gy + 0.31, gd.minZ, true);
+  addBox(staticGroup, gdW + 0.08, 0.62, 0.08, warmCedarMat, gdCX, gy + 0.31, gd.maxZ, true);
+  addBox(staticGroup, 0.08, 0.62, gdD - 0.09, warmCedarMat, gd.minX, gy + 0.31, gdCZ, true);
+  addBox(staticGroup, 0.08, 0.62, gdD - 0.09, warmCedarMat, gd.maxX, gy + 0.31, gdCZ, true);
   addCollider(1, gd.minX, gd.minZ, gd.maxX, gd.maxZ);
 
   // =========================================================================
@@ -938,7 +945,7 @@ export function buildVillage3D(ctx) {
   const toriiX = shX - 1.1;
   addBox(staticGroup, 0.34, 0.32, 0.34, makeSurfaceMat('stone_cistern_grey', 1, 1), toriiX, gy + 0.32, shZ - 1.28, true);
   addBox(staticGroup, 0.34, 0.32, 0.34, makeSurfaceMat('stone_cistern_grey', 1, 1), toriiX, gy + 0.32, shZ + 1.28, true);
-  const tPillar1 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 3.25, 10), vermilionMat);
+  const tPillar1 = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 3.05, 10), vermilionMat);
   tPillar1.position.set(toriiX, gy + 1.98, shZ - 1.28);
   tPillar1.castShadow = true;
   staticGroup.add(tPillar1);
@@ -948,8 +955,8 @@ export function buildVillage3D(ctx) {
   // Lower tie beam (貫 / nuki) & upper curved lintel (笠木 / kasagi)
   addBox(staticGroup, 0.12, 0.16, 3.35, vermilionMat, toriiX, gy + 2.95, shZ, true);
   addBox(staticGroup, 0.24, 0.22, 3.95, vermilionMat, toriiX, gy + 3.60, shZ, true);
-  addBox(staticGroup, 0.28, 0.10, 4.05, darkTimberMat, toriiX, gy + 3.74, shZ, true);
-  addBox(staticGroup, 0.14, 0.44, 0.32, darkTimberMat, toriiX, gy + 3.28, shZ, false);
+  addBox(staticGroup, 0.28, 0.10, 4.05, darkTimberMat, toriiX, gy + 3.76, shZ, true);
+  addBox(staticGroup, 0.14, 0.44, 0.32, darkTimberMat, toriiX, gy + 3.26, shZ, false);
   addCollider(1, toriiX - 0.24, shZ - 1.50, toriiX + 0.24, shZ - 1.06);
   addCollider(1, toriiX - 0.24, shZ + 1.06, toriiX + 0.24, shZ + 1.50);
 
@@ -957,15 +964,16 @@ export function buildVillage3D(ctx) {
   const hokX = shX + 2.25;
   addBox(staticGroup, 1.50, 0.68, 1.85, makeSurfaceMat('stone_moss_wall', 1.4, 0.8), hokX, gy + 0.50, shZ, true);
   addBox(staticGroup, 1.15, 1.28, 1.35, warmCedarMat, hokX, gy + 1.48, shZ, true);
-  addBox(staticGroup, 0.08, 0.72, 0.64, darkTimberMat, hokX - 0.58, gy + 1.44, shZ, false);
-  const sRoof1 = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.10, 1.15), charcoalTileMat);
-  sRoof1.position.set(hokX, gy + 2.34, shZ - 0.46);
+  addBox(staticGroup, 0.08, 0.72, 0.64, darkTimberMat, hokX - 0.62, gy + 1.44, shZ, false);
+  const sRoof1 = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.10, 1.12), charcoalTileMat);
+  sRoof1.position.set(hokX, gy + 2.34, shZ - 0.52);
   sRoof1.rotation.x = -0.48;
   staticGroup.add(sRoof1);
-  const sRoof2 = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.10, 1.15), charcoalTileMat);
-  sRoof2.position.set(hokX, gy + 2.34, shZ + 0.46);
+  const sRoof2 = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.10, 1.12), charcoalTileMat);
+  sRoof2.position.set(hokX, gy + 2.34, shZ + 0.52);
   sRoof2.rotation.x = 0.48;
   staticGroup.add(sRoof2);
+  addBox(staticGroup, 1.80, 0.12, 0.14, darkTimberMat, hokX, gy + 2.61, shZ, true);
   addBox(staticGroup, 0.56, 0.48, 0.92, warmCedarMat, hokX - 1.08, gy + 0.44, shZ, true); // Saisen-bako offering box
   addCollider(1, hokX - 1.42, shZ - 0.96, hokX + 0.85, shZ + 0.96);
 

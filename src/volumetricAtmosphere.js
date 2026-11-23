@@ -10,6 +10,10 @@ const SHAFT_VERT = /* glsl */ `
   varying vec3 vNormalView;
   varying vec3 vViewPos;
   varying vec3 vWorldPos;
+  #ifdef USE_LOGDEPTHBUF
+    varying float vFragDepth;
+    varying float vIsPerspective;
+  #endif
   void main() {
     vUv = uv;
     vec4 wp = modelMatrix * vec4(position, 1.0);
@@ -18,6 +22,10 @@ const SHAFT_VERT = /* glsl */ `
     vViewPos = -mv.xyz;
     vNormalView = normalize(normalMatrix * normal);
     gl_Position = projectionMatrix * mv;
+    #ifdef USE_LOGDEPTHBUF
+      vFragDepth = 1.0 + gl_Position.w;
+      vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+    #endif
   }
 `;
 
@@ -30,6 +38,7 @@ const SHAFT_FRAG = /* glsl */ `
   varying vec3 vNormalView;
   varying vec3 vViewPos;
   varying vec3 vWorldPos;
+  #include <logdepthbuf_pars_fragment>
 
   float hash(vec3 p) {
     p = fract(p * 0.3183099 + 0.1);
@@ -63,17 +72,26 @@ const SHAFT_FRAG = /* glsl */ `
     float alpha = edgeFade * lengthFade * sideFade * (0.68 + 0.45 * dust + 0.55 * dustSparkle) * uOpacity;
     if (alpha < 0.002) discard;
     gl_FragColor = vec4(uColor * (1.0 + dustSparkle * 0.5), alpha);
+    #include <logdepthbuf_fragment>
   }
 `;
 
 const MIST_VERT = /* glsl */ `
   varying vec2 vUv;
   varying vec3 vWorldPos;
+  #ifdef USE_LOGDEPTHBUF
+    varying float vFragDepth;
+    varying float vIsPerspective;
+  #endif
   void main() {
     vUv = uv;
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vWorldPos = wp.xyz;
     gl_Position = projectionMatrix * viewMatrix * wp;
+    #ifdef USE_LOGDEPTHBUF
+      vFragDepth = 1.0 + gl_Position.w;
+      vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+    #endif
   }
 `;
 
@@ -85,6 +103,7 @@ const MIST_FRAG = /* glsl */ `
   uniform vec4 uKeiPose;
   varying vec2 vUv;
   varying vec3 vWorldPos;
+  #include <logdepthbuf_pars_fragment>
 
   float h21(vec2 p) {
     p = fract(p * vec2(123.34, 456.21));
@@ -153,6 +172,7 @@ const MIST_FRAG = /* glsl */ `
     float alpha = smoothstep(0.28, 0.85, mist) * houseMask * radialFade * 0.22;
     if (alpha < 0.004) discard;
     gl_FragColor = vec4(uMistColor, alpha);
+    #include <logdepthbuf_fragment>
   }
 `;
 

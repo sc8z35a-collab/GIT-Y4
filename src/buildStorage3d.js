@@ -39,9 +39,9 @@ export function buildStorage3D(ctx) {
   addBox(staticGroup, 2.12, 0.36, 2.12, concPadMat, wx(1.00), -0.18, wz(1.00), true);
 
   // Concrete Stepping Path from Main North Porch (X=2.20) East to Warehouse 1F Door DS-1 (X=6.60) & South around to STS1!
-  addBox(exteriorGroup, 4.45, 0.08, 1.05, makeSurfaceMat('paver_granite_grid', 4.45, 1.05), 4.42, -0.30, -0.68, false);
-  addBox(exteriorGroup, 1.05, 0.08, 2.15, makeSurfaceMat('paver_granite_grid', 1.05, 2.15), 6.08, -0.30, 0.25, false);
-  addBox(exteriorGroup, 3.30, 0.08, 0.92, makeSurfaceMat('paver_granite_grid', 3.30, 0.92), 7.80, -0.30, 1.15, false);
+  addBox(exteriorGroup, 4.40, 0.08, 1.05, makeSurfaceMat('paver_granite_grid', 4.40, 1.05), 4.40, -0.30, -0.68, false);
+  addBox(exteriorGroup, 1.05, 0.08, 0.82, makeSurfaceMat('paver_granite_grid', 1.05, 0.82), 6.08, -0.30, 0.27, false);
+  addBox(exteriorGroup, 3.84, 0.08, 0.92, makeSurfaceMat('paver_granite_grid', 3.84, 0.92), 7.47, -0.30, 1.15, false);
 
   // 1F Floor & 2F Solid Concrete Floor Slab (Y = 1.92 .. 2.12 -> exact CH 1.92m!)
   addBox(staticGroup, 1.84, 0.016, 1.84, concPadMat, wx(1.00), 0.008, wz(1.00), false);
@@ -168,30 +168,31 @@ export function buildStorage3D(ctx) {
   staticGroup.add(sRail);
   [sw.bottomZ, midZ, sw.topZ].forEach((pz, idx) => {
     const py = idx === 0 ? 0.0 : (idx === 1 ? y2 / 2 : y2);
-    addBox(staticGroup, 0.035, 0.92, 0.035, mat.darkIron, sw.maxX - 0.025, py + 0.46, pz, false);
+    addBox(staticGroup, 0.035, 0.88, 0.035, mat.darkIron, sw.maxX - 0.025, py + 0.44, pz, false);
   });
 
-  // 2F Exterior Steel Grating Catwalk Landing (X=7.00..9.40, Z=-1.96..-1.20 at Y=2.12)
+  // 2F Exterior Steel Grating Catwalk Landing (X=7.00..9.40, Z=-1.96..-1.225 at Y=2.12)
   const ld = STORAGE.landing2FWorld;
   const ldW = ld.maxX - ld.minX;
-  const ldD = ld.maxZ - ld.minZ;
+  const ldD = ld.maxZ - ld.minZ - 0.025;
   const ldCX = (ld.minX + ld.maxX) / 2;
-  const ldCZ = (ld.minZ + ld.maxZ) / 2;
+  const ldCZ = (ld.minZ + ld.maxZ - 0.025) / 2;
   addBox(staticGroup, ldW, 0.08, ldD, grateMat, ldCX, y2 - 0.04, ldCZ, true);
   // 2 Steel support columns down to ground
-  addBox(staticGroup, 0.07, y2 + 0.30, 0.07, mat.darkIron, ld.minX + 0.05, (y2 - 0.30) / 2, ld.minZ + 0.05, true);
-  addBox(staticGroup, 0.07, y2 + 0.30, 0.07, mat.darkIron, ld.maxX - 0.05, (y2 - 0.30) / 2, ld.minZ + 0.05, true);
+  addBox(staticGroup, 0.07, y2 + 0.22, 0.07, mat.darkIron, ld.minX + 0.05, (y2 - 0.34) / 2, ld.minZ + 0.05, true);
+  addBox(staticGroup, 0.07, y2 + 0.22, 0.07, mat.darkIron, ld.maxX - 0.05, (y2 - 0.34) / 2, ld.minZ + 0.05, true);
   addCollider(1, ld.minX, ld.minZ, ld.minX + 0.12, ld.minZ + 0.12);
   addCollider(1, ld.maxX - 0.12, ld.minZ, ld.maxX, ld.minZ + 0.12);
 
-  // 2F Landing Industrial Steel Guardrails (North, West, East sides)
+  // 2F Landing Industrial Steel Guardrails (North, West, East sides, mitered cleanly)
   const lrH = 1.04;
+  const lrPostH = lrH - 0.022;
   addBox(staticGroup, ldW, 0.038, 0.038, mat.darkIron, ldCX, y2 + lrH, ld.minZ + 0.02, false);
-  addBox(staticGroup, ldW, 0.025, 0.025, mat.darkIron, ldCX, y2 + lrH * 0.52, ld.minZ + 0.02, false);
-  addBox(staticGroup, 0.038, 0.038, ldD, mat.darkIron, ld.minX + 0.02, y2 + lrH, ldCZ, false);
-  addBox(staticGroup, 0.038, 0.038, ldD, mat.darkIron, ld.maxX - 0.02, y2 + lrH, ldCZ, false);
-  [[ld.minX + 0.02, ld.minZ + 0.02], [ldCX, ld.minZ + 0.02], [ld.maxX - 0.02, ld.minZ + 0.02], [ld.minX + 0.02, ld.maxZ - 0.02]].forEach(([px, pz]) => {
-    addBox(staticGroup, 0.036, lrH, 0.036, mat.darkIron, px, y2 + lrH / 2, pz, false);
+  addBox(staticGroup, ldW - 0.06, 0.025, 0.025, mat.darkIron, ldCX, y2 + lrH * 0.52, ld.minZ + 0.02, false);
+  addBox(staticGroup, 0.038, 0.038, ldD - 0.04, mat.darkIron, ld.minX + 0.02, y2 + lrH, ldCZ + 0.02, false);
+  addBox(staticGroup, 0.038, 0.038, ldD - 0.04, mat.darkIron, ld.maxX - 0.02, y2 + lrH, ldCZ + 0.02, false);
+  [[ld.minX + 0.02, ld.minZ + 0.02], [ldCX, ld.minZ + 0.02], [ld.maxX - 0.02, ld.minZ + 0.02], [ld.minX + 0.02, ld.maxZ - 0.04]].forEach(([px, pz]) => {
+    addBox(staticGroup, 0.036, lrPostH, 0.036, mat.darkIron, px, y2 + lrPostH / 2, pz, false);
   });
   // Safety colliders around 2F landing (leave stair top entry X=8.60..9.40 at Z=ld.maxZ completely open!)
   addCollider(2, ld.minX - 0.06, ld.minZ - 0.06, ld.maxX + 0.06, ld.minZ + 0.04);

@@ -1,54 +1,41 @@
 import {
   TERRENO_WORLD,
-  MOUNTAIN_PEAKS,
   evalMainRiver,
+  evalRegionWeights,
 } from './terrenoConfig.js';
 import { AUTOPILOT_WAYPOINTS, DYNAMIC_TARGETS } from './terrenoAutopilot.js';
 import { VILLAGE } from '../villageData.js';
 
 /**
- * TERRENO Full-Screen Edge-to-Edge Authentic GSI 2D Topographic Map & 30-Waypoint Autonomous Route Selector (15km × 40km).
- *   - Oriented horizontally (North Left -> South Right) to fill 100% of widescreen POCO F7 landscape displays!
- *   - Hypsometric elevation tinting + NW hillshade + Sky-View gorge AO + crisp 50m/200m contour lines
- *   - Live 40km river (expands dynamically during storm flash-floods!), 40km forestry road, Suginosato village & active landslide rings
- *   - 30 numbered safe destination pins (01..30) + 4 live asset pins (自宅 / 軽 / 箱 / RV)
- *   - Live glowing A* safe route path + smooth 1/2-finger pan & pinch zoom (0.85x..6.0x)
- *   - Zero sidebars, zero telemetry boxes, zero verbose text!
+ * TERRENO Full-Screen Edge-to-Edge GSI 2D Topographic Map & Free-Destination Autonomous Route Selector (60 km × 60 km).
+ *   - Standard North-Up Orientation (North Top / South Bottom / West Left / East Right)
+ *   - Seamless 6-biome countryside palette + NW hillshade + Sky-View AO + crisp 10m / 50m contours
+ *   - Live 60 km meandering river, ALL 21 natural roads, Suginosato 5-House Village, & storm hazards
+ *   - Tap ANY point, waypoint (01..30), or live asset to set free autonomous destination for CAMPER-75 or ARMOR-155
+ *   - Smooth 1/2-finger pan & pinch zoom (0.85x..12.0x) — ZERO player teleportation!
  */
 
-function hypsometricColor(asl) {
-  // Authentic Japanese GSI topographic hypsometric ramp (EL +260m .. +2,260m ASL)
-  const stops = [
-    [280,  34,  68,  52],
-    [520,  46,  92,  60],
-    [820,  72, 118,  66],
-    [1160, 118, 138,  76],
-    [1480, 164, 146,  98],
-    [1820, 198, 178, 144],
-    [2260, 238, 234, 226],
-  ];
-  if (asl <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
-  for (let i = 0; i < stops.length - 1; i++) {
-    const a = stops[i], b = stops[i + 1];
-    if (asl <= b[0]) {
-      const t = (asl - a[0]) / (b[0] - a[0]);
-      return [
-        a[1] + (b[1] - a[1]) * t,
-        a[2] + (b[2] - a[2]) * t,
-        a[3] + (b[3] - a[3]) * t,
-      ];
-    }
-  }
-  const last = stops[stops.length - 1];
-  return [last[1], last[2], last[3]];
+function countrysideBiomeColor(wx, wz, asl) {
+  const rw = evalRegionWeights(wx, wz);
+  // Subtle organic palette matching the 6 seamless non-mountainous landscapes
+  let r = rw.valley * 58 + rw.hills * 76 + rw.plateau * 92 + rw.wetland * 52 + rw.meadow * 124 + rw.southPlain * 98;
+  let g = rw.valley * 102 + rw.hills * 122 + rw.plateau * 114 + rw.wetland * 94 + rw.meadow * 126 + rw.southPlain * 116;
+  let b = rw.valley * 64 + rw.hills * 66 + rw.plateau * 62 + rw.wetland * 82 + rw.meadow * 68 + rw.southPlain * 76;
+
+  // Gentle hypsometric brightness lift across EL +90m .. +240m ASL
+  const elevT = Math.max(0, Math.min(1, (asl - 95.0) / 145.0));
+  r += elevT * 26;
+  g += elevT * 24;
+  b += elevT * 14;
+  return [r, g, b];
 }
 
 /**
- * Pre-bake landscape-rotated 1536×512 (North Left -> South Right, West Top -> East Bottom) GSI Relief Bitmap once (<40ms).
+ * Pre-bake 1024×1024 North-Up Countryside GSI Relief Bitmap once (<45ms).
  */
-function bakeLandscapeReliefBitmap(geomorph) {
-  const W = geomorph.W; // 512 (X: West..East -> Vertical Y on landscape map)
-  const H = geomorph.H; // 1536 (Z: North..South -> Horizontal X on landscape map!)
+function bakeCountrysideReliefBitmap(geomorph) {
+  const W = geomorph.W;
+  const H = geomorph.H;
   const heights = geomorph.heights;
   const geoRGBA = geomorph.geoRGBA;
   const horizonRGBA = geomorph.horizonRGBA;
@@ -56,13 +43,13 @@ function bakeLandscapeReliefBitmap(geomorph) {
   const cellZ = TERRENO_WORLD.depth / (H - 1);
 
   const canvas = document.createElement('canvas');
-  canvas.width = H;
-  canvas.height = W;
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext('2d');
-  const img = ctx.createImageData(H, W);
+  const img = ctx.createImageData(W, H);
   const d = img.data;
 
-  const lx = -0.64, ly = 0.60, lz = -0.48;
+  const lx = -0.62, ly = 0.64, lz = -0.45;
 
   for (let iz = 0; iz < H; iz++) {
     const wz = TERRENO_WORLD.minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
@@ -77,46 +64,45 @@ function bakeLandscapeReliefBitmap(geomorph) {
       const izU = Math.max(0, iz - 1), izD = Math.min(H - 1, iz + 1);
       const gx = (heights[iz * W + ixR] - heights[iz * W + ixL]) / (2.0 * cellX);
       const gz = (heights[izD * W + ix] - heights[izU * W + ix]) / (2.0 * cellZ);
-      const invL = 1.0 / Math.hypot(gx, 1.0, gz);
-      const nx = -gx * invL, ny = invL, nz = -gz * invL;
-      const shade = Math.max(0.28, Math.min(1.28, (nx * lx + ny * ly + nz * lz) * 0.95 + 0.42));
-      const skyAO = 0.68 + 0.32 * (horizonRGBA[idx * 4 + 2] / 255.0);
+      const invL = 1.0 / Math.hypot(gx * 2.4, 1.0, gz * 2.4);
+      const nx = -gx * 2.4 * invL, ny = invL, nz = -gz * 2.4 * invL;
+      const shade = Math.max(0.45, Math.min(1.24, (nx * lx + ny * ly + nz * lz) * 0.85 + 0.48));
+      const skyAO = 0.76 + 0.24 * (horizonRGBA[idx * 4 + 2] / 255.0);
 
-      let [r, g, b] = hypsometricColor(asl);
+      let [r, g, b] = countrysideBiomeColor(wx, wz, asl);
       r *= shade * skyAO;
       g *= shade * skyAO;
       b *= shade * skyAO;
 
-      // Crisp 50m minor & 200m major GSI topographic contours
+      // Crisp 15m minor & 50m major countryside topographic contours
       const aslR = TERRENO_WORLD.baseElevationASL + heights[iz * W + ixR];
       const aslD = TERRENO_WORLD.baseElevationASL + heights[izD * W + ix];
-      const maj0 = Math.floor(asl / 200.0);
-      const isMajor = Math.floor(aslR / 200.0) !== maj0 || Math.floor(aslD / 200.0) !== maj0;
-      const min0 = Math.floor(asl / 50.0);
-      const isMinor = !isMajor && (Math.floor(aslR / 50.0) !== min0 || Math.floor(aslD / 50.0) !== min0);
+      const maj0 = Math.floor(asl / 50.0);
+      const isMajor = Math.floor(aslR / 50.0) !== maj0 || Math.floor(aslD / 50.0) !== maj0;
+      const min0 = Math.floor(asl / 15.0);
+      const isMinor = !isMajor && (Math.floor(aslR / 15.0) !== min0 || Math.floor(aslD / 15.0) !== min0);
 
       if (isMajor) {
-        r = r * 0.45 + 48;
-        g = g * 0.45 + 34;
-        b = b * 0.45 + 20;
+        r = r * 0.56 + 44;
+        g = g * 0.56 + 34;
+        b = b * 0.56 + 22;
       } else if (isMinor) {
-        r = r * 0.74 + 22;
-        g = g * 0.74 + 16;
-        b = b * 0.74 + 10;
+        r = r * 0.80 + 18;
+        g = g * 0.80 + 14;
+        b = b * 0.80 + 10;
       }
 
       const distRiv = Math.abs(wx - rv.x);
       const wetness = geoRGBA[idx * 4 + 1];
-      if (distRiv < rv.halfWidth * 1.15) {
-        r = 34; g = 148; b = 198;
-      } else if (wetness > 0.78 && asl < 1260) {
-        r = r * 0.48 + 30;
-        g = g * 0.48 + 108;
-        b = b * 0.48 + 148;
+      if (distRiv < rv.halfWidth * 1.35) {
+        r = 38; g = 148; b = 198;
+      } else if (wetness > 0.74) {
+        r = r * 0.52 + 32;
+        g = g * 0.52 + 106;
+        b = b * 0.52 + 144;
       }
 
-      // Write rotated: horizontal px = iz (0..H-1), vertical py = ix (0..W-1)
-      const o = (ix * H + iz) * 4;
+      const o = idx * 4;
       d[o] = Math.max(0, Math.min(255, Math.round(r)));
       d[o + 1] = Math.max(0, Math.min(255, Math.round(g)));
       d[o + 2] = Math.max(0, Math.min(255, Math.round(b)));
@@ -128,46 +114,51 @@ function bakeLandscapeReliefBitmap(geomorph) {
 }
 
 export function createTerrenoMap2D(geomorph, callbacks = {}) {
-  const reliefCanvas = bakeLandscapeReliefBitmap(geomorph);
+  const reliefCanvas = bakeCountrysideReliefBitmap(geomorph);
 
   let canvas = null;
   let containerEl = null;
   let lastState = null;
+  let activeAutoVeh = 'camper'; // 'camper' (CAMPER-75) or 'armor' (ARMOR-155)
+  let vehButtons = [];
 
-  // Interactive smooth pan & 2-finger pinch zoom state (normalized canvas view)
   let zoom = 1.0;
   let panX = 0;
   let panY = 0;
   let baseRect = { x: 0, y: 0, w: 1, h: 1 };
 
+  function setSelectedVehicle(v) {
+    activeAutoVeh = v === 'armor' ? 'armor' : 'camper';
+    vehButtons.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.vehKey === activeAutoVeh);
+    });
+    if (callbacks.onChangeAutopilotVehicle) {
+      callbacks.onChangeAutopilotVehicle(activeAutoVeh);
+    }
+    if (lastState) render(lastState);
+  }
+
   function updateBaseRect() {
     if (!canvas) return;
     const CW = canvas.width;
     const CH = canvas.height;
-    // Slight vertical visual stretch (1.42×) so the 5km × 19km relief fills POCO F7 widescreen edge-to-edge cleanly!
-    const padX = 16;
-    const padY = 44;
-    const availW = CW - padX * 2;
-    const availH = CH - padY * 2;
-    const targetAspect = (40 / 15) * 0.85; // ~2.27 landscape aspect matching 15km×40km on POCO F7!
-    let w = availW;
-    let h = w / targetAspect;
-    if (h > availH) {
-      h = availH;
-      w = h * targetAspect;
-    }
+    const padX = 18;
+    const padY = 46;
+    const availW = Math.max(120, CW - padX * 2);
+    const availH = Math.max(120, CH - padY * 2);
+    const side = Math.min(availW, availH);
     baseRect = {
-      x: (CW - w) * 0.5,
-      y: (CH - h) * 0.5,
-      w,
-      h,
+      x: (CW - side) * 0.5,
+      y: (CH - side) * 0.5,
+      w: side,
+      h: side,
     };
   }
 
-  // World (wx, wz) -> Canvas pixel (px, py) with current pan & zoom
+  // World (wx, wz) -> Canvas pixel (px, py) (Standard North-Up: +X right, +Z down)
   function worldToPx(wx, wz) {
-    const u = (wz - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth; // North (left 0) -> South (right 1)
-    const v = (wx - TERRENO_WORLD.minX) / TERRENO_WORLD.width; // West (top 0) -> East (bottom 1)
+    const u = (wx - TERRENO_WORLD.minX) / TERRENO_WORLD.width;
+    const v = (wz - TERRENO_WORLD.minZ) / TERRENO_WORLD.depth;
     const bx = baseRect.x + u * baseRect.w;
     const by = baseRect.y + v * baseRect.h;
     const cx = canvas.width * 0.5;
@@ -187,16 +178,16 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     const v = (by - baseRect.y) / baseRect.h;
     if (u < -0.02 || u > 1.02 || v < -0.02 || v > 1.02) return null;
     return {
-      x: Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, TERRENO_WORLD.minX + v * TERRENO_WORLD.width)),
-      z: Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, TERRENO_WORLD.minZ + u * TERRENO_WORLD.depth)),
+      x: Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, TERRENO_WORLD.minX + u * TERRENO_WORLD.width)),
+      z: Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, TERRENO_WORLD.minZ + v * TERRENO_WORLD.depth)),
     };
   }
 
   function clampView() {
-    zoom = Math.max(0.85, Math.min(6.0, zoom));
+    zoom = Math.max(0.85, Math.min(12.0, zoom));
     if (!canvas) return;
-    const maxPanX = canvas.width * 0.48 * zoom;
-    const maxPanY = canvas.height * 0.48 * zoom;
+    const maxPanX = canvas.width * 0.55 * zoom;
+    const maxPanY = canvas.height * 0.55 * zoom;
     panX = Math.max(-maxPanX, Math.min(maxPanX, panX));
     panY = Math.max(-maxPanY, Math.min(maxPanY, panY));
   }
@@ -214,6 +205,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       { id: 'dyn_kei', code: '軽', kind: 'kei', x: state?.keiPose?.cx ?? 3.55, z: state?.keiPose?.cz ?? -3.80, color: '#facc15' },
       { id: 'dyn_container', code: '箱', kind: 'container', x: state?.containerPose?.cx ?? 19.85, z: state?.containerPose?.cz ?? 6.50, color: '#a3e635' },
       { id: 'dyn_camper', code: 'RV', kind: 'camper', x: state?.camperPose?.cx ?? 7.75, z: state?.camperPose?.cz ?? 5.75, color: '#fb923c' },
+      { id: 'dyn_armor', code: '装甲', kind: 'armor', x: state?.armorPose?.cx ?? 15.6, z: state?.armorPose?.cz ?? 4.0, color: '#10b981' },
     ];
   }
 
@@ -228,9 +220,28 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     canvas.className = 'terreno-2d-canvas';
     wrap.appendChild(canvas);
 
-    // Compact minimalist top-left floating 4 dynamic asset chips (自宅 / 軽 / 箱 / RV)
+    // Compact top-left bar: Autonomous Vehicle selector (RV自動 / 装甲自動) + quick destination chips
     const dynBar = document.createElement('div');
     dynBar.className = 'map2d-dyn-bar';
+
+    vehButtons = [];
+    [
+      { key: 'camper', label: 'RV自動' },
+      { key: 'armor', label: '装甲自動' },
+    ].forEach((v) => {
+      const vb = document.createElement('button');
+      vb.type = 'button';
+      vb.className = `map-pill-btn map2d-veh-btn${v.key === activeAutoVeh ? ' active' : ''}`;
+      vb.dataset.vehKey = v.key;
+      vb.textContent = v.label;
+      vb.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setSelectedVehicle(v.key);
+      });
+      dynBar.appendChild(vb);
+      vehButtons.push(vb);
+    });
+
     DYNAMIC_TARGETS.forEach((dt) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -240,7 +251,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         if (callbacks.onSelectDynamicTarget) {
-          callbacks.onSelectDynamicTarget(dt.kind);
+          callbacks.onSelectDynamicTarget(dt.kind, activeAutoVeh);
         }
       });
       dynBar.appendChild(btn);
@@ -260,7 +271,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     const ro = new ResizeObserver(syncSize);
     ro.observe(wrap);
 
-    // Smooth Multi-Touch 2-Finger Pinch Zoom + 1/2-Finger Pan + Tap Pin Selection!
+    // Smooth Multi-Touch 2-Finger Pinch Zoom + 1/2-Finger Pan + Free-Destination Tap Selection
     const ptrs = new Map();
     let singleMoved = 0;
     let hadMulti = false;
@@ -304,7 +315,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
         if (prevDist > 8 && dist > 8) {
           const factor = dist / prevDist;
           const oldZoom = zoom;
-          zoom = Math.max(0.85, Math.min(6.0, zoom * factor));
+          zoom = Math.max(0.85, Math.min(12.0, zoom * factor));
           const ratio = zoom / oldZoom;
           const mx = (mid.x - rect.left) * sx - canvas.width * 0.5;
           const my = (mid.y - rect.top) * sy - canvas.height * 0.5;
@@ -329,19 +340,9 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
         const px = ((e.clientX - rect.left) / Math.max(1, rect.width)) * canvas.width;
         const py = ((e.clientY - rect.top) / Math.max(1, rect.height)) * canvas.height;
         const dpr = canvas.width / Math.max(1, rect.width);
-        const hitRad = 22 * dpr;
+        const hitRad = 18 * dpr;
 
-        // 1. Check 4 Dynamic Asset Pins first
-        const assets = getDynamicAssetCoords(lastState);
-        for (let i = 0; i < assets.length; i++) {
-          const ap = worldToPx(assets[i].x, assets[i].z);
-          if (Math.hypot(px - ap.px, py - ap.py) <= hitRad) {
-            if (callbacks.onSelectDynamicTarget) callbacks.onSelectDynamicTarget(assets[i].kind);
-            return;
-          }
-        }
-
-        // 2. Check 30 Numbered Safe Waypoints (01..30)
+        // 1. Check 30 Waypoint Pins
         let bestWp = null;
         let bestD = hitRad;
         for (let i = 0; i < AUTOPILOT_WAYPOINTS.length; i++) {
@@ -354,14 +355,14 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
           }
         }
         if (bestWp) {
-          if (callbacks.onSelectWaypoint) callbacks.onSelectWaypoint(bestWp);
+          if (callbacks.onSelectWaypoint) callbacks.onSelectWaypoint(bestWp, activeAutoVeh);
           return;
         }
 
-        // 3. Tap anywhere else on the 2D topographic map -> route/teleport to exact world point!
+        // 2. Tap ANY free point on the 60 km × 60 km 2D map -> autonomous camper destination (ZERO player teleport!)
         const w = pxToWorld(px, py);
         if (w && callbacks.onSelectWorldPoint) {
-          callbacks.onSelectWorldPoint(w.x, w.z);
+          callbacks.onSelectWorldPoint(w.x, w.z, activeAutoVeh);
         }
       }
     };
@@ -374,7 +375,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       const sx = canvas.width / Math.max(1, rect.width);
       const sy = canvas.height / Math.max(1, rect.height);
       const oldZoom = zoom;
-      zoom = Math.max(0.85, Math.min(6.0, zoom * (e.deltaY > 0 ? 0.88 : 1.14)));
+      zoom = Math.max(0.85, Math.min(12.0, zoom * (e.deltaY > 0 ? 0.86 : 1.16)));
       const ratio = zoom / oldZoom;
       const mx = (e.clientX - rect.left) * sx - canvas.width * 0.5;
       const my = (e.clientY - rect.top) * sy - canvas.height * 0.5;
@@ -387,6 +388,12 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
 
   function render(state) {
     lastState = state;
+    if (state?.selectedAutopilotVehicle && state.selectedAutopilotVehicle !== activeAutoVeh) {
+      activeAutoVeh = state.selectedAutopilotVehicle;
+      vehButtons.forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.vehKey === activeAutoVeh);
+      });
+    }
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const CW = canvas.width;
@@ -401,23 +408,23 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     const dw = br.px - tl.px;
     const dh = br.py - tl.py;
 
-    // 1. Shaded GSI Hypsometric + Hillshade + 50m/200m Contour Bitmap
+    // 1. Shaded 6-Biome Countryside Relief + Hillshade + 15m/50m Contour Bitmap
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(reliefCanvas, tl.px, tl.py, dw, dh);
 
-    // 2. Dynamic Storm Flash-Flood River Inundation & Active Landslide Hazard Rings
+    // 2. Dynamic Storm River Flood & Landslide Hazard Rings
     const floodRise = state?.floodRise || 0;
     if (floodRise > 0.3) {
       ctx.save();
       ctx.beginPath();
-      for (let z = TERRENO_WORLD.minZ; z <= TERRENO_WORLD.maxZ; z += 260) {
+      for (let z = TERRENO_WORLD.minZ; z <= TERRENO_WORLD.maxZ; z += 400) {
         const rv = evalMainRiver(z);
         const p = worldToPx(rv.x, z);
         if (z === TERRENO_WORLD.minZ) ctx.moveTo(p.px, p.py);
         else ctx.lineTo(p.px, p.py);
       }
       ctx.strokeStyle = `rgba(180, 128, 62, ${Math.min(0.68, 0.25 + floodRise * 0.06)})`;
-      ctx.lineWidth = Math.max(3, (6 + floodRise * 2.2) * dpr * Math.sqrt(zoom));
+      ctx.lineWidth = Math.max(2.5, (4.5 + floodRise * 1.8) * dpr * Math.sqrt(zoom));
       ctx.stroke();
       ctx.restore();
     }
@@ -427,99 +434,118 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
         const p = worldToPx(ls.x, ls.z);
         ctx.fillStyle = 'rgba(239, 68, 68, 0.42)';
         ctx.strokeStyle = 'rgba(248, 113, 113, 0.9)';
-        ctx.lineWidth = 1.5 * dpr;
+        ctx.lineWidth = 1.4 * dpr;
         ctx.beginPath();
-        ctx.arc(p.px, p.py, 5.5 * dpr, 0, Math.PI * 2);
+        ctx.arc(p.px, p.py, 5.0 * dpr, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
       });
       ctx.restore();
     }
 
-    // 3. Subtle 3 km × 4 km Metric Grid across 15 km × 40 km
+    // 3. Crisp 5 km Metric Grid across 60 km × 60 km
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 0.8 * dpr;
-    for (let x = -6000; x <= 6000; x += 3000) {
-      const a = worldToPx(x, TERRENO_WORLD.minZ);
-      const b = worldToPx(x, TERRENO_WORLD.maxZ);
-      ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
-    }
-    for (let z = -12000; z <= 24000; z += 4000) {
-      const a = worldToPx(TERRENO_WORLD.minX, z);
-      const b = worldToPx(TERRENO_WORLD.maxX, z);
-      ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.11)';
+    ctx.lineWidth = 0.75 * dpr;
+    for (let g = -25000; g <= 25000; g += 5000) {
+      const ax = worldToPx(g, TERRENO_WORLD.minZ);
+      const bx = worldToPx(g, TERRENO_WORLD.maxZ);
+      ctx.beginPath(); ctx.moveTo(ax.px, ax.py); ctx.lineTo(bx.px, bx.py); ctx.stroke();
+      const az = worldToPx(TERRENO_WORLD.minX, g);
+      const bz = worldToPx(TERRENO_WORLD.maxX, g);
+      ctx.beginPath(); ctx.moveTo(az.px, az.py); ctx.lineTo(bz.px, bz.py); ctx.stroke();
     }
     ctx.restore();
 
-    // 4. 40 km Graded Forestry Road (奥山林道)
+    // 4. ALL 21 Natural Terrain-Conforming Roads
     ctx.save();
-    ctx.beginPath();
-    const rd = geomorph.roadDense;
-    for (let i = 0; i < rd.length; i++) {
-      const p = worldToPx(rd[i][0], rd[i][1]);
-      if (i === 0) ctx.moveTo(p.px, p.py);
-      else ctx.lineTo(p.px, p.py);
-    }
-    ctx.strokeStyle = 'rgba(253, 224, 138, 0.85)';
-    ctx.lineWidth = 1.8 * dpr;
-    ctx.stroke();
-    ctx.restore();
-
-    // 5. Active Computed Safe A* Autonomous Route Path (Crisp Glowing Cyan Ribbon!)
-    if (state?.autopilotRoute && state.autopilotRoute.length >= 2) {
-      ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const roads = geomorph.roadPolylines || (geomorph.roadDense ? [{ pts: geomorph.roadDense }] : []);
+    for (let rIdx = 0; rIdx < roads.length; rIdx++) {
+      const pts = roads[rIdx].pts;
+      if (!pts || pts.length < 2) continue;
       ctx.beginPath();
-      for (let i = 0; i < state.autopilotRoute.length; i++) {
-        const pt = state.autopilotRoute[i];
-        const p = worldToPx(pt[0], pt[1]);
+      for (let i = 0; i < pts.length; i++) {
+        const p = worldToPx(pts[i][0], pts[i][1]);
         if (i === 0) ctx.moveTo(p.px, p.py);
         else ctx.lineTo(p.px, p.py);
       }
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 3.2 * dpr;
+      ctx.strokeStyle = rIdx === 0 ? 'rgba(254, 232, 152, 0.90)' : 'rgba(246, 214, 134, 0.74)';
+      ctx.lineWidth = (rIdx === 0 ? 1.85 : 1.25) * dpr * Math.min(2.2, Math.sqrt(zoom));
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 5. Active Computed A* Autonomous Route Paths (CAMPER-75 & ARMOR-155!)
+    const drawRoute = (routePts, strokeCol, destLabel) => {
+      if (!routePts || routePts.length < 2) return;
+      ctx.save();
+      ctx.beginPath();
+      for (let i = 0; i < routePts.length; i++) {
+        const p = worldToPx(routePts[i][0], routePts[i][1]);
+        if (i === 0) ctx.moveTo(p.px, p.py);
+        else ctx.lineTo(p.px, p.py);
+      }
+      ctx.strokeStyle = strokeCol;
+      ctx.lineWidth = 3.0 * dpr;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.stroke();
+
+      // Destination target pin
+      const last = routePts[routePts.length - 1];
+      const dp = worldToPx(last[0], last[1]);
+      ctx.fillStyle = strokeCol;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8 * dpr;
+      ctx.beginPath();
+      ctx.arc(dp.px, dp.py, 6.2 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      if (destLabel) {
+        ctx.font = `700 ${Math.round(8.5 * dpr)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(destLabel, dp.px, dp.py - 8.0 * dpr);
+      }
       ctx.restore();
+    };
+
+    const routesByVeh = state?.autopilotRoutes || null;
+    if (routesByVeh) {
+      drawRoute(routesByVeh.camper, '#38bdf8', 'RV目的地');
+      drawRoute(routesByVeh.armor, '#34d399', '装甲目的地');
+    } else if (state?.autopilotRoute && state.autopilotRoute.length >= 2) {
+      drawRoute(state.autopilotRoute, '#38bdf8', '目的地');
     }
 
-    // 6. Subtle Mountain Peak Triangles (▲) & Suginosato 5-House Village Marker
+    // 6. Suginosato 5-House Village Marker
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 243, 214, 0.72)';
-    MOUNTAIN_PEAKS.forEach((pk) => {
-      const p = worldToPx(pk.x, pk.z);
-      const r = 3.5 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(p.px, p.py - r);
-      ctx.lineTo(p.px - r * 0.9, p.py + r * 0.7);
-      ctx.lineTo(p.px + r * 0.9, p.py + r * 0.7);
-      ctx.closePath();
-      ctx.fill();
-    });
     const vp = worldToPx(VILLAGE.centerX, VILLAGE.centerZ);
     ctx.fillStyle = 'rgba(52, 211, 153, 0.35)';
     ctx.strokeStyle = '#34d399';
-    ctx.lineWidth = 1.5 * dpr;
+    ctx.lineWidth = 1.4 * dpr;
     ctx.beginPath();
-    ctx.arc(vp.px, vp.py, 10.5 * dpr, 0, Math.PI * 2);
+    ctx.arc(vp.px, vp.py, 8.5 * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    // 7. 30 Numbered Selectable Waypoint Pins (01..30 across full 40km road incl. Suginosato Village!)
+    // 7. 30 Numbered Selectable Waypoint Pins (01..30)
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.round(8.5 * dpr)}px ui-monospace, monospace`;
+    ctx.font = `700 ${Math.round(7.8 * dpr)}px ui-monospace, monospace`;
     const activeWpId = state?.autopilotTargetId || null;
     AUTOPILOT_WAYPOINTS.forEach((wp) => {
       const p = worldToPx(wp.x, wp.z);
       const isActive = activeWpId === wp.id;
-      const rad = (isActive ? 9.5 : 7.8) * dpr;
-      ctx.fillStyle = isActive ? '#0ea5e9' : 'rgba(9, 15, 22, 0.82)';
-      ctx.strokeStyle = isActive ? '#ffffff' : 'rgba(245, 198, 92, 0.85)';
-      ctx.lineWidth = (isActive ? 2.0 : 1.2) * dpr;
+      const rad = (isActive ? 8.6 : 6.8) * dpr;
+      ctx.fillStyle = isActive ? '#0ea5e9' : 'rgba(9, 15, 22, 0.80)';
+      ctx.strokeStyle = isActive ? '#ffffff' : 'rgba(245, 198, 92, 0.82)';
+      ctx.lineWidth = (isActive ? 1.9 : 1.1) * dpr;
       ctx.beginPath();
       ctx.arc(p.px, p.py, rad, 0, Math.PI * 2);
       ctx.fill();
@@ -529,61 +555,44 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     });
     ctx.restore();
 
-    // 8. 4 Live Dynamic Asset Pins (自宅 / 軽 / 箱 / RV) + ARMOR-155 Emerald Pin
+    // 8. Live Dynamic Asset Dots (自宅 / 軽 / 箱 / RV / 装甲)
     ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.round(8.5 * dpr)}px sans-serif`;
     const assets = getDynamicAssetCoords(state);
     assets.forEach((a) => {
       const p = worldToPx(a.x, a.z);
       ctx.fillStyle = a.color;
       ctx.strokeStyle = '#071018';
-      ctx.lineWidth = 1.6 * dpr;
+      ctx.lineWidth = 1.5 * dpr;
       ctx.beginPath();
-      ctx.arc(p.px, p.py, 5.2 * dpr, 0, Math.PI * 2);
+      ctx.arc(p.px, p.py, 4.8 * dpr, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     });
-
-    if (state?.armorPose) {
-      const ap = worldToPx(state.armorPose.cx, state.armorPose.cz);
-      ctx.fillStyle = '#10b981';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.8 * dpr;
-      ctx.beginPath();
-      ctx.arc(ap.px, ap.py, 5.8 * dpr, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
     ctx.restore();
 
-    // 9. Live Player GPS Dot & Heading Cone (Note: North = Left -X, West = Up -Y!)
+    // 9. Live Player GPS Dot & Heading Cone (North-Up: Forward (-sin(yaw), -cos(yaw)) -> (dx, dy))
     const pxW = state?.x ?? 1.5;
     const pzW = state?.z ?? 3.5;
     const pYaw = state?.yaw ?? 0;
     const pp = worldToPx(pxW, pzW);
     ctx.save();
-    // Forward world (-sin(yaw), -cos(yaw)): map X = +Z -> -cos(yaw), map Y = +X -> -sin(yaw)
-    const dirPx = -Math.cos(pYaw);
-    const dirPy = -Math.sin(pYaw);
-    const ang = Math.atan2(dirPy, dirPx);
+    const ang = Math.atan2(-Math.cos(pYaw), -Math.sin(pYaw));
     ctx.fillStyle = 'rgba(248, 113, 113, 0.36)';
     ctx.beginPath();
     ctx.moveTo(pp.px, pp.py);
-    ctx.arc(pp.px, pp.py, 19 * dpr, ang - 0.42, ang + 0.42);
+    ctx.arc(pp.px, pp.py, 17 * dpr, ang - 0.42, ang + 0.42);
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = '#ef4444';
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.8 * dpr;
+    ctx.lineWidth = 1.7 * dpr;
     ctx.beginPath();
-    ctx.arc(pp.px, pp.py, 4.8 * dpr, 0, Math.PI * 2);
+    ctx.arc(pp.px, pp.py, 4.5 * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
 
-    // Minimalist hairline frame
+    // Hairline perimeter frame + compact North compass mark
     ctx.strokeStyle = 'rgba(148, 184, 214, 0.40)';
     ctx.lineWidth = 1.1 * dpr;
     ctx.strokeRect(tl.px, tl.py, dw, dh);
@@ -593,6 +602,8 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     mount,
     render,
     resetView,
+    setSelectedVehicle,
+    getSelectedVehicle: () => activeAutoVeh,
     reliefCanvas,
   };
 }

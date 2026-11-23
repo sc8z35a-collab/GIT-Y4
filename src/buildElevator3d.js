@@ -284,10 +284,10 @@ export function buildElevator3D(ctx) {
   // Deep Pit Concrete Floor (-15.60) & Top Shaft Cap (+2.72)
   addEBox(elvStatic, shaftW + 0.26, 0.24, shaftD + 0.26, shaftDarkConcMat, shaftCx, S.pitY - 0.12, shaftCz);
   addEBox(elvStatic, shaftW + 0.26, 0.08, shaftD + 0.26, shaftDarkConcMat, shaftCx, S.topY + 0.04, shaftCz);
-  // East, North, South Full-Height Reinforced Concrete Shaft Walls
-  addEBox(elvStatic, 0.16, totalShaftH, shaftD + 0.24, shaftConcMat, S.maxX + 0.08, midShaftY, shaftCz);
-  addEBox(elvStatic, shaftW + 0.24, totalShaftH, 0.14, shaftConcMat, shaftCx, midShaftY, S.minZ - 0.07);
-  addEBox(elvStatic, shaftW + 0.24, totalShaftH, 0.14, shaftConcMat, shaftCx, midShaftY, S.maxZ + 0.07);
+  // East, North, South Full-Height Reinforced Concrete Shaft Walls (inset strictly inside Main Tower X=4.85..5.00!)
+  addEBox(elvStatic, 0.11, totalShaftH, shaftD + 0.16, shaftConcMat, S.maxX + 0.055, midShaftY, shaftCz);
+  addEBox(elvStatic, shaftW + 0.12, totalShaftH, 0.12, shaftConcMat, shaftCx - 0.02, midShaftY, S.minZ - 0.065);
+  addEBox(elvStatic, shaftW + 0.12, totalShaftH, 0.12, shaftConcMat, shaftCx - 0.02, midShaftY, S.maxZ + 0.065);
 
   // West Front Shaft Wall (X = 3.20..3.30): Solid Piers North & South of the 0.90m Door Slot + Solid Inter-Floor Spandrels!
   addEBox(elvStatic, 0.10, totalShaftH, D.minZ - S.minZ + 0.04, shaftConcMat, S.minX - 0.05, midShaftY, (S.minZ + D.minZ) / 2 - 0.02);
@@ -540,18 +540,18 @@ export function buildElevator3D(ctx) {
     });
   });
 
-  // Flamed Dark Granite Floor + Brass Perimeter Inlay + Grooved Aluminum Threshold Sill
-  addEBox(cabGroup, cabW, 0.02, cabD, graniteFloorMat, cabCx, 0.01, cabCz);
-  addEBox(cabGroup, cabW - 0.14, 0.022, 0.02, brassMat, cabCx, 0.011, C.minZ + 0.08);
-  addEBox(cabGroup, cabW - 0.14, 0.022, 0.02, brassMat, cabCx, 0.011, C.maxZ - 0.08);
-  addEBox(cabGroup, 0.085, 0.024, D.width + 0.08, stainlessMat, C.minX - 0.02, 0.012, doorCz);
+  // Flamed Dark Granite Floor + Raised Brass Inlay + Grooved Aluminum Threshold Sill (strictly stacked — zero Z-fighting!)
+  addEBox(cabGroup, cabW, 0.016, cabD, graniteFloorMat, cabCx, 0.008, cabCz);
+  addEBox(cabGroup, cabW - 0.14, 0.005, 0.02, brassMat, cabCx, 0.0185, C.minZ + 0.08);
+  addEBox(cabGroup, cabW - 0.14, 0.005, 0.02, brassMat, cabCx, 0.0185, C.maxZ - 0.08);
+  addEBox(cabGroup, 0.06, 0.018, D.width + 0.08, stainlessMat, C.minX - 0.032, 0.009, doorCz);
 
   // Structural Roof Cap + Crosshead I-Beam + 4 Individual Spring-Loaded Rope Hitch Shackles!
-  addEBox(cabGroup, cabW + 0.08, 0.08, cabD + 0.08, darkStainlessMat, cabCx, cabH + 0.04, cabCz);
-  addEBox(cabGroup, 0.20, 0.16, cabD + 0.22, railSteelMat, cabCx, cabH + 0.14, cabCz);
+  addEBox(cabGroup, cabW + 0.08, 0.08, cabD + 0.08, darkStainlessMat, cabCx, cabH + 0.042, cabCz);
+  addEBox(cabGroup, 0.20, 0.16, cabD + 0.22, railSteelMat, cabCx, cabH + 0.165, cabCz);
   [-0.045, -0.015, 0.015, 0.045].forEach((rzOff) => {
     const spring = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.12, 8), safetyYellowMat);
-    spring.position.set(cabCx, cabH + 0.25, cabCz + rzOff);
+    spring.position.set(cabCx, cabH + 0.28, cabCz + rzOff);
     cabGroup.add(spring);
   });
 
@@ -561,74 +561,75 @@ export function buildElevator3D(ctx) {
   doorOpWheel.rotation.z = Math.PI / 2;
   doorOpWheel.position.set(C.minX - 0.05, cabH + 0.15, doorCz);
   const doorArmBar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.028, 0.36), stainlessMat);
-  doorArmBar.position.set(C.minX - 0.06, cabH + 0.15, doorCz);
+  doorArmBar.position.set(C.minX - 0.068, cabH + 0.15, doorCz);
   cabGroup.add(doorOpWheel, doorArmBar);
 
-  // Architectural Coffered Luminous Ceiling + Ventilation Grille + Mini Security CCTV Dome
-  addEBox(cabGroup, cabW - 0.16, 0.03, cabD - 0.20, cabCeilGlowMat, cabCx, cabH - 0.015, cabCz);
-  addEBox(cabGroup, cabW - 0.12, 0.045, 0.045, stainlessMat, cabCx, cabH - 0.022, cabCz);
-  addEBox(cabGroup, 0.045, 0.045, cabD - 0.18, stainlessMat, cabCx, cabH - 0.022, cabCz);
+  // Architectural Coffered Luminous Ceiling + Vertically Staggered Grid Bars (zero cross-bar or roof Z-fighting!)
+  addEBox(cabGroup, cabW - 0.16, 0.022, cabD - 0.20, cabCeilGlowMat, cabCx, cabH - 0.012, cabCz);
+  addEBox(cabGroup, cabW - 0.12, 0.016, 0.044, stainlessMat, cabCx, cabH - 0.032, cabCz);
+  addEBox(cabGroup, 0.044, 0.012, cabD - 0.18, stainlessMat, cabCx, cabH - 0.046, cabCz);
   const cabCctv = new THREE.Mesh(new THREE.SphereGeometry(0.042, 10, 8), rubberEdgeMat);
-  cabCctv.position.set(C.maxX - 0.10, cabH - 0.035, C.minZ + 0.10);
+  cabCctv.position.set(C.maxX - 0.10, cabH - 0.038, C.minZ + 0.10);
   cabGroup.add(cabCctv);
 
   // Side Walls (North Z=1.02, South Z=2.48): Hairline Stainless Lower + Warm Walnut Upper + Stainless Handrails!
   [C.minZ, C.maxZ].forEach((wz) => {
     const inward = wz < cabCz ? 1 : -1;
-    addEBox(cabGroup, cabW, 0.92, 0.04, stainlessMat, cabCx, 0.46, wz - inward * 0.02);
+    addEBox(cabGroup, cabW, 0.916, 0.04, stainlessMat, cabCx, 0.458, wz - inward * 0.02);
     addEBox(cabGroup, cabW, cabH - 0.92, 0.04, walnutPanelMat, cabCx, 0.92 + (cabH - 0.92) / 2, wz - inward * 0.02);
-    addEBox(cabGroup, cabW - 0.04, 0.10, 0.015, darkStainlessMat, cabCx, 0.06, wz + inward * 0.01);
+    addEBox(cabGroup, cabW - 0.04, 0.09, 0.012, darkStainlessMat, cabCx, 0.062, wz + inward * 0.008);
     const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, cabW - 0.16, 10), stainlessMat);
     bar.rotation.z = Math.PI / 2;
     bar.position.set(cabCx, 0.90, wz + inward * 0.065);
     cabGroup.add(bar);
     [-0.42, 0.42].forEach((bxOff) => {
-      addEBox(cabGroup, 0.025, 0.025, 0.065, darkStainlessMat, cabCx + bxOff, 0.90, wz + inward * 0.032);
+      addEBox(cabGroup, 0.025, 0.025, 0.056, darkStainlessMat, cabCx + bxOff, 0.90, wz + inward * 0.032);
     });
   });
-  // Framed Architectural Vanity Mirror on North Wall
-  addEBox(cabGroup, 0.78, 0.96, 0.018, stainlessMat, cabCx, 1.52, C.minZ + 0.012);
-  addEBox(cabGroup, 0.72, 0.90, 0.014, mirrorGlassMat, cabCx, 1.52, C.minZ + 0.018);
+  // Framed Architectural Vanity Mirror on North Wall (mirror glass cleanly proud of stainless backing frame!)
+  addEBox(cabGroup, 0.78, 0.96, 0.010, stainlessMat, cabCx, 1.52, C.minZ + 0.007);
+  addEBox(cabGroup, 0.72, 0.90, 0.008, mirrorGlassMat, cabCx, 1.52, C.minZ + 0.017);
 
-  // Rear East Wall (X = 4.58): Full Panoramic Tempered Shaft Observation Window (H = 0.96..2.12 -> watch CWT, rails, depth ticks & cables!)
-  addEBox(cabGroup, 0.04, 0.96, cabD, stainlessMat, C.maxX + 0.02, 0.48, cabCz);
-  addEBox(cabGroup, 0.04, cabH - 0.96, 0.18, darkStainlessMat, C.maxX + 0.02, 0.96 + (cabH - 0.96) / 2, C.minZ + 0.09);
-  addEBox(cabGroup, 0.04, cabH - 0.96, 0.18, darkStainlessMat, C.maxX + 0.02, 0.96 + (cabH - 0.96) / 2, C.maxZ - 0.09);
+  // Rear East Wall (X = 4.58): Full Panoramic Shaft Window (side jambs stop cleanly beneath top transom!)
+  addEBox(cabGroup, 0.04, 0.958, cabD, stainlessMat, C.maxX + 0.02, 0.479, cabCz);
+  const rearJambH = cabH - 0.96 - 0.122;
+  addEBox(cabGroup, 0.04, rearJambH, 0.18, darkStainlessMat, C.maxX + 0.02, 0.96 + rearJambH / 2, C.minZ + 0.09);
+  addEBox(cabGroup, 0.04, rearJambH, 0.18, darkStainlessMat, C.maxX + 0.02, 0.96 + rearJambH / 2, C.maxZ - 0.09);
   addEBox(cabGroup, 0.04, 0.12, cabD, darkStainlessMat, C.maxX + 0.02, cabH - 0.06, cabCz);
-  addEBox(cabGroup, 0.016, 1.16, cabD - 0.36, obsGlassMat, C.maxX + 0.01, 1.54, cabCz);
-  addEBox(cabGroup, 0.03, 0.03, cabD - 0.36, stainlessMat, C.maxX, 0.96, cabCz);
-  addEBox(cabGroup, 0.03, 0.03, cabD - 0.36, stainlessMat, C.maxX, 2.12, cabCz);
+  addEBox(cabGroup, 0.014, 1.15, cabD - 0.365, obsGlassMat, C.maxX + 0.015, 1.54, cabCz);
+  addEBox(cabGroup, 0.028, 0.028, cabD - 0.365, stainlessMat, C.maxX - 0.016, 0.96, cabCz);
+  addEBox(cabGroup, 0.028, 0.028, cabD - 0.365, stainlessMat, C.maxX - 0.016, 2.12, cabCz);
   const rearBar = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, cabD - 0.24, 10), stainlessMat);
   rearBar.rotation.x = Math.PI / 2;
   rearBar.position.set(C.maxX - 0.065, 0.90, cabCz);
   cabGroup.add(rearBar);
 
-  // Front West Cab Wall Return Panels & Transom Header
+  // Front West Cab Wall Return Panels & Transom Header (cleanly disjoint — zero corner overlap!)
   addEBox(cabGroup, 0.04, cabH, D.minZ - C.minZ, stainlessMat, C.minX - 0.02, cabH / 2, (C.minZ + D.minZ) / 2);
   addEBox(cabGroup, 0.04, cabH, C.maxZ - D.maxZ, stainlessMat, C.minX - 0.02, cabH / 2, (D.maxZ + C.maxZ) / 2);
-  addEBox(cabGroup, 0.05, cabH - D.height + 0.02, D.width, darkStainlessMat, C.minX - 0.02, D.height + (cabH - D.height) / 2, doorCz);
+  addEBox(cabGroup, 0.046, cabH - D.height, D.width, darkStainlessMat, C.minX - 0.02, D.height + (cabH - D.height) / 2, doorCz);
 
   // Live High-Res Cab Transom OLED Floor/Speed/Depth Indicator
   const cabIndicator = createDigitalIndicator();
-  const cabIndMesh = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.145, 0.44), cabIndicator.mat);
-  cabIndMesh.position.set(C.minX + 0.012, D.height + 0.062, doorCz);
+  const cabIndMesh = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.135, 0.44), cabIndicator.mat);
+  cabIndMesh.position.set(C.minX + 0.016, D.height + 0.068, doorCz);
   cabGroup.add(cabIndMesh);
 
-  // Synchronized Center-Opening Car Doors with Active Infrared Light-Curtain Safety Edges!
+  // Synchronized Center-Opening Car Doors (staggered depths & heights — zero panel/rubber/glass Z-fighting!)
   const leafW = D.width / 2 + 0.01;
   const lightCurtainStrips = [];
   const makeDoorLeaf = (isLeft, hasCurtain = false) => {
     const grp = new THREE.Group();
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.034, D.height - 0.02, leafW), stainlessMat);
-    panel.position.set(0, D.height / 2, 0);
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.040, D.height - 0.02, 0.026), rubberEdgeMat);
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.030, D.height - 0.024, leafW - 0.016), stainlessMat);
+    panel.position.set(0, D.height / 2, isLeft ? -0.008 : 0.008);
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.036, D.height - 0.030, 0.016), rubberEdgeMat);
     edge.position.set(0, D.height / 2, isLeft ? leafW / 2 - 0.008 : -leafW / 2 + 0.008);
     const slit = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.72, 0.09), obsGlassMat);
     slit.position.set(0, 1.38, isLeft ? 0.04 : -0.04);
     grp.add(panel, edge, slit);
     if (hasCurtain) {
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.044, D.height - 0.14, 0.012), lightCurtainIdleMat);
-      strip.position.set(0, D.height / 2, isLeft ? leafW / 2 + 0.002 : -leafW / 2 - 0.002);
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.042, D.height - 0.14, 0.008), lightCurtainIdleMat);
+      strip.position.set(0, D.height / 2, isLeft ? leafW / 2 + 0.004 : -leafW / 2 - 0.004);
       grp.add(strip);
       lightCurtainStrips.push(strip);
     }
@@ -638,8 +639,8 @@ export function buildElevator3D(ctx) {
   const carDoorR = makeDoorLeaf(false, true);
   const carDoorLClosedZ = doorCz - leafW / 2;
   const carDoorRClosedZ = doorCz + leafW / 2;
-  carDoorL.position.set(C.minX - 0.045, 0, carDoorLClosedZ);
-  carDoorR.position.set(C.minX - 0.045, 0, carDoorRClosedZ);
+  carDoorL.position.set(C.minX - 0.048, 0, carDoorLClosedZ);
+  carDoorR.position.set(C.minX - 0.048, 0, carDoorRClosedZ);
   cabGroup.add(carDoorL, carDoorR);
 
   // Moving Cab Interior Architectural PointLight
@@ -651,14 +652,13 @@ export function buildElevator3D(ctx) {
   interiorLights.push({ name: 'ELV_Cab_Light', floor: 1, zone: 'elevator', light: cabLight, baseInt: 2.60 });
 
   // =========================================================================
-  // 5. OVERSIZED 3D CAR OPERATING PANEL (COP) WITH 5 FLOOR BUTTONS (1F..B4) + OPEN/CLOSE
+  // 5. OVERSIZED 3D CAR OPERATING PANEL (COP) — STRICTLY STACKED IN +X (ZERO Z-FIGHTING!)
   // =========================================================================
-  const copX = C.minX + 0.015;
+  const copX = C.minX + 0.018;
   const copZ = 2.34;
-  addEBox(cabGroup, 0.024, 1.24, 0.255, darkStainlessMat, copX - 0.005, 1.30, copZ);
-  addEBox(cabGroup, 0.012, 1.26, 0.275, stainlessMat, copX - 0.010, 1.30, copZ);
-  // Engraved Capacity & Model Nameplate at top of COP
-  addEBox(cabGroup, 0.022, 0.13, 0.22, makeSpecPlaqueMat(), copX + 0.009, 1.82, copZ);
+  addEBox(cabGroup, 0.010, 1.26, 0.275, stainlessMat, C.minX + 0.006, 1.30, copZ);
+  addEBox(cabGroup, 0.010, 1.22, 0.252, darkStainlessMat, C.minX + 0.017, 1.30, copZ);
+  addEBox(cabGroup, 0.008, 0.13, 0.22, makeSpecPlaqueMat(), C.minX + 0.027, 1.82, copZ);
 
   const copButtons = new Map();
   const copBtnSpecs = [
@@ -720,9 +720,9 @@ export function buildElevator3D(ctx) {
   copBtnSpecs.forEach((spec) => {
     const offMat = makeButtonMat(spec.label, spec.accent, false, spec.sub);
     const onMat = makeButtonMat(spec.label, spec.accent, true, spec.sub);
-    // Generous extruded physical 3D button for crisp mobile tap & crosshair aiming (no overlay UI needed!)
-    const btnMesh = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.128, 0.195), offMat);
-    btnMesh.position.set(copX + 0.016, spec.y, copZ);
+    // Generous extruded physical 3D button strictly proud of darkStainless COP backplate!
+    const btnMesh = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.128, 0.195), offMat);
+    btnMesh.position.set(copX + 0.018, spec.y, copZ);
     btnMesh.userData.propId = spec.id;
     cabGroup.add(btnMesh);
     copButtons.set(spec.id, { mesh: btnMesh, offMat, onMat, floor: spec.floor });
@@ -752,11 +752,11 @@ export function buildElevator3D(ctx) {
     elvDynamic.add(grp);
 
     const frameMat = st.classified ? darkStainlessMat : stainlessMat;
-    // Brushed Stainless 3-Sided Portal Jamb Frame & Grooved Threshold Sill
-    addEBox(elvStatic, 0.14, D.height + 0.06, 0.08, frameMat, S.minX - 0.05, y0 + D.height / 2 + 0.03, D.minZ - 0.04);
-    addEBox(elvStatic, 0.14, D.height + 0.06, 0.08, frameMat, S.minX - 0.05, y0 + D.height / 2 + 0.03, D.maxZ + 0.04);
-    addEBox(elvStatic, 0.14, 0.10, D.width + 0.16, frameMat, S.minX - 0.05, y0 + D.height + 0.05, doorCz);
-    addEBox(elvStatic, 0.12, 0.024, D.width + 0.08, stainlessMat, S.minX - 0.05, y0 + 0.012, doorCz);
+    // Brushed Stainless 3-Sided Portal Jamb Frame (jambs stop strictly beneath header — zero top-corner Z-fighting!)
+    addEBox(elvStatic, 0.14, D.height, 0.08, frameMat, S.minX - 0.05, y0 + D.height / 2, D.minZ - 0.04);
+    addEBox(elvStatic, 0.14, D.height, 0.08, frameMat, S.minX - 0.05, y0 + D.height / 2, D.maxZ + 0.04);
+    addEBox(elvStatic, 0.14, 0.10, D.width + 0.16, frameMat, S.minX - 0.05, y0 + D.height + 0.052, doorCz);
+    addEBox(elvStatic, 0.12, 0.018, D.width + 0.06, stainlessMat, S.minX - 0.05, y0 + 0.009, doorCz);
 
     // Synchronized Center-Opening Hall Doors
     const hallL = makeDoorLeaf(true, false);

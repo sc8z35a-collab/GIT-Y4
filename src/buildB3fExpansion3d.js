@@ -272,7 +272,7 @@ export function buildB3fExpansion3D(ctx) {
   addDBox(deepStatic, 2.50, 0.26, 7.30, concCleanMat, 1.60, yB3 - 0.13, 25.95);
   addDBox(deepStatic, 2.50, 0.26, 7.30, concPconMat, 1.60, yB3 + 2.73, 25.95);
   // Stainless floor drain grate in South Cold-Chain Zone C
-  addDBox(deepStatic, 1.25, 0.014, 0.18, makeSurfaceMat('metal_grate', 1.25, 0.2), 1.60, yB3 + 0.007, 28.15);
+  addDBox(deepStatic, 1.25, 0.014, 0.18, makeSurfaceMat('metal_grate', 1.25, 0.2), 1.60, yB3 + 0.010, 28.15);
   // 3 Bright Overhead LED Food Vault Light Bars
   [23.45, 25.95, 28.25].forEach((lz) => {
     addDBox(deepStatic, 0.16, 0.04, 1.15, studioTrackGlow, 1.60, yB3 + 2.58, lz);
@@ -281,7 +281,7 @@ export function buildB3fExpansion3D(ctx) {
   // --- B307: Warm Timber Acoustic Work Studio (X=-3.15..-0.15, Z=4.60..8.60, CH 2.75m) ---
   addDBox(deepStatic, 3.40, 0.26, 4.50, concCleanMat, -1.70, yB3 - 0.13, 6.60);
   addDBox(deepStatic, 3.00, 0.024, 4.00, walnutDeskMat, -1.65, yB3 + 0.012, 6.60);
-  addDBox(deepStatic, 1.65, 0.014, 2.15, makeSurfaceMat('carpet_beige', 1.65, 2.15), -1.55, yB3 + 0.025, 7.05);
+  addDBox(deepStatic, 1.65, 0.012, 2.15, makeSurfaceMat('carpet_beige', 1.65, 2.15), -1.55, yB3 + 0.030, 7.05);
   addDBox(deepStatic, 3.40, 0.26, 4.50, makeSurfaceMat('ceiling_acoustic', 3.4, 4.5), -1.70, yB3 + 2.88, 6.60);
   // Acoustic Timber Ceiling Baffle Beams (RT60 = 0.38s) + 2700K Cove Glow!
   for (let bz = 4.95; bz <= 8.25; bz += 0.42) {
@@ -295,8 +295,8 @@ export function buildB3fExpansion3D(ctx) {
 
   // Room-Specific Finished Floors & Custom Ceilings across the East Thermal Wing:
   // B308 Sauna Prep Room (X=3.35..5.05, Z=6.00..8.50, FL±0, CH2.55)
-  addDBox(deepStatic, 1.70, 0.022, 2.50, beigeTileMat, 4.20, yB3 + 0.008, 7.25);
-  addDBox(deepStatic, 1.38, 0.018, 2.18, hinokiDeckMat, 4.20, yB3 + 0.016, 7.25);
+  addDBox(deepStatic, 1.70, 0.020, 2.50, beigeTileMat, 4.20, yB3 + 0.010, 7.25);
+  addDBox(deepStatic, 1.38, 0.014, 2.18, hinokiDeckMat, 4.20, yB3 + 0.027, 7.25);
   addDBox(deepStatic, 1.72, 0.12, 2.52, makeSurfaceMat('plywood_attic', 1.7, 2.5), 4.20, yB3 + 2.61, 7.25);
   addDBox(deepStatic, 0.36, 0.03, 0.36, warmGlowMat, 4.20, yB3 + 2.54, 7.25);
 
@@ -310,13 +310,13 @@ export function buildB3fExpansion3D(ctx) {
   });
 
   // PS-TH Thermal MEP Plant Room (X=6.55..7.35, Z=3.85..5.85, FL-20mm, CH2.65)
-  addDBox(deepStatic, 0.80, 0.016, 2.00, concCleanMat, 6.95, yB3 - 0.020, 4.85);
+  addDBox(deepStatic, 0.80, 0.016, 2.00, concCleanMat, 6.95, yB3 + 0.008, 4.85);
   addDBox(deepStatic, 0.14, 0.035, 0.90, studioTrackGlow, 6.95, yB3 + 2.62, 4.85);
 
   // B309 Finnish Main Sauna (X=7.60..11.60, Z=3.85..8.85, FL-15mm, CURVED CONVECTION CEILING CH2.65->2.40!)
-  addDBox(deepStatic, 4.00, 0.020, 5.00, wetGraniteMat, 9.60, yB3 - 0.015, 6.35);
+  addDBox(deepStatic, 4.00, 0.020, 5.00, wetGraniteMat, 9.60, yB3 + 0.010, 6.35);
   // Perimeter Stainless Floor Drain Trench
-  addDBox(deepStatic, 0.12, 0.012, 4.65, mat.stainless, 7.72, yB3 - 0.004, 6.35);
+  addDBox(deepStatic, 0.12, 0.012, 4.65, mat.stainless, 7.72, yB3 + 0.022, 6.35);
   // True Finnish Curved/Stepped Löyly Convection Ceiling (High CH2.65 over West stoves -> curves smoothly down to CH2.40 over East Tier 3!)
   addDBox(deepStatic, 1.80, 0.08, 5.02, keloCedarMat, 8.50, yB3 + 2.66, 6.35);
   const ceilSlope = new THREE.Mesh(new THREE.BoxGeometry(2.35, 0.08, 5.02), keloCedarMat);
@@ -329,13 +329,13 @@ export function buildB3fExpansion3D(ctx) {
   }
 
   // B311 Private Meditation Sauna (X=7.60..11.60, Z=9.15..12.15, FL-15mm, CH2.45 Dark Yakisugi)
-  addDBox(deepStatic, 4.00, 0.020, 3.00, wetBasaltMat, 9.60, yB3 - 0.015, 10.65);
+  addDBox(deepStatic, 4.00, 0.020, 3.00, wetBasaltMat, 9.60, yB3 + 0.010, 10.65);
   addDBox(deepStatic, 4.02, 0.22, 3.02, yakisugiMat, 9.60, yB3 + 2.56, 10.65);
   // Linear black stainless drain along West wall
-  addDBox(deepStatic, 0.10, 0.012, 2.75, mat.darkIron, 7.72, yB3 - 0.004, 10.65);
+  addDBox(deepStatic, 0.10, 0.012, 2.75, mat.darkIron, 7.72, yB3 + 0.022, 10.65);
 
   // B312 Hinoki Bath & 14°C Deep Cold Plunge (X=3.35..5.35, Z=8.65..12.15, FL-30mm waterproof pan, CH2.50)
-  addDBox(deepStatic, 2.00, 0.020, 3.50, wetGraniteMat, 4.35, yB3 - 0.030, 10.40);
+  addDBox(deepStatic, 2.00, 0.020, 3.50, wetGraniteMat, 4.35, yB3 + 0.010, 10.40);
   addDBox(deepStatic, 2.02, 0.16, 3.52, warmTimberMat, 4.35, yB3 + 2.58, 10.40);
   // Moisture-proof Hinoki Ceiling Louvers + Warm Cove
   for (let lz = 8.88; lz <= 11.95; lz += 0.26) {
@@ -344,8 +344,8 @@ export function buildB3fExpansion3D(ctx) {
   addDBox(deepStatic, 0.03, 0.035, 3.20, warmGlowMat, 3.38, yB3 + 2.44, 10.40);
 
   // B313 Totonoi Forest-Breeze Cooling Gallery (X=5.55..7.35, Z=6.00..12.15, FL-10mm, CH2.62 Warm Timber Ceiling!)
-  addDBox(deepStatic, 1.80, 0.020, 6.15, wetGraniteMat, 6.45, yB3 - 0.010, 9.075);
-  addDBox(deepStatic, 1.18, 0.014, 5.65, hinokiDeckMat, 6.45, yB3 - 0.001, 9.075);
+  addDBox(deepStatic, 1.80, 0.020, 6.15, wetGraniteMat, 6.45, yB3 + 0.010, 9.075);
+  addDBox(deepStatic, 1.18, 0.014, 5.65, hinokiDeckMat, 6.45, yB3 + 0.026, 9.075);
   addDBox(deepStatic, 1.82, 0.10, 6.17, warmTimberMat, 6.45, yB3 + 2.67, 9.075);
   // Warm 2400K Baseboard Footpath Indirect Strips
   addDBox(deepStatic, 0.02, 0.03, 4.50, amberStripMat, 7.33, yB3 + 0.06, 8.60);
@@ -379,7 +379,7 @@ export function buildB3fExpansion3D(ctx) {
     addCyl(deepStatic, 0.045, 0.045, 0.025, mat.stainless, 0.72, yB3 + 1.64, jz, 10);
   }
   // Floor-Flush 150kg Stainless Platform Produce/Crate Scale (no blocking collider — walk right over!)
-  addDBox(deepStatic, 0.46, 0.012, 0.46, mat.stainless, 1.58, yB3 + 0.008, 23.45);
+  addDBox(deepStatic, 0.46, 0.012, 0.46, mat.stainless, 1.58, yB3 + 0.010, 23.45);
   // East Wall Cold-Chain Telemetry Board (12°C / +2°C / -25°C live display) + Dry Ration Clipboard
   addDBox(deepStatic, 0.06, 0.56, 0.92, darkSpeakerMat, 2.56, yB3 + 1.52, 23.45);
   addDBox(deepStatic, 0.02, 0.48, 0.84, coldChainPanelMat, 2.52, yB3 + 1.52, 23.45);
@@ -450,9 +450,9 @@ export function buildB3fExpansion3D(ctx) {
   // =========================================================================
   // 3. B307 WARM TIMBER ACOUSTIC WORK STUDIO (3.0m × 4.0m — WEST WING)
   // =========================================================================
-  // L-Shaped Solid Walnut & Oak Work Desk (West 3.60×0.72 + North Drafting Return 1.10×0.68, H=0.73m)
+  // L-Shaped Solid Walnut & Oak Work Desk (West 3.60×0.72 + North Drafting Return 1.06×0.68 butt-jointed at X=-2.40, H=0.73m)
   addDBox(deepStatic, 0.72, 0.055, 3.62, walnutDeskMat, -2.76, yB3 + 0.73, 6.62);
-  addDBox(deepStatic, 1.12, 0.055, 0.68, walnutDeskMat, -1.86, yB3 + 0.73, 4.96);
+  addDBox(deepStatic, 1.06, 0.055, 0.68, walnutDeskMat, -1.87, yB3 + 0.73, 4.96);
   // Recessed Brass Cable Management Grommet Strip
   addDBox(deepStatic, 0.08, 0.012, 2.20, brassMat, -3.02, yB3 + 0.76, 6.55);
   // Desk Walnut Legs & Side Drawer Pedestal
@@ -604,24 +604,24 @@ export function buildB3fExpansion3D(ctx) {
   // 3-Tier Floating Cantilevered L-Shaped Stadium Benches (North + East Walls, Zero Front Legs!)
   // Tier 3 Top Löyly Deck (H 1.66m, D 0.78m)
   addDBox(deepStatic, 2.28, 0.075, 0.78, thermoAspenMat, 10.45, yB3 + 1.64, 4.24);
-  addDBox(deepStatic, 0.78, 0.075, 4.18, thermoAspenMat, 11.20, yB3 + 1.64, 6.72);
+  addDBox(deepStatic, 0.78, 0.075, 4.16, thermoAspenMat, 11.20, yB3 + 1.64, 6.73);
   // Tier 3 Slatted Backrests + 2200K Fiber-Optic Indirect Glow Strips!
-  addDBox(deepStatic, 2.22, 0.34, 0.04, thermoAspenMat, 10.45, yB3 + 2.02, 3.89);
+  addDBox(deepStatic, 2.18, 0.34, 0.04, thermoAspenMat, 10.41, yB3 + 2.02, 3.89);
   addDBox(deepStatic, 0.04, 0.34, 4.78, thermoAspenMat, 11.55, yB3 + 2.02, 6.38);
-  addDBox(deepStatic, 2.18, 0.025, 0.025, saunaFiberGlowMat, 10.45, yB3 + 2.22, 3.88);
+  addDBox(deepStatic, 2.16, 0.025, 0.025, saunaFiberGlowMat, 10.41, yB3 + 2.22, 3.88);
   addDBox(deepStatic, 0.025, 0.025, 4.72, saunaFiberGlowMat, 11.56, yB3 + 2.22, 6.38);
   addDBox(deepStatic, 2.22, 0.02, 0.02, saunaFiberGlowMat, 10.45, yB3 + 1.59, 4.62);
-  addDBox(deepStatic, 0.02, 0.02, 4.12, saunaFiberGlowMat, 10.82, yB3 + 1.59, 6.72);
+  addDBox(deepStatic, 0.02, 0.02, 4.12, saunaFiberGlowMat, 10.82, yB3 + 1.59, 6.73);
 
-  // Tier 2 Mid Deck (H 1.24m, D 0.60m)
+  // Tier 2 Mid Deck (H 1.24m, D 0.60m, butt-jointed at Z=5.24)
   addDBox(deepStatic, 1.50, 0.07, 0.60, thermoAspenMat, 10.06, yB3 + 1.22, 4.93);
-  addDBox(deepStatic, 0.60, 0.07, 4.16, thermoAspenMat, 10.51, yB3 + 1.22, 6.73);
-  addDBox(deepStatic, 0.02, 0.02, 4.12, saunaFiberGlowMat, 10.22, yB3 + 1.17, 6.73);
+  addDBox(deepStatic, 0.60, 0.07, 3.57, thermoAspenMat, 10.51, yB3 + 1.22, 7.025);
+  addDBox(deepStatic, 0.02, 0.02, 3.54, saunaFiberGlowMat, 10.22, yB3 + 1.17, 7.025);
 
-  // Tier 1 Lower Foot/Bench Deck (H 0.82m, D 0.50m)
+  // Tier 1 Lower Foot/Bench Deck (H 0.82m, D 0.50m, butt-jointed at Z=5.74)
   addDBox(deepStatic, 0.90, 0.065, 0.50, thermoAspenMat, 9.76, yB3 + 0.80, 5.48);
-  addDBox(deepStatic, 0.50, 0.065, 3.55, thermoAspenMat, 9.96, yB3 + 0.80, 7.04);
-  addDBox(deepStatic, 0.02, 0.02, 3.50, saunaFiberGlowMat, 9.72, yB3 + 0.75, 7.04);
+  addDBox(deepStatic, 0.50, 0.065, 3.07, thermoAspenMat, 9.96, yB3 + 0.80, 7.275);
+  addDBox(deepStatic, 0.02, 0.02, 3.04, saunaFiberGlowMat, 9.72, yB3 + 0.75, 7.275);
 
   // Access Step (H 0.42m)
   addDBox(deepStatic, 0.34, 0.06, 1.35, thermoAspenMat, 9.52, yB3 + 0.40, 7.80);
@@ -699,14 +699,14 @@ export function buildB3fExpansion3D(ctx) {
   // Interactive [E] Personal Forged Copper Kiulu Bucket & Dimmer Niche
   addDBox(deepStatic, 0.34, 0.38, 0.34, wetBasaltMat, 8.62, yB3 + 0.19, 9.42);
   const privKiuluBucket = addCyl(deepDynamic, 0.125, 0.105, 0.20, copperMat, 8.62, yB3 + 0.48, 9.42, 12);
-  // Bed-Sized Full-Flat Lie-Down L-Shaped 2-Tier Wide Bench (Upper W 950mm × L 2,800mm, H 1.18m!)
+  // Bed-Sized Full-Flat Lie-Down L-Shaped 2-Tier Wide Bench (Upper W 950mm × L 2,800mm, H 1.18m, butt-jointed at X=10.62!)
   addDBox(deepStatic, 0.95, 0.08, 2.94, darkAlderMat, 11.10, yB3 + 1.16, 10.65);
-  addDBox(deepStatic, 2.02, 0.08, 0.95, darkAlderMat, 9.64, yB3 + 1.16, 11.64);
+  addDBox(deepStatic, 1.98, 0.08, 0.95, darkAlderMat, 9.62, yB3 + 1.16, 11.64);
   addDBox(deepStatic, 0.03, 0.025, 2.86, privCandleGlowMat, 10.64, yB3 + 1.10, 10.65);
-  addDBox(deepStatic, 1.96, 0.025, 0.03, privCandleGlowMat, 9.64, yB3 + 1.10, 11.18);
-  // Lower Bench (H 0.66m, D 0.62m) + Movable Step (H 0.33m)
+  addDBox(deepStatic, 1.94, 0.025, 0.03, privCandleGlowMat, 9.62, yB3 + 1.10, 11.18);
+  // Lower Bench (H 0.66m, D 0.62m, butt-jointed at X=10.00) + Movable Step (H 0.33m)
   addDBox(deepStatic, 0.62, 0.07, 1.85, darkAlderMat, 10.31, yB3 + 0.64, 10.25);
-  addDBox(deepStatic, 1.38, 0.07, 0.62, darkAlderMat, 9.62, yB3 + 0.64, 10.86);
+  addDBox(deepStatic, 1.06, 0.07, 0.62, darkAlderMat, 9.46, yB3 + 0.64, 10.86);
   addDBox(deepStatic, 0.36, 0.06, 0.64, darkAlderMat, 9.80, yB3 + 0.32, 10.18);
   // 2 Sculpted Ergonomic Wave Wooden Pillows for Full-Flat Lie-Down!
   addDBox(deepStatic, 0.56, 0.09, 0.26, thermoAspenMat, 11.10, yB3 + 1.24, 9.42);
@@ -746,10 +746,10 @@ export function buildB3fExpansion3D(ctx) {
   // South-West 41.0°C Kiso Hinoki Deep Hot Tub (X=3.38..4.30, Z=10.65..12.12, rim +0.52m)
   addDBox(deepStatic, 0.92, 0.55, 0.10, hinokiMat, 3.84, yB3 + 0.245, 10.70); // Front North rim
   addDBox(deepStatic, 0.92, 0.55, 0.10, hinokiMat, 3.84, yB3 + 0.245, 12.07); // Back South rim
-  addDBox(deepStatic, 0.10, 0.55, 1.47, hinokiMat, 3.43, yB3 + 0.245, 11.385); // West rim
-  addDBox(deepStatic, 0.09, 0.55, 1.47, hinokiMat, 4.26, yB3 + 0.245, 11.385); // Divider rim
-  addDBox(deepStatic, 0.78, 0.08, 1.30, hinokiMat, 3.84, yB3 + 0.02, 11.385); // Submerged Hinoki floor
-  const hotTubWaterMesh = addDBox(deepDynamic, 0.76, 0.03, 1.28, hotWaterMat, 3.84, yB3 + 0.44, 11.385);
+  addDBox(deepStatic, 0.10, 0.55, 1.26, hinokiMat, 3.43, yB3 + 0.245, 11.385); // West rim
+  addDBox(deepStatic, 0.09, 0.55, 1.26, hinokiMat, 4.26, yB3 + 0.245, 11.385); // Divider rim
+  addDBox(deepStatic, 0.72, 0.08, 1.24, hinokiMat, 3.84, yB3 + 0.05, 11.385); // Submerged Hinoki floor
+  const hotTubWaterMesh = addDBox(deepDynamic, 0.72, 0.03, 1.24, hotWaterMat, 3.84, yB3 + 0.44, 11.385);
   // Brass Gooseneck Spout + Floating Hinoki Tea Tray & Ceramic Cup
   addCyl(deepStatic, 0.022, 0.022, 0.24, brassMat, 3.52, yB3 + 0.66, 11.38, 10, 0, Math.PI / 2);
   addDBox(deepStatic, 0.22, 0.025, 0.30, hinokiMat, 3.92, yB3 + 0.46, 11.15);
@@ -758,9 +758,9 @@ export function buildB3fExpansion3D(ctx) {
   // South-East 14.0°C Black Basalt Deep Cold Plunge (X=4.34..5.32, Z=10.65..12.12 — 950mm Deep Pro Spec!)
   addDBox(deepStatic, 0.98, 0.58, 0.10, blackMarbleMat, 4.83, yB3 + 0.26, 10.70); // Front North coping
   addDBox(deepStatic, 0.98, 0.58, 0.10, blackMarbleMat, 4.83, yB3 + 0.26, 12.07); // Back South coping
-  addDBox(deepStatic, 0.10, 0.58, 1.47, blackMarbleMat, 5.27, yB3 + 0.26, 11.385); // East coping
-  addDBox(deepStatic, 0.09, 0.58, 1.47, blackMarbleMat, 4.38, yB3 + 0.26, 11.385); // West coping
-  addDBox(deepStatic, 0.80, 0.20, 0.34, wetBasaltMat, 4.83, yB3 + 0.14, 10.90); // Internal step!
+  addDBox(deepStatic, 0.10, 0.58, 1.26, blackMarbleMat, 5.27, yB3 + 0.26, 11.385); // East coping
+  addDBox(deepStatic, 0.09, 0.58, 1.26, blackMarbleMat, 4.38, yB3 + 0.26, 11.385); // West coping
+  addDBox(deepStatic, 0.78, 0.20, 0.34, wetBasaltMat, 4.83, yB3 + 0.14, 10.94); // Internal step!
   // Glowing Cyan IP68 Underwater LED Strip inside Deep Cold Plunge!
   addDBox(deepStatic, 0.72, 0.035, 0.035, plungeUnderwaterLedMat, 4.83, yB3 + 0.22, 12.00);
   addDBox(deepStatic, 0.035, 0.035, 1.12, plungeUnderwaterLedMat, 5.20, yB3 + 0.22, 11.38);

@@ -122,53 +122,50 @@ export function buildExtElevator3D(ctx) {
     addBox(eStatic, 0.11, totalH, 0.11, blackSteelMat, cx, S.pitY + totalH * 0.5, cz, true);
   });
 
-  // Horizontal Steel Structural Tie Beams at every floor height (1F..RF + Top Machine Head)
+  // Horizontal Steel Structural Tie Beams at every floor height (stopped cleanly between corner H-columns — ZERO corner Z-fighting!)
   const tieYs = [0.00, 2.75, 5.50, 8.15, 10.50, 13.25, 16.10, 18.40, S.topY];
   tieYs.forEach((ty) => {
-    addBox(eStatic, shaftW, 0.10, 0.09, blackSteelMat, shaftCx, ty, S.minZ + 0.05, false);
-    addBox(eStatic, shaftW, 0.10, 0.09, blackSteelMat, shaftCx, ty, S.maxZ - 0.05, false);
-    addBox(eStatic, 0.09, 0.10, shaftD, blackSteelMat, S.minX + 0.05, ty, shaftCz, false);
-    addBox(eStatic, 0.09, 0.10, shaftD, blackSteelMat, S.maxX - 0.05, ty, shaftCz, false);
+    addBox(eStatic, shaftW - 0.22, 0.095, 0.085, blackSteelMat, shaftCx, ty, S.minZ + 0.05, false);
+    addBox(eStatic, shaftW - 0.22, 0.095, 0.085, blackSteelMat, shaftCx, ty, S.maxZ - 0.05, false);
+    addBox(eStatic, 0.085, 0.095, shaftD - 0.22, blackSteelMat, S.minX + 0.05, ty, shaftCz, false);
+    addBox(eStatic, 0.085, 0.095, shaftD - 0.22, blackSteelMat, S.maxX - 0.05, ty, shaftCz, false);
   });
 
   // Panoramic Tempered Glass Shaft Glazing Panels (North, South, & West above ground door!)
-  addBox(eStatic, shaftW - 0.14, totalH - 0.4, 0.02, glassShaftMat, shaftCx, S.pitY + totalH * 0.5, S.minZ + 0.04, false);
-  addBox(eStatic, shaftW - 0.14, totalH - 0.4, 0.02, glassShaftMat, shaftCx, S.pitY + totalH * 0.5, S.maxZ - 0.04, false);
-  addBox(eStatic, 0.02, S.topY - 2.20, shaftD - 0.14, glassShaftMat, S.minX + 0.04, 2.20 + (S.topY - 2.20) * 0.5, shaftCz, false);
+  addBox(eStatic, shaftW - 0.22, totalH - 0.4, 0.018, glassShaftMat, shaftCx, S.pitY + totalH * 0.5, S.minZ + 0.04, false);
+  addBox(eStatic, shaftW - 0.22, totalH - 0.4, 0.018, glassShaftMat, shaftCx, S.pitY + totalH * 0.5, S.maxZ - 0.04, false);
+  addBox(eStatic, 0.018, S.topY - 2.20, shaftD - 0.22, glassShaftMat, S.minX + 0.04, 2.20 + (S.topY - 2.20) * 0.5, shaftCz, false);
 
   // Top MRL Traction Motor Housing Cap & Sheave Beam (Y = 18.85..19.45m)
-  addBox(eStatic, shaftW + 0.12, 0.14, shaftD + 0.12, blackSteelMat, shaftCx, S.topY + 0.07, shaftCz, true);
+  addBox(eStatic, shaftW + 0.12, 0.14, shaftD + 0.12, blackSteelMat, shaftCx, S.topY + 0.12, shaftCz, true);
   const topMotor = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.52, 16), new THREE.MeshStandardMaterial({ color: 0x244642, roughness: 0.4, metalness: 0.55 }));
   topMotor.rotation.z = Math.PI / 2;
   topMotor.position.set(shaftCx, S.topY - 0.34, shaftCz);
   eStatic.add(topMotor);
 
   // Vertical T-Section Guide Rails (North & South inside shaft)
-  addBox(eStatic, 0.06, totalH - 0.3, 0.06, darkStainlessMat, cabCx, S.pitY + totalH * 0.5, S.minZ + 0.09, false);
-  addBox(eStatic, 0.06, totalH - 0.3, 0.06, darkStainlessMat, cabCx, S.pitY + totalH * 0.5, S.maxZ - 0.09, false);
+  addBox(eStatic, 0.06, totalH - 0.3, 0.06, darkStainlessMat, cabCx, S.pitY + totalH * 0.5, S.minZ + 0.11, false);
+  addBox(eStatic, 0.06, totalH - 0.3, 0.06, darkStainlessMat, cabCx, S.pitY + totalH * 0.5, S.maxZ - 0.11, false);
 
   // ---- 2. ARCHITECTURAL ZINC-CLAD ATTIC DORMER AT RF (Y = 16.10..18.45m, X = 0.00..1.45, Z = 0.35..1.85) ----
-  // Raises the sloped 6-sun roof cleanly above the West Attic elevator doorway so protagonist walks in full-height!
   const yRF = HOUSE.atticBaseY; // 16.10
   const dormH = 2.24;
-  // Dormer side cheeks (North Z=0.35, South Z=1.85)
   addBox(eStatic, 1.38, dormH, 0.10, zincDormerMat, 0.69, yRF + dormH * 0.5, 0.38, true);
   addBox(eStatic, 1.38, dormH, 0.10, zincDormerMat, 0.69, yRF + dormH * 0.5, 1.82, true);
-  // Dormer flat-pitched zinc roof cap joining back into main roof slope
-  addBox(eStatic, 1.56, 0.10, 1.62, zincDormerMat, 0.72, yRF + dormH + 0.05, 1.10, true);
-  // Stainless landing portal jambs at 1F Ground (West X=-1.55) & RF Attic (East X=0.00)
+  addBox(eStatic, 1.56, 0.10, 1.62, zincDormerMat, 0.72, yRF + dormH + 0.055, 1.10, true);
+  // Stainless landing portal jambs (cleanly stopped below header, East portal strictly West of Main Tower X=0.00!)
   const buildPortalFrame = (px, py) => {
-    addBox(eStatic, 0.10, doorH, 0.12, darkStainlessMat, px, py + doorH * 0.5, doorCz - doorW * 0.5 - 0.06, false);
-    addBox(eStatic, 0.10, doorH, 0.12, darkStainlessMat, px, py + doorH * 0.5, doorCz + doorW * 0.5 + 0.06, false);
-    addBox(eStatic, 0.10, 0.16, doorW + 0.24, darkStainlessMat, px, py + doorH + 0.08, doorCz, false);
+    addBox(eStatic, 0.085, doorH, 0.11, darkStainlessMat, px, py + doorH * 0.5, doorCz - doorW * 0.5 - 0.055, false);
+    addBox(eStatic, 0.085, doorH, 0.11, darkStainlessMat, px, py + doorH * 0.5, doorCz + doorW * 0.5 + 0.055, false);
+    addBox(eStatic, 0.090, 0.14, doorW + 0.22, darkStainlessMat, px, py + doorH + 0.072, doorCz, false);
   };
-  buildPortalFrame(S.minX + 0.03, 0.00);
-  buildPortalFrame(S.maxX - 0.03, yRF);
+  buildPortalFrame(S.minX + 0.045, 0.00);
+  buildPortalFrame(S.maxX - 0.055, yRF);
 
   // ---- 3. INTERLOCKED LANDING DOORS (Ground 1F West & Attic RF East) ----
   const landingDoors = {};
   EXT_ELEVATOR.stops.forEach((st) => {
-    const px = st.doorSide === 'west' ? S.minX + 0.05 : S.maxX - 0.05;
+    const px = st.doorSide === 'west' ? S.minX + 0.05 : S.maxX - 0.055;
     const leafW = doorW * 0.5 - 0.01;
     const leftLeaf = new THREE.Mesh(new THREE.BoxGeometry(0.035, doorH - 0.02, leafW), stainlessMat);
     const rightLeaf = new THREE.Mesh(new THREE.BoxGeometry(0.035, doorH - 0.02, leafW), stainlessMat);
@@ -183,19 +180,19 @@ export function buildExtElevator3D(ctx) {
   cabGroup.position.set(0, 0.0, 0);
   eDynamic.add(cabGroup);
 
-  // Cab floor platform (oak deck) & ceiling slab (with warm luminous soffit)
-  addBox(cabGroup, cabW, 0.09, cabD, oakDeckMat, cabCx, -0.045, cabCz, false);
-  addBox(cabGroup, cabW + 0.04, 0.09, cabD + 0.04, blackSteelMat, cabCx, cabH + 0.045, cabCz, false);
-  addBox(cabGroup, cabW - 0.20, 0.025, cabD - 0.20, cabCeilGlowMat, cabCx, cabH - 0.015, cabCz, false);
-  // Cab corner mullions + panoramic North/South glass walls + stainless handrails
+  // Cab floor platform (oak deck) & ceiling slab (with cleanly offset warm luminous soffit)
+  addBox(cabGroup, cabW, 0.09, cabD, oakDeckMat, cabCx, -0.046, cabCz, false);
+  addBox(cabGroup, cabW + 0.04, 0.09, cabD + 0.04, blackSteelMat, cabCx, cabH + 0.046, cabCz, false);
+  addBox(cabGroup, cabW - 0.22, 0.022, cabD - 0.22, cabCeilGlowMat, cabCx, cabH - 0.015, cabCz, false);
+  // Cab corner mullions (cleanly bounded between floor & ceiling — zero slab fighting!)
   [
     [C.minX + 0.03, C.minZ + 0.03], [C.maxX - 0.03, C.minZ + 0.03],
     [C.minX + 0.03, C.maxZ - 0.03], [C.maxX - 0.03, C.maxZ - 0.03],
   ].forEach(([mx, mz]) => {
-    addBox(cabGroup, 0.05, cabH, 0.05, blackSteelMat, mx, cabH * 0.5, mz, false);
+    addBox(cabGroup, 0.048, cabH - 0.006, 0.048, blackSteelMat, mx, cabH * 0.5, mz, false);
   });
-  addBox(cabGroup, cabW - 0.08, cabH - 0.14, 0.02, glassShaftMat, cabCx, cabH * 0.5, C.minZ + 0.02, false);
-  addBox(cabGroup, cabW - 0.08, cabH - 0.14, 0.02, glassShaftMat, cabCx, cabH * 0.5, C.maxZ - 0.02, false);
+  addBox(cabGroup, cabW - 0.12, cabH - 0.14, 0.018, glassShaftMat, cabCx, cabH * 0.5, C.minZ + 0.02, false);
+  addBox(cabGroup, cabW - 0.12, cabH - 0.14, 0.018, glassShaftMat, cabCx, cabH * 0.5, C.maxZ - 0.02, false);
   addBox(cabGroup, cabW - 0.24, 0.032, 0.032, brassMat, cabCx, 0.92, C.minZ + 0.08, false);
   addBox(cabGroup, cabW - 0.24, 0.032, 0.032, brassMat, cabCx, 0.92, C.maxZ - 0.08, false);
 

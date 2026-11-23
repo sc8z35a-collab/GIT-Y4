@@ -6,17 +6,17 @@
 
 const CENTER_X = 820.0;
 const CENTER_Z = 1280.0;
-const GROUND_Y = -6.0; // +514.35m ASL sunlit river-bend mountain terrace overlooking Kurosugigawa gorge
+const GROUND_Y = -1.20; // +119.15m ASL sunlit natural river-plain terrace matching surrounding flat ground
 
 export const VILLAGE = {
   id: 'village',
   nameJp: '杉ノ郷集落',
-  subtitleJp: '標高 +514m 河岸段丘の5棟集落',
+  subtitleJp: '標高 +119m 河岸平野の5棟集落',
   centerX: CENTER_X,
   centerZ: CENTER_Z,
   groundY: GROUND_Y,
-  flatRadius: 56.0,
-  blendRadius: 195.0,
+  flatRadius: 46.0,
+  blendRadius: 145.0,
   // Main stone village lane & central plaza (relative to centerX, centerZ)
   lane: { minX: CENTER_X - 34.0, maxX: CENTER_X + 28.5, minZ: CENTER_Z - 3.6, maxZ: CENTER_Z + 3.6 },
   plaza: { minX: CENTER_X - 6.0, maxX: CENTER_X + 12.0, minZ: CENTER_Z - 7.5, maxZ: CENTER_Z + 7.5 },

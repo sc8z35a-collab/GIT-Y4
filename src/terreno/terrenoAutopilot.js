@@ -1,45 +1,45 @@
-import { TERRENO_WORLD, FOREST_ROAD_POINTS, evalMainRiver } from './terrenoConfig.js';
+import { TERRENO_WORLD, evalMainRiver } from './terrenoConfig.js';
 
 /**
- * TERRENO On-Board Autonomous Navigation Computer:
- *   - 30 Curated Safe Mountain Destinations across the 5 km × 19 km Watershed (01..30)
- *   - + 4 Live Dynamic Asset Destinations (Home/Garage, KEI-340, CON-24 Container, CAMPER-75)
- *   - Real 128×384 Terrain-Cost A* Pathfinding (prefers graded forestry road, avoids cliffs, floods, & landslides!)
- *   - Smooth Wide-Radius Trajectory Filtering & Pure-Pursuit Silent Autopilot Controller
+ * TERRENO On-Board Autonomous Navigation Computer (60 km × 60 km, 21 Roads):
+ *   - 30 Curated Countryside Waypoints across the 60 km × 60 km World & 21 Roads
+ *   - + 5 Live Dynamic Asset Destinations (Home/Garage, KEI-340, CON-24 Container, CAMPER-75, ARMOR-155)
+ *   - Real 240×240 Terrain-Cost A* Pathfinding (prefers all 21 roads, avoids water/hazards, supports free destinations!)
+ *   - Smooth Wide-Radius Trajectory Filtering & Dual-Vehicle Pure-Pursuit Autopilot (CAMPER-75 & ARMOR-155)
  */
 
-// 30 Safe Mountain Destinations spanning the full 15 km × 40 km Forestry Road (North Headwaters Z=-13100 -> Suginosato Village -> South Alps Z=+24950)
+// 30 Curated Scenic Countryside Waypoints across the 60 km × 60 km 21-Road Network
 export const AUTOPILOT_WAYPOINTS = [
-  { id: 'wp01', num: '01', nameJp: '北アルプス源流口', x: -1420, z: -13100 },
-  { id: 'wp02', num: '02', nameJp: '北奥霧氷平',       x:  -680, z: -11800 },
-  { id: 'wp03', num: '03', nameJp: '北東尾根見晴',     x:   240, z: -10600 },
-  { id: 'wp04', num: '04', nameJp: '雲海展望峠',       x:   920, z:  -9450 },
-  { id: 'wp05', num: '05', nameJp: '雲海南カーブ',     x:   320, z:  -8100 },
-  { id: 'wp06', num: '06', nameJp: '霧沢西分岐',       x:  -580, z:  -6850 },
-  { id: 'wp07', num: '07', nameJp: '白樺ヘアピン',     x: -1120, z:  -5550 },
-  { id: 'wp08', num: '08', nameJp: '西森原生林道',     x:  -740, z:  -4150 },
-  { id: 'wp09', num: '09', nameJp: '古杉北尾根',       x:  -420, z:  -2850 },
-  { id: 'wp10', num: '10', nameJp: '苔杉西沢口',       x:  -210, z:  -1550 },
-  { id: 'wp11', num: '11', nameJp: '北渓谷展望台',     x:   -85, z:   -580 },
-  { id: 'wp12', num: '12', nameJp: '拠点北アプローチ', x:   -24, z:   -180 },
-  { id: 'wp13', num: '13', nameJp: '車庫前広場',       x:    15.6, z:  -18.0 },
-  { id: 'wp14', num: '14', nameJp: '西回廊バイパス',   x:   -42, z:     24 },
-  { id: 'wp15', num: '15', nameJp: '黒杉渓谷口',       x:   -88, z:    145 },
-  { id: 'wp16', num: '16', nameJp: '翡翠淵高台',       x:    65, z:    460 },
-  { id: 'wp17', num: '17', nameJp: '朝霧沢南テラス',   x:   420, z:    840 },
-  { id: 'wp18', num: '18', nameJp: '杉ノ郷北アプローチ', x: 735, z:   1140 },
-  { id: 'wp19', num: '19', nameJp: '杉ノ郷集落(5棟)',  x:   788, z:   1280 },
-  { id: 'wp20', num: '20', nameJp: '杉ノ郷南段丘',     x:   610, z:   1880 },
-  { id: 'wp21', num: '21', nameJp: '清流沢カーブ',     x:   280, z:   2650 },
-  { id: 'wp22', num: '22', nameJp: '翡翠西尾根口',     x:  -120, z:   3850 },
-  { id: 'wp23', num: '23', nameJp: '深緑中南広場',     x:  -540, z:   5450 },
-  { id: 'wp24', num: '24', nameJp: '黒岳前衛尾根',     x: -1080, z:   7250 },
-  { id: 'wp25', num: '25', nameJp: '黒岳ブナ尾根',     x: -1620, z:   9250 },
-  { id: 'wp26', num: '26', nameJp: 'ブナ大嶺南口',     x: -1340, z:  11400 },
-  { id: 'wp27', num: '27', nameJp: '西アルプス峠口',   x:  -780, z:  13650 },
-  { id: 'wp28', num: '28', nameJp: '翠巒中岳テラス',   x:  -320, z:  16100 },
-  { id: 'wp29', num: '29', nameJp: '白雲峰展望林道',   x:   980, z:  21250 },
-  { id: 'wp30', num: '30', nameJp: '南アルプス終点',   x:   280, z:  24950 },
+  { id: 'wp01', num: '01', nameJp: '最北白樺パノラマ',   x:  -1200, z: -24200 },
+  { id: 'wp02', num: '02', nameJp: '北西丘陵ループ北',   x: -11800, z: -22800 },
+  { id: 'wp03', num: '03', nameJp: '北西森林十字路',     x: -17200, z: -16500 },
+  { id: 'wp04', num: '04', nameJp: '北部台地中央口',     x:    420, z: -16500 },
+  { id: 'wp05', num: '05', nameJp: '北東ブナ林分岐',     x:  17800, z: -16300 },
+  { id: 'wp06', num: '06', nameJp: '最北東湖畔入口',     x:  25000, z: -24400 },
+  { id: 'wp07', num: '07', nameJp: '最西牧野北口',       x: -25600, z: -12400 },
+  { id: 'wp08', num: '08', nameJp: '白樺北西合流点',     x:  -8600, z: -11600 },
+  { id: 'wp09', num: '09', nameJp: '中央環状北ゲート',   x:    220, z:  -8600 },
+  { id: 'wp10', num: '10', nameJp: '北東広葉樹林道',     x:   9200, z: -13800 },
+  { id: 'wp11', num: '11', nameJp: '西丘陵パノラマ口',   x: -17500, z:   -380 },
+  { id: 'wp12', num: '12', nameJp: '環状西テラス',       x:  -9400, z:   -620 },
+  { id: 'wp13', num: '13', nameJp: '車庫前広場',         x:     15.6, z:  -18.0 },
+  { id: 'wp14', num: '14', nameJp: '黒杉川・清流口',     x:    -55, z:   -420 },
+  { id: 'wp15', num: '15', nameJp: '杉ノ郷集落(5棟)',    x:    788, z:   1280 },
+  { id: 'wp16', num: '16', nameJp: '東岸せせらぎ原',     x:   4400, z:   1600 },
+  { id: 'wp17', num: '17', nameJp: '環状東ミスト入口',   x:   9600, z:   -320 },
+  { id: 'wp18', num: '18', nameJp: '東水郷・湿原連絡口', x:  17200, z:   4800 },
+  { id: 'wp19', num: '19', nameJp: '最東葦原レイク',     x:  26500, z:   6800 },
+  { id: 'wp20', num: '20', nameJp: '最西草原連絡口',     x: -26600, z:   6400 },
+  { id: 'wp21', num: '21', nameJp: '西丘陵草原口',       x: -16800, z:   4600 },
+  { id: 'wp22', num: '22', nameJp: '西岸リバーサイド',   x:  -3800, z:   6800 },
+  { id: 'wp23', num: '23', nameJp: '中央環状南分岐',     x:   -920, z:   9200 },
+  { id: 'wp24', num: '24', nameJp: '南西ススキ大草原',   x: -13200, z:  14200 },
+  { id: 'wp25', num: '25', nameJp: '南部草原中央交点',   x:  -1280, z:  14800 },
+  { id: 'wp26', num: '26', nameJp: '南東水辺ループ口',   x:  11800, z:  15200 },
+  { id: 'wp27', num: '27', nameJp: '南東湿原パノラマ',   x:  17800, z:  14700 },
+  { id: 'wp28', num: '28', nameJp: '最南西松原入口',     x: -17400, z:  14900 },
+  { id: 'wp29', num: '29', nameJp: '南部沖積松原口',     x:    640, z:  24200 },
+  { id: 'wp30', num: '30', nameJp: '南東松原平原',       x:  13600, z:  24600 },
 ];
 
 export const DYNAMIC_TARGETS = [
@@ -47,10 +47,11 @@ export const DYNAMIC_TARGETS = [
   { id: 'dyn_kei',       code: '軽',   kind: 'kei' },
   { id: 'dyn_container', code: '箱',   kind: 'container' },
   { id: 'dyn_camper',    code: 'RV',   kind: 'camper' },
+  { id: 'dyn_armor',     code: '装甲', kind: 'armor' },
 ];
 
-const GRID_W = 144;
-const GRID_H = 384;
+const GRID_W = 240;
+const GRID_H = 240;
 const CELL_W = TERRENO_WORLD.width / (GRID_W - 1);
 const CELL_H = TERRENO_WORLD.depth / (GRID_H - 1);
 
@@ -67,7 +68,7 @@ function gridToWorld(gx, gz) {
   ];
 }
 
-// Fast Binary Min-Heap for sub-14ms A* search across 55,296 terrain nodes
+// Fast Binary Min-Heap for sub-15ms A* search across 57,600 terrain nodes
 class MinHeap {
   constructor() {
     this.nodes = [];
@@ -111,38 +112,54 @@ class MinHeap {
   get size() { return this.nodes.length; }
 }
 
+const DEFAULT_VEHICLE_PROFILES = {
+  camper: {
+    maxSpeed: 17.5,
+    minSpeed: 3.4,
+    lookaheadMin: 10.5,
+    lookaheadMax: 26.0,
+    steerGain: 2.05,
+    arriveDist: 4.5,
+  },
+  armor: {
+    maxSpeed: 15.2,
+    minSpeed: 3.2,
+    lookaheadMin: 14.0,
+    lookaheadMax: 34.0,
+    steerGain: 1.85,
+    arriveDist: 5.5,
+  },
+};
+
 export function createTerrenoAutopilot(geomorph, storm) {
   let baseCostGrid = null;
 
   function ensureNavGrid() {
     if (baseCostGrid) return baseCostGrid;
     baseCostGrid = new Float32Array(GRID_W * GRID_H);
-    const roadSnapBand = Math.max(58.0, Math.hypot(CELL_W, CELL_H) * 0.85);
+    const roadSnapBand = Math.max(150.0, Math.hypot(CELL_W, CELL_H) * 0.72);
     for (let gz = 0; gz < GRID_H; gz++) {
       for (let gx = 0; gx < GRID_W; gx++) {
         const [wx, wz] = gridToWorld(gx, gz);
         const idx = gz * GRID_W + gx;
         const g = geomorph.sampleGeoBilinear(wx, wz);
-        const mn = geomorph.getMacroNormalAt(wx, wz, 6.0);
+        const mn = geomorph.getMacroNormalAt(wx, wz, 8.0);
         const rv = evalMainRiver(wz);
         const distRiv = Math.abs(wx - rv.x);
-        const inRiver = distRiv < rv.halfWidth * 1.45 && g.hMacro < rv.waterY + 1.2;
-        const rq = geomorph.roadIndex ? geomorph.roadIndex.queryDist(wx, wz) : { dist: 999 };
-        const onRoadCorridor = g.roadPad > 0.20 || rq.dist < roadSnapBand;
+        const inRiver = distRiv < rv.halfWidth * 1.25 && g.hMacro < rv.waterY + 1.0;
+        const rq = geomorph.roadIndex ? geomorph.roadIndex.queryDist(wx, wz) : { dist: 9999 };
+        const onRoadCorridor = g.roadPad > 0.16 || rq.dist < roadSnapBand;
 
         let cost = 1.0;
         if (onRoadCorridor) {
-          // Strong safe preference for continuous graded 40 km forestry road corridor!
+          // Strong safe preference for all 21 terrain-conforming countryside roads!
           cost = 0.14 + (Math.min(rq.dist, roadSnapBand) / roadSnapBand) * 0.08;
         } else if (inRiver) {
-          cost = 65.0;
-        } else if (mn.slope > 0.54) {
-          // Steep cliff: impassable for safe autonomous routing!
-          cost = 1e6;
-        } else if (mn.slope > 0.34) {
-          cost = 2.8 + (mn.slope - 0.34) * 28.0;
+          cost = 32.0;
+        } else if (mn.slope > 0.45) {
+          cost = 12.0 + (mn.slope - 0.45) * 40.0;
         } else {
-          cost = 1.25 + mn.slope * 2.4;
+          cost = 1.15 + mn.slope * 2.2;
         }
         baseCostGrid[idx] = cost;
       }
@@ -151,21 +168,24 @@ export function createTerrenoAutopilot(geomorph, storm) {
   }
 
   /**
-   * Compute a safe drivable route from (startX, startZ) to (goalX, goalZ) avoiding cliffs,
-   * deep flooded channels, and active landslides, preferring the graded mountain road!
+   * Compute a safe drivable route from (startX, startZ) to ANY free destination (goalX, goalZ)
+   * across the 60 km × 60 km world, preferring the 21-road network and avoiding floods/hazards.
    */
   function computeSafeRoute(startX, startZ, goalX, goalZ) {
+    const clampedGoalX = Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, goalX));
+    const clampedGoalZ = Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, goalZ));
+
+    if (Math.hypot(clampedGoalX - startX, clampedGoalZ - startZ) < 42.0) {
+      return [[startX, startZ], [clampedGoalX, clampedGoalZ]];
+    }
+
     const grid = ensureNavGrid();
     const N = GRID_W * GRID_H;
     const [sx, sz] = worldToGrid(startX, startZ);
-    const [ex, ez] = worldToGrid(goalX, goalZ);
+    const [ex, ez] = worldToGrid(clampedGoalX, clampedGoalZ);
 
     const startIdx = sz * GRID_W + sx;
     const goalIdx = ez * GRID_W + ex;
-
-    if (Math.hypot(goalX - startX, goalZ - startZ) < 42.0) {
-      return [[startX, startZ], [goalX, goalZ]];
-    }
 
     const gScore = new Float32Array(N);
     gScore.fill(1e12);
@@ -175,7 +195,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
 
     const heap = new MinHeap();
     gScore[startIdx] = 0;
-    const hScale = 0.13; // Admissible heuristic matched to minimum road corridor cost!
+    const hScale = 0.13;
     const heuristic = (gx, gz) => Math.hypot((gx - ex) * CELL_W, (gz - ez) * CELL_H) * hScale;
     heap.push(startIdx, heuristic(sx, sz));
 
@@ -192,7 +212,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
     let bestNode = startIdx;
     let bestRemDist = Math.hypot((sx - ex) * CELL_W, (sz - ez) * CELL_H);
     let iterations = 0;
-    const maxIter = 36000;
+    const maxIter = 45000;
 
     while (heap.size > 0 && iterations++ < maxIter) {
       const cur = heap.pop();
@@ -223,13 +243,12 @@ export function createTerrenoAutopilot(geomorph, storm) {
         let cellCost = grid[nIdx];
         if (cellCost >= 1e5 && nIdx !== goalIdx) continue;
 
-        // Dynamic live flood & active landslide hazard avoidance!
         if (stormActive) {
           const [nwx, nwz] = gridToWorld(nx, nz);
           if (floodRise > 0.8) {
             const rv = evalMainRiver(nwz);
-            if (Math.abs(nwx - rv.x) < rv.halfWidth + floodRise * 9.0) {
-              cellCost += 28.0;
+            if (Math.abs(nwx - rv.x) < rv.halfWidth + floodRise * 8.0) {
+              cellCost += 24.0;
             }
           }
           for (let s = 0; s < activeSlides.length; s++) {
@@ -260,36 +279,28 @@ export function createTerrenoAutopilot(geomorph, storm) {
       node = cameFrom[node];
     }
     rawPts.reverse();
-    if (rawPts.length === 0) return [[startX, startZ], [goalX, goalZ]];
+    if (rawPts.length === 0) return [[startX, startZ], [clampedGoalX, clampedGoalZ]];
 
-    // Anchor exact start & goal points and snap road-proximate points directly onto crisp forestry road centerline!
+    // Anchor exact start & goal points and snap road-proximate nodes onto ANY of the 21 road centerlines!
     rawPts[0] = [startX, startZ];
-    rawPts[rawPts.length - 1] = [goalX, goalZ];
+    rawPts[rawPts.length - 1] = [clampedGoalX, clampedGoalZ];
 
     for (let i = 1; i < rawPts.length - 1; i++) {
       const rq = geomorph.roadIndex.queryDist(rawPts[i][0], rawPts[i][1]);
-      if (rq.dist < 38.0 && rq.segIdx >= 0) {
-        const a = geomorph.roadDense[rq.segIdx];
-        const b = geomorph.roadDense[rq.segIdx + 1];
-        const rx = a[0] + (b[0] - a[0]) * rq.t;
-        const rz = a[1] + (b[1] - a[1]) * rq.t;
-        // Blend cleanly onto graded road center!
+      if (rq.dist < 145.0 && rq.roadIdx >= 0) {
+        const rx = rq.ax + (rq.bx - rq.ax) * rq.t;
+        const rz = rq.az + (rq.bz - rq.az) * rq.t;
         rawPts[i] = [rx, rz];
       }
     }
 
-    // If starting inside the 10x20m Garage (X=12..22, Z=-6..14), inject clean straight North exit point (-14m)!
-    if (startX >= 11.5 && startX <= 22.5 && startZ >= -6.5 && startZ <= 14.5) {
-      rawPts.splice(1, 0, [15.6, -15.0], [1.5, -22.0]);
-    }
-
-    // Chaikin corner-smoothing pass for wide turning radius suitable for 15.5m armored camper + trailer!
+    // Chaikin corner-smoothing pass for wide turning radius suitable for both campers
     const smoothOnce = (pts) => {
       if (pts.length <= 2) return pts;
       const out = [pts[0]];
       for (let i = 0; i < pts.length - 1; i++) {
         const p0 = pts[i], p1 = pts[i + 1];
-        if (Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 8.0) {
+        if (Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) < 10.0) {
           out.push(p1);
           continue;
         }
@@ -300,37 +311,88 @@ export function createTerrenoAutopilot(geomorph, storm) {
       return out;
     };
 
-    let smoothed = smoothOnce(rawPts);
-    // Resample to clean ~14m spacing
+    const smoothed = smoothOnce(rawPts);
+    // Resample to clean ~18m spacing (subdividing long 250m legs smoothly!)
     const resampled = [smoothed[0]];
     for (let i = 1; i < smoothed.length; i++) {
       const prev = resampled[resampled.length - 1];
       const cur = smoothed[i];
-      if (Math.hypot(cur[0] - prev[0], cur[1] - prev[1]) >= 12.0 || i === smoothed.length - 1) {
+      const segLen = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
+      if (segLen > 38.0) {
+        const subSteps = Math.min(24, Math.ceil(segLen / 24.0));
+        for (let s = 1; s <= subSteps; s++) {
+          const u = s / subSteps;
+          let sxPt = prev[0] + (cur[0] - prev[0]) * u;
+          let szPt = prev[1] + (cur[1] - prev[1]) * u;
+          if (i < smoothed.length - 1) {
+            const rq = geomorph.roadIndex.queryDist(sxPt, szPt);
+            if (rq.dist < 26.0 && rq.roadIdx >= 0) {
+              sxPt = rq.ax + (rq.bx - rq.ax) * rq.t;
+              szPt = rq.az + (rq.bz - rq.az) * rq.t;
+            }
+          }
+          resampled.push([sxPt, szPt]);
+        }
+      } else if (segLen >= 12.0 || i === smoothed.length - 1) {
         resampled.push(cur);
       }
+    }
+
+    // Prepend exact unsmoothed bay pull-out points so vehicles exit compound bays cleanly
+    if (startX >= 11.5 && startX <= 22.5 && startZ >= -6.5 && startZ <= 14.5) {
+      resampled.splice(1, 0, [15.6, -16.5], [1.5, -26.0]);
+    } else if (startX >= 5.0 && startX <= 11.5 && startZ >= 0.0 && startZ <= 14.5) {
+      resampled.splice(1, 0, [7.75, 18.2], [1.5, 25.0]);
     }
     return resampled;
   }
 
   /**
-   * Pure-Pursuit Silent Autopilot Controller for ARMOR-155 (returns throttle [-1..1], steer [-1..1], arrived).
+   * Generate a smooth forward cruise route when autopilot is switched ON from the driver's seat
+   * without a map destination yet — follows the road ahead or cruises straight gently!
    */
-  function evaluateDrivingControl(pose, speed, routeState, grip = 0.95) {
+  function buildCruiseAheadRoute(startX, startZ, yaw, cruiseDist = 2400) {
+    const fwdX = -Math.sin(yaw);
+    const fwdZ = -Math.cos(yaw);
+    const goalX = Math.max(TERRENO_WORLD.playMinX + 40, Math.min(TERRENO_WORLD.playMaxX - 40, startX + fwdX * cruiseDist));
+    const goalZ = Math.max(TERRENO_WORLD.playMinZ + 40, Math.min(TERRENO_WORLD.playMaxZ - 40, startZ + fwdZ * cruiseDist));
+    return computeSafeRoute(startX, startZ, goalX, goalZ);
+  }
+
+  /**
+   * Pure-Pursuit Silent Autopilot Controller for CAMPER-75 & ARMOR-155
+   * Returns { throttle [-1..1], steer [-1..1], arrived }.
+   */
+  function evaluateDrivingControl(pose, speed, routeState, grip = 0.95, vehicleKey = 'armor') {
     if (!routeState || !routeState.points || routeState.points.length < 2) {
       return { throttle: 0, steer: 0, arrived: true };
     }
+    const prof = DEFAULT_VEHICLE_PROFILES[vehicleKey] || DEFAULT_VEHICLE_PROFILES.armor;
     const pts = routeState.points;
     const goal = pts[pts.length - 1];
     const distToGoal = Math.hypot(goal[0] - pose.cx, goal[1] - pose.cz);
-    if (distToGoal < 5.5) {
+    if (distToGoal < prof.arriveDist) {
       return { throttle: 0, steer: 0, arrived: true };
+    }
+
+    // 1. Precision Reverse Pull-Out when CAMPER-75 is inside its East compound bay (Storage-4 sits directly North!)
+    if (pose.cx >= 5.0 && pose.cx <= 11.8 && pose.cz >= 0.0 && pose.cz < 16.8 && distToGoal > 12.0) {
+      if (Math.cos(pose.yaw) > -0.2) {
+        const steerCenter = Math.max(-0.22, Math.min(0.22, (7.75 - pose.cx) * 0.25 - Math.sin(pose.yaw) * 0.9));
+        return { throttle: -0.92, steer: steerCenter, arrived: false };
+      }
+    }
+
+    // 2. Precision Straight North Pull-Out when ARMOR-155 is inside GARAGE-200
+    if (pose.cx >= 11.8 && pose.cx <= 22.2 && pose.cz >= -11.5 && pose.cz <= 14.5 && distToGoal > 14.0) {
+      const steerCenter = Math.max(-0.25, Math.min(0.25, -(15.60 - pose.cx) * 0.25 - Math.sin(pose.yaw) * 0.9));
+      return { throttle: 0.88, steer: steerCenter, arrived: false };
     }
 
     // Advance nearest path cursor monotonically
     let cursor = routeState.cursor || 0;
     let bestD = Infinity;
-    const searchEnd = Math.min(pts.length - 1, cursor + 16);
+    const searchEnd = Math.min(pts.length - 1, cursor + 22);
     for (let i = cursor; i <= searchEnd; i++) {
       const d = Math.hypot(pts[i][0] - pose.cx, pts[i][1] - pose.cz);
       if (d < bestD) {
@@ -340,8 +402,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
     }
     routeState.cursor = cursor;
 
-    // Pick dynamic lookahead target (14m .. 34m ahead depending on speed & vehicle length!)
-    const lookaheadDist = Math.max(14.0, Math.min(34.0, 14.0 + Math.abs(speed) * 1.15));
+    const lookaheadDist = Math.max(prof.lookaheadMin, Math.min(prof.lookaheadMax, prof.lookaheadMin + Math.abs(speed) * 1.12));
     let targetPt = goal;
     let accum = 0;
     for (let i = cursor; i < pts.length - 1; i++) {
@@ -353,7 +414,6 @@ export function createTerrenoAutopilot(geomorph, storm) {
       }
     }
 
-    // Transform target vector into vehicle local coordinates (Forward = (-sin(yaw), -cos(yaw)), Right = (cos(yaw), -sin(yaw)))
     const dx = targetPt[0] - pose.cx;
     const dz = targetPt[1] - pose.cz;
     const sinY = Math.sin(pose.yaw);
@@ -362,20 +422,16 @@ export function createTerrenoAutopilot(geomorph, storm) {
     const localRight = cosY * dx - sinY * dz;
     const headingErr = Math.atan2(localRight, Math.max(0.5, localFwd));
 
-    // Steering command (+1 turns Left, -1 turns Right — matches vehicle steering convention!)
-    let steerCmd = Math.max(-1, Math.min(1, -headingErr * 1.85));
-
-    // If target is behind us (e.g. tight turnaround), turn sharply while creeping forward/reverse safely
+    let steerCmd = Math.max(-1, Math.min(1, -headingErr * prof.steerGain));
     let throttleCmd = 0.85;
     if (localFwd < -2.0 && distToGoal > 10.0) {
       steerCmd = localRight >= 0 ? -1.0 : 1.0;
       throttleCmd = 0.42;
     } else {
-      // Modulate target cruising speed smoothly by curvature, grip (storm!), and approach distance
       const curveSlow = 1.0 - Math.min(0.62, Math.abs(headingErr) * 0.65);
-      const gripSlow = 0.52 + 0.48 * Math.max(0.2, Math.min(1.0, grip));
+      const gripSlow = 0.55 + 0.45 * Math.max(0.25, Math.min(1.0, grip));
       const approachSlow = Math.min(1.0, distToGoal / 28.0);
-      const desiredSpeed = Math.max(3.2, 14.5 * curveSlow * gripSlow * approachSlow);
+      const desiredSpeed = Math.max(prof.minSpeed, prof.maxSpeed * curveSlow * gripSlow * approachSlow);
       if (speed < desiredSpeed - 0.6) throttleCmd = Math.min(1.0, (desiredSpeed - speed) * 0.28 + 0.35);
       else if (speed > desiredSpeed + 1.2) throttleCmd = -0.35;
       else throttleCmd = 0.18;
@@ -388,6 +444,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
     waypoints: AUTOPILOT_WAYPOINTS,
     dynamicTargets: DYNAMIC_TARGETS,
     computeSafeRoute,
+    buildCruiseAheadRoute,
     evaluateDrivingControl,
   };
 }

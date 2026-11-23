@@ -249,7 +249,7 @@ export const ARMOR_CAMPER_PLAN = {
     {
       id: 'WAM_N', axis: 'h', x1: 0, z1: 0, x2: 3.10, z2: 0.12, kind: 'ext', extTex: 'armor_steel_plate', intTex: 'secret_cedar_plank',
       openings: [
-        { id: 'WAM-WIN-F', type: 'window', pos: 0.35, width: 2.40, height: 0.68, sill: 1.24, hasIronShutter: true, label: '防弾フロントスリット窓（電動鉄シャッター付）' },
+        { id: 'WAM-WIN-F', type: 'window', pos: 0.28, width: 2.54, height: 0.96, sill: 1.02, hasIronShutter: true, label: '防弾フロントパノラマ窓（電動鉄シャッター付）' },
       ],
     },
     {

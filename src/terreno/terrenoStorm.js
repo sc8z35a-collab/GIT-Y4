@@ -11,14 +11,14 @@ import { TERRENO_WORLD, evalMainRiver } from './terrenoConfig.js';
  */
 
 export const LANDSLIDE_SITES = [
-  { id: 'ls_1', x:  -88, z:  -590,  radius: 13.5, peakH: 1.55, slopeDirX: 0.85,  slopeDirZ: 0.25 },
-  { id: 'ls_2', x: -215, z: -1580,  radius: 14.5, peakH: 1.75, slopeDirX: 0.88,  slopeDirZ: -0.20 },
-  { id: 'ls_3', x: -745, z: -4180,  radius: 15.0, peakH: 1.80, slopeDirX: 0.76,  slopeDirZ: 0.42 },
-  { id: 'ls_4', x:  905, z: -9420,  radius: 14.0, peakH: 1.70, slopeDirX: -0.82, slopeDirZ: 0.30 },
-  { id: 'ls_5', x:  432, z:   860,  radius: 13.5, peakH: 1.60, slopeDirX: 0.90,  slopeDirZ: 0.15 },
-  { id: 'ls_6', x:  290, z:  2680,  radius: 14.5, peakH: 1.75, slopeDirX: 0.86,  slopeDirZ: 0.22 },
-  { id: 'ls_7', x: -550, z:  5490,  radius: 15.0, peakH: 1.85, slopeDirX: 0.80,  slopeDirZ: -0.32 },
-  { id: 'ls_8', x: -1610, z: 9290,  radius: 16.0, peakH: 1.95, slopeDirX: 0.84,  slopeDirZ: 0.28 },
+  { id: 'ls_1', x:  -58, z:  -430,  radius: 11.5, peakH: 1.05, slopeDirX: 0.85,  slopeDirZ: 0.25 },
+  { id: 'ls_2', x: -185, z: -1260,  radius: 12.0, peakH: 1.15, slopeDirX: 0.88,  slopeDirZ: -0.20 },
+  { id: 'ls_3', x: -685, z: -5560,  radius: 12.5, peakH: 1.20, slopeDirX: 0.76,  slopeDirZ: 0.42 },
+  { id: 'ls_4', x:  435, z: -16510, radius: 12.5, peakH: 1.20, slopeDirX: -0.82, slopeDirZ: 0.30 },
+  { id: 'ls_5', x:  425, z:   850,  radius: 11.5, peakH: 1.05, slopeDirX: 0.90,  slopeDirZ: 0.15 },
+  { id: 'ls_6', x:  250, z:  3210,  radius: 12.0, peakH: 1.15, slopeDirX: 0.86,  slopeDirZ: 0.22 },
+  { id: 'ls_7', x: -290, z:  5810,  radius: 12.5, peakH: 1.20, slopeDirX: 0.80,  slopeDirZ: -0.32 },
+  { id: 'ls_8', x: -1290, z: 14810, radius: 13.0, peakH: 1.25, slopeDirX: 0.84,  slopeDirZ: 0.28 },
 ];
 
 const RAIN_VERT = /* glsl */ `
@@ -31,11 +31,19 @@ const RAIN_VERT = /* glsl */ `
   uniform vec3 uWind;
 
   varying float vAlpha;
+  #ifdef USE_LOGDEPTHBUF
+    varying float vFragDepth;
+    varying float vIsPerspective;
+  #endif
 
   void main() {
     if (uIntensity < 0.02) {
       gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
       vAlpha = 0.0;
+      #ifdef USE_LOGDEPTHBUF
+        vFragDepth = 1.0 + gl_Position.w;
+        vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+      #endif
       return;
     }
 
@@ -61,6 +69,10 @@ const RAIN_VERT = /* glsl */ `
     float distFade = (1.0 - smoothstep(14.0, 25.0, dist)) * smoothstep(1.1, 2.8, dist);
     vAlpha = distFade * uIntensity * (1.0 - abs(aQuad.y - 0.5) * 1.4) * 0.52;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    #ifdef USE_LOGDEPTHBUF
+      vFragDepth = 1.0 + gl_Position.w;
+      vIsPerspective = float( projectionMatrix[ 2 ][ 3 ] == - 1.0 );
+    #endif
   }
 `;
 
@@ -68,10 +80,12 @@ const RAIN_FRAG = /* glsl */ `
   precision highp float;
   uniform float uLightning;
   varying float vAlpha;
+  #include <logdepthbuf_pars_fragment>
   void main() {
     if (vAlpha < 0.01) discard;
     vec3 col = mix(vec3(0.68, 0.76, 0.86), vec3(0.96, 0.98, 1.0), clamp(uLightning, 0.0, 1.0));
     gl_FragColor = vec4(col, vAlpha);
+    #include <logdepthbuf_fragment>
   }
 `;
 
