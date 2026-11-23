@@ -627,6 +627,13 @@ void main() {
   if (vWorldPos.x > -0.16 && vWorldPos.x < 5.16 && vWorldPos.z > -0.16 && vWorldPos.z < 10.16) {
     discard;
   }
+  // 0b. Exact NULL EREA Underground 40m Launch Silo Aperture & High-Speed Elevator Shaft Cutouts
+  if (vWorldPos.x > -10.02 && vWorldPos.x < 10.02 && vWorldPos.z > 29888.98 && vWorldPos.z < 29931.02) {
+    discard;
+  }
+  if (vWorldPos.x > -26.22 && vWorldPos.x < -23.78 && vWorldPos.z > 29908.78 && vWorldPos.z < 29911.22) {
+    discard;
+  }
 
   vec2 xz = vWorldPos.xz;
   float dist = vCamDist;
@@ -757,7 +764,8 @@ void main() {
   albedo = mix(albedo, colVillageYard, isVillageYard * 0.86);
 
   // 5. Far-Distance (> 180m .. 60,000m) Multi-Biome Canopy & Open Prairie Mosaic
-  float farCanopyBlend = smoothstep(165.0, 480.0, dist) * canopyDensity * (1.0 - rockMask * 0.65) * (1.0 - isRoad) * (1.0 - isVillageYard * 0.92);
+  float isNullPad = evalSouthRectWeight(xz);
+  float farCanopyBlend = smoothstep(165.0, 480.0, dist) * canopyDensity * (1.0 - rockMask * 0.65) * (1.0 - isRoad) * (1.0 - isVillageYard * 0.92) * (1.0 - isNullPad);
   if (farCanopyBlend > 0.01) {
     float c1 = glslNoise(xz * 0.095);
     float c2 = glslNoise(xz * 0.24 + vec2(31.2, -19.7));

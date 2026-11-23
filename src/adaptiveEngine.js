@@ -98,7 +98,26 @@ export class AdaptiveMobileEngine {
     const villageNearSet = nearVillage ? this._getNearestVillageLightSet(playerX, playerZ, 5) : null;
     for (const entry of this.house.interiorLights) {
       const b = entry.light.userData.building
-        || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' ? entry.zone : 'main');
+        || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' || entry.zone === 'null_hangar' || entry.zone === 'null_elv' || entry.zone === 'k11' ? entry.zone : 'main');
+      if (b === 'null_hangar') {
+        const nearNull = Math.hypot(playerX - 0.0, playerZ - 29910.0) < 95.0;
+        const activeNH = nearNull && (floorIdx === -40 || activeBuilding === 'null_hangar' || activeBuilding === 'k11');
+        entry.light.intensity = activeNH ? entry.baseInt : 0;
+        entry.light.visible = activeNH;
+        continue;
+      }
+      if (b === 'null_elv') {
+        const nearNullElv = Math.hypot(playerX + 25.0, playerZ - 29910.0) < 12.0;
+        entry.light.intensity = nearNullElv ? entry.baseInt : 0;
+        entry.light.visible = nearNullElv;
+        continue;
+      }
+      if (b === 'k11') {
+        const activeK11 = activeBuilding === 'k11';
+        entry.light.intensity = activeK11 ? entry.baseInt : 0;
+        entry.light.visible = activeK11;
+        continue;
+      }
       if (b === 'village') {
         const activeV = Boolean(villageNearSet && villageNearSet.has(entry.name));
         entry.light.intensity = activeV ? entry.baseInt : 0;
@@ -243,10 +262,22 @@ export class AdaptiveMobileEngine {
       }
 
       const b = entry.light.userData.building
-        || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' ? entry.zone : 'main');
+        || (entry.zone === 'garage' || entry.zone === 'armor' || entry.zone === 'ext_elv' || entry.zone === 'null_hangar' || entry.zone === 'null_elv' || entry.zone === 'k11' ? entry.zone : 'main');
       let weight = 0.0;
 
-      if (b === 'village') {
+      if (b === 'null_hangar') {
+        const nearNull = Math.hypot(playerX - 0.0, playerZ - 29910.0) < 95.0;
+        if (nearNull && (currentFloor === -40 || activeBuilding === 'null_hangar')) weight = 1.0;
+        else if (nearNull && activeBuilding === 'k11') weight = 0.85;
+        else if (nearNull && this.house.nullErea && !this.house.nullErea.silo.isRoofSealed()) weight = 0.72;
+      } else if (b === 'null_elv') {
+        if (Math.hypot(playerX + 25.0, playerZ - 29910.0) < 14.0) weight = 1.0;
+      } else if (b === 'k11') {
+        const kp = this.house.airshipK11?.pose;
+        const nearK11 = kp && Math.hypot(playerX - kp.cx, playerZ - kp.cz) < 24.0;
+        if (activeBuilding === 'k11') weight = 1.0;
+        else if (nearK11) weight = 0.65;
+      } else if (b === 'village') {
         if (villageNearSet && villageNearSet.has(entry.name)) {
           weight = 1.0;
         }

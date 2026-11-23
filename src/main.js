@@ -33,11 +33,22 @@ const btnEnterLandscape = document.getElementById('btn-enter-landscape');
 const perfPanel = document.getElementById('perf-panel');
 const perfGrid = document.getElementById('perf-grid');
 
+const statusToastEl = document.getElementById('status-toast');
 const driveHudEl = document.getElementById('drive-hud');
 const driveSpeedValEl = document.getElementById('drive-speed-val');
 const btnDriveAuto = document.getElementById('btn-drive-auto');
 const btnDriveCam = document.getElementById('btn-drive-cam');
 const btnDriveExit = document.getElementById('btn-drive-exit');
+const k11FlightControls = document.getElementById('k11-flight-controls');
+const k11AltValEl = document.getElementById('k11-alt-val');
+const k11FuelValEl = document.getElementById('k11-fuel-val');
+const k11WindValEl = document.getElementById('k11-wind-val');
+const btnK11Up = document.getElementById('btn-k11-up');
+const btnK11Down = document.getElementById('btn-k11-down');
+const btnK11Silo = document.getElementById('btn-k11-silo');
+const btnK11Refuel = document.getElementById('btn-k11-refuel');
+const btnK11CallRv = document.getElementById('btn-k11-call-rv');
+const btnK11CallArmor = document.getElementById('btn-k11-call-armor');
 const autopilotStopChip = document.getElementById('autopilot-stop-chip');
 const autopilotStopLabel = document.getElementById('autopilot-stop-label');
 
@@ -52,6 +63,7 @@ const btnMap3dFocus = document.getElementById('btn-map3d-focus');
 const btnMap3dOrbit = document.getElementById('btn-map3d-orbit');
 const btnMap3dVehRv = document.getElementById('btn-map3d-veh-rv');
 const btnMap3dVehArmor = document.getElementById('btn-map3d-veh-armor');
+const btnMap3dVehK11 = document.getElementById('btn-map3d-veh-k11');
 const cadMapBody = document.getElementById('cad-map-body');
 const blueprintViewport = document.getElementById('blueprint-viewport');
 const bpToolsGroup = document.getElementById('bp-tools-group');
@@ -65,19 +77,34 @@ let settingsVisible = false;
 let perfVisible = false;
 let isDriving = false;
 let hasActiveAutopilot = false;
-let selectedAutopilotVehicle = 'camper'; // 'camper' | 'armor'
-let activeSheetIdx = 30; // 30 = Full-Screen 3D Map, 31 = Authentic 2D Route Map, 0..22 = 23 CAD Blueprints
+let selectedAutopilotVehicle = 'camper'; // 'camper' | 'armor' | 'k11'
+let activeSheetIdx = 30; // 30 = Full-Screen 3D Map, 31 = Authentic 2D Route Map, 0..24 = 25 CAD Blueprints
 let map3dOrbitMode = false;
 let terrenoMap2d = null;
 let bpScale = 1.0;
 let bpPanX = 0;
 let bpPanY = 0;
+let toastTimer = null;
 let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, yaw: Math.PI, todId: 'day', dx: 0, dz: 1 };
 
+function showStatusToast(message, kind = 'info') {
+  if (!statusToastEl || !message) return;
+  statusToastEl.textContent = message;
+  statusToastEl.classList.remove('hidden', 'toast-warn', 'toast-ok');
+  if (kind === 'warn' || kind === 'error') statusToastEl.classList.add('toast-warn');
+  else if (kind === 'ok' || kind === 'success') statusToastEl.classList.add('toast-ok');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    statusToastEl.classList.add('hidden');
+    toastTimer = null;
+  }, 4200);
+}
+
 function setSelectedAutopilotVehicle(v) {
-  selectedAutopilotVehicle = v === 'armor' ? 'armor' : 'camper';
+  selectedAutopilotVehicle = (v === 'armor' || v === 'k11') ? v : 'camper';
   if (btnMap3dVehRv) btnMap3dVehRv.classList.toggle('active', selectedAutopilotVehicle === 'camper');
   if (btnMap3dVehArmor) btnMap3dVehArmor.classList.toggle('active', selectedAutopilotVehicle === 'armor');
+  if (btnMap3dVehK11) btnMap3dVehK11.classList.toggle('active', selectedAutopilotVehicle === 'k11');
   if (explorer && explorer.setSelectedAutopilotVehicle) {
     explorer.setSelectedAutopilotVehicle(selectedAutopilotVehicle);
   }
@@ -455,16 +482,20 @@ function toggleMap(force = null) {
   btnMap.classList.toggle('active', mapVisible);
   if (mapVisible) {
     if (settingsVisible) toggleSettings(false);
+    let defaultSheet = activeSheetIdx === 31 ? 31 : 30;
     if (explorer) {
       explorer.setMapOpen(true);
-      // Pre-select whichever camper the player is driving or inside!
-      if (explorer.drivingVehicle === 'armor' || explorer.activeBuilding === 'armor') {
+      // Pre-select whichever vehicle/airship the player is piloting or inside!
+      if (explorer.drivingVehicle === 'k11' || explorer.activeBuilding === 'k11') {
+        setSelectedAutopilotVehicle('k11');
+        if (explorer.drivingVehicle === 'k11') defaultSheet = 31;
+      } else if (explorer.drivingVehicle === 'armor' || explorer.activeBuilding === 'armor') {
         setSelectedAutopilotVehicle('armor');
       } else if (explorer.drivingVehicle === 'camper' || explorer.activeBuilding === 'camper') {
         setSelectedAutopilotVehicle('camper');
       }
     }
-    selectBlueprintFloor(activeSheetIdx === 31 ? 31 : 30);
+    selectBlueprintFloor(defaultSheet);
   } else {
     if (explorer) {
       explorer.setMap3DMode(false);
@@ -499,6 +530,7 @@ function togglePerf(force = null) {
 function updateDriveHUD(driving, state = {}) {
   isDriving = driving;
   hasActiveAutopilot = Boolean(state.autopilotActive);
+  const isK11 = driving && state.vehicle === 'k11';
   if (!mapVisible) {
     driveHudEl.classList.toggle('hidden', !driving);
     mobileActionsEl.classList.toggle('hidden', driving);
@@ -506,25 +538,35 @@ function updateDriveHUD(driving, state = {}) {
       autopilotStopChip.classList.toggle('hidden', driving || !hasActiveAutopilot);
     }
   }
+  if (k11FlightControls) k11FlightControls.classList.toggle('hidden', !isK11);
   btnDriveExitSettings.classList.toggle('hidden', !driving);
   if (driving) {
     driveSpeedValEl.textContent = String(state.speedKmh ?? 0);
+    if (isK11) {
+      if (k11AltValEl) k11AltValEl.textContent = String(state.altAgl ?? 0);
+      if (k11FuelValEl) k11FuelValEl.textContent = Number(state.fuelL ?? 100).toFixed(1);
+      if (k11WindValEl) k11WindValEl.textContent = String(state.windKmh ?? 0);
+      if (btnK11Silo) btnK11Silo.classList.toggle('hidden', !state.nearSilo);
+      if (btnK11Refuel) btnK11Refuel.classList.toggle('hidden', !state.canRefuel);
+    }
     if (btnDriveAuto) {
-      const canAuto = state.canAutopilot !== false && (state.vehicle === 'camper' || state.vehicle === 'armor');
+      const canAuto = state.canAutopilot !== false && (state.vehicle === 'camper' || state.vehicle === 'armor' || state.vehicle === 'k11');
       btnDriveAuto.classList.toggle('hidden', !canAuto);
       btnDriveAuto.classList.toggle('active', Boolean(state.autopilotActive));
-      btnDriveAuto.textContent = state.autopilotActive ? '自動ON' : '自動運転';
+      btnDriveAuto.textContent = state.autopilotActive ? (isK11 ? '自動航行ON' : '自動ON') : (isK11 ? '自動航行' : '自動運転');
     }
     if (btnDriveCam) {
-      const modeLabel = state.camMode === 'hood' ? '前方' : (state.camMode === 'chase' ? '後方' : '運転席');
+      const modeLabel = state.camMode === 'hood' ? (isK11 ? '機首' : '前方') : (state.camMode === 'chase' ? '後方' : (isK11 ? '操縦席' : '運転席'));
       btnDriveCam.textContent = `視点:${modeLabel}`;
     }
+    if (btnDriveExit) btnDriveExit.textContent = isK11 ? '離席' : '降車';
     if (toggleLight) toggleLight.checked = Boolean(state.headlightsOn);
   } else {
     if (autopilotStopLabel && hasActiveAutopilot) {
-      autopilotStopLabel.textContent = state.ridingAutopilot
-        ? '自動走行中（乗船中）・停止'
-        : 'キャンピングカー自動走行中・停止';
+      if (state.ridingAutopilot === 'k11') autopilotStopLabel.textContent = 'K-11 自動飛行中（乗船中）・停止';
+      else if (state.autopilotK11) autopilotStopLabel.textContent = 'K-11 自動飛行中・停止';
+      else if (state.ridingAutopilot) autopilotStopLabel.textContent = '自動走行中（乗船中）・停止';
+      else autopilotStopLabel.textContent = 'キャンピングカー自動走行中・停止';
     }
     if (toggleLight && explorer) toggleLight.checked = Boolean(explorer.flashlightOn);
   }
@@ -558,6 +600,7 @@ try {
       }
     },
     onDriveChange: (driving, state) => updateDriveHUD(driving, state),
+    onStatusToast: (msg, kind) => showStatusToast(msg, kind),
     onFlashlightChange: (on) => {
       if (!isDriving && toggleLight) toggleLight.checked = Boolean(on);
     },
@@ -664,6 +707,51 @@ if (btnDriveExit) {
     if (explorer && isDriving) explorer.interact();
   });
 }
+function bindClimbHold(btn, dir) {
+  if (!btn) return;
+  const start = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    btn.classList.add('active');
+    if (explorer) explorer.setK11ClimbInput(dir);
+  };
+  const stop = (e) => {
+    if (e) e.stopPropagation();
+    btn.classList.remove('active');
+    if (explorer) explorer.setK11ClimbInput(0);
+  };
+  btn.addEventListener('pointerdown', start);
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointerleave', stop);
+  btn.addEventListener('pointercancel', stop);
+}
+bindClimbHold(btnK11Up, 1);
+bindClimbHold(btnK11Down, -1);
+
+if (btnK11Silo) {
+  btnK11Silo.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer) explorer.toggleNullSilo();
+  });
+}
+if (btnK11Refuel) {
+  btnK11Refuel.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer) explorer.refuelK11();
+  });
+}
+if (btnK11CallRv) {
+  btnK11CallRv.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer) explorer.summonCamperToK11('camper');
+  });
+}
+if (btnK11CallArmor) {
+  btnK11CallArmor.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (explorer) explorer.summonCamperToK11('armor');
+  });
+}
 if (autopilotStopChip) {
   autopilotStopChip.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -680,6 +768,12 @@ if (btnMap3dVehArmor) {
   btnMap3dVehArmor.addEventListener('click', (e) => {
     e.stopPropagation();
     setSelectedAutopilotVehicle('armor');
+  });
+}
+if (btnMap3dVehK11) {
+  btnMap3dVehK11.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelectedAutopilotVehicle('k11');
   });
 }
 interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
@@ -904,12 +998,12 @@ btnExportSvg.addEventListener('click', () => {
 btnExportAllSvg.addEventListener('click', () => {
   const combinedSvg = blueprint.exportAllSheetsCombinedSVG();
   const blob = new Blob([combinedSvg], { type: 'image/svg+xml;charset=utf-8' });
-  triggerDownload(blob, 'NARROW50_ALL_23_BLUEPRINTS.svg');
+  triggerDownload(blob, 'NARROW50_ALL_25_BLUEPRINTS.svg');
 });
 
 btnExportAllZip.addEventListener('click', () => {
   const zipBlob = blueprint.exportAllSheetsZipBlob();
-  triggerDownload(zipBlob, 'NARROW50_ALL_23_SVG.zip');
+  triggerDownload(zipBlob, 'NARROW50_ALL_25_SVG.zip');
 });
 
 // ---- URL Parameters for Verification & Deep-Links ----
@@ -927,6 +1021,20 @@ if (explorer) {
     const xef = Number(params.get('extElvFloor'));
     const xeOpen = params.get('extElvDoors') !== 'closed';
     if (!Number.isNaN(xef)) explorer.snapExtElevator(xef, xeOpen);
+  }
+  if (params.has('nullElvFloor')) {
+    const nef = Number(params.get('nullElvFloor'));
+    const neOpen = params.get('nullElvDoors') !== 'closed';
+    if (!Number.isNaN(nef)) explorer.snapNullElevator(nef, neOpen);
+  }
+  if (params.get('siloOpen') === '1') {
+    explorer.snapNullSilo(true);
+  }
+  if (params.get('k11Pose')) {
+    const parts = params.get('k11Pose').split(',').map(Number);
+    if (!Number.isNaN(parts[0]) && !Number.isNaN(parts[2])) {
+      explorer.setK11Pose(parts[0], Number.isNaN(parts[1]) ? null : parts[1], parts[2], Number.isNaN(parts[3]) ? 0 : parts[3]);
+    }
   }
   if (params.get('camperPose')) {
     const parts = params.get('camperPose').split(',');
@@ -955,7 +1063,25 @@ if (explorer) {
   if (params.get('hitch') === '1') explorer.toggleArmorHitch(true);
   if (params.get('shutters') === '1') explorer.toggleArmorShutters(true);
   const floorParam = params.has('floor') ? Number(params.get('floor')) : null;
-  if (params.get('landmark')) {
+  if (params.get('b40') === '1') {
+    explorer.snapNullElevator(-40, true);
+    const yaw = params.has('yaw') ? Number(params.get('yaw')) : -Math.PI * 0.5;
+    const pitch = params.has('pitch') ? Number(params.get('pitch')) : 0.08;
+    explorer.setPose(-16.5, 29910.0, yaw, pitch, -40);
+  } else if (params.get('nullErea') === '1') {
+    explorer.teleportToLandmark('null_erea');
+    if (params.has('yaw') || params.has('pitch')) {
+      const yw = params.has('yaw') ? Number(params.get('yaw')) : explorer.yaw;
+      const pt = params.has('pitch') ? Number(params.get('pitch')) : explorer.pitch;
+      explorer.setPose(explorer.playerPos.x, explorer.playerPos.z, yw, pt, 1);
+    }
+  } else if (params.get('boardK11') === '1') {
+    const kFloor = (explorer.house.airshipK11.dockedInSilo && explorer.house.nullErea && explorer.house.nullErea.silo.liftProgress < 0.5) ? -40 : 1;
+    const wPos = explorer.k11LocalToWorld(2.40, 5.20);
+    const yaw = params.has('yaw') ? Number(params.get('yaw')) : explorer.house.airshipK11.pose.yaw;
+    const pitch = params.has('pitch') ? Number(params.get('pitch')) : -0.02;
+    explorer.setPose(wPos.x, wPos.z, yaw, pitch, kFloor);
+  } else if (params.get('landmark')) {
     explorer.teleportToLandmark(params.get('landmark'));
     if (params.has('yaw') || params.has('pitch')) {
       const yw = params.has('yaw') ? Number(params.get('yaw')) : explorer.yaw;
@@ -1002,6 +1128,7 @@ if (explorer) {
   if (params.get('drive') === '1') explorer.toggleCamperDrive(true);
   if (params.get('driveKei') === '1') explorer.toggleKeiDrive(true);
   if (params.get('driveArmor') === '1') explorer.toggleArmorDrive(true);
+  if (params.get('flyK11') === '1') explorer.toggleK11Pilot(true);
   if (params.get('flash') === '1') explorer.toggleFlashlight(true);
 }
 if (params.get('perf') === '1') togglePerf(true);
@@ -1022,6 +1149,7 @@ window.__FPS_APP__ = {
   applyStorm,
   setBlueprintView,
   getBlueprintViewState,
+  showStatusToast,
   getMap2D: () => ensureMap2D(),
   getMap3D: () => explorer?.map3d || null,
 };

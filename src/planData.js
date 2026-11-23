@@ -1960,10 +1960,16 @@ import {
   TOW_CONTAINER, TOW_CONTAINER_PLAN,
   EXT_ELEVATOR,
 } from './warehouseAndArmorData.js';
+import {
+  NULL_EREA, NULL_ELEVATOR, NULL_SILO_MECHANISM, NULL_HANGAR_PLAN,
+  AIRSHIP_K11, AIRSHIP_K11_PLAN,
+} from './airshipData.js';
 export {
   CAMPER, CAMPER_SHEETS, KEI, KEI_PLAN,
   ELEVATOR, STAIR_B1_B2, STAIR_B2_B3, FLOOR_B2F, FLOOR_B3F, FLOOR_B4F,
   GARAGE, GARAGE_PLAN, ARMOR_CAMPER, ARMOR_CAMPER_PLAN, TOW_CONTAINER, TOW_CONTAINER_PLAN, EXT_ELEVATOR,
+  NULL_EREA, NULL_ELEVATOR, NULL_SILO_MECHANISM, NULL_HANGAR_PLAN,
+  AIRSHIP_K11, AIRSHIP_K11_PLAN,
 };
 
 export const FLOORS = [FLOOR_B1F, FLOOR_1F, FLOOR_2F, FLOOR_3F, FLOOR_4F, FLOOR_5F, FLOOR_6F, FLOOR_RF];
@@ -1979,16 +1985,19 @@ export const SHEET_OFFSETS = {
   garage: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 1,
   armor: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 2,
   container: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 3,
+  nullHangar: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 4,
+  k11: 3 + FLOORS.length + ANNEX_FLOORS.length + STORAGE_FLOORS.length + CAMPER_SHEETS.length + 5,
 };
 
 export function getFloorByPhysicalIndex(f) {
+  if (f === -40) return NULL_HANGAR_PLAN;
   if (f === -3) return FLOOR_B4F;
   if (f === -2) return FLOOR_B3F;
   if (f === -1) return FLOOR_B2F;
   return FLOORS[f] || FLOORS[HOUSE.spawnFloor];
 }
 
-// 23 Comprehensive JIS CAD Blueprint Sheets (0..19 Existing + 20=Garage 10x20x4.5m, 21=Armor Camper 15.5x3.1x4m, 22=Tow Container 2x4x3m)
+// 25 Comprehensive JIS CAD Blueprint Sheets (0..22 Existing + 23=NULL EREA Underground Silo-40 Hangar, 24=Airship K-11)
 export const BLUEPRINT_SHEETS = [
   FLOOR_B4F,
   FLOOR_B3F,
@@ -2001,6 +2010,8 @@ export const BLUEPRINT_SHEETS = [
   GARAGE_PLAN,
   ARMOR_CAMPER_PLAN,
   TOW_CONTAINER_PLAN,
+  NULL_HANGAR_PLAN,
+  AIRSHIP_K11_PLAN,
 ];
 BLUEPRINT_SHEETS.forEach((s, i) => {
   s.sheetIndex = i;

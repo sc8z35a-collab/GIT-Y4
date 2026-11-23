@@ -284,6 +284,7 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
     if (instant) {
       intensity = stormEnabled ? 1.0 : 0.0;
       floodRise = stormEnabled ? 7.5 : 0.0;
+      windVec.set(stormEnabled ? -11.5 : 0.0, 0, stormEnabled ? 6.2 : 0.0);
       landslides.forEach((ls) => {
         ls.progress = stormEnabled ? 1.0 : 0.0;
         ls.group.visible = stormEnabled;

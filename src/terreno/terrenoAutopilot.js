@@ -1,14 +1,16 @@
 import { TERRENO_WORLD, evalMainRiver } from './terrenoConfig.js';
+import { NULL_EREA } from '../airshipData.js';
+import { VILLAGE_HOUSES } from '../villageData.js';
 
 /**
  * TERRENO On-Board Autonomous Navigation Computer (60 km × 60 km, 21 Roads):
- *   - 30 Curated Countryside Waypoints across the 60 km × 60 km World & 21 Roads
- *   - + 5 Live Dynamic Asset Destinations (Home/Garage, KEI-340, CON-24 Container, CAMPER-75, ARMOR-155)
- *   - Real 240×240 Terrain-Cost A* Pathfinding (prefers all 21 roads, avoids water/hazards, supports free destinations!)
- *   - Smooth Wide-Radius Trajectory Filtering & Dual-Vehicle Pure-Pursuit Autopilot (CAMPER-75 & ARMOR-155)
+ *   - 31 Curated Countryside Waypoints (including NULL EREA Underground Airship Base)
+ *   - + 7 Live Dynamic Asset Destinations (Home/Garage, NULL EREA, K-11, KEI-340, CON-24, CAMPER-75, ARMOR-155)
+ *   - Real 240×240 Terrain-Cost A* Pathfinding + Strict Mathematical Reachability Verification for K-11 Camper Summon
+ *   - Smooth Wide-Radius Trajectory Filtering & Autonomous Controllers (CAMPER-75, ARMOR-155, & Airship K-11)
  */
 
-// 30 Curated Scenic Countryside Waypoints across the 60 km × 60 km 21-Road Network
+// 31 Curated Scenic Countryside Waypoints across the 60 km × 60 km 21-Road Network + NULL EREA
 export const AUTOPILOT_WAYPOINTS = [
   { id: 'wp01', num: '01', nameJp: '最北白樺パノラマ',   x:  -1200, z: -24200 },
   { id: 'wp02', num: '02', nameJp: '北西丘陵ループ北',   x: -11800, z: -22800 },
@@ -40,10 +42,13 @@ export const AUTOPILOT_WAYPOINTS = [
   { id: 'wp28', num: '28', nameJp: '最南西松原入口',     x: -17400, z:  14900 },
   { id: 'wp29', num: '29', nameJp: '南部沖積松原口',     x:    640, z:  24200 },
   { id: 'wp30', num: '30', nameJp: '南東松原平原',       x:  13600, z:  24600 },
+  { id: 'wp31', num: 'NL', nameJp: 'NULL EREA (K-11基地)', x:   28, z:  29910 },
 ];
 
 export const DYNAMIC_TARGETS = [
   { id: 'dyn_home',      code: '自宅', kind: 'home' },
+  { id: 'dyn_null',      code: 'NULL', kind: 'null_erea' },
+  { id: 'dyn_k11',       code: 'K-11', kind: 'k11' },
   { id: 'dyn_kei',       code: '軽',   kind: 'kei' },
   { id: 'dyn_container', code: '箱',   kind: 'container' },
   { id: 'dyn_camper',    code: 'RV',   kind: 'camper' },
@@ -279,11 +284,14 @@ export function createTerrenoAutopilot(geomorph, storm) {
       node = cameFrom[node];
     }
     rawPts.reverse();
-    if (rawPts.length === 0) return [[startX, startZ], [clampedGoalX, clampedGoalZ]];
-
-    // Anchor exact start & goal points and snap road-proximate nodes onto ANY of the 21 road centerlines!
-    rawPts[0] = [startX, startZ];
-    rawPts[rawPts.length - 1] = [clampedGoalX, clampedGoalZ];
+    if (rawPts.length <= 1) {
+      rawPts.length = 0;
+      rawPts.push([startX, startZ], [clampedGoalX, clampedGoalZ]);
+    } else {
+      // Anchor exact start & goal points and snap road-proximate nodes onto ANY of the 21 road centerlines!
+      rawPts[0] = [startX, startZ];
+      rawPts[rawPts.length - 1] = [clampedGoalX, clampedGoalZ];
+    }
 
     for (let i = 1; i < rawPts.length - 1; i++) {
       const rq = geomorph.roadIndex.queryDist(rawPts[i][0], rawPts[i][1]);
@@ -371,7 +379,8 @@ export function createTerrenoAutopilot(geomorph, storm) {
     const pts = routeState.points;
     const goal = pts[pts.length - 1];
     const distToGoal = Math.hypot(goal[0] - pose.cx, goal[1] - pose.cz);
-    if (distToGoal < prof.arriveDist) {
+    const arriveThreshold = routeState.isSummon ? Math.max(prof.arriveDist, 7.5) : prof.arriveDist;
+    if (distToGoal < arriveThreshold) {
       return { throttle: 0, steer: 0, arrived: true };
     }
 
@@ -440,11 +449,190 @@ export function createTerrenoAutopilot(geomorph, storm) {
     return { throttle: throttleCmd, steer: steerCmd, arrived: false };
   }
 
+  /**
+   * Breakthrough #4 — Rigorous Mathematical Destination Reachability Validator for K-11 Camper Summon!
+   * Rejects:
+   *  - Out of playable map bounds
+   *  - Rivers / deep water channels / storm flash-flood submerged zones (川などの場所は無効!)
+   *  - Impassable steep slopes / cliffs
+   *  - Solid building footprints (Main Tower, Annex, Storage, Suginosato Village houses, ELV-NULL pavilion)
+   *  - Open 40m-deep NULL EREA Launch Silo pit
+   *  - Any point mathematically unreachable via strict hard-barrier A* pathfinding!
+   */
+  function validateCamperDestination(vehicleKey, startX, startZ, goalX, goalZ, opts = {}) {
+    const isArmor = vehicleKey === 'armor';
+    const maxFordDepth = isArmor ? 1.15 : 0.72;
+    const maxClimbSlope = isArmor ? 0.49 : 0.42;
+    const cliffHardSlope = isArmor ? 0.60 : 0.52;
+
+    if (
+      !Number.isFinite(goalX) || !Number.isFinite(goalZ) ||
+      goalX < TERRENO_WORLD.playMinX + 4 || goalX > TERRENO_WORLD.playMaxX - 4 ||
+      goalZ < TERRENO_WORLD.playMinZ + 4 || goalZ > TERRENO_WORLD.playMaxZ - 4
+    ) {
+      return { valid: false, reason: 'bounds', reasonJp: '呼出不可：マップ範囲外の地点です' };
+    }
+
+    // 1. River & Deep Water Check (main meandering river + active storm floodwater!)
+    const gGoal = geomorph.sampleGeoBilinear(goalX, goalZ);
+    const yGoal = geomorph.getHeightAt(goalX, goalZ);
+    const rvGoal = evalMainRiver(goalZ);
+    const distRiv = Math.abs(goalX - rvGoal.x);
+    const rqGoal = geomorph.roadIndex ? geomorph.roadIndex.queryDist(goalX, goalZ) : { dist: 9999 };
+    const onRoadBridge = rqGoal.dist < (rqGoal.width || 10) * 0.55;
+    const riverDepth = Math.max(0, rvGoal.waterY - yGoal);
+    const floodInfo = storm ? storm.getFloodInfoAt(goalX, goalZ) : { depth: 0 };
+    const effectiveDepth = Math.max(riverDepth, floodInfo.depth || 0);
+
+    if (distRiv < rvGoal.halfWidth * 1.12 && (yGoal < rvGoal.waterY + 0.55 || riverDepth > 0.25)) {
+      return { valid: false, reason: 'river', reasonJp: '呼出不可：川の上には呼び出せません' };
+    }
+    if (!onRoadBridge && effectiveDepth > maxFordDepth * 0.80) {
+      return { valid: false, reason: 'water', reasonJp: '呼出不可：水域・浸水地帯のため到達不可' };
+    }
+
+    // 2. Steep Cliff / Unclimbable Terrain Check
+    const nGoal = geomorph.getMacroNormalAt(goalX, goalZ, 4.0);
+    if (nGoal.slope > maxClimbSlope) {
+      return { valid: false, reason: 'slope', reasonJp: '呼出不可：急斜面のため車両が進入できません' };
+    }
+
+    // 3. Solid Building & Open 40m Launch Silo Pit Check
+    const inSolidBuilding =
+      (goalX >= -1.8 && goalX <= 5.5 && goalZ >= -0.6 && goalZ <= 10.6) || // Main Tower
+      (goalX >= -8.0 && goalX <= -2.1 && goalZ >= -0.6 && goalZ <= 8.6) || // Annex
+      (goalX >= 6.1 && goalX <= 9.1 && goalZ >= -0.6 && goalZ <= 2.6) ||   // Storage-4
+      (goalX >= -28.5 && goalX <= -21.8 && goalZ >= 29906.2 && goalZ <= 29913.8); // ELV-NULL Pavilion
+    if (inSolidBuilding) {
+      return { valid: false, reason: 'building', reasonJp: '呼出不可：建物の上には呼び出せません' };
+    }
+    for (let i = 0; i < VILLAGE_HOUSES.length; i++) {
+      const vh = VILLAGE_HOUSES[i];
+      if (goalX >= vh.ox - 0.8 && goalX <= vh.ox + vh.w + 0.8 && goalZ >= vh.oz - 0.8 && goalZ <= vh.oz + vh.d + 0.8) {
+        return { valid: false, reason: 'village_house', reasonJp: '呼出不可：集落建物の上には呼び出せません' };
+      }
+    }
+    const sa = NULL_EREA.siloAperture;
+    if (
+      opts.siloOpen &&
+      goalX >= sa.minX - 1.2 && goalX <= sa.maxX + 1.2 &&
+      goalZ >= sa.minZ - 1.2 && goalZ <= sa.maxZ + 1.2
+    ) {
+      return { valid: false, reason: 'silo_pit', reasonJp: '呼出不可：開放中の地下40m立坑の上です' };
+    }
+
+    // 4. Strict Mathematical Hard-Barrier A* Connectivity Verification
+    const directDist = Math.hypot(goalX - startX, goalZ - startZ);
+    if (directDist >= 45.0) {
+      const grid = ensureNavGrid();
+      const [sx, sz] = worldToGrid(startX, startZ);
+      const [ex, ez] = worldToGrid(goalX, goalZ);
+      const startIdx = sz * GRID_W + sx;
+      const goalIdx = ez * GRID_W + ex;
+      const N = GRID_W * GRID_H;
+      const gScore = new Float32Array(N);
+      gScore.fill(1e12);
+      const closed = new Uint8Array(N);
+      const heap = new MinHeap();
+      gScore[startIdx] = 0;
+      const hFn = (gx, gz) => Math.hypot((gx - ex) * CELL_W, (gz - ez) * CELL_H) * 0.13;
+      heap.push(startIdx, hFn(sx, sz));
+
+      const dirs = [
+        [-1, 0, CELL_W], [1, 0, CELL_W], [0, -1, CELL_H], [0, 1, CELL_H],
+        [-1, -1, Math.hypot(CELL_W, CELL_H)], [1, -1, Math.hypot(CELL_W, CELL_H)],
+        [-1, 1, Math.hypot(CELL_W, CELL_H)], [1, 1, Math.hypot(CELL_W, CELL_H)],
+      ];
+      const floodRise = storm ? storm.getFloodRise() : 0;
+      let reached = false;
+      let iter = 0;
+      while (heap.size > 0 && iter++ < 48000) {
+        const cur = heap.pop();
+        if (closed[cur]) continue;
+        closed[cur] = 1;
+        if (cur === goalIdx) { reached = true; break; }
+        const cx = cur % GRID_W;
+        const cz = (cur - cx) / GRID_W;
+        const curG = gScore[cur];
+        for (let d = 0; d < 8; d++) {
+          const nx = cx + dirs[d][0];
+          const nz = cz + dirs[d][1];
+          if (nx < 0 || nx >= GRID_W || nz < 0 || nz >= GRID_H) continue;
+          const nIdx = nz * GRID_W + nx;
+          if (closed[nIdx]) continue;
+          const baseC = grid[nIdx];
+          // Hard-block unbridged deep river (>20 cost) & extreme unnavigable cliffs (>24) unless on a road corridor!
+          if (nIdx !== goalIdx && baseC >= 28.0) {
+            const [nwx, nwz] = gridToWorld(nx, nz);
+            const rqn = geomorph.roadIndex ? geomorph.roadIndex.queryDist(nwx, nwz) : { dist: 9999 };
+            if (rqn.dist > 155.0) continue; // Strictly impassable unbridged deep river/cliff!
+          }
+          let stepC = baseC;
+          if (floodRise > 1.5 && nIdx !== goalIdx) {
+            const [nwx, nwz] = gridToWorld(nx, nz);
+            const rvn = evalMainRiver(nwz);
+            if (Math.abs(nwx - rvn.x) < rvn.halfWidth + floodRise * 4.0) {
+              const rqn = geomorph.roadIndex ? geomorph.roadIndex.queryDist(nwx, nwz) : { dist: 9999 };
+              if (rqn.dist > 155.0) continue; // Flooded river bank strictly impassable off-road!
+            }
+          }
+          const candG = curG + dirs[d][2] * stepC;
+          if (candG < gScore[nIdx]) {
+            gScore[nIdx] = candG;
+            heap.push(nIdx, candG + hFn(nx, nz));
+          }
+        }
+      }
+      if (!reached) {
+        return { valid: false, reason: 'unreachable', reasonJp: '呼出不可：経路計算により到達不可能な地点です' };
+      }
+    }
+
+    const points = computeSafeRoute(startX, startZ, goalX, goalZ);
+    // Final sanity check: make sure route doesn't cut directly across deep water without bridge if short
+    if (directDist < 45.0 && directDist > 4.0) {
+      const steps = Math.ceil(directDist / 5.0);
+      for (let s = 1; s < steps; s++) {
+        const u = s / steps;
+        const sx = startX + (goalX - startX) * u;
+        const sz = startZ + (goalZ - startZ) * u;
+        const rvs = evalMainRiver(sz);
+        const ys = geomorph.getHeightAt(sx, sz);
+        if (Math.abs(sx - rvs.x) < rvs.halfWidth * 0.95 && ys < rvs.waterY - maxFordDepth) {
+          return { valid: false, reason: 'river_between', reasonJp: '呼出不可：間に渡れない川があります' };
+        }
+        if (geomorph.getMacroNormalAt(sx, sz, 3.0).slope > cliffHardSlope) {
+          return { valid: false, reason: 'cliff_between', reasonJp: '呼出不可：経路上に登坂不能な崖があります' };
+        }
+      }
+    }
+
+    return { valid: true, points, distM: directDist };
+  }
+
+  /**
+   * Breakthrough #3 — Direct High-Altitude Aerial Route Corridor Planner for Airship K-11!
+   */
+  function computeAirshipRoute(startX, startZ, goalX, goalZ) {
+    const gx = Math.max(TERRENO_WORLD.playMinX, Math.min(TERRENO_WORLD.playMaxX, goalX));
+    const gz = Math.max(TERRENO_WORLD.playMinZ, Math.min(TERRENO_WORLD.playMaxZ, goalZ));
+    const dist = Math.hypot(gx - startX, gz - startZ);
+    const segs = Math.max(2, Math.min(64, Math.ceil(dist / 800.0)));
+    const pts = [];
+    for (let i = 0; i <= segs; i++) {
+      const u = i / segs;
+      pts.push([startX + (gx - startX) * u, startZ + (gz - startZ) * u]);
+    }
+    return pts;
+  }
+
   return {
     waypoints: AUTOPILOT_WAYPOINTS,
     dynamicTargets: DYNAMIC_TARGETS,
     computeSafeRoute,
     buildCruiseAheadRoute,
     evaluateDrivingControl,
+    validateCamperDestination,
+    computeAirshipRoute,
   };
 }

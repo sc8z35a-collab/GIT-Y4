@@ -11,9 +11,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <title>NARROW-50</title>
-  <script type="module" crossorigin src="./assets/dev-B_oShNzh.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/three-vendor-C4jP0wTT.js">
-  <link rel="stylesheet" crossorigin href="./assets/dev-Cet6QbKM.css">
+  <script type="module" crossorigin src="./assets/dev-C3frQDAH.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/three-vendor-yHBgYjMZ.js">
+  <link rel="stylesheet" crossorigin href="./assets/dev-3oE99zHh.css">
 </head>
 <body>
   <div id="stage" class="stage">
@@ -123,8 +123,26 @@
       </div>
     </aside>
 
-    <!-- Minimal Driving Control Bar (Autopilot / Viewpoint / Exit / Speedometer) -->
-    <div id="drive-hud" class="drive-hud-bar hidden" aria-label="運転操作">
+    <!-- Minimal Auto-Fading Status Notification Pill (K-11 Summon / Refuel / Silo Status) -->
+    <div id="status-toast" class="status-toast hidden" role="status" aria-live="polite"></div>
+
+    <!-- Minimal Driving & K-11 Flight Control Bar -->
+    <div id="drive-hud" class="drive-hud-bar hidden" aria-label="運転・操縦操作">
+      <div id="k11-flight-controls" class="k11-flight-controls hidden">
+        <div class="drive-tele-pill" aria-label="高度・燃料">
+          <span class="tele-item">ALT <strong id="k11-alt-val">0</strong>m</span>
+          <span class="tele-sep">|</span>
+          <span class="tele-item">FUEL <strong id="k11-fuel-val">100.0</strong>L</span>
+          <span class="tele-sep">|</span>
+          <span class="tele-item">WIND <strong id="k11-wind-val">0</strong></span>
+        </div>
+        <button id="btn-k11-up" class="drive-action-btn drive-action-k11" type="button">上昇</button>
+        <button id="btn-k11-down" class="drive-action-btn drive-action-k11" type="button">降下</button>
+        <button id="btn-k11-silo" class="drive-action-btn drive-action-amber hidden" type="button">格納昇降</button>
+        <button id="btn-k11-refuel" class="drive-action-btn drive-action-emerald hidden" type="button">給油</button>
+        <button id="btn-k11-call-rv" class="drive-action-btn" type="button">RV呼出</button>
+        <button id="btn-k11-call-armor" class="drive-action-btn" type="button">装甲呼出</button>
+      </div>
       <button id="btn-drive-auto" class="drive-action-btn" type="button">自動運転</button>
       <button id="btn-drive-cam" class="drive-action-btn" type="button">視点</button>
       <button id="btn-drive-exit" class="drive-action-btn drive-action-exit" type="button">降車</button>
@@ -148,7 +166,7 @@
       </button>
     </div>
 
-    <!-- Edge-to-Edge Fullscreen High-Precision 3D Map, Authentic 2D Route Map & 23-Sheet CAD Blueprint Modal -->
+    <!-- Edge-to-Edge Fullscreen High-Precision 3D Map, Authentic 2D Route Map & 25-Sheet CAD Blueprint Modal -->
     <section id="map-modal" class="map-modal mode-3d hidden" role="dialog" aria-modal="true" aria-label="地図">
       <!-- Transparent Full-Screen Interactive Gesture Layer for Live 3D Topographic Map -->
       <div id="map3d-gesture-layer" class="map3d-gesture-layer"></div>
@@ -179,6 +197,7 @@
         </button>
         <button id="btn-map3d-veh-rv" class="map-pill-btn map2d-veh-btn active" data-veh-key="camper" type="button">RV自動</button>
         <button id="btn-map3d-veh-armor" class="map-pill-btn map2d-veh-btn" data-veh-key="armor" type="button">装甲自動</button>
+        <button id="btn-map3d-veh-k11" class="map-pill-btn map2d-veh-btn" data-veh-key="k11" type="button">K-11自動</button>
       </div>
 
       <!-- Minimal Floating Top-Right Controls -->
@@ -220,6 +239,8 @@
         <button class="floor-tab floor-tab-garage" data-floor="20" type="button" role="tab">車庫</button>
         <button class="floor-tab floor-tab-armor" data-floor="21" type="button" role="tab">装甲</button>
         <button class="floor-tab floor-tab-cont" data-floor="22" type="button" role="tab">箱</button>
+        <button class="floor-tab floor-tab-null" data-floor="23" type="button" role="tab">NULL車庫</button>
+        <button class="floor-tab floor-tab-k11" data-floor="24" type="button" role="tab">K-11</button>
       </nav>
     </section>
   </div>

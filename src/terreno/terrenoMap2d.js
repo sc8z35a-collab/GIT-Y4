@@ -128,7 +128,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
   let baseRect = { x: 0, y: 0, w: 1, h: 1 };
 
   function setSelectedVehicle(v) {
-    activeAutoVeh = v === 'armor' ? 'armor' : 'camper';
+    activeAutoVeh = v === 'k11' ? 'k11' : (v === 'armor' ? 'armor' : 'camper');
     vehButtons.forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.vehKey === activeAutoVeh);
     });
@@ -202,6 +202,8 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
   function getDynamicAssetCoords(state) {
     return [
       { id: 'dyn_home', code: '自宅', kind: 'home', x: 15.6, z: -15.0, color: '#38bdf8' },
+      { id: 'dyn_null', code: 'NULL', kind: 'null_erea', x: 0.0, z: 29910.0, color: '#22d3ee' },
+      { id: 'dyn_k11', code: 'K-11', kind: 'k11', x: state?.k11Pose?.cx ?? 0.0, z: state?.k11Pose?.cz ?? 29910.0, color: '#c084fc' },
       { id: 'dyn_kei', code: '軽', kind: 'kei', x: state?.keiPose?.cx ?? 3.55, z: state?.keiPose?.cz ?? -3.80, color: '#facc15' },
       { id: 'dyn_container', code: '箱', kind: 'container', x: state?.containerPose?.cx ?? 19.85, z: state?.containerPose?.cz ?? 6.50, color: '#a3e635' },
       { id: 'dyn_camper', code: 'RV', kind: 'camper', x: state?.camperPose?.cx ?? 7.75, z: state?.camperPose?.cz ?? 5.75, color: '#fb923c' },
@@ -220,7 +222,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     canvas.className = 'terreno-2d-canvas';
     wrap.appendChild(canvas);
 
-    // Compact top-left bar: Autonomous Vehicle selector (RV自動 / 装甲自動) + quick destination chips
+    // Compact top-left bar: Autonomous Vehicle selector (RV自動 / 装甲自動 / K-11) + quick destination chips
     const dynBar = document.createElement('div');
     dynBar.className = 'map2d-dyn-bar';
 
@@ -228,6 +230,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     [
       { key: 'camper', label: 'RV自動' },
       { key: 'armor', label: '装甲自動' },
+      { key: 'k11', label: 'K-11自動' },
     ].forEach((v) => {
       const vb = document.createElement('button');
       vb.type = 'button';
@@ -517,11 +520,12 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     if (routesByVeh) {
       drawRoute(routesByVeh.camper, '#38bdf8', 'RV目的地');
       drawRoute(routesByVeh.armor, '#34d399', '装甲目的地');
+      drawRoute(routesByVeh.k11, '#c084fc', 'K-11目的地');
     } else if (state?.autopilotRoute && state.autopilotRoute.length >= 2) {
       drawRoute(state.autopilotRoute, '#38bdf8', '目的地');
     }
 
-    // 6. Suginosato 5-House Village Marker
+    // 6. Suginosato 5-House Village & NULL EREA Underground Airship Complex Markers
     ctx.save();
     const vp = worldToPx(VILLAGE.centerX, VILLAGE.centerZ);
     ctx.fillStyle = 'rgba(52, 211, 153, 0.35)';
@@ -531,9 +535,22 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     ctx.arc(vp.px, vp.py, 8.5 * dpr, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    // NULL EREA Launch Pad & Silo-40 Marker (South Edge X: -150..+150, Z: 29860..29960)
+    const np = worldToPx(0, 29910);
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.28)';
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.fillRect(np.px - 10 * dpr, np.py - 5 * dpr, 20 * dpr, 10 * dpr);
+    ctx.strokeRect(np.px - 10 * dpr, np.py - 5 * dpr, 20 * dpr, 10 * dpr);
+    ctx.font = `800 ${Math.round(8.2 * dpr)}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = '#67e8f9';
+    ctx.fillText('NULL EREA', np.px, np.py - 7.5 * dpr);
     ctx.restore();
 
-    // 7. 30 Numbered Selectable Waypoint Pins (01..30)
+    // 7. 31 Numbered Selectable Waypoint Pins (01..30 + NL)
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -542,24 +559,45 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     AUTOPILOT_WAYPOINTS.forEach((wp) => {
       const p = worldToPx(wp.x, wp.z);
       const isActive = activeWpId === wp.id;
-      const rad = (isActive ? 8.6 : 6.8) * dpr;
-      ctx.fillStyle = isActive ? '#0ea5e9' : 'rgba(9, 15, 22, 0.80)';
-      ctx.strokeStyle = isActive ? '#ffffff' : 'rgba(245, 198, 92, 0.82)';
-      ctx.lineWidth = (isActive ? 1.9 : 1.1) * dpr;
+      const isNull = wp.id === 'wp31';
+      const rad = (isActive ? 8.6 : (isNull ? 7.8 : 6.8)) * dpr;
+      ctx.fillStyle = isActive ? '#0ea5e9' : (isNull ? 'rgba(8, 36, 48, 0.90)' : 'rgba(9, 15, 22, 0.80)');
+      ctx.strokeStyle = isActive ? '#ffffff' : (isNull ? '#22d3ee' : 'rgba(245, 198, 92, 0.82)');
+      ctx.lineWidth = (isActive ? 1.9 : 1.2) * dpr;
       ctx.beginPath();
       ctx.arc(p.px, p.py, rad, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = isActive ? '#ffffff' : '#fde68a';
+      ctx.fillStyle = isActive ? '#ffffff' : (isNull ? '#67e8f9' : '#fde68a');
       ctx.fillText(wp.num, p.px, p.py + 0.5 * dpr);
     });
     ctx.restore();
 
-    // 8. Live Dynamic Asset Dots (自宅 / 軽 / 箱 / RV / 装甲)
+    // 8. Live Dynamic Asset Dots (自宅 / NULL / K-11 / 軽 / 箱 / RV / 装甲)
     ctx.save();
     const assets = getDynamicAssetCoords(state);
     assets.forEach((a) => {
       const p = worldToPx(a.x, a.z);
+      if (a.kind === 'k11') {
+        // Distinct Sleek Airship Silhouette Marker for K-11!
+        const kYaw = state?.k11Pose?.yaw ?? 0;
+        ctx.save();
+        ctx.translate(p.px, p.py);
+        ctx.rotate(-kYaw);
+        ctx.fillStyle = '#c084fc';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(0, -8.5 * dpr);
+        ctx.lineTo(4.6 * dpr, 2.0 * dpr);
+        ctx.lineTo(0, 7.5 * dpr);
+        ctx.lineTo(-4.6 * dpr, 2.0 * dpr);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
       ctx.fillStyle = a.color;
       ctx.strokeStyle = '#071018';
       ctx.lineWidth = 1.5 * dpr;
