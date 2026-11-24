@@ -113,6 +113,22 @@
           <span class="switch-track"></span>
         </label>
 
+        <div class="setting-ai-box">
+          <div class="setting-label-row">
+            <div class="setting-title-col">
+              <span>APEX-OMNIDRIVE v6</span>
+              <small id="apex-ai-meta">内蔵 APEX-v6 BASE</small>
+            </div>
+            <span id="apex-ai-badge" class="ai-badge">BASE</span>
+          </div>
+          <div class="setting-ai-btns">
+            <a id="btn-colab-l4" class="setting-action-btn setting-action-colab" href="https://colab.research.google.com/github/sc8z35a-collab/GIT-Y4/blob/main/colab/APEX_DRIVE_L4_GPU_Training.ipynb" target="_blank" rel="noopener noreferrer">Colab TITAN</a>
+            <button id="btn-ai-import" class="setting-action-btn setting-action-accent" type="button">重み読込</button>
+            <button id="btn-ai-reset" class="setting-action-btn hidden" type="button">標準</button>
+            <input id="input-ai-weights" type="file" accept=".json,application/json" class="hidden" />
+          </div>
+        </div>
+
         <div class="settings-actions">
           <button id="btn-fullscreen" class="setting-action-btn" type="button">全画面</button>
           <button id="btn-drive-exit-settings" class="setting-action-btn setting-action-danger hidden" type="button">降車</button>

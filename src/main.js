@@ -29,6 +29,11 @@ const btnFullscreen = document.getElementById('btn-fullscreen');
 const btnDriveExitSettings = document.getElementById('btn-drive-exit-settings');
 const btnInstall = document.getElementById('btn-install');
 const btnEnterLandscape = document.getElementById('btn-enter-landscape');
+const apexAiMetaEl = document.getElementById('apex-ai-meta');
+const apexAiBadgeEl = document.getElementById('apex-ai-badge');
+const btnAiImport = document.getElementById('btn-ai-import');
+const btnAiReset = document.getElementById('btn-ai-reset');
+const inputAiWeights = document.getElementById('input-ai-weights');
 
 const perfPanel = document.getElementById('perf-panel');
 const perfGrid = document.getElementById('perf-grid');
@@ -506,11 +511,19 @@ function toggleMap(force = null) {
 }
 
 function renderTelemetry(t) {
+  let apexHtml = '';
+  if (explorer && explorer.getApexDriveTelemetry) {
+    const at = explorer.getApexDriveTelemetry();
+    if (at && at.active) {
+      apexHtml = `<span>AI<strong>${at.mode}</strong></span><span>LD<strong>${at.lidarFrontMinM.toFixed(0)}m</strong></span>`;
+    }
+  }
   perfGrid.innerHTML = `
     <span><strong>${t.fps}</strong>fps</span>
     <span><strong>${t.frameMs}</strong>ms</span>
     <span><strong>${t.scale}×</strong>${t.surfaceSuper ? ' SM1.1S' : ''}</span>
     <span>DC<strong>${t.drawCalls}</strong></span>
+    ${apexHtml}
   `;
 }
 
@@ -688,6 +701,48 @@ btnDriveExitSettings.addEventListener('click', () => {
     toggleSettings(false);
   }
 });
+
+function syncApexAiUi() {
+  if (!explorer || !explorer.getApexNeuralMeta) return;
+  const meta = explorer.getApexNeuralMeta();
+  if (apexAiMetaEl) {
+    const stepsTxt = meta.trainedSteps >= 1e9
+      ? ` • ${(meta.trainedSteps / 1e9).toFixed(2)}B steps`
+      : (meta.trainedSteps > 0 ? ` • ${(meta.trainedSteps / 1e6).toFixed(1)}M steps` : '');
+    apexAiMetaEl.textContent = `${meta.labelJp}${stepsTxt}`;
+  }
+  if (apexAiBadgeEl) {
+    apexAiBadgeEl.textContent = meta.isTitanV6 ? 'TITAN-v6' : (meta.isCustom ? 'L4-AI' : 'BASE');
+    apexAiBadgeEl.classList.toggle('custom', Boolean(meta.isCustom));
+  }
+  if (btnAiReset) {
+    btnAiReset.classList.toggle('hidden', !meta.isCustom);
+  }
+}
+syncApexAiUi();
+
+if (btnAiImport && inputAiWeights) {
+  btnAiImport.addEventListener('click', () => inputAiWeights.click());
+  inputAiWeights.addEventListener('change', async () => {
+    const file = inputAiWeights.files && inputAiWeights.files[0];
+    inputAiWeights.value = '';
+    if (!file || !explorer) return;
+    try {
+      const text = await file.text();
+      explorer.loadApexNeuralWeights(text);
+      syncApexAiUi();
+    } catch (err) {
+      showStatusToast(`AI重み読込エラー：${err?.message || err}`, 'error');
+    }
+  });
+}
+if (btnAiReset) {
+  btnAiReset.addEventListener('click', () => {
+    if (!explorer) return;
+    explorer.resetApexNeuralWeights();
+    syncApexAiUi();
+  });
+}
 
 if (btnDriveAuto) {
   btnDriveAuto.addEventListener('click', (e) => {

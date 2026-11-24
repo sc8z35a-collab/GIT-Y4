@@ -506,6 +506,53 @@ html, body {
   color: #fee2e2;
 }
 
+.setting-ai-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.setting-ai-btns {
+  display: flex;
+  gap: 5px;
+}
+
+.setting-ai-btns .setting-action-btn {
+  padding: 7px 5px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.setting-action-colab {
+  text-decoration: none;
+  text-align: center;
+  border-color: rgba(249, 171, 0, 0.58);
+  background: rgba(249, 171, 0, 0.22);
+  color: #fef3c7;
+}
+
+.ai-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(14, 165, 233, 0.2);
+  color: #bae6fd;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ai-badge.custom {
+  border-color: rgba(249, 171, 0, 0.65);
+  background: rgba(249, 171, 0, 0.24);
+  color: #fde68a;
+}
+
 /* Minimal Auto-Fading Status Notification Pill */
 .status-toast {
   position: absolute;

@@ -766,10 +766,12 @@ export class FirstPersonHouseExplorer {
   cancelAutopilot(vehicleKey = null) {
     if (vehicleKey) {
       if (this.autopilotRoutes[vehicleKey]) this.autopilotRoutes[vehicleKey] = null;
+      this.terreno?.autopilot?.neuralPolicy?.resetHidden?.(vehicleKey);
     } else {
       this.autopilotRoutes.camper = null;
       this.autopilotRoutes.armor = null;
       this.autopilotRoutes.k11 = null;
+      this.terreno?.autopilot?.neuralPolicy?.resetHidden?.();
     }
     this._notifyDriveHUD();
   }
@@ -1430,19 +1432,26 @@ export class FirstPersonHouseExplorer {
       ) return { hit: true, reason: 'bounds', stepLift: 0 };
     }
 
-    // 1b. Directional Deep River & Flash-Flood Guard
+    // 1b. Directional Deep River & Flash-Flood Guard (21-road bridges remain passable in normal water!)
     if (this.terreno) {
-      const flood = this.terreno.storm
-        ? this.terreno.storm.getFloodInfoAt(ncx, ncz)
-        : null;
-      const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(ncz).waterY - this.terreno.getHeightAt(ncx, ncz));
-      if (nextDepth > maxFordDepth) {
-        const prevFlood = this.terreno.storm
-          ? this.terreno.storm.getFloodInfoAt(prevCx, prevCz)
+      const rqBridge = this.terreno.geomorph?.roadIndex
+        ? this.terreno.geomorph.roadIndex.queryDist(ncx, ncz)
+        : { dist: 9999, width: 9.5 };
+      const onRoadBridge = rqBridge.dist < (rqBridge.width || 9.5) * 0.62;
+      const stormFloodRise = this.terreno.storm ? this.terreno.storm.getFloodRise() : 0;
+      if (!onRoadBridge || stormFloodRise > 2.2) {
+        const flood = this.terreno.storm
+          ? this.terreno.storm.getFloodInfoAt(ncx, ncz)
           : null;
-        const prevDepth = prevFlood ? prevFlood.depth : Math.max(0, evalMainRiver(prevCz).waterY - this.terreno.getHeightAt(prevCx, prevCz));
-        if (nextDepth >= prevDepth - 0.02) {
-          return { hit: true, reason: 'river', stepLift: 0 };
+        const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(ncz).waterY - this.terreno.getHeightAt(ncx, ncz));
+        if (nextDepth > maxFordDepth) {
+          const prevFlood = this.terreno.storm
+            ? this.terreno.storm.getFloodInfoAt(prevCx, prevCz)
+            : null;
+          const prevDepth = prevFlood ? prevFlood.depth : Math.max(0, evalMainRiver(prevCz).waterY - this.terreno.getHeightAt(prevCx, prevCz));
+          if (nextDepth >= prevDepth - 0.02) {
+            return { hit: true, reason: 'river', stepLift: 0 };
+          }
         }
       }
     }
@@ -1642,6 +1651,110 @@ export class FirstPersonHouseExplorer {
     });
   }
 
+  _gatherApexObstacleProviders(vehicleKey, cx, cz, yaw = 0) {
+    const staticBoxes = [];
+    let lanternCols = null;
+    let houseBoulderCols = null;
+
+    if (Math.abs(cx - 6) < 75 && Math.abs(cz - 4) < 75) {
+      for (let i = 0; i < STATIC_VEHICLE_OBSTACLES.length; i++) {
+        staticBoxes.push(STATIC_VEHICLE_OBSTACLES[i]);
+      }
+      const gWalls = this.house.garage ? this.house.garage.vehicleWallObstacles : [];
+      for (let i = 0; i < gWalls.length; i++) {
+        staticBoxes.push(gWalls[i]);
+      }
+      for (let i = 0; i < this.house.interactiveDoors.length; i++) {
+        const d = this.house.interactiveDoors[i];
+        if (d.isGarageGate && d.progress < 0.62) {
+          staticBoxes.push(d.collider);
+        }
+      }
+      lanternCols = LANTERN_OBSTACLES;
+      houseBoulderCols = this.house.boulderColliders || null;
+    } else if (Math.hypot(cx - VILLAGE.centerX, cz - VILLAGE.centerZ) < 115.0) {
+      for (let i = 0; i < VILLAGE_VEHICLE_OBSTACLES.length; i++) {
+        staticBoxes.push(VILLAGE_VEHICLE_OBSTACLES[i]);
+      }
+    } else if (Math.hypot(cx - NULL_EREA.originX, cz - NULL_EREA.originZ) < 110.0) {
+      staticBoxes.push({ minX: -28.2, maxX: -22.0, minZ: 29906.5, maxZ: 29913.5, reason: 'building' });
+      staticBoxes.push({ minX: -14.7, maxX: -13.7, minZ: 29909.2, maxZ: 29910.8, reason: 'building' });
+      const silo = this.house.nullErea ? this.house.nullErea.silo : null;
+      if (silo && !silo.isRoofSealed()) {
+        const sa = NULL_EREA.siloAperture;
+        staticBoxes.push({ minX: sa.minX - 0.6, maxX: sa.maxX + 0.6, minZ: sa.minZ - 0.6, maxZ: sa.maxZ + 0.6, reason: 'silo_pit' });
+      }
+    }
+
+    const forestCols = this.terreno
+      ? (this.terreno.getCollidersNear ? this.terreno.getCollidersNear(cx, cz) : this.terreno.getLocalColliders())
+      : null;
+    const aheadX = cx - Math.sin(yaw) * 52.0;
+    const aheadZ = cz - Math.cos(yaw) * 52.0;
+    const forestColsAhead = this.terreno && this.terreno.getCollidersNear
+      ? this.terreno.getCollidersNear(aheadX, aheadZ)
+      : null;
+    const landslideCols = this.terreno && this.terreno.storm
+      ? this.terreno.storm.getActiveLandslideColliders()
+      : null;
+
+    return {
+      forestCols,
+      forestColsAhead: forestColsAhead === forestCols ? null : forestColsAhead,
+      landslideCols,
+      lanternCols,
+      houseBoulderCols,
+      staticBoxes,
+      otherObbs: this._getOtherVehicleObbs(vehicleKey),
+    };
+  }
+
+  loadApexNeuralWeights(jsonOrText) {
+    if (!this.terreno?.autopilot?.neuralPolicy) {
+      throw new Error('自動運転エンジンが初期化されていません');
+    }
+    const meta = this.terreno.autopilot.neuralPolicy.loadWeightsFromJSON(jsonOrText, true);
+    const stepsTxt = meta.trainedSteps >= 1e9
+      ? ` (${(meta.trainedSteps / 1e9).toFixed(2)}B steps)`
+      : (meta.trainedSteps > 0 ? ` (${(meta.trainedSteps / 1e6).toFixed(1)}M steps)` : '');
+    this._notifyStatus(`AI重み適用完了：${meta.labelJp}${stepsTxt}`, 'ok');
+    return meta;
+  }
+
+  resetApexNeuralWeights() {
+    if (!this.terreno?.autopilot?.neuralPolicy) return null;
+    const meta = this.terreno.autopilot.neuralPolicy.resetToBuiltin();
+    this._notifyStatus(`自動運転AIを標準（${meta.labelJp}）へ復元しました`, 'ok');
+    return meta;
+  }
+
+  getApexNeuralMeta() {
+    return this.terreno?.autopilot?.neuralPolicy?.getMeta() || {
+      version: 'apex-omnidrive-v6.0',
+      format: 'v4-mlp',
+      source: 'builtin-structured-v6',
+      labelJp: '内蔵 APEX-v6 BASE',
+      trainedSteps: 0,
+      isCustom: false,
+      isTitanV6: false,
+    };
+  }
+
+  getApexDriveTelemetry(vehicleKey = null) {
+    const key = vehicleKey || this.drivingVehicle || this.selectedAutopilotVehicle || 'camper';
+    const route = this.autopilotRoutes[key];
+    return {
+      vehicleKey: key,
+      active: Boolean(route),
+      mode: route?.mode || 'IDLE',
+      lidarFrontMinM: route?.lidarFrontMin ?? 45.0,
+      collisionCount: route?.collisionCount || 0,
+      kTurnCount: route?.kTurnCount || 0,
+      stuckStage: route?.stuckStage || 0,
+      neural: this.getApexNeuralMeta(),
+    };
+  }
+
   _stepVehiclePhysics(vehicleKey, dt, isPlayerDriving) {
     const isKei = vehicleKey === 'kei';
     const isArmor = vehicleKey === 'armor';
@@ -1669,7 +1782,38 @@ export class FirstPersonHouseExplorer {
       ? this.terreno.storm.getFloodInfoAt(veh.pose.cx, veh.pose.cz)
       : { depth: 0, submerged: false, currentX: 0, currentZ: 0 };
 
-    // Autonomous Driving Controller for BOTH CAMPER-75 & ARMOR-155 (works seated OR unmanned with 4-Stage Anti-Stuck!)
+    const distFromCompound = Math.hypot(veh.pose.cx - TERRENO_WORLD.compoundCenterX, veh.pose.cz - TERRENO_WORLD.compoundCenterZ);
+    const openRoad = distFromCompound > 28.0;
+    const towingTrailer = isArmor && this.house.towContainer && this.house.towContainer.hitched;
+    const towMassScale = towingTrailer ? 0.86 : 1.0;
+
+    let climbGravAccel = 0;
+    let cliffMacroSlope = 0;
+    let macroNormal = null;
+    let fwdUphill = 0;
+    let latSlope = 0;
+    const fwdX = -Math.sin(veh.pose.yaw);
+    const fwdZ = -Math.cos(veh.pose.yaw);
+    const rightX = Math.cos(veh.pose.yaw);
+    const rightZ = -Math.sin(veh.pose.yaw);
+
+    if (this.terreno && openRoad) {
+      macroNormal = this.terreno.getMacroNormalAt
+        ? this.terreno.getMacroNormalAt(veh.pose.cx, veh.pose.cz, 3.2)
+        : this.terreno.getNormalAt(veh.pose.cx, veh.pose.cz, 3.2);
+      cliffMacroSlope = macroNormal.slope;
+      fwdUphill = -(fwdX * macroNormal.x + fwdZ * macroNormal.z);
+      latSlope = -(rightX * macroNormal.x + rightZ * macroNormal.z);
+      climbGravAccel = -fwdUphill * 12.8;
+    }
+
+    const maxClimbSlope = isArmor ? 0.49 : (isKei ? 0.46 : 0.42);
+    const cliffHardSlope = isArmor ? 0.60 : (isKei ? 0.56 : 0.52);
+    const maxSteer = isKei ? 0.54 : (isArmor ? 0.42 : 0.46);
+    const steerRate = isKei ? 8.2 : (isArmor ? 6.0 : 7.4);
+    const wheelbase = isArmor ? 7.80 : (isKei ? 1.98 : 4.55);
+
+    // ---- APEX-DRIVE v4.0 Autonomous Driving Controller (RoadGraph A* + 1.25m Local C-Space + 19-Cand MPPI + 32-Ray LiDAR + Smart K-Turn + Shielded Neural Policy) ----
     let autopilotActive = false;
     let unmannedFarTransit = false;
     const route = (vehicleKey === 'camper' || vehicleKey === 'armor') ? this.autopilotRoutes[vehicleKey] : null;
@@ -1678,7 +1822,63 @@ export class FirstPersonHouseExplorer {
         // Manual steering/throttle override cleanly hands control back to player
         this.cancelAutopilot(vehicleKey);
       } else {
-        const ctrl = this.terreno.autopilot.evaluateDrivingControl(veh.pose, veh.speed, route, grip, vehicleKey);
+        if (isArmor) this._ensureGarageGatesOpenForArmor();
+        const distToPlayer = Math.hypot(veh.pose.cx - this.playerPos.x, veh.pose.cz - this.playerPos.z);
+        if (!isPlayerDriving && this.activeBuilding !== vehicleKey && distToPlayer > 280.0 && route.isSummon) {
+          unmannedFarTransit = true;
+        }
+        const rqNow = this.terreno.geomorph?.roadIndex
+          ? this.terreno.geomorph.roadIndex.queryDist(veh.pose.cx, veh.pose.cz)
+          : { dist: 9999, width: 9.5 };
+        const onRoad = rqNow.dist < (rqNow.width || 9.5) * 0.65 + 1.5;
+
+        const baseAccelFwd = (unmannedFarTransit ? 16.0 : (isArmor ? (openRoad ? 7.8 : 5.0) : (openRoad ? 8.4 : 5.2))) * towMassScale;
+        const baseAccelRev = (isArmor ? 4.2 : 4.6) * towMassScale;
+        const baseMaxFwd = (unmannedFarTransit ? 36.0 : (isArmor ? (openRoad ? 17.5 : 7.2) : (openRoad ? 18.5 : 7.0))) * (towingTrailer ? 0.90 : 1.0);
+
+        const apexSpec = {
+          hw: (isArmor ? ARMOR_CAMPER.width : CAMPER.width) * 0.5,
+          hl: (isArmor ? ARMOR_CAMPER.length : CAMPER.length) * 0.5,
+          wheelbase,
+          maxSteer,
+          steerRate,
+          accelFwd: baseAccelFwd,
+          accelRev: baseAccelRev,
+          maxSpeed: baseMaxFwd,
+          minSpeed: isArmor ? 3.2 : 3.4,
+          maxStepH: isArmor ? 0.95 : 0.62,
+          maxFordDepth: isArmor ? 1.95 : 0.92,
+          maxClimbSlope,
+          cliffHardSlope,
+          isArmor,
+          arriveDist: isArmor ? 5.5 : 4.5,
+          lookaheadMin: isArmor ? 13.5 : 9.5,
+          lookaheadMax: isArmor ? 32.0 : 25.0,
+        };
+
+        const providers = this._gatherApexObstacleProviders(vehicleKey, veh.pose.cx, veh.pose.cz, veh.pose.yaw);
+        const ctrl = this.terreno.autopilot.evaluateApexControl({
+          pose: veh.pose,
+          speed: veh.speed,
+          velX: veh.velX,
+          velZ: veh.velZ,
+          steerAngle: veh.steerAngle,
+          grip,
+          route,
+          vehicleKey,
+          spec: apexSpec,
+          providers,
+          dt,
+          wasBlocked: Boolean(route.lastFrameBlocked),
+          onRoad,
+          isTowing: towingTrailer,
+          fwdUphill,
+          latSlope,
+        });
+
+        route.mode = ctrl.mode || 'CRUISE';
+        route.lidarFrontMin = ctrl.lidarFrontMin ?? 45.0;
+
         if (ctrl.arrived) {
           const wasSummon = Boolean(route.isSummon);
           this.autopilotRoutes[vehicleKey] = null;
@@ -1693,26 +1893,13 @@ export class FirstPersonHouseExplorer {
           }
           this._notifyDriveHUD();
         } else {
-          // Stage 1 Active Recovery Override: smooth reverse + counter-steer extraction away from obstacle!
-          if (route.recoverTimer > 0) {
-            route.recoverTimer = Math.max(0, route.recoverTimer - dt);
-            throttle = -0.95;
-            steerIn = route.recoverDir || 1;
-          } else {
-            throttle = ctrl.throttle;
-            steerIn = ctrl.steer;
-          }
+          throttle = ctrl.throttle;
+          steerIn = ctrl.steer;
           autopilotActive = true;
-          const distToPlayer = Math.hypot(veh.pose.cx - this.playerPos.x, veh.pose.cz - this.playerPos.z);
-          if (!isPlayerDriving && this.activeBuilding !== vehicleKey && distToPlayer > 320.0 && route.isSummon) {
-            unmannedFarTransit = true;
-          }
         }
       }
     }
 
-    const maxSteer = isKei ? 0.54 : (isArmor ? 0.42 : 0.46);
-    const steerRate = isKei ? 8.2 : (isArmor ? 5.6 : 6.8);
     const targetSteer = steerIn * maxSteer;
     veh.steerAngle += (targetSteer - veh.steerAngle) * Math.min(1, dt * steerRate);
     veh.frontSteerPivots.forEach((p, idx) => {
@@ -1720,33 +1907,10 @@ export class FirstPersonHouseExplorer {
     });
     veh.steerWheelGroup.rotation.z = veh.steerAngle * 2.4;
 
-    const distFromCompound = Math.hypot(veh.pose.cx - TERRENO_WORLD.compoundCenterX, veh.pose.cz - TERRENO_WORLD.compoundCenterZ);
-    const openRoad = distFromCompound > 28.0;
-    const towingTrailer = isArmor && this.house.towContainer && this.house.towContainer.hitched;
-    const towMassScale = towingTrailer ? 0.86 : 1.0;
-
-    const accelFwd = (unmannedFarTransit ? 18.0 : (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.6 : 4.8) : (openRoad ? 8.0 : 4.8)))) * towMassScale;
-    const accelRev = (isKei ? 5.2 : (isArmor ? 4.0 : 4.4)) * towMassScale;
-    const maxFwd = (unmannedFarTransit ? 48.0 : (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 7.0) : (openRoad ? 18.0 : 6.8)))) * (towingTrailer ? 0.90 : 1.0);
-    const maxRev = isKei ? 5.0 : 4.2;
-
-    let climbGravAccel = 0;
-    let cliffMacroSlope = 0;
-    let macroNormal = null;
-    const fwdX = -Math.sin(veh.pose.yaw);
-    const fwdZ = -Math.cos(veh.pose.yaw);
-
-    if (this.terreno && openRoad) {
-      macroNormal = this.terreno.getMacroNormalAt
-        ? this.terreno.getMacroNormalAt(veh.pose.cx, veh.pose.cz, 3.2)
-        : this.terreno.getNormalAt(veh.pose.cx, veh.pose.cz, 3.2);
-      cliffMacroSlope = macroNormal.slope;
-      const fwdUphill = -(fwdX * macroNormal.x + fwdZ * macroNormal.z);
-      climbGravAccel = -fwdUphill * 12.8;
-    }
-
-    const maxClimbSlope = isArmor ? 0.49 : (isKei ? 0.46 : 0.42);
-    const cliffHardSlope = isArmor ? 0.60 : (isKei ? 0.56 : 0.52);
+    const accelFwd = (unmannedFarTransit ? 16.0 : (isKei ? (openRoad ? 9.4 : 5.6) : (isArmor ? (openRoad ? 7.8 : 5.0) : (openRoad ? 8.4 : 5.2)))) * towMassScale;
+    const accelRev = (isKei ? 5.2 : (isArmor ? 4.2 : 4.6)) * towMassScale;
+    const maxFwd = (unmannedFarTransit ? 36.0 : (isKei ? (openRoad ? 19.0 : 7.2) : (isArmor ? (openRoad ? 17.5 : 7.2) : (openRoad ? 18.5 : 7.0)))) * (towingTrailer ? 0.90 : 1.0);
+    const maxRev = isKei ? 5.0 : 4.5;
 
     const tractionAccelScale = 0.42 + 0.58 * grip;
     const coastDrag = 1.4 + 2.5 * grip;
@@ -1804,11 +1968,10 @@ export class FirstPersonHouseExplorer {
       veh.velZ += flood.currentZ * currentScale * dt * 2.4;
     }
 
-    const rightX = Math.cos(veh.pose.yaw);
-    const rightZ = -Math.sin(veh.pose.yaw);
     veh.slipSpeed = veh.velX * rightX + veh.velZ * rightZ;
 
     let blocked = false;
+    let blockedReason = null;
     let maxStepLift = 0;
     let totalMoved = 0;
     let totalDYaw = 0;
@@ -1823,9 +1986,8 @@ export class FirstPersonHouseExplorer {
     );
 
     if (planarSpeed > 0.005 || Math.abs(veh.speed) > 0.005) {
-      const subSteps = 3;
+      const subSteps = Math.abs(veh.speed) > 20.0 ? 5 : 3;
       const subDt = dt / subSteps;
-      const wheelbase = isArmor ? 7.80 : (isKei ? 1.98 : 4.55);
       const wheelRad = isArmor ? ARMOR_CAMPER.wheelRadius : (isKei ? KEI.wheelRadius : CAMPER.wheelRadius);
 
       for (let sIdx = 0; sIdx < subSteps; sIdx++) {
@@ -1855,6 +2017,8 @@ export class FirstPersonHouseExplorer {
             veh.speed = -travelSign * Math.min(2.2, (nextMacro.slope - cliffHardSlope) * 5.0 + 0.65);
             veh.velX *= 0.25;
             veh.velZ *= 0.25;
+            blocked = true;
+            blockedReason = 'cliff';
             break;
           }
           if (uphillDot > 0.12 && nextMacro.slope > maxClimbSlope && stepRise > 0) {
@@ -1877,37 +2041,42 @@ export class FirstPersonHouseExplorer {
           totalDYaw += dYaw;
           if (res.stepLift > maxStepLift) maxStepLift = res.stepLift;
         } else {
-          // If autonomous camper encounters a roadside tree/boulder/shutter, smoothly nudge around it!
-          if (autopilotActive && (res.reason === 'forest' || res.reason === 'landslide' || res.reason === 'boulder')) {
-            const prevY = veh.pose.yaw;
-            let dodged = false;
-            for (const dirSign of [steerIn >= 0 ? 1 : -1, steerIn >= 0 ? -1 : 1]) {
-              const altYaw = prevY + dirSign * 0.11;
-              const altCx = veh.pose.cx - Math.sin(altYaw) * (distFwd * 0.65);
-              const altCz = veh.pose.cz - Math.cos(altYaw) * (distFwd * 0.65);
-              if (!testVehCollision(altCx, altCz, altYaw, veh.pose.cx, veh.pose.cz).hit) {
-                veh.pose.cx = altCx;
-                veh.pose.cz = altCz;
-                veh.pose.yaw = altYaw;
-                totalMoved += distFwd * 0.65;
-                totalDYaw += (altYaw - prevY);
-                dodged = true;
-                break;
-              }
+          // Newton's 3rd Law tangential wall-slide: if lateral storm/slope slip pressed the flank into a trunk,
+          // the obstacle normal cancels sideways slip while allowing friction-damped wheel-axis motion if clear.
+          const tanStepX = -Math.sin(nyaw) * distFwd;
+          const tanStepZ = -Math.cos(nyaw) * distFwd;
+          const slipDelta = Math.hypot(stepX - tanStepX, stepZ - tanStepZ);
+          let slidCleanly = false;
+          if (res.reason !== 'shutter' && res.reason !== 'cliff' && slipDelta > 0.0005 && Math.abs(distFwd) > 0.0002) {
+            const tcx = veh.pose.cx + tanStepX;
+            const tcz = veh.pose.cz + tanStepZ;
+            const tanRes = testVehCollision(tcx, tcz, nyaw, veh.pose.cx, veh.pose.cz);
+            if (!tanRes.hit) {
+              veh.pose.cx = tcx;
+              veh.pose.cz = tcz;
+              veh.pose.yaw = nyaw;
+              veh.speed *= Math.max(0.88, 1.0 - subDt * 1.8);
+              veh.velX = -Math.sin(nyaw) * veh.speed;
+              veh.velZ = -Math.cos(nyaw) * veh.speed;
+              totalMoved += distFwd;
+              totalDYaw += dYaw;
+              if (tanRes.stepLift > maxStepLift) maxStepLift = tanRes.stepLift;
+              slidCleanly = true;
             }
-            if (dodged) continue;
           }
+          if (slidCleanly) continue;
+
           if (autopilotActive && res.reason === 'shutter') {
-            // Wait patiently while garage gate rolls open!
-            veh.speed *= 0.4;
-            veh.velX *= 0.4;
-            veh.velZ *= 0.4;
+            veh.speed *= 0.35;
+            veh.velX *= 0.35;
+            veh.velZ *= 0.35;
             break;
           }
-          veh.speed = isArmor ? -Math.sign(veh.speed) * Math.min(0.6, Math.abs(veh.speed) * 0.15) : 0;
+          veh.speed = isArmor ? -Math.sign(veh.speed) * Math.min(0.45, Math.abs(veh.speed) * 0.12) : 0;
           veh.velX *= 0.1;
           veh.velZ *= 0.1;
           blocked = true;
+          blockedReason = res.reason;
           if (isPlayerDriving) {
             this.vehicleBlockedTimer = 0.55;
             if (this.bumpCooldown <= 0) {
@@ -1943,96 +2112,101 @@ export class FirstPersonHouseExplorer {
       this._applyVehicleTerrainPose(veh, vehicleKey, 0);
     }
 
-    // ---- 4-STAGE SELF-HEALING ANTI-STUCK RECOVERY CONTROLLER (Breakthrough #4 Guarantee!) ----
+    // ---- APEX-DRIVE v4.0 EMERGENCY DEADLOCK GUARD (Only triggers if physically wedged after K-Turns!) ----
     if (autopilotActive && route) {
+      if (blocked && !route.lastFrameBlocked) {
+        route.collisionCount = (route.collisionCount || 0) + 1;
+      }
+      route.lastFrameBlocked = blocked;
       route.checkClock = (route.checkClock || 0) + dt;
-      if (blocked) route.stuckTimer = (route.stuckTimer || 0) + dt * 1.45;
-      if (route.checkClock >= 0.95) {
+      if (blocked) route.stuckTimer = (route.stuckTimer || 0) + dt * 1.1;
+
+      if (route.checkClock >= 1.2) {
         const netMoved = Math.hypot(veh.pose.cx - (route.lastCheckX ?? veh.pose.cx), veh.pose.cz - (route.lastCheckZ ?? veh.pose.cz));
         route.lastCheckX = veh.pose.cx;
         route.lastCheckZ = veh.pose.cz;
         route.checkClock = 0;
-        if (netMoved < 0.95) {
-          route.stuckTimer = (route.stuckTimer || 0) + 1.15;
+        if (netMoved < 1.2) {
+          route.stuckTimer = (route.stuckTimer || 0) + 1.25;
         } else {
-          route.stuckTimer = Math.max(0, (route.stuckTimer || 0) - 1.4);
+          route.stuckTimer = Math.max(0, (route.stuckTimer || 0) - 2.2);
           if (route.stuckTimer < 0.2) route.stuckStage = 0;
         }
       }
 
-      if ((route.stuckTimer || 0) >= 1.5 && (route.stuckStage || 0) === 0) {
-        // Stage 1: Smart Reverse + Counter-Steer Extraction away from obstacle!
+      if ((route.stuckTimer || 0) >= 4.5 && (route.stuckStage || 0) === 0) {
+        // Stage 1 Emergency: Force fresh macro + local C-Space detour to clear side!
         route.stuckStage = 1;
-        route.recoverDir = (route.recoverDir || 1) * -1;
-        route.recoverTimer = 1.65;
+        route.localPlanTimer = 0;
+        route.kTurnMode = 'CRUISE';
+        route.kTurnCooldown = 0;
         if (vehicleKey === 'armor') this._ensureGarageGatesOpenForArmor();
-      } else if ((route.stuckTimer || 0) >= 4.2 && route.stuckStage === 1) {
-        // Stage 2: Lateral Sidestep Detour + Live A* Re-Route around cluster/landslide!
+      } else if ((route.stuckTimer || 0) >= 8.5 && route.stuckStage === 1) {
+        // Stage 2 Emergency: 24-Ray Free-Corridor Heading Alignment (never lands inside obstacle!)
         route.stuckStage = 2;
-        const sideSign = route.recoverDir || 1;
-        const perpX = Math.cos(veh.pose.yaw) * sideSign * 14.0;
-        const perpZ = -Math.sin(veh.pose.yaw) * sideSign * 14.0;
-        const midX = Math.max(TERRENO_WORLD.playMinX + 10, Math.min(TERRENO_WORLD.playMaxX - 10, veh.pose.cx + perpX));
-        const midZ = Math.max(TERRENO_WORLD.playMinZ + 10, Math.min(TERRENO_WORLD.playMaxZ - 10, veh.pose.cz + perpZ));
-        const leg2 = this.terreno.autopilot.computeSafeRoute(midX, midZ, route.goalX, route.goalZ);
-        route.points = [[veh.pose.cx, veh.pose.cz], [midX, midZ], ...leg2.slice(1)];
-        route.cursor = 0;
-        route.recoverTimer = 1.15;
-      } else if ((route.stuckTimer || 0) >= 7.8 && route.stuckStage === 2) {
-        // Stage 3: 16-Ray Free-Corridor Heading Probe & Escape Alignment!
-        route.stuckStage = 3;
-        let escaped = false;
-        for (let k = 0; k < 16; k++) {
-          const probeYaw = veh.pose.yaw + (k * Math.PI * 2) / 16;
-          const px = veh.pose.cx - Math.sin(probeYaw) * 5.2;
-          const pz = veh.pose.cz - Math.cos(probeYaw) * 5.2;
-          if (!testVehCollision(px, pz, probeYaw, veh.pose.cx, veh.pose.cz).hit) {
-            veh.pose.cx = px;
-            veh.pose.cz = pz;
-            veh.pose.yaw = probeYaw;
-            veh.speed = 4.2;
-            this._applyVehicleTerrainPose(veh, vehicleKey, 0);
-            escaped = true;
-            break;
+        const goalPt = route.points[Math.min(route.points.length - 1, (route.cursor || 0) + 2)] || [route.goalX, route.goalZ];
+        const aimToGoal = Math.atan2(-(goalPt[0] - veh.pose.cx), -(goalPt[1] - veh.pose.cz));
+        let bestEsc = null;
+        let bestEscScore = -1e9;
+        for (let k = 0; k < 24; k++) {
+          const probeYaw = aimToGoal + (k * Math.PI * 2) / 24;
+          for (const dist of [4.2, 6.8]) {
+            const px = veh.pose.cx - Math.sin(probeYaw) * dist;
+            const pz = veh.pose.cz - Math.cos(probeYaw) * dist;
+            if (!testVehCollision(px, pz, probeYaw, veh.pose.cx, veh.pose.cz).hit) {
+              const align = Math.cos(probeYaw - aimToGoal);
+              const sc = align * 10.0 + dist;
+              if (sc > bestEscScore) {
+                bestEscScore = sc;
+                bestEsc = { px, pz, probeYaw };
+              }
+            }
           }
         }
-        if (escaped) route.stuckTimer = 3.0;
-      } else if ((route.stuckTimer || 0) >= 11.5) {
-        // Stage 4: Guaranteed Clear-Path Self-Correction onto Next Verified Safe Route Node!
+        if (bestEsc) {
+          veh.pose.cx = bestEsc.px;
+          veh.pose.cz = bestEsc.pz;
+          veh.pose.yaw = bestEsc.probeYaw;
+          veh.speed = 3.8;
+          veh.velX = -Math.sin(bestEsc.probeYaw) * 3.8;
+          veh.velZ = -Math.cos(bestEsc.probeYaw) * 3.8;
+          this._applyVehicleTerrainPose(veh, vehicleKey, 0);
+          route.localPlanTimer = 0;
+          route.stuckTimer = 2.5;
+        }
+      } else if ((route.stuckTimer || 0) >= 13.5) {
+        // Stage 3 Ultimate Deadlock Recovery: Place cleanly onto next collision-free route corridor node
+        route.stuckStage = 3;
         const nextIdx = Math.min(route.points.length - 1, (route.cursor || 0) + 2);
         const nxt = route.points[nextIdx];
         const lookIdx = Math.min(route.points.length - 1, nextIdx + 1);
         const lookPt = route.points[lookIdx];
         if (nxt) {
           const aimYaw = Math.atan2(-(lookPt[0] - nxt[0]), -(lookPt[1] - nxt[1]));
-          // Probe small radius around safe route node so it never lands inside a tree or building!
-          let placed = false;
-          const offsets = [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4], [6, 6], [-6, -6]];
+          const offsets = [[0, 0], [4, 0], [-4, 0], [0, 4], [0, -4], [6, 6], [-6, -6], [8, 0], [-8, 0]];
           for (let oi = 0; oi < offsets.length; oi++) {
             const tx = nxt[0] + offsets[oi][0];
             const tz = nxt[1] + offsets[oi][1];
             const checkCol = testVehCollision(tx, tz, aimYaw, tx, tz);
-            if (!checkCol.hit || checkCol.reason === 'forest') {
+            if (!checkCol.hit) {
               veh.pose.cx = tx;
               veh.pose.cz = tz;
               veh.pose.yaw = aimYaw;
-              veh.speed = 5.0;
-              veh.velX = -Math.sin(aimYaw) * 5.0;
-              veh.velZ = -Math.cos(aimYaw) * 5.0;
+              veh.speed = 4.5;
+              veh.velX = -Math.sin(aimYaw) * 4.5;
+              veh.velZ = -Math.cos(aimYaw) * 4.5;
               this._applyVehicleTerrainPose(veh, vehicleKey, 0);
               if (isArmor && this.house.towContainer && this.house.towContainer.hitched) {
                 this._updateTowedContainer(0);
               }
-              placed = true;
+              route.cursor = nextIdx;
+              route.stuckTimer = 0;
+              route.stuckStage = 0;
+              route.localPlanTimer = 0;
+              route.lastCheckX = veh.pose.cx;
+              route.lastCheckZ = veh.pose.cz;
               break;
             }
-          }
-          if (placed) {
-            route.cursor = nextIdx;
-            route.stuckTimer = 0;
-            route.stuckStage = 0;
-            route.lastCheckX = veh.pose.cx;
-            route.lastCheckZ = veh.pose.cz;
           }
         }
       }
@@ -2042,6 +2216,7 @@ export class FirstPersonHouseExplorer {
       moved: Math.abs(totalMoved) > 0.0001 || Math.abs(totalDYaw) > 0.00001,
       totalDYaw,
       blocked,
+      blockedReason,
       cliffMacroSlope,
       grip,
       maxFwd,
