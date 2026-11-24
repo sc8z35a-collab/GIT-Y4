@@ -11,9 +11,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <title>NARROW-50</title>
-  <script type="module" crossorigin src="./assets/dev-C3frQDAH.js"></script>
+  <script type="module" crossorigin src="./assets/dev-DL0SeZ2G.js"></script>
   <link rel="modulepreload" crossorigin href="./assets/three-vendor-yHBgYjMZ.js">
-  <link rel="stylesheet" crossorigin href="./assets/dev-3oE99zHh.css">
+  <link rel="stylesheet" crossorigin href="./assets/dev-D48x0cW-.css">
 </head>
 <body>
   <div id="stage" class="stage">
@@ -114,6 +114,22 @@
           <input id="toggle-perf" type="checkbox" />
           <span class="switch-track"></span>
         </label>
+
+        <div class="setting-ai-box">
+          <div class="setting-label-row">
+            <div class="setting-title-col">
+              <span>APEX-OMNIDRIVE v6</span>
+              <small id="apex-ai-meta">内蔵 APEX-v6 BASE</small>
+            </div>
+            <span id="apex-ai-badge" class="ai-badge">BASE</span>
+          </div>
+          <div class="setting-ai-btns">
+            <a id="btn-colab-l4" class="setting-action-btn setting-action-colab" href="https://colab.research.google.com/github/sc8z35a-collab/GIT-Y4/blob/main/colab/APEX_DRIVE_L4_GPU_Training.ipynb" target="_blank" rel="noopener noreferrer">Colab TITAN</a>
+            <button id="btn-ai-import" class="setting-action-btn setting-action-accent" type="button">重み読込</button>
+            <button id="btn-ai-reset" class="setting-action-btn hidden" type="button">標準</button>
+            <input id="input-ai-weights" type="file" accept=".json,application/json" class="hidden" />
+          </div>
+        </div>
 
         <div class="settings-actions">
           <button id="btn-fullscreen" class="setting-action-btn" type="button">全画面</button>
