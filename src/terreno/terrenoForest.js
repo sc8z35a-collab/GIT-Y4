@@ -859,10 +859,10 @@ function buildGroundClumpGeo(uvRect, cardW, cardH, splayPitch) {
 }
 
 function buildBoulderGeo() {
-  const rock = new THREE.SphereGeometry(1.0, 14, 10);
-  rock.scale(1.18, 0.64, 0.96);
-  perturbGeometry(rock, 0.16, -2.0, 191);
-  rock.translate(0, 0.28, 0);
+  const rock = new THREE.SphereGeometry(1.0, 16, 12);
+  rock.scale(1.26, 0.48, 1.04);
+  perturbGeometry(rock, 0.19, -2.0, 191);
+  rock.translate(0, 0.12, 0);
   return rock;
 }
 
@@ -1546,7 +1546,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       if (isInsideCompoundClearing(wx, wz, 1.0)) continue;
       if (isInsideSouthRect(wx, wz, 3.0)) continue;
       if (isOnBridge(wx, wz, 5.2)) continue;
-      if (geomorph.isInsideLandformTreeExclusion && geomorph.isInsideLandformTreeExclusion(wx, wz)) continue;
+      if (geomorph.isNaturallyBarrenOrSubmerged && geomorph.isNaturallyBarrenOrSubmerged(wx, wz)) continue;
 
       const rq = geomorph.roadIndex.queryDist(wx, wz);
       if (rq.dist < rq.width * 0.5 + 3.0) continue;
@@ -1801,6 +1801,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
       if (isInsideCompoundClearing(wx, wz, 0.4) || isInsideSouthRect(wx, wz, 2.5)) continue;
       if (isOnBridge(wx, wz, 3.2)) continue;
+      if (geomorph.isNaturallyBarrenOrSubmerged && geomorph.isNaturallyBarrenOrSubmerged(wx, wz)) continue;
       const rq = geomorph.roadIndex.queryDist(wx, wz);
       if (rq.dist < rq.width * 0.5 + 1.4) continue;
       const rv = evalMainRiver(wz);
@@ -1836,6 +1837,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
       if (isInsideCompoundPaving(wx, wz) || isInsideSouthRect(wx, wz, 2.0)) continue;
       if (isOnBridge(wx, wz, 2.8)) continue;
+      if (geomorph.isNaturallyBarrenOrSubmerged && geomorph.isNaturallyBarrenOrSubmerged(wx, wz)) continue;
       const rq = geomorph.roadIndex.queryDist(wx, wz);
       if (rq.dist < rq.width * 0.5 + 0.6) continue;
       const rv = evalMainRiver(wz);
@@ -1866,6 +1868,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
       if (isInsideCompoundClearing(wx, wz, 1.5) || isInsideSouthRect(wx, wz, 3.0)) continue;
       if (isOnBridge(wx, wz, 5.2)) continue;
+      if (geomorph.getNaturalWaterYAt && geomorph.getNaturalWaterYAt(wx, wz) > getGroundY(wx, wz) - 0.1) continue;
       const rq = geomorph.roadIndex.queryDist(wx, wz);
       if (rq.dist < rq.width * 0.5 + 3.0) continue;
 
@@ -2209,6 +2212,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
           if (wx < TERRENO_WORLD.minX + 10 || wx > TERRENO_WORLD.maxX - 10 || wz < TERRENO_WORLD.minZ + 10 || wz > TERRENO_WORLD.maxZ - 10) continue;
           if (isInsideCompoundClearing(wx, wz, 2.0) || isInsideSouthRect(wx, wz, 6.0)) continue;
           if (isOnBridge(wx, wz, 7.0)) continue;
+          if (geomorph.isNaturallyBarrenOrSubmerged && geomorph.isNaturallyBarrenOrSubmerged(wx, wz)) continue;
 
           const geo = geomorph.sampleGeoBilinear(wx, wz);
           if (geo.roadPad > 0.28) continue;

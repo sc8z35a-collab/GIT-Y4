@@ -398,6 +398,7 @@ precision highp float;
 
 uniform sampler2D uGeoMap;
 uniform sampler2D uHorizonMap;
+uniform sampler2D uLithoMap;
 uniform sampler2D uLocalDetailMap;
 uniform vec2 uLocalDetailMin;
 uniform float uLocalDetailSpan;
@@ -675,10 +676,11 @@ void main() {
 
   vec2 horizonUV = (((xz - uWorldMin) / uWorldSize) * (uAtlasSize - 1.0) + 0.5) / uAtlasSize;
   vec4 horz = texture2D(uHorizonMap, clamp(horizonUV, 0.0005, 0.9995));
+  vec4 litho = texture2D(uLithoMap, clamp(horizonUV, 0.0005, 0.9995));
   float skyViewAO = horz.b;
   float canopyDensity = horz.a * (1.0 - vOutRim * 0.35);
 
-  float wetness = vGeo.g;
+  float wetness = max(vGeo.g, litho.a * 0.72);
   float ridge = vGeo.b;
   float roadPad = vGeo.a;
   float asl = uBaseElevationASL + vWorldPos.y;
@@ -773,6 +775,39 @@ void main() {
               + colMeadow * wMeadow
               + colSouthPlain * wSouthPlain;
 
+  // 4b. TERRENO 5.0 Continuous 4-Channel Geological Lithology Surface Expression!
+  //     R: Dark Volcanic Basalt / Scoria / Lava Ash
+  //     G: Pale Karst Limestone / Travertine Mineral Sinter / Shirasu Pumice
+  //     B: Ochre Badlands Clay / Raw Landslide Earth / Hydrothermal Sulfur Alteration
+  //     A: Saturated Peat Mire / Seepage Fen / Backswamp Silt / Wet Cascade Bedrock
+  float lithoNoise = fbm2(xz * 0.014 + vec2(4.7, -8.3));
+  if (litho.a > 0.04) {
+    // Rich dark mossy peat bog / sedge fen / wet silt shoreline
+    vec3 colPeat = mix(vec3(0.022, 0.042, 0.022), texForest.rgb * vec3(0.42, 0.52, 0.28), 0.45 + 0.35 * lithoNoise);
+    float peatMask = smoothstep(0.08, 0.72, litho.a + (lithoNoise - 0.5) * 0.16) * (1.0 - smoothstep(0.32, 0.62, slopeRad));
+    albedo = mix(albedo, colPeat, peatMask * 0.72);
+  }
+  if (litho.b > 0.04) {
+    // Iron-ochre badlands clay / exposed landslide regolith / sulfurous hydrothermal bleached earth
+    vec3 colOchre = texGravel.rgb * vec3(0.74, 0.50, 0.29) * (0.78 + 0.44 * microVar);
+    vec3 colSulfur = texGravel.rgb * vec3(0.84, 0.80, 0.54) * (0.85 + 0.30 * lithoNoise);
+    vec3 colEarth = mix(colOchre, colSulfur, smoothstep(0.22, 0.68, litho.g));
+    float earthMask = smoothstep(0.12, 0.76, litho.b + (lithoNoise - 0.5) * 0.20);
+    albedo = mix(albedo, colEarth, earthMask * 0.86);
+  }
+  if (litho.g > 0.06 && litho.b < 0.55) {
+    // Pale weathered karst limestone / mineral travertine sinter / Shirasu pumice-tuff
+    vec3 colLimeSoil = texGravel.rgb * vec3(0.86, 0.84, 0.74) * (0.84 + 0.30 * microVar);
+    float limeSoilMask = smoothstep(0.28, 0.82, litho.g + (lithoNoise - 0.5) * 0.18);
+    albedo = mix(albedo, colLimeSoil, limeSoilMask * 0.54);
+  }
+  if (litho.r > 0.06) {
+    // Dark charcoal volcanic basalt / scoria ash / wrinkled shield lava fields
+    vec3 colVolcSoil = texGravel.rgb * vec3(0.24, 0.23, 0.24) * (0.74 + 0.48 * microVar);
+    float volcSoilMask = smoothstep(0.22, 0.82, litho.r + (lithoNoise - 0.5) * 0.18);
+    albedo = mix(albedo, colVolcSoil, volcSoilMask * 0.82);
+  }
+
   // Damp drainage gullies & rich dark mossy swales
   float dampSwale = smoothstep(0.46, 0.86, wetness) * (1.0 - smoothstep(0.25, 0.55, slopeRad));
   albedo = mix(albedo, vec3(0.016, 0.036, 0.018) * (0.74 + 0.52 * texForest.a), dampSwale * 0.44);
@@ -784,12 +819,25 @@ void main() {
   colWetCobble *= mix(1.0, 0.48, wetShoreBand);
   albedo = mix(albedo, colWetCobble, riverCobble * 0.82);
 
-  // Dramatic Triplanar Stratified Japanese Granite Cliffs & Rocky Mountain Ridges!
-  float alpineRockBoost = smoothstep(780.0, 1180.0, asl) * 0.28;
-  float rockMask = smoothstep(0.36, 0.66, slopeRad + alpineRockBoost + (texRock.a - 0.5) * 0.14 + ridge * 0.10);
+  // Dramatic Triplanar Stratified Cliffs — lithology-responsive (Granite, Dark Basalt Jointing, Pale Karst Limestone, Wet Cascade Rock!)
+  float alpineRockBoost = smoothstep(780.0, 1180.0, asl) * 0.28 + max(litho.r, litho.b) * 0.18;
+  float rockMask = smoothstep(0.34, 0.64, slopeRad + alpineRockBoost + (texRock.a - 0.5) * 0.14 + ridge * 0.10);
   vec3 colGranite = texRock.rgb * vec3(0.64, 0.66, 0.68);
-  // Subtle green moss shelves clinging to flatter horizontal granite cracks below treeline
-  float cliffMoss = smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(820.0, 1100.0, asl)) * smoothstep(0.42, 0.78, microVar);
+  // Dark volcanic basalt cliffs with subtle natural vertical fracture striations (ZERO fake 3D cylinders!)
+  float basaltJoint = 0.84 + 0.22 * sin((xz.x + xz.y) * 0.72 + fbm2(xz * 0.08) * 4.2);
+  vec3 colBasaltCliff = texRock.rgb * vec3(0.25, 0.27, 0.30) * basaltJoint;
+  colGranite = mix(colGranite, colBasaltCliff, smoothstep(0.18, 0.72, litho.r));
+  // Pale weathered karst limestone & Shirasu pumice cliffs
+  vec3 colLimeCliff = texRock.rgb * vec3(0.96, 0.93, 0.84);
+  colGranite = mix(colGranite, colLimeCliff, smoothstep(0.20, 0.75, litho.g) * (1.0 - smoothstep(0.3, 0.7, litho.r)));
+  // Ochre badlands & landslide exposed tuff rock
+  vec3 colOchreCliff = texRock.rgb * vec3(0.76, 0.54, 0.34);
+  colGranite = mix(colGranite, colOchreCliff, smoothstep(0.25, 0.78, litho.b));
+  // Wet darkened mossy cascade headwalls & spring alcoves
+  float wetCascadeRock = smoothstep(0.28, 0.78, litho.a) * smoothstep(0.28, 0.65, slopeRad);
+  colGranite *= mix(1.0, 0.52, wetCascadeRock);
+  // Subtle green moss shelves clinging to flatter horizontal rock cracks below treeline
+  float cliffMoss = smoothstep(0.55, 0.85, N.y) * (1.0 - smoothstep(820.0, 1100.0, asl)) * smoothstep(0.42, 0.78, microVar) * (1.0 - litho.b * 0.7);
   colGranite = mix(colGranite, vec3(0.036, 0.068, 0.028), cliffMoss * 0.48);
   albedo = mix(albedo, colGranite, rockMask * 0.94);
 
@@ -824,7 +872,8 @@ void main() {
 
   // 5. Far-Distance (> 180m .. 60,000m) Rich Multi-Species Japanese Mountain Forest Canopy Mosaic!
   float isNullPad = evalSouthRectWeight(xz);
-  float farCanopyBlend = smoothstep(160.0, 440.0, dist) * canopyDensity * (1.0 - rockMask * 0.88) * (1.0 - snowMask) * (1.0 - isRoad * 0.92) * (1.0 - isVillageYard * 0.92) * (1.0 - isNullPad);
+  float barrenLitho = smoothstep(0.56, 0.84, max(litho.b, litho.r * 0.92));
+  float farCanopyBlend = smoothstep(160.0, 440.0, dist) * canopyDensity * (1.0 - rockMask * 0.88) * (1.0 - barrenLitho * 0.90) * (1.0 - snowMask) * (1.0 - isRoad * 0.92) * (1.0 - isVillageYard * 0.92) * (1.0 - isNullPad);
   if (farCanopyBlend > 0.01) {
     float c1 = glslNoise(xz * 0.095);
     float c2 = glslNoise(xz * 0.24 + vec2(31.2, -19.7));
@@ -1125,6 +1174,7 @@ export function createTerrenoClipmap(geomorph, atmoUniforms) {
     ...atmoUniforms,
     uGeoMap: { value: geomorph.geoTexture },
     uHorizonMap: { value: geomorph.horizonTexture },
+    uLithoMap: { value: geomorph.lithoTexture },
     uLocalDetailMap: { value: localDetailTex },
     uLocalDetailMin: { value: localDetailMin },
     uLocalDetailSpan: { value: LOCAL_DETAIL_SPAN },

@@ -82,6 +82,8 @@ function bakeAlpineReliefBitmap(geomorph) {
   const heights = geomorph.heights;
   const geoRGBA = geomorph.geoRGBA;
   const horizonRGBA = geomorph.horizonRGBA;
+  const lithoRGBA = geomorph.lithoRGBA;
+  const basinWaterY = geomorph.basinWaterY;
   const cellX = TERRENO_WORLD.width / (W - 1);
   const cellZ = TERRENO_WORLD.depth / (H - 1);
 
@@ -123,6 +125,31 @@ function bakeAlpineReliefBitmap(geomorph) {
       const rw = evalRegionWeights(wx, wz);
       let [r, g, b] = alpineHypsometricColor(asl, rw, slope);
 
+      // Subtle authentic GSI geological lithology undertone (volcanic rock, pale karst, ochre badlands, peat mire)
+      if (lithoRGBA) {
+        const l4 = idx * 4;
+        const lVolc = lithoRGBA[l4] / 255.0;
+        const lLime = lithoRGBA[l4 + 1] / 255.0;
+        const lOchre = lithoRGBA[l4 + 2] / 255.0;
+        const lPeat = lithoRGBA[l4 + 3] / 255.0;
+        if (lVolc > 0.22) {
+          const w = Math.min(0.55, (lVolc - 0.22) * 0.75);
+          r = r * (1 - w) + 74 * w; g = g * (1 - w) + 74 * w; b = b * (1 - w) + 80 * w;
+        }
+        if (lLime > 0.28) {
+          const w = Math.min(0.45, (lLime - 0.28) * 0.65);
+          r = r * (1 - w) + 178 * w; g = g * (1 - w) + 174 * w; b = b * (1 - w) + 156 * w;
+        }
+        if (lOchre > 0.24) {
+          const w = Math.min(0.58, (lOchre - 0.24) * 0.78);
+          r = r * (1 - w) + 168 * w; g = g * (1 - w) + 124 * w; b = b * (1 - w) + 78 * w;
+        }
+        if (lPeat > 0.32) {
+          const w = Math.min(0.42, (lPeat - 0.32) * 0.65);
+          r = r * (1 - w) + 46 * w; g = g * (1 - w) + 86 * w; b = b * (1 - w) + 72 * w;
+        }
+      }
+
       // Imhof aerial color temperature shift: warm sunlit slopes, cool violet-blue shadows!
       const warmLift = Math.max(0, sun1 - 0.52) * 28;
       const coolShad = Math.max(0, 0.55 - sun1) * 22;
@@ -148,11 +175,17 @@ function bakeAlpineReliefBitmap(geomorph) {
         b = b * 0.84 + 8;
       }
 
-      // River channel & alpine wetland undertone
+      // River channel & 100% organic contour-clipped natural basin water (caldera, tarn, maar, oxbow, dammed, kettle, bog!)
       const distRiv = Math.abs(wx - rv.x);
       const wetness = geoRGBA[idx * 4 + 1];
+      const natWaterY = basinWaterY ? basinWaterY[idx] : -1e6;
       if (distRiv < rv.halfWidth * 1.15) {
         r = 34; g = 148; b = 192;
+      } else if (natWaterY > h) {
+        const wDepth = Math.min(1.0, (natWaterY - h) / 22.0);
+        r = 56 * (1 - wDepth) + 22 * wDepth;
+        g = 154 * (1 - wDepth) + 96 * wDepth;
+        b = 186 * (1 - wDepth) + 168 * wDepth;
       } else if (wetness > 0.78) {
         r = r * 0.64 + 28;
         g = g * 0.64 + 98;
@@ -622,11 +655,40 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
 
         const rw = evalRegionWeights(wx, wz);
         let [cr, cg, cb] = alpineHypsometricColor(asl, rw, slope);
+        if (geomorph.getLithoAt) {
+          const lt = geomorph.getLithoAt(wx, wz);
+          if (lt.volcanic > 0.22) {
+            const w = Math.min(0.52, (lt.volcanic - 0.22) * 0.72);
+            cr = cr * (1 - w) + 74 * w; cg = cg * (1 - w) + 74 * w; cb = cb * (1 - w) + 80 * w;
+          }
+          if (lt.limestone > 0.28) {
+            const w = Math.min(0.42, (lt.limestone - 0.28) * 0.62);
+            cr = cr * (1 - w) + 178 * w; cg = cg * (1 - w) + 174 * w; cb = cb * (1 - w) + 156 * w;
+          }
+          if (lt.ochre > 0.24) {
+            const w = Math.min(0.55, (lt.ochre - 0.24) * 0.75);
+            cr = cr * (1 - w) + 168 * w; cg = cg * (1 - w) + 124 * w; cb = cb * (1 - w) + 78 * w;
+          }
+          if (lt.peat > 0.32) {
+            const w = Math.min(0.40, (lt.peat - 0.32) * 0.62);
+            cr = cr * (1 - w) + 46 * w; cg = cg * (1 - w) + 86 * w; cb = cb * (1 - w) + 72 * w;
+          }
+        }
         const warmLift = Math.max(0, sun1 - 0.52) * 20;
         const coolShad = Math.max(0, 0.55 - sun1) * 15;
         cr = cr * shade + warmLift - coolShad * 0.3;
         cg = cg * shade + warmLift * 0.6 - coolShad * 0.1;
         cb = cb * shade - warmLift * 0.18 + coolShad * 0.72;
+
+        // Exact contour-clipped natural basin water table (ZERO geometric circle overlays!)
+        const terrainLocalY = asl - TERRENO_WORLD.baseElevationASL;
+        const natWaterY = geomorph.getNaturalWaterYAt ? geomorph.getNaturalWaterYAt(wx, wz) : -1e6;
+        if (natWaterY > terrainLocalY) {
+          const wDepth = Math.min(1.0, (natWaterY - terrainLocalY) / 18.0);
+          cr = 58 * (1 - wDepth) + 22 * wDepth;
+          cg = 158 * (1 - wDepth) + 96 * wDepth;
+          cb = 188 * (1 - wDepth) + 168 * wDepth;
+        }
 
         data[o] = Math.max(0, Math.min(255, Math.round(cr)));
         data[o + 1] = Math.max(0, Math.min(255, Math.round(cg)));
@@ -1541,88 +1603,31 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
       ctx.restore();
     }
 
-    // ---- 7b. ALL 22 REAL-WORLD LANDFORMS & NATURAL GEOLOGICAL LOCATIONS (Lakes, Waterfalls, Onsen, Caves, Cliffs) ----
-    const landforms = geomorph.landforms || [];
-    if (landforms.length > 0) {
+    // ---- 7b. CONTINUOUS GEOLOGY ENGINE LABELS (ZERO geometric lake/bog circles — shorelines are true terrain contours!) ----
+    const emergentFeats = geomorph.emergentFeatures || [];
+    if (emergentFeats.length > 0 && zoom >= 2.2 && zoom < 160) {
       ctx.save();
-      for (let i = 0; i < landforms.length; i++) {
-        const lf = landforms[i];
-        const p = worldToPx(lf.x, lf.z);
-        if (p.px < -140 || p.px > CW + 140 || p.py < -140 || p.py > CH + 140) continue;
+      ctx.font = `700 ${Math.round(8.0 * dpr)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 2.8 * dpr;
+      ctx.strokeStyle = 'rgba(7, 13, 20, 0.86)';
+      for (let i = 0; i < emergentFeats.length; i++) {
+        const f = emergentFeats[i];
+        const minZ = f.hasLake ? 2.2 : (f.radius >= 650 ? 3.2 : 5.2);
+        if (zoom < minZ) continue;
+        const p = worldToPx(f.x, f.z);
+        if (p.px < -100 || p.px > CW + 100 || p.py < -100 || p.py > CH + 100) continue;
+        if (!canPlaceLabel(p.px, p.py, 94 * dpr)) continue;
 
-        // True-scale lakes, plunge pools, travertine pools & bog marsh shading
-        if (lf.hasLake) {
-          const rPx = Math.max(4.5 * dpr, (lf.lakeRadius || 200) * pxPerMeter);
-          ctx.fillStyle = lf.kind === 'caldera_lake' ? 'rgba(29, 108, 198, 0.88)' : 'rgba(42, 168, 192, 0.86)';
-          ctx.strokeStyle = 'rgba(186, 230, 253, 0.82)';
-          ctx.lineWidth = Math.max(1.0, 1.3 * dpr);
-          ctx.beginPath();
-          ctx.arc(p.px, p.py, rPx, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          // Central volcanic dome island inside Caldera Crater Lake
-          if (lf.kind === 'caldera_lake' && rPx > 10 * dpr) {
-            ctx.fillStyle = '#5c7c48';
-            ctx.beginPath();
-            ctx.arc(p.px, p.py, rPx * 0.16, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        } else if (lf.hasBogPools) {
-          const rPx = Math.max(6 * dpr, (lf.bogRadius || 380) * pxPerMeter);
-          ctx.fillStyle = 'rgba(56, 134, 108, 0.34)';
-          ctx.strokeStyle = 'rgba(110, 231, 183, 0.55)';
-          ctx.lineWidth = 1.1 * dpr;
-          ctx.beginPath();
-          ctx.arc(p.px, p.py, rPx, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        } else if (lf.hasWaterfall && zoom >= 2.2) {
-          const pr = Math.max(3.2 * dpr, (lf.poolRadius || 24) * pxPerMeter);
-          ctx.fillStyle = 'rgba(56, 189, 248, 0.78)';
-          ctx.strokeStyle = '#e0f2fe';
-          ctx.lineWidth = 1.3 * dpr;
-          ctx.beginPath();
-          ctx.arc(p.px, p.py, pr, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        } else if (lf.hasHotSpring && zoom >= 2.0) {
-          const pr = Math.max(3.8 * dpr, 38 * pxPerMeter);
-          ctx.fillStyle = 'rgba(103, 232, 249, 0.76)';
-          ctx.strokeStyle = '#fef3c7';
-          ctx.lineWidth = 1.3 * dpr;
-          ctx.beginPath();
-          ctx.arc(p.px, p.py, pr, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
-
-        // Crisp zoom-adaptive label & cartographic glyph (smartly decluttered!)
-        if (zoom < (lf.minZoomMap || 2.0) || zoom >= 160) continue;
-        if (!canPlaceLabel(p.px, p.py, 78 * dpr)) continue;
-
-        const accent = lf.hasWaterfall ? '#38bdf8'
-          : (lf.hasHotSpring ? '#67e8f9'
-            : (lf.hasLake ? '#7dd3fc'
-              : (lf.category === 'cave' ? '#a7f3d0' : '#fcd34d')));
-
-        // Small refined symbol dot/ring
-        ctx.fillStyle = 'rgba(8, 16, 26, 0.82)';
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = 1.4 * dpr;
-        ctx.beginPath();
-        ctx.arc(p.px, p.py, 3.2 * dpr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        const glyph = lf.hasWaterfall ? '≋ ' : (lf.hasHotSpring ? '♨ ' : (lf.category === 'cave' ? '∩ ' : ''));
-        ctx.font = `700 ${Math.round(8.2 * dpr)}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.lineWidth = 3.0 * dpr;
-        ctx.strokeStyle = 'rgba(7, 13, 20, 0.88)';
+        const accent = f.hasLake ? '#7dd3fc'
+          : (f.hasWaterfall ? '#38bdf8'
+            : (f.hasHotSpring ? '#fde68a'
+              : (f.hasBogPools ? '#6ee7b7' : '#e2e8f0')));
+        const label = f.shortJp || f.nameJp;
         ctx.fillStyle = accent;
-        ctx.strokeText(`${glyph}${lf.shortJp || lf.nameJp}`, p.px, p.py - 6 * dpr);
-        ctx.fillText(`${glyph}${lf.shortJp || lf.nameJp}`, p.px, p.py - 6 * dpr);
+        ctx.strokeText(label, p.px, p.py);
+        ctx.fillText(label, p.px, p.py);
       }
       ctx.restore();
     }

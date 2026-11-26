@@ -610,8 +610,15 @@ export const EXTENDED_TREE_SPECIES_V4 = [
 export function pickExtendedSpeciesIndex(wx, wz, elevASL, slope, onRiverBank, landformHit, roll) {
   const lfKind = landformHit ? landformHit.landform.kind : null;
 
-  // High alpine ridges, saddles, calderas & mesas (> 880m ASL)
-  if (elevASL > 880 || lfKind === 'alpine_saddle' || lfKind === 'glacial_cirque') {
+  // High alpine ridges, glacial troughs, horns, arêtes, saddles, nivation hollows & avalanche chutes (> 880m ASL)
+  if (
+    elevASL > 880 ||
+    lfKind === 'alpine_saddle' || lfKind === 'glacial_cirque' ||
+    lfKind === 'glacial_u_trough' || lfKind === 'knife_edge_arete' ||
+    lfKind === 'glacial_horn_peak' || lfKind === 'lateral_moraine_ridge' ||
+    lfKind === 'solifluction_lobe_slope' || lfKind === 'nivation_snow_hollow' ||
+    lfKind === 'avalanche_chute_couloir'
+  ) {
     if (roll < 0.26) return 10; // haimatsu_dwarf (ハイマツ)
     if (roll < 0.48) return 11; // dakekanba_birch (ダケカンバ)
     if (roll < 0.70) return 4;  // karamatsu_larch (カラマツ)
@@ -620,16 +627,25 @@ export function pickExtendedSpeciesIndex(wx, wz, elevASL, slope, onRiverBank, la
     return 19;                  // karekigi_snag (白骨古木)
   }
 
-  // Highland peat bog & marshland -> Sawara bog cypress, birch, larch, silver snags
-  if (lfKind === 'peat_bog') {
+  // Peat bogs, backswamps, seepage fens, oxbow lakes, kettle ponds & polje wet basins
+  if (
+    lfKind === 'peat_bog' || lfKind === 'natural_levee_backswamp' ||
+    lfKind === 'alpine_seepage_fen_terrace' || lfKind === 'kettle_hole_ponds' ||
+    lfKind === 'karst_polje_flat_basin'
+  ) {
     if (roll < 0.42) return 18; // sawara_cypress
     if (roll < 0.68) return 4;  // karamatsu_larch
     if (roll < 0.86) return 11; // dakekanba_birch
     return 19;                  // karekigi_snag
   }
 
-  // Waterfalls, mossy ravines & riverbanks -> Katsura, Tochinoki, Shidare-Sakura, Wisteria!
-  if (onRiverBank || lfKind === 'waterfall_multitier' || lfKind === 'waterfall_veil' || lfKind === 'moss_cascade_ravine') {
+  // Waterfalls, spring alcoves, oxbows, point bars, knickpoints, dammed lakes & riverbanks
+  if (
+    onRiverBank || lfKind === 'waterfall_multitier' || lfKind === 'waterfall_veil' ||
+    lfKind === 'moss_cascade_ravine' || lfKind === 'oxbow_cutoff_lake' ||
+    lfKind === 'point_bar_scroll_plain' || lfKind === 'knickpoint_rock_rapids' ||
+    lfKind === 'landslide_dammed_lake' || lfKind === 'spring_sapping_alcove'
+  ) {
     if (roll < 0.24) return 12; // katsura_tree (大カツラ)
     if (roll < 0.44) return 13; // tochinoki_chestnut (トチノキ)
     if (roll < 0.62) return 1;  // sakura_shidare (枝垂れ桜)
@@ -638,8 +654,15 @@ export function pickExtendedSpeciesIndex(wx, wz, elevASL, slope, onRiverBank, la
     return 15;                  // tsubaki_camellia (ヤブツバキ)
   }
 
-  // Steep cliffs, gorges, hoodoos & scoria cones -> Kuromatsu Black Pine & Silver-Bone Snags!
-  if (slope > 0.38 || lfKind === 'basalt_cliff' || lfKind === 'granite_hoodoos' || lfKind === 'v_gorge') {
+  // Volcanic lava domes, scoria cones, fumaroles, hogbacks, fault scarps, badlands, cliffs & gorges
+  if (
+    slope > 0.38 || lfKind === 'basalt_cliff' || lfKind === 'granite_hoodoos' ||
+    lfKind === 'v_gorge' || lfKind === 'incised_meander_gorge' ||
+    lfKind === 'lava_dome_extrusion' || lfKind === 'shield_lava_apron' ||
+    lfKind === 'fumarole_sulfur_basin' || lfKind === 'hogback_strike_ridge' ||
+    lfKind === 'fault_scarp_step' || lfKind === 'badlands_rilled_gullies' ||
+    lfKind === 'scoria_cone' || lfKind === 'roche_moutonnee_knolls'
+  ) {
     if (roll < 0.36) return 7;  // kuromatsu_pine (クロマツ)
     if (roll < 0.58) return 19; // karekigi_snag (白骨古木)
     if (roll < 0.78) return 9;  // tsuga_hemlock (コメツガ)
