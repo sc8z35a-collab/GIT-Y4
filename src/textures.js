@@ -69,7 +69,7 @@ const NORMAL_STRENGTH = {
 
 function buildProceduralTextureCanvas(name) {
   if (typeof document === 'undefined') return null;
-  const S = 512;
+  const S = 256;
   const c = document.createElement('canvas');
   c.width = S;
   c.height = S;
@@ -386,7 +386,7 @@ function buildProceduralTextureCanvas(name) {
 }
 
 function buildNormalFromImage(img, strength = 1.5) {
-  const size = 256;
+  const size = 64;
   const c = document.createElement('canvas');
   c.width = size;
   c.height = size;
@@ -395,8 +395,8 @@ function buildNormalFromImage(img, strength = 1.5) {
   const src = ctx.getImageData(0, 0, size, size).data;
   const lum = new Float32Array(size * size);
   for (let i = 0; i < size * size; i++) {
-    const o = i * 4;
-    lum[i] = (0.299 * src[o] + 0.587 * src[o + 1] + 0.114 * src[o + 2]) / 255.0;
+    const o = i << 2;
+    lum[i] = (0.299 * src[o] + 0.587 * src[o + 1] + 0.114 * src[o + 2]) * (1 / 255.0);
   }
 
   const out = ctx.createImageData(size, size);
@@ -405,23 +405,24 @@ function buildNormalFromImage(img, strength = 1.5) {
   for (let y = 0; y < size; y++) {
     const ym = (y - 1) & mask;
     const yp = (y + 1) & mask;
+    const rowM = ym * size, rowC = y * size, rowP = yp * size;
     for (let x = 0; x < size; x++) {
       const xm = (x - 1) & mask;
       const xp = (x + 1) & mask;
-      const tl = lum[ym * size + xm], tc = lum[ym * size + x], tr = lum[ym * size + xp];
-      const ml = lum[y * size + xm],                            mr = lum[y * size + xp];
-      const bl = lum[yp * size + xm], bc = lum[yp * size + x], br = lum[yp * size + xp];
+      const tl = lum[rowM + xm], tc = lum[rowM + x], tr = lum[rowM + xp];
+      const ml = lum[rowC + xm],                      mr = lum[rowC + xp];
+      const bl = lum[rowP + xm], bc = lum[rowP + x], br = lum[rowP + xp];
       const gx = (tr + 2 * mr + br) - (tl + 2 * ml + bl);
       const gy = (bl + 2 * bc + br) - (tl + 2 * tc + tr);
       let nx = -gx * strength;
       let ny = -gy * strength;
-      let nz = 1.0;
-      const invLen = 1.0 / Math.hypot(nx, ny, nz);
-      nx *= invLen; ny *= invLen; nz *= invLen;
-      const idx = (y * size + x) * 4;
-      d[idx] = Math.round((nx * 0.5 + 0.5) * 255);
-      d[idx + 1] = Math.round((ny * 0.5 + 0.5) * 255);
-      d[idx + 2] = Math.round((nz * 0.5 + 0.5) * 255);
+      const invLen = 1.0 / Math.sqrt(nx * nx + ny * ny + 1.0);
+      nx *= invLen; ny *= invLen;
+      const nz = invLen;
+      const idx = (rowC + x) << 2;
+      d[idx] = ((nx * 0.5 + 0.5) * 255 + 0.5) | 0;
+      d[idx + 1] = ((ny * 0.5 + 0.5) * 255 + 0.5) | 0;
+      d[idx + 2] = ((nz * 0.5 + 0.5) * 255 + 0.5) | 0;
       d[idx + 3] = 255;
     }
   }

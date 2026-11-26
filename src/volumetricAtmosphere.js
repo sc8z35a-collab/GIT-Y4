@@ -187,24 +187,29 @@ export function createVolumetricAtmosphere(scene) {
     uKeiPose: { value: new THREE.Vector4(3.55, -3.60, 1.0, 0.0) },
   };
 
-  function addMoonShaft(x, y, z, w, length, rotX, rotY, rotZ, opacity = 0.088) {
-    const mat = new THREE.ShaderMaterial({
-      vertexShader: SHAFT_VERT,
-      fragmentShader: SHAFT_FRAG,
-      uniforms: {
-        uTime: uniforms.uTime,
-        uColor: { value: new THREE.Color(0x88b2dc) },
-        uOpacity: { value: opacity },
-      },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    });
-    const m1 = new THREE.Mesh(new THREE.PlaneGeometry(w, length), mat);
+  const sharedShaftMat = new THREE.ShaderMaterial({
+    vertexShader: SHAFT_VERT,
+    fragmentShader: SHAFT_FRAG,
+    uniforms: {
+      uTime: uniforms.uTime,
+      uColor: { value: new THREE.Color(0x88b2dc) },
+      uOpacity: { value: 0.084 },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+  const sharedShaftGeo = new THREE.PlaneGeometry(1, 1);
+
+  function addMoonShaft(x, y, z, w, length, rotX, rotY, rotZ) {
+    const m1 = new THREE.Mesh(sharedShaftGeo, sharedShaftMat);
     m1.position.set(x, y, z);
+    m1.scale.set(w, length, 1);
     m1.rotation.set(rotX, rotY, rotZ);
     m1.renderOrder = 3;
+    m1.matrixAutoUpdate = false;
+    m1.updateMatrix();
     group.add(m1);
   }
 
@@ -247,6 +252,7 @@ export function createVolumetricAtmosphere(scene) {
   addMoonShaft(-5.10, 8.15 + 1.15, 8.05, 1.35, 2.25, 0.56, 0.04, 0.0, 0.095);
 
   const mistPlanes = [];
+  const sharedMistGeo = new THREE.PlaneGeometry(88, 88);
   // Layered Drifting Forest Mist Sheets (ground + mid-canopy + high-canopy around 5F/6F Sky Terraces!)
   [
     { y: 0.26, col: 0x1b2b38 },
@@ -267,10 +273,13 @@ export function createVolumetricAtmosphere(scene) {
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(88, 88), mistMat);
+    const plane = new THREE.Mesh(sharedMistGeo, mistMat);
     plane.rotation.x = -Math.PI / 2;
     plane.position.set(0.0, layer.y, 4.0);
     plane.renderOrder = 2;
+    plane.visible = false;
+    plane.matrixAutoUpdate = false;
+    plane.updateMatrix();
     group.add(plane);
     mistPlanes.push({ plane, mat: mistMat, nightHex: layer.col });
   });
@@ -282,22 +291,18 @@ export function createVolumetricAtmosphere(scene) {
       const isNight = preset.id === 'night';
       const isDay = preset.id === 'day';
       mistPlanes.forEach(({ plane, mat, nightHex }) => {
-        plane.visible = isNight; // TERRENO's exact 3D height fog handles daylight/dawn/dusk valley mist cleanly!
+        plane.visible = isNight;
         if (isNight) mat.uniforms.uMistColor.value.setHex(nightHex);
       });
-      group.children.forEach((ch) => {
-        if (ch.material && ch.material.uniforms && ch.material.uniforms.uColor && ch.material.uniforms.uOpacity) {
-          if (isNight) {
-            ch.material.uniforms.uColor.value.setHex(0x88b4e0);
-          } else if (preset.id === 'dawn') {
-            ch.material.uniforms.uColor.value.setRGB(1.0, 0.78, 0.52);
-          } else if (isDay) {
-            ch.material.uniforms.uColor.value.setRGB(1.0, 0.96, 0.86);
-          } else {
-            ch.material.uniforms.uColor.value.setRGB(1.0, 0.56, 0.34);
-          }
-        }
-      });
+      if (isNight) {
+        sharedShaftMat.uniforms.uColor.value.setHex(0x88b4e0);
+      } else if (preset.id === 'dawn') {
+        sharedShaftMat.uniforms.uColor.value.setRGB(1.0, 0.78, 0.52);
+      } else if (isDay) {
+        sharedShaftMat.uniforms.uColor.value.setRGB(1.0, 0.96, 0.86);
+      } else {
+        sharedShaftMat.uniforms.uColor.value.setRGB(1.0, 0.56, 0.34);
+      }
     },
     update(elapsed, camperPose = null, keiPose = null) {
       uniforms.uTime.value = elapsed;

@@ -285,6 +285,7 @@ export function buildExtElevator3D(ctx) {
 
   // ---- 6. SMOOTH S-CURVE MOTION CONTROLLER ----
   const state = {
+    root,
     cabGroup,
     cabY: 0.0,
     prevCabY: 0.0,

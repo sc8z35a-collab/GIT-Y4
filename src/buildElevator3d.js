@@ -1235,6 +1235,7 @@ export function buildElevator3D(ctx) {
 
   // Initialize parked cleanly at B3F (-10.20m) with doors open
   syncMechanicalPose();
+  controller.root = elvRoot;
   controller.batchStats = elvBatchStats;
   return controller;
 }

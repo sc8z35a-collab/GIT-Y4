@@ -1,29 +1,10 @@
 import * as THREE from 'three';
 import { TERRENO_WORLD } from './terrenoConfig.js';
-import { GEOLOGY_PROCESS_CATALOG_62 } from './terrenoGeologyEngine.js';
+import { GEOLOGY_PROCESS_CATALOG_100 } from './terrenoGeologyEngine.js';
 
 /**
- * TERRENO 5.0 — Zero-Artificiality Natural Basin Water Table & Geothermal Vapor Layer
- *
- * STRICT ANTI-ARTIFICIALITY GUARANTEE:
- *  - ZERO IcosahedronGeometry / low-poly boulder props
- *  - ZERO CylinderGeometry basalt pipes, concrete waterfall weirs, or tub pedestals
- *  - ZERO TorusGeometry artificial pool rims
- *  - ZERO TubeGeometry macaroni arches
- *  - ZERO ConeGeometry fake cave stalactites
- *  - ZERO BoxGeometry wooden boardwalks inside wild landforms
- *  - ZERO CircleGeometry floating lake/pool discs
- *  - ZERO PlaneGeometry detached waterfall cards
- *
- * ONLY contains:
- *  1. Terrain-Clipped Natural Basin Water Surfaces: flat water sheets tucked strictly BELOW the
- *     eroded rim of genuine closed natural depressions (caldera crater lakes, glacial cirque tarns,
- *     maar crater lakes, oxbow cutoff lakes, landslide-dammed lakes, kettle hole ponds, karst polje
- *     marshes, peat bog pools & seepage fens). Every fragment samples `uGeoMap` + identical
- *     `evalSharedMicroRelief` to compute exact physical water depth (`waterY - terrainY`) and
- *     discards any pixel at or below ground, so shorelines follow 100% organic terrain contours!
- *  2. Ultra-subtle ground-hugging natural geothermal vapor wisps in active volcanic fumarole /
- *     hydrothermal seepage hollows (radial quadratic fade -> zero visible quad edges).
+ * TERRENO 6.0 — Zero-Artificiality Natural Basin Water Table & Geothermal Vapor Layer
+ * (100% synced to TERRENO 6.0 CPU/GPU `evalSharedCliffAndStrataRelief`, ZERO artificial primitives!)
  */
 
 function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {}) {
@@ -38,9 +19,11 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
     side: THREE.FrontSide,
     uniforms: {
       uGeoMap: { value: geomorph.geoTexture },
+      uNormalMap: { value: geomorph.normalTexture },
+      uMicroNoiseTex: { value: geomorph.microNoiseTexture },
       uWorldMin: { value: new THREE.Vector2(TERRENO_WORLD.minX, TERRENO_WORLD.minZ) },
       uWorldSize: { value: new THREE.Vector2(TERRENO_WORLD.width, TERRENO_WORLD.depth) },
-      uAtlasSize: { value: new THREE.Vector2(TERRENO_WORLD.atlasW, TERRENO_WORLD.atlasH) },
+      uAtlasSize: { value: new THREE.Vector2(geomorph.W, geomorph.H) },
       uTime: atmoUniforms.uTime,
       uSunDir: atmoUniforms.uSunDir,
       uSunColor: atmoUniforms.uSunColor,
@@ -60,7 +43,6 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
       void main() {
         vUv = uv;
         vec4 wp = modelMatrix * vec4(position, 1.0);
-        // Subtle natural wind swell (only ~2cm vertical amplitude so shoreline stays rock-solid!)
         wp.y += sin(dot(wp.xz, vec2(0.24, 0.17)) + uTime * 1.45) * 0.018;
         vWorldPos = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
@@ -77,6 +59,8 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
       #include <logdepthbuf_pars_fragment>
 
       uniform sampler2D uGeoMap;
+      uniform sampler2D uNormalMap;
+      uniform sampler2D uMicroNoiseTex;
       uniform vec2 uWorldMin;
       uniform vec2 uWorldSize;
       uniform vec2 uAtlasSize;
@@ -88,29 +72,25 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
       uniform vec3 uAbsorb;
       uniform float uMaxOpacity;
 
-      float sinHash2(vec2 p) {
-        return fract(sin(p.x * 127.1 + p.y * 311.7) * 43758.5453123);
+      float sampleMicroLut(vec2 p) {
+        return texture2D(uMicroNoiseTex, (p + 0.5) / 256.0).r;
       }
 
-      float glslNoise(vec2 p) {
-        vec2 i = floor(p);
-        vec2 f = p - i;
-        vec2 u = f * f * (3.0 - 2.0 * f);
-        float a = sinHash2(i);
-        float b = sinHash2(i + vec2(1.0, 0.0));
-        float c = sinHash2(i + vec2(0.0, 1.0));
-        float d = sinHash2(i + vec2(1.0, 1.0));
-        return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-      }
-
-      // 1:1 BIT-IDENTICAL to terrenoGeomorphology.js & terrenoClipmap.js!
-      float evalSharedMicroRelief(vec2 xz, float suppressFactor) {
+      float evalSharedCliffAndStrataRelief(vec2 xz, float macroSlope, float suppressFactor, float macroH) {
         if (suppressFactor >= 0.999) return 0.0;
-        float swell = glslNoise(xz * 0.015 + vec2(-4.2, 11.8)) - 0.5;
-        float n1 = glslNoise(xz * 0.046) - 0.5;
-        float n2 = glslNoise(xz * 0.145 + vec2(19.3, -7.1)) - 0.5;
-        float hummock = glslNoise(xz * 0.34 + vec2(-11.1, 6.4)) - 0.5;
-        float micro = swell * 1.15 + n1 * 0.62 + n2 * 0.22 + hummock * 0.08;
+        vec4 m0 = texture2D(uMicroNoiseTex, (xz * 0.024 + 0.5) / 256.0);
+        float micro = (m0.r - 0.5) * 1.15 + (m0.g - 0.5) * 0.52 + (m0.b - 0.5) * 0.22;
+        if (macroSlope > 0.24) {
+          float cliffT = clamp((macroSlope - 0.24) / 0.58, 0.0, 1.0);
+          float cliffSq = cliffT * cliffT;
+          vec4 m1 = texture2D(uMicroNoiseTex, (xz * 0.056 + vec2(7.4, -3.9) + 0.5) / 256.0);
+          float ridge1 = 1.0 - abs(m1.r * 2.0 - 1.0);
+          float ridge2 = 1.0 - abs(m1.b * 2.0 - 1.0);
+          float crag = (ridge1 * ridge1 - 0.42) * 5.8 + (ridge2 * ridge2 - 0.42) * 1.95;
+          float sp = fract(macroH * 0.11 + (m0.r - 0.5) * 1.35);
+          float tri = 1.0 - abs(sp * 4.0 - 2.0);
+          micro += (crag + (tri * tri * tri) * 2.85) * cliffSq;
+        }
         return micro * (1.0 - suppressFactor);
       }
 
@@ -128,23 +108,22 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
       }
 
       void main() {
-        // Soft safety edge fade far inside the buried terrain rim
         float edgeMask = smoothstep(0.0, 0.07, vUv.x) * smoothstep(1.0, 0.93, vUv.x)
                        * smoothstep(0.0, 0.07, vUv.y) * smoothstep(1.0, 0.93, vUv.y);
         if (edgeMask < 0.01) discard;
 
-        // Exact physical water depth directly from the real terrain heightfield + micro-relief!
         vec4 geo = sampleGeoBilinear(vWorldPos.xz);
-        float terrainY = geo.r + evalSharedMicroRelief(vWorldPos.xz, geo.a);
+        vec2 atlasUv = clamp((((vWorldPos.xz - uWorldMin) / uWorldSize) * (uAtlasSize - 1.0) + 0.5) / uAtlasSize, 0.0005, 0.9995);
+        float macroSlope = texture2D(uNormalMap, atlasUv).b / 0.45;
+        float terrainY = geo.r + evalSharedCliffAndStrataRelief(vWorldPos.xz, macroSlope, geo.a, geo.r);
         float depth = vWorldPos.y - terrainY;
         if (depth <= 0.01) discard;
 
-        // 3-angle irrational organic wind ripples (ZERO Cartesian grid artifacts!)
         vec2 wp2 = vWorldPos.xz;
         float w1 = sin(dot(wp2, vec2(0.53, 0.31)) + uTime * 1.75);
         float w2 = sin(dot(wp2, vec2(-0.41, 0.77)) - uTime * 1.42 + w1 * 0.42);
         float w3 = sin(dot(wp2, vec2(0.97, -0.63)) + uTime * 2.35 + w2 * 0.32);
-        float fineRip = (glslNoise(wp2 * 0.85 + vec2(uTime * 0.35, -uTime * 0.28)) - 0.5) * 0.04;
+        float fineRip = (sampleMicroLut(wp2 * 0.85 + vec2(uTime * 0.35, -uTime * 0.28)) - 0.5) * 0.04;
         vec3 nrm = normalize(vec3(
           (w1 * 0.45 + w2 * 0.35 + w3 * 0.20) * 0.045 + fineRip,
           1.0,
@@ -345,18 +324,19 @@ export function createTerrenoNaturalLocations(geomorph, atmoUniforms) {
 
   return {
     group: root,
-    locations: GEOLOGY_PROCESS_CATALOG_62,
+    locations: GEOLOGY_PROCESS_CATALOG_100,
     waterBasins,
     vaporSites,
     update,
     getStats: () => ({
-      totalLandforms: GEOLOGY_PROCESS_CATALOG_62.length,
-      newLandformsV5: GEOLOGY_PROCESS_CATALOG_62.filter((l) => l.isNewV5).length,
+      totalLandforms: GEOLOGY_PROCESS_CATALOG_100.length,
+      newLandformsV5: GEOLOGY_PROCESS_CATALOG_100.filter((l) => l.isNewV5).length,
+      newLandformsV6: GEOLOGY_PROCESS_CATALOG_100.filter((l) => l.isNewV6).length,
       activeProcessCount: geoState.activeProcessCount || 0,
       multiOccurrenceFeatures: (geoState.features || []).length,
       naturalWaterBasins: waterBasins.length,
       geothermalVaporSites: vaporSites.length,
-      primitivePropsCount: 0, // Strictly ZERO artificial primitive natural structures!
+      primitivePropsCount: 0,
     }),
   };
 }

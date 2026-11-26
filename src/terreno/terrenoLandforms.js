@@ -1,13 +1,9 @@
 /**
- * TERRENO 5.0 — Unified Continuous Geomorphology Facade (62 Natural Earth Landform Processes)
- *
- * Replaces the old single-spot landmark array with a clean bridge to the
- * Continuous Geological Terrain Engine (`terrenoGeologyEngine.js`), where ALL 62 real-world
- * geomorphological types (22 upgraded legacy processes + 40 brand-new Earth processes)
- * emerge continuously and across multiple organic locations throughout the 60 km × 60 km world.
+ * TERRENO 6.0 — Unified Continuous Geomorphology Facade (100 Natural Earth & Subterranean Processes)
  */
 
 import {
+  GEOLOGY_PROCESS_CATALOG_100,
   GEOLOGY_PROCESS_CATALOG_62,
   GEOLOGY_BY_INDEX,
   GEOLOGY_BY_ID,
@@ -15,14 +11,15 @@ import {
   runContinuousGeologyEngine,
 } from './terrenoGeologyEngine.js';
 
-export const ALL_LANDFORMS_62 = GEOLOGY_PROCESS_CATALOG_62;
-export const LEGACY_LANDFORMS_22 = GEOLOGY_PROCESS_CATALOG_62.filter((g) => !g.isNewV5);
-export const NEW_LANDFORMS_40 = GEOLOGY_PROCESS_CATALOG_62.filter((g) => g.isNewV5);
-
-// Backwards-compatible alias referencing the full 62-type catalog
+export const ALL_LANDFORMS_100 = GEOLOGY_PROCESS_CATALOG_100;
+export const ALL_LANDFORMS_62 = GEOLOGY_PROCESS_CATALOG_100;
+export const LEGACY_LANDFORMS_22 = GEOLOGY_PROCESS_CATALOG_100.filter((g) => !g.isNewV5 && !g.isNewV6);
+export const NEW_LANDFORMS_40 = GEOLOGY_PROCESS_CATALOG_100.filter((g) => g.isNewV5);
+export const NEW_LANDFORMS_V6_38 = GEOLOGY_PROCESS_CATALOG_100.filter((g) => g.isNewV6);
 export const MAJOR_LANDFORMS_22 = LEGACY_LANDFORMS_22;
 
 export {
+  GEOLOGY_PROCESS_CATALOG_100,
   GEOLOGY_PROCESS_CATALOG_62,
   GEOLOGY_BY_INDEX,
   GEOLOGY_BY_ID,
@@ -30,7 +27,6 @@ export {
   runContinuousGeologyEngine,
 };
 
-// Active runtime geology engine output (populated by buildTerrenoGeomorphology)
 let activeGeology = null;
 
 export function setActiveGeologyEngineState(geoState) {
@@ -41,15 +37,10 @@ export function getActiveGeologyEngineState() {
   return activeGeology;
 }
 
-/**
- * Query the emergent geological landform at (wx, wz) directly from the continuous engine's
- * 1024×1024 dominantKindId grid (and nearest multi-occurrence feature metadata).
- */
 export function queryLandformAt(wx, wz, extraMargin = 0) {
   if (!activeGeology) return null;
   const { features, dominantKindId, W, H, minX, minZ, worldW, worldD } = activeGeology;
 
-  // 1. Direct O(1) continuous field lookup from the 1024×1024 dominant geology map!
   const fx = ((wx - minX) / worldW) * (W - 1);
   const fz = ((wz - minZ) / worldD) * (H - 1);
   const ix = Math.max(0, Math.min(W - 1, Math.round(fx)));
@@ -58,7 +49,6 @@ export function queryLandformAt(wx, wz, extraMargin = 0) {
   if (kindIdx > 0) {
     const meta = GEOLOGY_BY_INDEX.get(kindIdx);
     if (meta) {
-      // Find closest matching feature instance for distance estimate (for audio/zone context)
       let bestDist = 180;
       for (let i = 0; i < features.length; i++) {
         const f = features[i];
@@ -73,7 +63,6 @@ export function queryLandformAt(wx, wz, extraMargin = 0) {
     }
   }
 
-  // 2. Fallback check against multi-occurrence feature envelopes if extraMargin > 0
   if (extraMargin > 0 && features) {
     let best = null;
     let bestDist = Infinity;
@@ -94,19 +83,10 @@ export function queryLandformAt(wx, wz, extraMargin = 0) {
   return null;
 }
 
-/**
- * Legacy circular crop-circle tree exclusion is ABOLISHED!
- * Vegetation clearance is now 100% physically driven by real water depth, bare rock slope,
- * and barren lithology (`geomorph.isNaturallyBarrenOrSubmerged`).
- */
 export function isInsideLandformTreeExclusion() {
   return null;
 }
 
-/**
- * Distance to nearest natural rushing cascade / knickpoint rapids / spring alcove
- * across all multi-occurrence fluvial features for spatial roaring-water audio!
- */
 export function getClosestWaterfallDist(wx, wz) {
   if (!activeGeology || !activeGeology.features) return 9999;
   let best = 9999;

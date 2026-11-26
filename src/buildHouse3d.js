@@ -17,7 +17,7 @@ import { buildVillage3D } from './buildVillage3d.js';
 import { buildNullErea3D } from './buildNullErea3d.js';
 import { buildAirshipK113D } from './buildAirshipK113d.js';
 
-export function buildHouse3D(scene) {
+export function buildHouse3D(scene, renderer = null) {
   const mat = createSharedMaterials();
 
   const root = new THREE.Group();
@@ -2097,7 +2097,7 @@ export function buildHouse3D(scene) {
   // =========================================================================
   // 7. TERRENO 60 km × 60 km (3,600 km²) NATURAL COUNTRYSIDE & FOREST ENGINE
   // =========================================================================
-  const terreno = createTerrenoEngine(scene, 'day');
+  const terreno = createTerrenoEngine(scene, 'day', renderer);
 
   // North Mossy Stepping Stone Approach & Porch Canopy (cleanly separated at Z=-1.26)
   addBox(exteriorGroup, 2.10, 0.14, 6.24, makeSurfaceMat('paver_moss_stones', 2.2, 6.2), 1.12, -0.28, -4.38, false);
@@ -2441,8 +2441,18 @@ export function buildHouse3D(scene) {
       + airshipK11.batchStats.totalTriangles,
   };
 
+  // TERRENO 6.0 Spatial Zone Culling defaults at NARROW-50 1F spawn (eliminates hidden Frame-0 shaders & draw calls!)
+  if (deepBasement.root) deepBasement.root.visible = false;
+  if (village.root) village.root.visible = false;
+  if (nullErea.root) nullErea.root.visible = false;
+  if (airshipK11.root) airshipK11.root.visible = false;
+
   return {
     root,
+    batchedGroup,
+    dynamicGroup,
+    exteriorGroup,
+    deepBasement,
     collidersByFloor,
     treeColliders,
     boulderColliders,

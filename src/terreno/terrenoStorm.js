@@ -154,6 +154,7 @@ function buildRainMesh(count = 3600) {
 export function createTerrenoStorm(geomorph, water, atmoUniforms) {
   const group = new THREE.Group();
   group.name = 'TERRENO_SevereStormSystem';
+  group.visible = false;
 
   // 1. GPU Diagonal Torrential Rain Curtain
   const rain = buildRainMesh(3600);
@@ -325,11 +326,19 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
     atmoUniforms.uCloudBrightness.value = calmSnap.cloudBrightness * (1.0 - s * 0.68) + flashBoost * 0.3;
   }
 
+  let anyActiveLandslide = false;
+  const ZERO_LANDSLIDE = Object.freeze({ heightAdd: 0, mudFactor: 0 });
+
   function update(cameraPos, dt, elapsed) {
     const targetI = stormEnabled ? 1.0 : 0.0;
     if (Math.abs(intensity - targetI) > 0.001) {
       intensity += (targetI - intensity) * Math.min(1, dt * (stormEnabled ? 0.55 : 0.85));
       if (Math.abs(intensity - targetI) < 0.004) intensity = targetI;
+    }
+    group.visible = stormEnabled || intensity > 0.005;
+    if (!group.visible) {
+      anyActiveLandslide = false;
+      return;
     }
 
     // Floodwater rises dramatically up to +7.5m during extreme storm!
@@ -362,10 +371,12 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
     rain.mat.uniforms.uLightning.value = lightningFlash;
 
     // Landslide slump progression & live cascading debris animation
+    let activeLs = false;
     for (let i = 0; i < landslides.length; i++) {
       const ls = landslides[i];
       const targetP = intensity > 0.25 ? Math.min(1.0, (intensity - 0.25) / 0.55) : 0.0;
       ls.progress += (targetP - ls.progress) * Math.min(1, dt * 0.45);
+      if (ls.progress > 0.05) activeLs = true;
       ls.group.visible = ls.progress > 0.02;
       if (ls.group.visible) {
         ls.group.scale.y = Math.max(0.05, ls.progress);
@@ -385,6 +396,7 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
         }
       }
     }
+    anyActiveLandslide = activeLs;
 
     _applyStormAtmosphere();
   }
@@ -421,9 +433,32 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
   }
 
   /**
+   * Zero-allocation scalar height delta from active storm landslides at (wx, wz).
+   */
+  function getLandslideHeightAddAt(wx, wz) {
+    if (!anyActiveLandslide) return 0.0;
+    let heightAdd = 0.0;
+    for (let i = 0; i < landslides.length; i++) {
+      const ls = landslides[i];
+      if (ls.progress <= 0.05) continue;
+      const dx = wx - ls.x;
+      const dz = wz - ls.z;
+      const d2 = dx * dx + dz * dz;
+      const r2 = ls.radius * ls.radius;
+      if (d2 < r2) {
+        const t = 1.0 - Math.sqrt(d2) / ls.radius;
+        const h = t * t * ls.peakH * ls.progress;
+        if (h > heightAdd) heightAdd = h;
+      }
+    }
+    return heightAdd;
+  }
+
+  /**
    * Extra terrain height and mud/rock hazard info from active landslides at (wx, wz).
    */
   function getLandslideInfoAt(wx, wz) {
+    if (!anyActiveLandslide) return ZERO_LANDSLIDE;
     let heightAdd = 0;
     let mudFactor = 0;
     for (let i = 0; i < landslides.length; i++) {
@@ -440,6 +475,7 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
   }
 
   function getActiveLandslideColliders() {
+    if (!anyActiveLandslide) return [];
     const out = [];
     for (let i = 0; i < landslides.length; i++) {
       const ls = landslides[i];
@@ -470,6 +506,7 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
     landslides,
     setStormEnabled,
     isStormEnabled: () => stormEnabled,
+    hasActiveLandslides: () => anyActiveLandslide,
     getIntensity: () => intensity,
     getFloodRise: () => floodRise,
     getWind: () => windVec,
@@ -477,6 +514,7 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
     setThunderCallback: (cb) => { thunderCallback = cb; },
     update,
     getFloodInfoAt,
+    getLandslideHeightAddAt,
     getLandslideInfoAt,
     getActiveLandslideColliders,
     getSurfaceGripAt,

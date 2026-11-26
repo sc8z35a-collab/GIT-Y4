@@ -235,8 +235,9 @@ export const AIRSHIP_K11 = {
   kmPerLiter: 3.0,               // EXACT 1L = 3km!
   maxFuelL: 100.0,               // EXACT 100L max tank!
   maxRangeKm: 300.0,             // 100L × 3km/L = 300km!
-  maxAltitudeAGL: 420.0,
-  cruiseAltitudeAGL: 78.0,
+  maxAltitudeAGL: 1200.0,
+  maxAltitudeASL: 3200.0,
+  cruiseAltitudeAGL: 92.0,
   pilotSeatLocal: { x: 2.40, z: 1.55 },
   initialPose: {
     cx: NULL_EREA.originX,

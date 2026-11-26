@@ -466,6 +466,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
   function ensureNavGrid() {
     if (baseCostGrid) return baseCostGrid;
     baseCostGrid = new Float32Array(GRID_W * GRID_H);
+    const hasRoads = Boolean(geomorph.roadPolylines && geomorph.roadPolylines.length > 0);
     const roadSnapBand = Math.max(150.0, Math.hypot(CELL_W, CELL_H) * 0.72);
     for (let gz = 0; gz < GRID_H; gz++) {
       for (let gx = 0; gx < GRID_W; gx++) {
@@ -475,20 +476,24 @@ export function createTerrenoAutopilot(geomorph, storm) {
         const mn = geomorph.getMacroNormalAt(wx, wz, 8.0);
         const rv = evalMainRiver(wz);
         const distRiv = Math.abs(wx - rv.x);
-        const bHit = geomorph.queryBridgeAt ? geomorph.queryBridgeAt(wx, wz, 45.0) : null;
+        const bHit = geomorph.queryBridgeAt ? geomorph.queryBridgeAt(wx, wz, 65.0) : null;
         const inRiver = !bHit && distRiv < rv.halfWidth * 1.25 && g.hMacro < rv.waterY + 1.0;
-        const rq = geomorph.roadIndex ? geomorph.roadIndex.queryDist(wx, wz) : { dist: 9999 };
-        const onRoadCorridor = Boolean(bHit) || g.roadPad > 0.16 || rq.dist < roadSnapBand;
+        const rq = hasRoads && geomorph.roadIndex ? geomorph.roadIndex.queryDist(wx, wz) : { dist: 9999 };
+        const onRoadCorridor = hasRoads && (g.roadPad > 0.16 || rq.dist < roadSnapBand);
 
         let cost = 1.0;
-        if (onRoadCorridor) {
+        if (bHit) {
+          // Natural shallow cobble river ford — safe crossing!
+          cost = 0.65;
+        } else if (onRoadCorridor) {
           cost = 0.14 + (Math.min(rq.dist, roadSnapBand) / roadSnapBand) * 0.08;
         } else if (inRiver) {
-          cost = 38.0;
-        } else if (mn.slope > 0.45) {
-          cost = 14.0 + (mn.slope - 0.45) * 44.0;
+          cost = 42.0;
+        } else if (mn.slope > 0.48) {
+          // Steep cliffs & escarpments: strongly avoid!
+          cost = 18.0 + (mn.slope - 0.48) * 58.0;
         } else {
-          cost = 1.15 + mn.slope * 2.4;
+          cost = 1.0 + mn.slope * 2.6;
         }
         baseCostGrid[idx] = cost;
       }
@@ -497,7 +502,7 @@ export function createTerrenoAutopilot(geomorph, storm) {
   }
 
   /**
-   * 240×240 Terrain-Cost A* for long off-road legs / connectors.
+   * 240×240 Pure Off-Road Terrain-Cost & Natural Ford A* for long wilderness routes.
    */
   function computeOffroadGridRoute(startX, startZ, goalX, goalZ) {
     if (Math.hypot(goalX - startX, goalZ - startZ) < 60.0) {
@@ -519,7 +524,8 @@ export function createTerrenoAutopilot(geomorph, storm) {
 
     const heap = new MinHeap();
     gScore[startIdx] = 0;
-    const heuristic = (gx, gz) => Math.hypot((gx - ex) * CELL_W, (gz - ez) * CELL_H) * 0.13;
+    const minCellCost = (geomorph.roadPolylines && geomorph.roadPolylines.length > 0) ? 0.13 : 0.65;
+    const heuristic = (gx, gz) => Math.hypot((gx - ex) * CELL_W, (gz - ez) * CELL_H) * minCellCost;
     heap.push(startIdx, heuristic(sx, sz));
 
     const stormActive = storm && storm.getIntensity() > 0.15;
