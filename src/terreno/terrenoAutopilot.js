@@ -475,9 +475,10 @@ export function createTerrenoAutopilot(geomorph, storm) {
         const mn = geomorph.getMacroNormalAt(wx, wz, 8.0);
         const rv = evalMainRiver(wz);
         const distRiv = Math.abs(wx - rv.x);
-        const inRiver = distRiv < rv.halfWidth * 1.25 && g.hMacro < rv.waterY + 1.0;
+        const bHit = geomorph.queryBridgeAt ? geomorph.queryBridgeAt(wx, wz, 45.0) : null;
+        const inRiver = !bHit && distRiv < rv.halfWidth * 1.25 && g.hMacro < rv.waterY + 1.0;
         const rq = geomorph.roadIndex ? geomorph.roadIndex.queryDist(wx, wz) : { dist: 9999 };
-        const onRoadCorridor = g.roadPad > 0.16 || rq.dist < roadSnapBand;
+        const onRoadCorridor = Boolean(bHit) || g.roadPad > 0.16 || rq.dist < roadSnapBand;
 
         let cost = 1.0;
         if (onRoadCorridor) {

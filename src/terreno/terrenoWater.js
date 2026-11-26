@@ -371,12 +371,13 @@ function buildMainRiverGeometry(geomorph) {
     const slope = Math.max(0.002, (pPrev.waterY - pNext.waterY) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
 
     const ribbonHW = p.halfWidth * 1.38;
+    const rawH = geomorph.getTerrainHeightAt || geomorph.getHeightAt;
     for (let j = 0; j <= segsX; j++) {
       const crossT = (j / segsX) * 2.0 - 1.0;
       const wx = p.x + bx * crossT * ribbonHW;
       const wz = p.z + bz * crossT * ribbonHW;
-      const bedY = geomorph.getHeightAt(wx, wz);
-      const centerBed = geomorph.getHeightAt(p.x, p.z);
+      const bedY = rawH(wx, wz);
+      const centerBed = rawH(p.x, p.z);
       const safeWaterY = Math.max(p.waterY, Math.min(p.waterY + 0.4, centerBed + 0.95));
       const depth = Math.max(0.0, safeWaterY - bedY);
 
@@ -411,6 +412,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
   const segsX = 4;
   const rv0 = evalMainRiver(tr.z0);
   const startLen = tr.len * 0.72;
+  const rawH = geomorph.getTerrainHeightAt || geomorph.getHeightAt;
 
   const pts = [];
   let accumDist = 0.0;
@@ -422,7 +424,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
     const perpZ = tr.dirX;
     const wx = rv0.x + tr.dirX * along + perpX * meander;
     const wz = tr.z0 + tr.dirZ * along + perpZ * meander;
-    const terrainY = geomorph.getHeightAt(wx, wz);
+    const terrainY = rawH(wx, wz);
     if (i > 0) {
       accumDist += Math.hypot(wx - pts[i - 1].x, wz - pts[i - 1].z);
     }
@@ -458,7 +460,7 @@ function buildTributaryGeometry(geomorph, tr, ti) {
       const crossT = (j / segsX) * 2.0 - 1.0;
       const wx = p.x + bx * crossT * p.hw;
       const wz = p.z + bz * crossT * p.hw;
-      const bedY = geomorph.getHeightAt(wx, wz);
+      const bedY = rawH(wx, wz);
       const depth = Math.max(0.0, p.y - bedY + (1.0 - Math.abs(crossT)) * 0.35);
       positions.push(wx, p.y, wz);
       normals.push(ftx, 0.0, ftz);

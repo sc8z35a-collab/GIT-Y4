@@ -1,6 +1,5 @@
-import { HOUSE, BLUEPRINT_SHEETS } from './planData.js';
+import { HOUSE } from './planData.js';
 import { FirstPersonHouseExplorer } from './scene3d.js';
-import { ArchitecturalBlueprint2D } from './blueprint2d.js';
 
 const STORAGE_SENS_KEY = 'narrow50_cam_sens';
 const STORAGE_SM11S_KEY = 'narrow50_sm11s';
@@ -61,21 +60,8 @@ const mobileActionsEl = document.getElementById('mobile-actions');
 const mobCrouch = document.getElementById('mob-crouch');
 
 const mapModal = document.getElementById('map-modal');
-const map3dGestureLayer = document.getElementById('map3d-gesture-layer');
 const terreno2dPanel = document.getElementById('terreno-2d-panel');
-const map3dControls = document.getElementById('map3d-controls');
-const btnMap3dFocus = document.getElementById('btn-map3d-focus');
-const btnMap3dOrbit = document.getElementById('btn-map3d-orbit');
-const btnMap3dVehRv = document.getElementById('btn-map3d-veh-rv');
-const btnMap3dVehArmor = document.getElementById('btn-map3d-veh-armor');
-const btnMap3dVehK11 = document.getElementById('btn-map3d-veh-k11');
-const cadMapBody = document.getElementById('cad-map-body');
-const blueprintViewport = document.getElementById('blueprint-viewport');
-const bpToolsGroup = document.getElementById('bp-tools-group');
-const btnExportSvg = document.getElementById('btn-export-svg');
-const btnExportAllSvg = document.getElementById('btn-export-all-svg');
-const btnExportAllZip = document.getElementById('btn-export-all-zip');
-const blueprintMount = document.getElementById('blueprint-mount');
+const btnCloseMap = document.getElementById('btn-close-map');
 
 let mapVisible = false;
 let settingsVisible = false;
@@ -83,14 +69,17 @@ let perfVisible = false;
 let isDriving = false;
 let hasActiveAutopilot = false;
 let selectedAutopilotVehicle = 'camper'; // 'camper' | 'armor' | 'k11'
-let activeSheetIdx = 30; // 30 = Full-Screen 3D Map, 31 = Authentic 2D Route Map, 0..24 = 25 CAD Blueprints
-let map3dOrbitMode = false;
 let terrenoMap2d = null;
-let bpScale = 1.0;
-let bpPanX = 0;
-let bpPanY = 0;
 let toastTimer = null;
 let lastPose = { floor: HOUSE.spawnFloor, sheetIndex: 4, floorCode: '1F', x: 1.62, z: 6.25, yaw: Math.PI, todId: 'day', dx: 0, dz: 1 };
+
+function playUi(kind) {
+  try {
+    if (explorer && explorer.audio && typeof explorer.audio.playUiSound === 'function') {
+      explorer.audio.playUiSound(kind);
+    }
+  } catch (_) {}
+}
 
 function showStatusToast(message, kind = 'info') {
   if (!statusToastEl || !message) return;
@@ -107,9 +96,6 @@ function showStatusToast(message, kind = 'info') {
 
 function setSelectedAutopilotVehicle(v) {
   selectedAutopilotVehicle = (v === 'armor' || v === 'k11') ? v : 'camper';
-  if (btnMap3dVehRv) btnMap3dVehRv.classList.toggle('active', selectedAutopilotVehicle === 'camper');
-  if (btnMap3dVehArmor) btnMap3dVehArmor.classList.toggle('active', selectedAutopilotVehicle === 'armor');
-  if (btnMap3dVehK11) btnMap3dVehK11.classList.toggle('active', selectedAutopilotVehicle === 'k11');
   if (explorer && explorer.setSelectedAutopilotVehicle) {
     explorer.setSelectedAutopilotVehicle(selectedAutopilotVehicle);
   }
@@ -125,7 +111,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ---- Automatic Mobile Landscape Fullscreen Controller (POCO F7) ----
+// ---- Automatic Mobile Landscape Fullscreen Controller ----
 const isTouchDevice = () =>
   window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
@@ -204,258 +190,37 @@ btnInstall.addEventListener('click', async () => {
   btnInstall.classList.add('hidden');
 });
 
-// ---- High-Resolution Native Vector SVG ViewBox CAD Blueprint Controller (Up to 12× Crisp Zoom!) ----
-const blueprint = new ArchitecturalBlueprint2D(blueprintMount, {});
-
-function getBlueprintFitMetrics() {
-  const rect = blueprintViewport.getBoundingClientRect();
-  const vpW = Math.max(200, rect.width || window.innerWidth || 924);
-  const vpH = Math.max(160, rect.height || window.innerHeight || 427);
-  const padT = 12;
-  const padB = 46;
-  const padX = 12;
-  const availW = Math.max(120, vpW - padX * 2);
-  const availH = Math.max(100, vpH - padT - padB);
-  const curVW = blueprint.curVW || 840;
-  const curVH = blueprint.curVH || 1590;
-  const fitScale = Math.min(availW / curVW, availH / curVH);
-  return { vpW, vpH, curVW, curVH, fitScale };
-}
-
-function clampBlueprintPan() {
-  const { vpW, vpH, curVW, curVH, fitScale } = getBlueprintFitMetrics();
-  const maxPanX = Math.max(vpW * 0.48, 0.56 * curVW * fitScale * bpScale);
-  const maxPanY = Math.max(vpH * 0.48, 0.56 * curVH * fitScale * bpScale);
-  bpPanX = Math.max(-maxPanX, Math.min(maxPanX, bpPanX));
-  bpPanY = Math.max(-maxPanY, Math.min(maxPanY, bpPanY));
-}
-
-function applyBlueprintTransform() {
-  bpScale = Math.max(0.5, Math.min(12.0, bpScale));
-  clampBlueprintPan();
-  // Pure native SVG viewBox zooming — zero blurry CSS raster scaling at any zoom level!
-  blueprintMount.style.transform = '';
-  const svg = blueprint.svg;
-  if (!svg) return;
-  const { vpW, vpH, curVW, curVH, fitScale } = getBlueprintFitMetrics();
-  const pxPerSvg = Math.max(1e-4, fitScale * bpScale);
-  const vbW = vpW / pxPerSvg;
-  const vbH = vpH / pxPerSvg;
-  const centerSvgX = curVW * 0.5 - bpPanX / pxPerSvg;
-  const centerSvgY = curVH * 0.5 - (bpPanY - 14) / pxPerSvg;
-  const vx = centerSvgX - vbW * 0.5;
-  const vy = centerSvgY - vbH * 0.5;
-  svg.setAttribute('viewBox', `${vx.toFixed(2)} ${vy.toFixed(2)} ${vbW.toFixed(2)} ${vbH.toFixed(2)}`);
-}
-
-window.addEventListener('resize', () => {
-  if (mapVisible && activeSheetIdx < 30) applyBlueprintTransform();
-});
-
-function setBlueprintView(scale = 1.0, panX = 0, panY = 0) {
-  bpScale = Number(scale) || 1.0;
-  bpPanX = Number(panX) || 0;
-  bpPanY = Number(panY) || 0;
-  applyBlueprintTransform();
-  return getBlueprintViewState();
-}
-
-function getBlueprintViewState() {
-  return { scale: Number(bpScale.toFixed(3)), panX: Number(bpPanX.toFixed(1)), panY: Number(bpPanY.toFixed(1)) };
-}
-
-function zoomBlueprintAtPoint(factor, clientX = null, clientY = null) {
-  const rect = blueprintViewport.getBoundingClientRect();
-  const cx = rect.left + rect.width * 0.5;
-  const cy = rect.top + rect.height * 0.5;
-  const rx = clientX !== null ? (clientX - cx) : 0;
-  const ry = clientY !== null ? (clientY - cy) : 0;
-  const oldScale = bpScale;
-  const nextScale = Math.max(0.5, Math.min(12.0, oldScale * factor));
-  const u = (rx - bpPanX) / oldScale;
-  const v = (ry - bpPanY) / oldScale;
-  bpScale = nextScale;
-  bpPanX = rx - u * nextScale;
-  bpPanY = ry - v * nextScale;
-  applyBlueprintTransform();
-}
-
-document.getElementById('btn-zoom-in').addEventListener('click', () => zoomBlueprintAtPoint(1.38));
-document.getElementById('btn-zoom-out').addEventListener('click', () => zoomBlueprintAtPoint(1 / 1.38));
-
-// Multi-Touch 2-Finger Pinch Zoom-Out/In + 1/2-Finger Omnidirectional Pan + Double-Tap Reset
-const bpPointers = new Map();
-let bpPrevDist = 0;
-let bpPrevMidX = 0;
-let bpPrevMidY = 0;
-let bpDragMoved = 0;
-let bpHadMulti = false;
-let bpLastTapTime = 0;
-let bpLastTapX = 0;
-let bpLastTapY = 0;
-
-blueprintViewport.addEventListener('pointerdown', (e) => {
-  if (!mapVisible || activeSheetIdx >= 30) return;
-  try { blueprintViewport.setPointerCapture(e.pointerId); } catch (_) {}
-  bpPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-  if (bpPointers.size === 1) {
-    bpDragMoved = 0;
-    bpHadMulti = false;
-  } else if (bpPointers.size === 2) {
-    bpHadMulti = true;
-    const pts = Array.from(bpPointers.values());
-    bpPrevDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-    bpPrevMidX = (pts[0].x + pts[1].x) * 0.5;
-    bpPrevMidY = (pts[0].y + pts[1].y) * 0.5;
-  }
-});
-
-blueprintViewport.addEventListener('pointermove', (e) => {
-  if (!bpPointers.has(e.pointerId) || !mapVisible || activeSheetIdx >= 30) return;
-  const prev = bpPointers.get(e.pointerId);
-  const dx = e.clientX - prev.x;
-  const dy = e.clientY - prev.y;
-  bpPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-  if (bpPointers.size === 1 && !bpHadMulti) {
-    bpDragMoved += Math.hypot(dx, dy);
-    bpPanX += dx;
-    bpPanY += dy;
-    applyBlueprintTransform();
-  } else if (bpPointers.size >= 2) {
-    const pts = Array.from(bpPointers.values());
-    const p0 = pts[0];
-    const p1 = pts[1];
-    const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
-    const midX = (p0.x + p1.x) * 0.5;
-    const midY = (p0.y + p1.y) * 0.5;
-
-    const rect = blueprintViewport.getBoundingClientRect();
-    const cx = rect.left + rect.width * 0.5;
-    const cy = rect.top + rect.height * 0.5;
-    const rxOld = bpPrevMidX - cx;
-    const ryOld = bpPrevMidY - cy;
-    const rxNew = midX - cx;
-    const ryNew = midY - cy;
-
-    const oldScale = bpScale;
-    let nextScale = oldScale;
-    if (bpPrevDist > 10 && dist > 10) {
-      nextScale = Math.max(0.5, Math.min(12.0, oldScale * (dist / bpPrevDist)));
-    }
-    const u = (rxOld - bpPanX) / oldScale;
-    const v = (ryOld - bpPanY) / oldScale;
-    bpScale = nextScale;
-    bpPanX = rxNew - u * nextScale;
-    bpPanY = ryNew - v * nextScale;
-    applyBlueprintTransform();
-
-    bpPrevDist = dist;
-    bpPrevMidX = midX;
-    bpPrevMidY = midY;
-  }
-});
-
-function releaseBpPointer(e) {
-  if (!bpPointers.has(e.pointerId)) return;
-  const wasQuickTap = bpPointers.size === 1 && !bpHadMulti && bpDragMoved < 8;
-  bpPointers.delete(e.pointerId);
-  if (bpPointers.size === 1) {
-    const rem = Array.from(bpPointers.values())[0];
-    bpPrevMidX = rem.x;
-    bpPrevMidY = rem.y;
-  } else if (bpPointers.size === 0) {
-    bpHadMulti = false;
-    if (wasQuickTap) {
-      const now = performance.now();
-      if (now - bpLastTapTime < 320 && Math.hypot(e.clientX - bpLastTapX, e.clientY - bpLastTapY) < 28) {
-        setBlueprintView(1.0, 0, 0);
-        bpLastTapTime = 0;
-      } else {
-        bpLastTapTime = now;
-        bpLastTapX = e.clientX;
-        bpLastTapY = e.clientY;
-      }
-    }
-  }
-}
-
-blueprintViewport.addEventListener('pointerup', releaseBpPointer);
-blueprintViewport.addEventListener('pointercancel', releaseBpPointer);
-blueprintViewport.addEventListener('dblclick', () => setBlueprintView(1.0, 0, 0));
-blueprintViewport.addEventListener('wheel', (e) => {
-  if (!mapVisible || activeSheetIdx >= 30) return;
-  e.preventDefault();
-  zoomBlueprintAtPoint(e.deltaY > 0 ? 0.86 : 1.18, e.clientX, e.clientY);
-}, { passive: false });
-
-// ---- Authentic 2D Topographic & Dual-Camper Free-Destination Autopilot Map Mount ----
+// ---- Pinnacle 2D-Only Cartographic Map Controller ----
 function ensureMap2D() {
   if (terrenoMap2d || !explorer || !explorer.terreno) return terrenoMap2d;
   terrenoMap2d = explorer.terreno.getOrCreateMap2D({
     onChangeAutopilotVehicle: (vehKey) => {
+      playUi('ui_toggle');
       setSelectedAutopilotVehicle(vehKey);
-    },
-    onSelectWaypoint: (wp, vehKey) => {
-      if (!explorer || !wp) return;
-      const key = vehKey || selectedAutopilotVehicle;
-      explorer.startCamperAutopilotTo(key, wp.x, wp.z, wp.id);
     },
     onSelectDynamicTarget: (kind, vehKey) => {
       if (!explorer || !kind) return;
+      playUi('waypoint_set');
       const key = vehKey || selectedAutopilotVehicle;
       explorer.startCamperAutopilotToDynamic(key, kind);
     },
     onSelectWorldPoint: (wx, wz, vehKey) => {
       if (!explorer) return;
+      playUi('waypoint_set');
       const key = vehKey || selectedAutopilotVehicle;
       explorer.startCamperAutopilotTo(key, wx, wz, 'custom');
+    },
+    onCancelAutopilot: () => {
+      if (!explorer) return;
+      playUi('ui_toggle');
+      explorer.cancelAutopilot();
+      if (terrenoMap2d && lastPose) requestAnimationFrame(() => terrenoMap2d.render(lastPose));
     },
   });
   terrenoMap2d.mount(terreno2dPanel);
   terrenoMap2d.setSelectedVehicle(selectedAutopilotVehicle);
   return terrenoMap2d;
 }
-
-function selectBlueprintFloor(sheetIdx) {
-  const numIdx = Number(sheetIdx);
-  const is3DMap = numIdx === 30;
-  const is2DMap = numIdx === 31;
-  activeSheetIdx = is3DMap ? 30 : (is2DMap ? 31 : Math.max(0, Math.min(BLUEPRINT_SHEETS.length - 1, numIdx || 0)));
-
-  document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
-    btn.classList.toggle('active', Number(btn.dataset.floor) === activeSheetIdx);
-  });
-
-  mapModal.classList.toggle('mode-3d', is3DMap);
-  mapModal.classList.toggle('mode-2d', is2DMap);
-  map3dGestureLayer.classList.toggle('hidden', !is3DMap);
-  map3dControls.classList.toggle('hidden', !is3DMap);
-  terreno2dPanel.classList.toggle('hidden', !is2DMap);
-  cadMapBody.classList.toggle('hidden', is3DMap || is2DMap);
-  bpToolsGroup.classList.toggle('hidden', is3DMap || is2DMap);
-
-  if (explorer) {
-    explorer.setMap3DMode(mapVisible && is3DMap);
-  }
-
-  if (is2DMap) {
-    const m2d = ensureMap2D();
-    if (m2d && lastPose) {
-      requestAnimationFrame(() => m2d.render(lastPose));
-    }
-  } else if (!is3DMap) {
-    blueprint.setFloor(activeSheetIdx);
-    setBlueprintView(1.0, 0, 0);
-    requestAnimationFrame(() => applyBlueprintTransform());
-    if (lastPose) blueprint.updateCameraPose(lastPose);
-  }
-}
-
-document.querySelectorAll('#bp-floor-tabs .floor-tab').forEach((btn) => {
-  btn.addEventListener('click', () => selectBlueprintFloor(Number(btn.dataset.floor)));
-});
 
 function syncGameplayOverlayVisibility() {
   const hideGameplay = mapVisible;
@@ -475,37 +240,39 @@ function syncGameplayOverlayVisibility() {
 }
 
 function toggleSettings(force = null) {
-  settingsVisible = force !== null ? force : !settingsVisible;
+  const next = force !== null ? force : !settingsVisible;
+  if (next !== settingsVisible) playUi('ui_toggle');
+  settingsVisible = next;
   settingsSheet.classList.toggle('hidden', !settingsVisible);
   btnSettings.classList.toggle('active', settingsVisible);
   if (settingsVisible && mapVisible) toggleMap(false);
 }
 
 function toggleMap(force = null) {
-  mapVisible = force !== null ? force : !mapVisible;
+  const next = force !== null ? force : !mapVisible;
+  if (next !== mapVisible) playUi(next ? 'map_open' : 'map_close');
+  mapVisible = next;
   mapModal.classList.toggle('hidden', !mapVisible);
   btnMap.classList.toggle('active', mapVisible);
+
   if (mapVisible) {
     if (settingsVisible) toggleSettings(false);
-    let defaultSheet = activeSheetIdx === 31 ? 31 : 30;
     if (explorer) {
       explorer.setMapOpen(true);
-      // Pre-select whichever vehicle/airship the player is piloting or inside!
       if (explorer.drivingVehicle === 'k11' || explorer.activeBuilding === 'k11') {
         setSelectedAutopilotVehicle('k11');
-        if (explorer.drivingVehicle === 'k11') defaultSheet = 31;
       } else if (explorer.drivingVehicle === 'armor' || explorer.activeBuilding === 'armor') {
         setSelectedAutopilotVehicle('armor');
       } else if (explorer.drivingVehicle === 'camper' || explorer.activeBuilding === 'camper') {
         setSelectedAutopilotVehicle('camper');
       }
     }
-    selectBlueprintFloor(defaultSheet);
-  } else {
-    if (explorer) {
-      explorer.setMap3DMode(false);
-      explorer.setMapOpen(false);
+    const m2d = ensureMap2D();
+    if (m2d && lastPose) {
+      requestAnimationFrame(() => m2d.render(lastPose));
     }
+  } else if (explorer) {
+    explorer.setMapOpen(false);
   }
   syncGameplayOverlayVisibility();
 }
@@ -591,12 +358,8 @@ try {
   explorer = new FirstPersonHouseExplorer(canvas3dEl, {
     onPoseUpdate: (pose) => {
       lastPose = pose;
-      if (mapVisible) {
-        if (activeSheetIdx === 31 && terrenoMap2d) {
-          terrenoMap2d.render(pose);
-        } else if (activeSheetIdx < 30) {
-          blueprint.updateCameraPose(pose);
-        }
+      if (mapVisible && terrenoMap2d) {
+        terrenoMap2d.render(pose);
       }
     },
     onAimChange: (aim) => {
@@ -674,14 +437,14 @@ try {
 
 // ---- Wire HUD & Settings Events ----
 btnMap.addEventListener('click', () => toggleMap());
-document.getElementById('btn-close-map').addEventListener('click', () => toggleMap(false));
+if (btnCloseMap) btnCloseMap.addEventListener('click', () => toggleMap(false));
 btnSettings.addEventListener('click', () => toggleSettings());
 btnCloseSettings.addEventListener('click', () => toggleSettings(false));
 
 inputSens.addEventListener('input', () => applySensitivity(Number(inputSens.value), true));
-toggleSm11s.addEventListener('change', () => applySm11s(toggleSm11s.checked, true));
+toggleSm11s.addEventListener('change', () => { playUi('ui_toggle'); applySm11s(toggleSm11s.checked, true); });
 if (toggleStorm) {
-  toggleStorm.addEventListener('change', () => applyStorm(toggleStorm.checked, false));
+  toggleStorm.addEventListener('change', () => { playUi('ui_toggle'); applyStorm(toggleStorm.checked, false); });
 }
 toggleLight.addEventListener('change', () => {
   if (!explorer) return;
@@ -693,8 +456,8 @@ toggleAudio.addEventListener('change', () => {
   const active = explorer.toggleAudio();
   toggleAudio.checked = active;
 });
-togglePerfCb.addEventListener('change', () => togglePerf(togglePerfCb.checked));
-btnFullscreen.addEventListener('click', () => toggleFullscreen());
+togglePerfCb.addEventListener('change', () => { playUi('ui_toggle'); togglePerf(togglePerfCb.checked); });
+btnFullscreen.addEventListener('click', () => { playUi('ui_toggle'); toggleFullscreen(); });
 btnDriveExitSettings.addEventListener('click', () => {
   if (explorer && isDriving) {
     explorer.interact();
@@ -753,6 +516,7 @@ if (btnDriveAuto) {
 if (btnDriveCam) {
   btnDriveCam.addEventListener('click', (e) => {
     e.stopPropagation();
+    playUi('camera_switch');
     if (explorer && isDriving) explorer.cycleDriveCameraMode();
   });
 }
@@ -813,135 +577,8 @@ if (autopilotStopChip) {
     if (explorer) explorer.cancelAutopilot();
   });
 }
-if (btnMap3dVehRv) {
-  btnMap3dVehRv.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setSelectedAutopilotVehicle('camper');
-  });
-}
-if (btnMap3dVehArmor) {
-  btnMap3dVehArmor.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setSelectedAutopilotVehicle('armor');
-  });
-}
-if (btnMap3dVehK11) {
-  btnMap3dVehK11.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setSelectedAutopilotVehicle('k11');
-  });
-}
 interactPromptEl.addEventListener('click', () => explorer && explorer.interact());
 mobCrouch.addEventListener('click', () => explorer && !isDriving && explorer.toggleCrouch());
-
-// ---- High-Precision 3D Map Touch / Mouse Orbit, Pan, Pinch-Zoom & Free-Destination Autopilot (NO Player Teleport!) ----
-btnMap3dFocus.addEventListener('click', () => {
-  if (!explorer || !explorer.map3d) return;
-  const focused = explorer.map3d.toggleFocusMode();
-  btnMap3dFocus.classList.toggle('active', focused);
-});
-
-btnMap3dOrbit.addEventListener('click', () => {
-  map3dOrbitMode = !map3dOrbitMode;
-  btnMap3dOrbit.classList.toggle('active', map3dOrbitMode);
-});
-
-const mapPointers = new Map();
-let mapSingleMoved = 0;
-let mapHadMultiTouch = false;
-let mapDragIsOrbit = false;
-let mapPrevPinchDist = 0;
-let mapPrevPinchAngle = 0;
-let mapPrevPinchMidY = 0;
-
-map3dGestureLayer.addEventListener('contextmenu', (e) => e.preventDefault());
-
-map3dGestureLayer.addEventListener('pointerdown', (e) => {
-  if (!mapVisible || activeSheetIdx !== 30 || !explorer || !explorer.map3d) return;
-  try { map3dGestureLayer.setPointerCapture(e.pointerId); } catch (_) {}
-  mapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-  if (mapPointers.size === 1) {
-    mapSingleMoved = 0;
-    mapHadMultiTouch = false;
-    mapDragIsOrbit = map3dOrbitMode || e.button === 2 || e.shiftKey;
-  } else if (mapPointers.size === 2) {
-    mapHadMultiTouch = true;
-    const pts = Array.from(mapPointers.values());
-    mapPrevPinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-    mapPrevPinchAngle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
-    mapPrevPinchMidY = (pts[0].y + pts[1].y) * 0.5;
-  }
-});
-
-map3dGestureLayer.addEventListener('pointermove', (e) => {
-  if (!mapPointers.has(e.pointerId) || !explorer || !explorer.map3d) return;
-  const prev = mapPointers.get(e.pointerId);
-  const dx = e.clientX - prev.x;
-  const dy = e.clientY - prev.y;
-  mapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-  if (mapPointers.size === 1 && !mapHadMultiTouch) {
-    mapSingleMoved += Math.hypot(dx, dy);
-    if (mapDragIsOrbit || e.buttons === 2 || e.shiftKey) {
-      explorer.map3d.orbitByDelta(dx, dy);
-    } else {
-      const rect = map3dGestureLayer.getBoundingClientRect();
-      explorer.map3d.panByScreenDelta(dx, dy, rect.width, rect.height);
-      btnMap3dFocus.classList.remove('active');
-    }
-  } else if (mapPointers.size === 2) {
-    const pts = Array.from(mapPointers.values());
-    const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
-    const angle = Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x);
-    const midY = (pts[0].y + pts[1].y) * 0.5;
-
-    if (mapPrevPinchDist > 8 && dist > 8) {
-      explorer.map3d.zoomByFactor(mapPrevPinchDist / dist);
-    }
-    let dAng = angle - mapPrevPinchAngle;
-    if (dAng > Math.PI) dAng -= Math.PI * 2;
-    if (dAng < -Math.PI) dAng += Math.PI * 2;
-    const dTilt = midY - mapPrevPinchMidY;
-    explorer.map3d.orbitByDelta(-dAng * 165, dTilt * 0.9);
-
-    mapPrevPinchDist = dist;
-    mapPrevPinchAngle = angle;
-    mapPrevPinchMidY = midY;
-  }
-});
-
-function releaseMapPointer(e) {
-  if (!mapPointers.has(e.pointerId)) return;
-  const wasSingleTap = mapPointers.size === 1 && !mapHadMultiTouch && mapSingleMoved < 9 && e.button !== 2;
-  mapPointers.delete(e.pointerId);
-  if (mapPointers.size === 0) {
-    mapHadMultiTouch = false;
-  }
-
-  // Tap anywhere on 3D map sets free autonomous destination for the selected camper — NEVER teleports player!
-  if (wasSingleTap && mapVisible && activeSheetIdx === 30 && explorer && explorer.map3d) {
-    const rect = map3dGestureLayer.getBoundingClientRect();
-    const hit = explorer.map3d.pickAtScreenPoint(e.clientX, e.clientY, rect);
-    if (hit) {
-      explorer.startCamperAutopilotTo(
-        selectedAutopilotVehicle,
-        hit.worldX,
-        hit.worldZ,
-        hit.kind === 'landmark' ? hit.id : 'custom'
-      );
-    }
-  }
-}
-
-map3dGestureLayer.addEventListener('pointerup', releaseMapPointer);
-map3dGestureLayer.addEventListener('pointercancel', releaseMapPointer);
-
-map3dGestureLayer.addEventListener('wheel', (e) => {
-  if (!mapVisible || activeSheetIdx !== 30 || !explorer || !explorer.map3d) return;
-  e.preventDefault();
-  explorer.map3d.zoomByFactor(e.deltaY > 0 ? 1.12 : 0.89);
-}, { passive: false });
 
 // ---- 2.3× Ergonomic Touch Dual-Thumb Joystick + Direct 3D Physical Button Tap ----
 const joyZone = document.getElementById('joy-zone');
@@ -1031,35 +668,6 @@ function releaseLook(e) {
 }
 lookZone.addEventListener('pointerup', releaseLook);
 lookZone.addEventListener('pointercancel', releaseLook);
-
-// ---- Bulk SVG / ZIP Blueprint Downloads (All 23 CAD Sheets) ----
-function triggerDownload(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
-}
-
-btnExportSvg.addEventListener('click', () => {
-  const fl = BLUEPRINT_SHEETS[blueprint.activeFloor];
-  const blob = new Blob([blueprint.exportSVGString()], { type: 'image/svg+xml;charset=utf-8' });
-  triggerDownload(blob, `NARROW50_${fl.code}.svg`);
-});
-
-btnExportAllSvg.addEventListener('click', () => {
-  const combinedSvg = blueprint.exportAllSheetsCombinedSVG();
-  const blob = new Blob([combinedSvg], { type: 'image/svg+xml;charset=utf-8' });
-  triggerDownload(blob, 'NARROW50_ALL_25_BLUEPRINTS.svg');
-});
-
-btnExportAllZip.addEventListener('click', () => {
-  const zipBlob = blueprint.exportAllSheetsZipBlob();
-  triggerDownload(zipBlob, 'NARROW50_ALL_25_SVG.zip');
-});
 
 // ---- URL Parameters for Verification & Deep-Links ----
 const params = new URLSearchParams(window.location.search);
@@ -1190,21 +798,26 @@ if (params.get('perf') === '1') togglePerf(true);
 if (params.get('settings') === '1') toggleSettings(true);
 if (params.get('map') === '1') {
   toggleMap(true);
-  if (params.has('bpFloor')) selectBlueprintFloor(Number(params.get('bpFloor')));
+  if (params.has('mapZoom')) {
+    const mz = Number(params.get('mapZoom'));
+    const mc = params.get('mapCenter') ? params.get('mapCenter').split(',').map(Number) : null;
+    if (!Number.isNaN(mz)) {
+      requestAnimationFrame(() => {
+        const m2d = ensureMap2D();
+        if (m2d) m2d.setView(mz, mc && !Number.isNaN(mc[0]) ? mc[0] : null, mc && !Number.isNaN(mc[1]) ? mc[1] : null);
+      });
+    }
+  }
 }
 
 window.__FPS_APP__ = {
   explorer,
-  blueprint,
-  selectBlueprintFloor,
   toggleSettings,
   toggleMap,
   applySensitivity,
   applySm11s,
   applyStorm,
-  setBlueprintView,
-  getBlueprintViewState,
   showStatusToast,
   getMap2D: () => ensureMap2D(),
-  getMap3D: () => explorer?.map3d || null,
+  setMapZoom: (z, wx = null, wz = null) => ensureMap2D()?.setView(z, wx, wz),
 };
