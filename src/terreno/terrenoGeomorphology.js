@@ -7,6 +7,13 @@ import {
   evalMainRiver,
   evalRegionWeights,
 } from './terrenoConfig.js';
+import {
+  MAJOR_LANDFORMS_22,
+  applyLandformsToHeightfield,
+  queryLandformAt,
+  isInsideLandformTreeExclusion,
+  getClosestWaterfallDist,
+} from './terrenoLandforms.js';
 
 /**
  * TERRENO 3.0 Engine — Real-World Japanese Mountain-Valley & Old-Growth Forest Geomorphology Solver
@@ -816,9 +823,27 @@ export function buildTerrenoGeomorphology() {
   }
 
   // =========================================================================
-  // PASS 2: RIDGE CURVATURE TENSOR + D8 FLUVIAL EROSION & 34° TALUS REPOSE
+  // PASS 2: RIDGE CURVATURE TENSOR + D8 FLUVIAL EROSION + 22 MAJOR REAL-WORLD LANDFORMS
   // =========================================================================
   const flowArea = runAlpineHydrologyAndErosion(heights, W, H, cellX, cellZ);
+
+  // Pre-evaluate road corridor mask so all 22 landforms sculpt cleanly around driveable roads!
+  for (let iz = 0; iz < H; iz++) {
+    const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
+    const row = iz * W;
+    for (let ix = 0; ix < W; ix++) {
+      const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
+      const rq = roadIndex.queryDist(wx, wz);
+      if (rq.segIdx >= 0 && rq.dist < 30.0) {
+        const halfW = rq.width * 0.5;
+        roadMaskArr[row + ix] = 1.0 - quinticSmoothstep(halfW * 0.85, halfW + 6.0, rq.dist);
+      }
+    }
+  }
+
+  // Sculpt all 22 authentic Earth landforms (waterfalls, V-gorges, basalt cliffs, mesas,
+  // calderas, glacial cirques, river terraces, drumlin hills, karst dolines, cuestas, etc.)!
+  applyLandformsToHeightfield(heights, W, H, roadMaskArr);
   const ridgeTensor = applyRidgeCurvaturePass(heights, W, H, cellX, cellZ);
 
   // =========================================================================
@@ -826,7 +851,6 @@ export function buildTerrenoGeomorphology() {
   // =========================================================================
   // Note: Roads NEVER create ugly dirt causeways across rivers — the riverbed stays open & flowing
   // underneath our real 3D Architectural Bridges (terrenoBridges.js)!
-  // Gently relax steep cross-slopes right along road corridors so cars climb mountain passes realistically!
   const roadSmoothHeights = new Float32Array(heights);
   for (let pass = 0; pass < 3; pass++) {
     for (let iz = 2; iz < H - 2; iz++) {
@@ -853,6 +877,8 @@ export function buildTerrenoGeomorphology() {
     heights.set(roadSmoothHeights);
   }
 
+  const braidedIsl = MAJOR_LANDFORMS_22.find((l) => l.kind === 'braided_island');
+
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
     const rivX = riverRowX[iz];
@@ -877,18 +903,16 @@ export function buildTerrenoGeomorphology() {
         } else {
           targetRivY = bankBenchY + (dxRiv - (rivHW + 18.0)) * 0.11;
         }
+        // Preserve Braided River Sandbar Island (#21) rising cleanly out of Kurosugi River!
+        if (braidedIsl && Math.abs(wz - braidedIsl.z) < 120.0 && dxRiv < 32.0) {
+          const islMound = Math.exp(-Math.pow((wx - braidedIsl.x) / 14.0, 2.0) - Math.pow((wz - braidedIsl.z) / 68.0, 2.0));
+          targetRivY = Math.max(targetRivY, rivWaterY - 0.5 + islMound * 2.45);
+        }
         const rivEnv = 1.0 - quinticSmoothstep(rivHW + 14.0, rivHW + 60.0, dxRiv);
         heights[idx] = heights[idx] * (1.0 - rivEnv) + targetRivY * rivEnv;
       }
 
-      // 3b. Macro road mask (crisp 1.0m detail is rendered via uLocalDetailMap in clipmap!)
-      const rq = roadIndex.queryDist(wx, wz);
-      if (rq.segIdx >= 0 && rq.dist < 30.0) {
-        const halfW = rq.width * 0.5;
-        roadMaskArr[idx] = 1.0 - quinticSmoothstep(halfW * 0.85, halfW + 6.0, rq.dist);
-      }
-
-      // 3c. Tight Flush Compound & Suginosato Village Terraces
+      // 3b. Tight Flush Compound & Suginosato Village Terraces
       const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
       if (dVill < TERRENO_WORLD.villageBlendRadius) {
         const vLockT = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius, TERRENO_WORLD.villageBlendRadius, dVill);
@@ -1103,10 +1127,12 @@ export function buildTerrenoGeomorphology() {
     const rw = evalRegionWeights(wx, wz);
 
     const inNullErea = isInsideSouthRect(wx, wz, 2.0);
+    const lfHit = queryLandformAt(wx, wz, 0);
     let zoneJp = '黒杉・紅葉の原生渓谷林';
     if (inNullErea) zoneJp = 'NULL EREA・地下40m飛行船基地';
     else if (onBridge) zoneJp = bHit.bridge.nameJp || '黒杉川大橋';
     else if (inVillage) zoneJp = '杉ノ郷集落';
+    else if (lfHit && lfHit.dist < lfHit.landform.radius * 0.78) zoneJp = lfHit.landform.nameJp;
     else if (inRiver) zoneJp = '黒杉川の清流';
     else if (isRoad) zoneJp = '山岳森林ロード';
     else if (asl > 1180) zoneJp = '高山岩稜・雪渓帯';
@@ -1132,6 +1158,7 @@ export function buildTerrenoGeomorphology() {
       isRoad,
       onBridge,
       bridge: bHit ? bHit.bridge : null,
+      landform: lfHit ? lfHit.landform : null,
       inRiver,
       inVillage,
       riverY: rv.waterY,
@@ -1157,6 +1184,7 @@ export function buildTerrenoGeomorphology() {
     roadDense,
     roadElevs,
     roadIndex,
+    landforms: MAJOR_LANDFORMS_22,
     southRectY,
     minElev,
     maxElev,
@@ -1164,6 +1192,9 @@ export function buildTerrenoGeomorphology() {
     get bridges() { return bridgeList; },
     setBridgeSystem,
     queryBridgeAt,
+    queryLandformAt,
+    isInsideLandformTreeExclusion,
+    getClosestWaterfallDist,
     getTerrainHeightAt,
     getHeightAt,
     getNormalAt,

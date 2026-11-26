@@ -216,6 +216,9 @@ function ensureMap2D() {
       explorer.cancelAutopilot();
       if (terrenoMap2d && lastPose) requestAnimationFrame(() => terrenoMap2d.render(lastPose));
     },
+    onZoomTick: (zoomIn) => {
+      playUi(zoomIn ? 'zoom_in' : 'zoom_out');
+    },
   });
   terrenoMap2d.mount(terreno2dPanel);
   terrenoMap2d.setSelectedVehicle(selectedAutopilotVehicle);

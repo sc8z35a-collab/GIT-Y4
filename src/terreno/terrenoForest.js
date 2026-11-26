@@ -9,10 +9,17 @@ import {
 import {
   BOTANICAL_UV,
   getBotanicalFoliageAtlas,
+  getExtendedBotanicalAtlas,
   getBotanicalBarkTexture,
   getBirchBarkTexture,
   getPineBarkTexture,
+  getBambooCulmTexture,
+  getSakuraBarkTexture,
 } from './terrenoBotanicalAtlas.js';
+import {
+  EXTENDED_TREE_SPECIES_V4,
+  pickExtendedSpeciesIndex,
+} from './terrenoForestSpeciesV4.js';
 
 /**
  * TERRENO Engine 3.0 — Living Multi-Species Japanese Mountain Forest & Understory Ecosystem
@@ -1295,17 +1302,20 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   group.name = 'TERRENO_EcologicalForest_Streamer';
 
   const foliageAtlas = getBotanicalFoliageAtlas();
+  const extFoliageAtlas = getExtendedBotanicalAtlas();
   const barkTex = getBotanicalBarkTexture();
   const birchBarkTex = getBirchBarkTexture();
   const pineBarkTex = getPineBarkTexture();
+  const bambooBarkTex = getBambooCulmTexture();
+  const sakuraBarkTex = getSakuraBarkTexture();
 
-  const CAP_SUGI   = 1150;
-  const CAP_HINOKI = 820;
-  const CAP_BUNA   = 1050;
-  const CAP_MAPLE  = 860;
-  const CAP_BIRCH  = 780;
-  const CAP_PINE   = 760;
-  const CAP_WILLOW = 380;
+  const CAP_SUGI   = 960;
+  const CAP_HINOKI = 680;
+  const CAP_BUNA   = 820;
+  const CAP_MAPLE  = 680;
+  const CAP_BIRCH  = 640;
+  const CAP_PINE   = 620;
+  const CAP_WILLOW = 340;
   const CAP_SHRUB  = 980;
   const CAP_STUMP  = 180;
   const CAP_FERN   = 1500;
@@ -1329,11 +1339,20 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   const matBarkPine   = createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, pineBarkTex, {
     baseColor: [0.36, 0.26, 0.20], swayAmp: 0.004, barkUvScale: [2.0, 5.2], barkMossAmt: 0.45, useDirectBark: true,
   });
+  const matBarkBamboo = createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, bambooBarkTex, {
+    baseColor: [0.42, 0.54, 0.28], swayAmp: 0.009, barkUvScale: [1.5, 9.0], barkMossAmt: 0.12, useDirectBark: true,
+  });
+  const matBarkSakura = createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, sakuraBarkTex, {
+    baseColor: [0.32, 0.22, 0.19], swayAmp: 0.004, barkUvScale: [2.0, 5.5], barkMossAmt: 0.30, useDirectBark: true,
+  });
   const matBoulder = createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, { isRock: true, baseColor: [0.105, 0.112, 0.118] });
   const matLog     = createTerrenoSolidEcoMaterial(geomorph, atmoUniforms, barkTex, { isRock: true, baseColor: [0.068, 0.044, 0.028] });
 
   const matTreeFoliage = createBotanicalFoliageMaterial(geomorph, atmoUniforms, foliageAtlas, {
     swayAmp: 0.015, flutterAmp: 0.012, sssStrength: 0.38,
+  });
+  const matExtFoliage = createBotanicalFoliageMaterial(geomorph, atmoUniforms, extFoliageAtlas, {
+    swayAmp: 0.017, flutterAmp: 0.014, sssStrength: 0.42,
   });
   const matWillowFoliage = createBotanicalFoliageMaterial(geomorph, atmoUniforms, foliageAtlas, {
     swayAmp: 0.024, flutterAmp: 0.020, sssStrength: 0.46,
@@ -1354,6 +1373,16 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     swayAmp: 0.0, flutterAmp: 0.0, isMidImpostor: true, sssStrength: 0.24,
   });
 
+  const barkByKey = {
+    sugi: matBarkSugi,
+    hinoki: matBarkHinoki,
+    buna: matBarkBuna,
+    birch: matBarkBirch,
+    pine: matBarkPine,
+    bamboo: matBarkBamboo,
+    sakura: matBarkSakura,
+  };
+
   function makeInstanced(geo, mat, cap, name) {
     const im = new THREE.InstancedMesh(geo, mat, cap);
     im.count = 0;
@@ -1366,7 +1395,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     return im;
   }
 
-  // 7 Full-Canopy 3D Tree Species
+  // 7 Core Full-Canopy 3D Tree Species (+ Azalea Shrubs = 8 core)
   const imSugiTrunk   = makeInstanced(buildSugiTrunkGeo(),   matBarkSugi,   CAP_SUGI,   'ECO_Sugi_Trunks');
   const imSugiLeaf    = makeInstanced(buildSugiFoliageGeo(), matTreeFoliage, CAP_SUGI,   'ECO_Sugi_Foliage');
   const imHinokiTrunk = makeInstanced(buildHinokiTrunkGeo(), matBarkHinoki, CAP_HINOKI, 'ECO_Hinoki_Trunks');
@@ -1381,6 +1410,18 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   const imPineLeaf    = makeInstanced(buildPineFoliageGeo(), matTreeFoliage, CAP_PINE,  'ECO_Pine_Foliage');
   const imWillowTrunk = makeInstanced(buildWillowTrunkGeo(), matBarkBuna,   CAP_WILLOW, 'ECO_Willow_Trunks');
   const imWillowLeaf  = makeInstanced(buildWillowFoliageGeo(), matWillowFoliage, CAP_WILLOW, 'ECO_Willow_Foliage');
+
+  // +20 Brand-New Real-World Japanese Tree Species (Total = 28 Distinct Tree Species!)
+  const extMeshes = EXTENDED_TREE_SPECIES_V4.map((spec) => {
+    const built = spec.build();
+    const bMat = barkByKey[spec.bark] || matBarkBuna;
+    const fMat = spec.atlas === 'ext' ? matExtFoliage : matTreeFoliage;
+    return {
+      spec,
+      trunk: makeInstanced(built.trunkGeo, bMat, spec.cap, `ECO_${spec.id}_Trunks`),
+      leaf: makeInstanced(built.foliageGeo, fMat, spec.cap, `ECO_${spec.id}_Foliage`),
+    };
+  });
 
   // Understory Midstory Shrubs, Mossy Stumps, Ferns, Grass, Kumazasa, Boulders & Nurse Logs
   const imShrub   = makeInstanced(buildShrubGeo(),   matShrub,       CAP_SHRUB,   'ECO_Azalea_Shrubs');
@@ -1408,7 +1449,10 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   let mergedLocalColliders = [];
   const remoteTileColliderCache = new Map();
   let stats = {
+    totalTreeSpecies: 8 + EXTENDED_TREE_SPECIES_V4.length,
     sugi: 0, hinoki: 0, abies: 0, buna: 0, maple: 0, birch: 0, pine: 0, willow: 0,
+    extendedTreesTotal: 0,
+    extendedSpecies: {},
     shrubs: 0, stumps: 0, ferns: 0, grass: 0, sasa: 0, boulders: 0, logs: 0,
     midConifers: 0, midBroad: 0, midMaple: 0, midPine: 0,
   };
@@ -1494,14 +1538,15 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
 
     const rng = makeTileRng(tx, tz, 9011);
 
-    // --- 1. Multi-Species Woodland Canopy Trees (48 candidate stems per 64m×64m tile) ---
-    for (let c = 0; c < 48; c++) {
+    // --- 1. Multi-Species Woodland Canopy Trees (58 candidate stems per 64m×64m tile across 28 species!) ---
+    for (let c = 0; c < 58; c++) {
       const wx = tileX0 + rng() * NEAR_TILE_SIZE;
       const wz = tileZ0 + rng() * NEAR_TILE_SIZE;
       if (wx < TERRENO_WORLD.minX + 12 || wx > TERRENO_WORLD.maxX - 12 || wz < TERRENO_WORLD.minZ + 12 || wz > TERRENO_WORLD.maxZ - 12) continue;
       if (isInsideCompoundClearing(wx, wz, 1.0)) continue;
       if (isInsideSouthRect(wx, wz, 3.0)) continue;
       if (isOnBridge(wx, wz, 5.2)) continue;
+      if (geomorph.isInsideLandformTreeExclusion && geomorph.isInsideLandformTreeExclusion(wx, wz)) continue;
 
       const rq = geomorph.roadIndex.queryDist(wx, wz);
       if (rq.dist < rq.width * 0.5 + 3.0) continue;
@@ -1519,7 +1564,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
 
       const y = getGroundY(wx, wz);
       const rw = evalRegionWeights(wx, wz);
-      const keepProb = onRiverBank ? 0.85 : evalForestKeepProb(wx, wz, y, rw);
+      const keepProb = onRiverBank ? 0.86 : evalForestKeepProb(wx, wz, y, rw);
       if (rng() > keepProb) continue;
 
       const nrm = geomorph.getNormalAt(wx, wz, 2.2);
@@ -1529,9 +1574,11 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       if (in6fVistaCorridor && rng() < 0.42) continue;
 
       const spRoll = rng();
+      const extRoll = rng();
       const elevASL = TERRENO_WORLD.baseElevationASL + y;
-      const isWillow = onRiverBank && elevASL < 760 && spRoll < 0.58;
-      const species = isWillow ? 6 : pickUplandSpecies(wx, wz, y, nrm.slope, rw, spRoll);
+      const lfHit = geomorph.queryLandformAt ? geomorph.queryLandformAt(wx, wz, 18) : null;
+      const isWillow = onRiverBank && elevASL < 760 && spRoll < 0.44;
+      const useExtended20 = !isWillow && extRoll < 0.52;
 
       const yaw = isWillow
         ? Math.atan2(rv.x - wx, (rng() - 0.5) * 6.0) + (rng() - 0.5) * 0.65
@@ -1541,6 +1588,37 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       const alpineShrink = elevASL > 900 ? Math.max(0.42, 1.0 - (elevASL - 900) / 360.0) : 1.0;
       let sizeScale = (0.88 + rw.valley * 0.14 + rw.plateau * 0.10 - rw.wetland * 0.14) * alpineShrink;
       if (in6fVistaCorridor) sizeScale *= 0.48;
+
+      if (useExtended20) {
+        const ei = pickExtendedSpeciesIndex(wx, wz, elevASL, nrm.slope, onRiverBank, lfHit, spRoll);
+        const entry = extMeshes[ei];
+        const spec = entry.spec;
+        const h = (spec.minH + rng() * (spec.maxH - spec.minH)) * sizeScale;
+        const rS = h * spec.radRatio * (0.90 + rng() * 0.22);
+        const vCol = rng();
+        const curN = outCounters.nExt[ei];
+        if (emitVisuals && curN < spec.cap) {
+          dummyObj.position.set(wx, y - 0.36, wz);
+          dummyObj.rotation.set(leanX, yaw, leanZ);
+          dummyObj.scale.set(rS, h, rS);
+          dummyObj.updateMatrix();
+          entry.trunk.setMatrixAt(curN, dummyObj.matrix);
+          entry.leaf.setMatrixAt(curN, dummyObj.matrix);
+          const fc = spec.colorFn(vCol);
+          tmpColor.setRGB(fc[0], fc[1], fc[2]);
+          entry.leaf.setColorAt(curN, tmpColor);
+          const tc = spec.trunkColorFn(vCol);
+          tmpColor.setRGB(tc[0], tc[1], tc[2]);
+          entry.trunk.setColorAt(curN, tmpColor);
+          outCounters.nExt[ei] = curN + 1;
+        }
+        if (isDetailTile) {
+          outColliders.push({ x: wx, z: wz, r: Math.max(0.20, rS * spec.colliderR), kind: 'tree', height: h });
+        }
+        continue;
+      }
+
+      const species = isWillow ? 6 : pickUplandSpecies(wx, wz, y, nrm.slope, rw, spRoll);
 
       if (species === 0) {
         // SUGI CEDAR (黒杉)
@@ -1913,6 +1991,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
   function rebuildNearForest(centerTx, centerTz) {
     const counters = {
       nSugi: 0, nHinoki: 0, nBuna: 0, nMaple: 0, nBirch: 0, nPine: 0, nWillow: 0,
+      nExt: new Uint32Array(EXTENDED_TREE_SPECIES_V4.length),
       nShrub: 0, nStump: 0, nFern: 0, nBoulder: 0, nLog: 0,
     };
     const newColliders = [];
@@ -1946,6 +2025,21 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     imBoulder.count     = counters.nBoulder;
     imLog.count         = counters.nLog;
 
+    let extTotal = 0;
+    const extCounts = {};
+    for (let ei = 0; ei < extMeshes.length; ei++) {
+      const em = extMeshes[ei];
+      const cnt = counters.nExt[ei];
+      em.trunk.count = cnt;
+      em.leaf.count = cnt;
+      em.trunk.instanceMatrix.needsUpdate = true;
+      em.leaf.instanceMatrix.needsUpdate = true;
+      if (em.trunk.instanceColor) em.trunk.instanceColor.needsUpdate = true;
+      if (em.leaf.instanceColor) em.leaf.instanceColor.needsUpdate = true;
+      extTotal += cnt;
+      extCounts[em.spec.id] = cnt;
+    }
+
     [
       imSugiTrunk, imSugiLeaf, imHinokiTrunk, imHinokiLeaf,
       imBunaTrunk, imBunaLeaf, imMapleTrunk, imMapleLeaf,
@@ -1958,6 +2052,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
 
     localColliders = newColliders;
     syncMergedColliders();
+    stats.totalTreeSpecies = 8 + EXTENDED_TREE_SPECIES_V4.length;
     stats.sugi = counters.nSugi;
     stats.hinoki = counters.nHinoki;
     stats.abies = counters.nHinoki; // backwards-compatible stats key
@@ -1966,6 +2061,8 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
     stats.birch = counters.nBirch;
     stats.pine = counters.nPine;
     stats.willow = counters.nWillow;
+    stats.extendedTreesTotal = extTotal;
+    stats.extendedSpecies = extCounts;
     stats.shrubs = counters.nShrub;
     stats.stumps = counters.nStump;
     stats.ferns = counters.nFern;
@@ -2222,6 +2319,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
       cached = [];
       const dummyC = {
         nSugi: 0, nHinoki: 0, nBuna: 0, nMaple: 0, nBirch: 0, nPine: 0, nWillow: 0,
+        nExt: new Uint32Array(EXTENDED_TREE_SPECIES_V4.length),
         nShrub: 0, nStump: 0, nFern: 0, nBoulder: 0, nLog: 0,
       };
       for (let dz = -1; dz <= 1; dz++) {
@@ -2244,7 +2342,7 @@ export function createTerrenoForest(geomorph, atmoUniforms) {
 
   function setSurfaceSuper(enabled, maxAniso = 8) {
     const aniso = enabled ? Math.min(16, maxAniso) : 4;
-    [foliageAtlas, barkTex, birchBarkTex, pineBarkTex].forEach((t) => {
+    [foliageAtlas, extFoliageAtlas, barkTex, birchBarkTex, pineBarkTex, bambooBarkTex, sakuraBarkTex].forEach((t) => {
       if (t) { t.anisotropy = aniso; t.needsUpdate = true; }
     });
   }
