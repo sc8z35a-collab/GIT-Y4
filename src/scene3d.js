@@ -5135,9 +5135,10 @@ export class FirstPersonHouseExplorer {
     const lfAtPlayer = this.terreno?.queryLandformAt ? this.terreno.queryLandformAt(pxW, pzW, 0) : null;
     let inNaturalSpa = false;
     if (lfAtPlayer && isFullyOutdoors) {
-      if (lfAtPlayer.landform.kind === 'cave_grotto' && lfAtPlayer.dist < 32) {
+      const k = lfAtPlayer.landform.kind;
+      if ((k === 'cave_grotto' || k === 'spring_sapping_alcove') && lfAtPlayer.dist < 42) {
         acousticZone = 'silo_cavern';
-      } else if (lfAtPlayer.landform.kind === 'travertine_onsen' && lfAtPlayer.dist < 58) {
+      } else if ((k === 'travertine_onsen' || k === 'fumarole_sulfur_basin') && lfAtPlayer.dist < 85) {
         inNaturalSpa = true;
       }
     }

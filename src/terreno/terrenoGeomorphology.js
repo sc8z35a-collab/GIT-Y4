@@ -8,8 +8,9 @@ import {
   evalRegionWeights,
 } from './terrenoConfig.js';
 import {
-  MAJOR_LANDFORMS_22,
-  applyLandformsToHeightfield,
+  ALL_LANDFORMS_62,
+  runContinuousGeologyEngine,
+  setActiveGeologyEngineState,
   queryLandformAt,
   isInsideLandformTreeExclusion,
   getClosestWaterfallDist,
@@ -823,27 +824,39 @@ export function buildTerrenoGeomorphology() {
   }
 
   // =========================================================================
-  // PASS 2: RIDGE CURVATURE TENSOR + D8 FLUVIAL EROSION + 22 MAJOR REAL-WORLD LANDFORMS
+  // PASS 2: CONTINUOUS GEOLOGICAL TERRAIN ENGINE (62 PROCESSES) + POST-GEOLOGY EROSION FUSION
   // =========================================================================
-  const flowArea = runAlpineHydrologyAndErosion(heights, W, H, cellX, cellZ);
-
-  // Pre-evaluate road corridor mask so all 22 landforms sculpt cleanly around driveable roads!
+  // Pre-evaluate road corridor mask so all 62 continuous geological processes strictly protect roads & bridges!
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
     const row = iz * W;
     for (let ix = 0; ix < W; ix++) {
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
       const rq = roadIndex.queryDist(wx, wz);
-      if (rq.segIdx >= 0 && rq.dist < 30.0) {
+      if (rq.segIdx >= 0 && rq.dist < 32.0) {
         const halfW = rq.width * 0.5;
-        roadMaskArr[row + ix] = 1.0 - quinticSmoothstep(halfW * 0.85, halfW + 6.0, rq.dist);
+        roadMaskArr[row + ix] = 1.0 - quinticSmoothstep(halfW * 0.85, halfW + 7.0, rq.dist);
       }
     }
   }
 
-  // Sculpt all 22 authentic Earth landforms (waterfalls, V-gorges, basalt cliffs, mesas,
-  // calderas, glacial cirques, river terraces, drumlin hills, karst dolines, cuestas, etc.)!
-  applyLandformsToHeightfield(heights, W, H, roadMaskArr);
+  // Run the Continuous Geomorphological Engine across the entire 60 km × 60 km watershed
+  // (22 upgraded legacy processes + 40 brand-new Earth terrain processes = 62 natural processes!)
+  const geologyState = runContinuousGeologyEngine({
+    heights,
+    W,
+    H,
+    roadMaskArr,
+    roadIndex,
+    riverRowX,
+    riverRowHW,
+    riverRowWaterY,
+  });
+
+  // Post-Geology D8 Stream-Power Fluvial Erosion + 34° Alpine Talus Thermal Relaxation:
+  // Naturally carves rain rills, gullies, and concave talus aprons across EVERY ONE of the 62 landforms
+  // so nothing ever looks "stamped on" — every slope fuses seamlessly into Earth!
+  const flowArea = runAlpineHydrologyAndErosion(heights, W, H, cellX, cellZ);
   const ridgeTensor = applyRidgeCurvaturePass(heights, W, H, cellX, cellZ);
 
   // =========================================================================
@@ -877,7 +890,7 @@ export function buildTerrenoGeomorphology() {
     heights.set(roadSmoothHeights);
   }
 
-  const braidedIsl = MAJOR_LANDFORMS_22.find((l) => l.kind === 'braided_island');
+  const braidedIslands = geologyState.features.filter((l) => l.kind === 'braided_island');
 
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
@@ -903,10 +916,13 @@ export function buildTerrenoGeomorphology() {
         } else {
           targetRivY = bankBenchY + (dxRiv - (rivHW + 18.0)) * 0.11;
         }
-        // Preserve Braided River Sandbar Island (#21) rising cleanly out of Kurosugi River!
-        if (braidedIsl && Math.abs(wz - braidedIsl.z) < 120.0 && dxRiv < 32.0) {
-          const islMound = Math.exp(-Math.pow((wx - braidedIsl.x) / 14.0, 2.0) - Math.pow((wz - braidedIsl.z) / 68.0, 2.0));
-          targetRivY = Math.max(targetRivY, rivWaterY - 0.5 + islMound * 2.45);
+        // Preserve ALL multi-occurrence natural Braided Cobble Islands along Kurosugi River!
+        for (let bi = 0; bi < braidedIslands.length; bi++) {
+          const bIsl = braidedIslands[bi];
+          if (Math.abs(wz - bIsl.z) < 120.0 && dxRiv < 32.0) {
+            const islMound = Math.exp(-Math.pow((wx - bIsl.x) / 14.0, 2.0) - Math.pow((wz - bIsl.z) / 68.0, 2.0));
+            targetRivY = Math.max(targetRivY, rivWaterY - 0.5 + islMound * 2.45);
+          }
         }
         const rivEnv = 1.0 - quinticSmoothstep(rivHW + 14.0, rivHW + 60.0, dxRiv);
         heights[idx] = heights[idx] * (1.0 - rivEnv) + targetRivY * rivEnv;
@@ -996,6 +1012,32 @@ export function buildTerrenoGeomorphology() {
   horizonTexture.generateMipmaps = false;
   horizonTexture.needsUpdate = true;
 
+  // 1024×1024 RGBA8 Geological Lithology Atlas (R: Volcanic/Basalt, G: Limestone/Pumice, B: Ochre/Badlands/Sulfur, A: Peat/Fen/Wet)
+  const lithoRGBA = geologyState.lithoRGBA;
+  const basinWaterY = geologyState.basinWaterY;
+  // Ensure no road corridor, compound, or village is ever submerged by a natural basin water table!
+  for (let i = 0; i < N; i++) {
+    if (roadMaskArr[i] > 0.12) basinWaterY[i] = -1e6;
+  }
+  const lithoTexture = new THREE.DataTexture(lithoRGBA, W, H, THREE.RGBAFormat, THREE.UnsignedByteType);
+  lithoTexture.minFilter = THREE.LinearFilter;
+  lithoTexture.magFilter = THREE.LinearFilter;
+  lithoTexture.wrapS = THREE.ClampToEdgeWrapping;
+  lithoTexture.wrapT = THREE.ClampToEdgeWrapping;
+  lithoTexture.generateMipmaps = false;
+  lithoTexture.needsUpdate = true;
+
+  const runtimeGeologyState = {
+    ...geologyState,
+    W,
+    H,
+    minX,
+    minZ,
+    worldW: TERRENO_WORLD.width,
+    worldD: TERRENO_WORLD.depth,
+  };
+  setActiveGeologyEngineState(runtimeGeologyState);
+
   const bakeMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - tStart;
 
   function sampleGeoBilinear(wx, wz) {
@@ -1021,6 +1063,48 @@ export function buildTerrenoGeomorphology() {
       ridge: geoRGBA[i00 + 2] * w00 + geoRGBA[i10 + 2] * w10 + geoRGBA[i01 + 2] * w01 + geoRGBA[i11 + 2] * w11,
       roadPad: geoRGBA[i00 + 3] * w00 + geoRGBA[i10 + 3] * w10 + geoRGBA[i01 + 3] * w01 + geoRGBA[i11 + 3] * w11,
     };
+  }
+
+  function getLithoAt(wx, wz) {
+    const u = Math.max(0.0, Math.min(W - 1.0001, ((wx - minX) / TERRENO_WORLD.width) * (W - 1)));
+    const v = Math.max(0.0, Math.min(H - 1.0001, ((wz - minZ) / TERRENO_WORLD.depth) * (H - 1)));
+    const ix = Math.round(u);
+    const iz = Math.round(v);
+    const o4 = (iz * W + ix) * 4;
+    return {
+      volcanic: lithoRGBA[o4] / 255.0,
+      limestone: lithoRGBA[o4 + 1] / 255.0,
+      ochre: lithoRGBA[o4 + 2] / 255.0,
+      peat: lithoRGBA[o4 + 3] / 255.0,
+    };
+  }
+
+  function getNaturalWaterYAt(wx, wz) {
+    const u = Math.max(0.0, Math.min(W - 1.0001, ((wx - minX) / TERRENO_WORLD.width) * (W - 1)));
+    const v = Math.max(0.0, Math.min(H - 1.0001, ((wz - minZ) / TERRENO_WORLD.depth) * (H - 1)));
+    const ix = Math.round(u);
+    const iz = Math.round(v);
+    return basinWaterY[iz * W + ix];
+  }
+
+  /**
+   * 100% physically-driven natural vegetation exclusion (replaces artificial circular crop-circles!):
+   * Trees naturally do NOT grow submerged underwater in natural lakes/oxbows/maars/tarns/kettle ponds,
+   * or inside barren acid-sulfur fumaroles / fresh basalt lava / steep raw badlands clay, using organic
+   * fractal noise edge modulation for realistic ecotones.
+   */
+  function isNaturallyBarrenOrSubmerged(wx, wz) {
+    const wy = getNaturalWaterYAt(wx, wz);
+    if (wy > -1e5) {
+      const ty = getTerrainHeightAt(wx, wz);
+      if (ty < wy + 0.55) return true; // Actually submerged or wet gravel shoreline!
+    }
+    const lith = getLithoAt(wx, wz);
+    const edgeNoise = (smoothNoise2D(wx * 0.032 + 4.1, wz * 0.032 - 7.3) - 0.5) * 0.22;
+    // Barren sulfur fumarole / badlands clay / fresh shield lava flow
+    if (lith.ochre + edgeNoise > 0.78) return true;
+    if (lith.volcanic + edgeNoise > 0.86) return true;
+    return false;
   }
 
   const sr = TERRENO_WORLD.southRect;
@@ -1132,7 +1216,7 @@ export function buildTerrenoGeomorphology() {
     if (inNullErea) zoneJp = 'NULL EREA・地下40m飛行船基地';
     else if (onBridge) zoneJp = bHit.bridge.nameJp || '黒杉川大橋';
     else if (inVillage) zoneJp = '杉ノ郷集落';
-    else if (lfHit && lfHit.dist < lfHit.landform.radius * 0.78) zoneJp = lfHit.landform.nameJp;
+    else if (lfHit && lfHit.landform) zoneJp = lfHit.landform.nameJp;
     else if (inRiver) zoneJp = '黒杉川の清流';
     else if (isRoad) zoneJp = '山岳森林ロード';
     else if (asl > 1180) zoneJp = '高山岩稜・雪渓帯';
@@ -1155,6 +1239,7 @@ export function buildTerrenoGeomorphology() {
       ridge: g.ridge,
       roadPad: g.roadPad,
       regions: rw,
+      litho: getLithoAt(wx, wz),
       isRoad,
       onBridge,
       bridge: bHit ? bHit.bridge : null,
@@ -1178,13 +1263,18 @@ export function buildTerrenoGeomorphology() {
     heights,
     geoRGBA,
     horizonRGBA,
+    lithoRGBA,
+    basinWaterY,
     geoTexture,
     horizonTexture,
+    lithoTexture,
+    geologyState: runtimeGeologyState,
+    emergentFeatures: geologyState.features,
     roadPolylines,
     roadDense,
     roadElevs,
     roadIndex,
-    landforms: MAJOR_LANDFORMS_22,
+    landforms: ALL_LANDFORMS_62,
     southRectY,
     minElev,
     maxElev,
@@ -1194,6 +1284,9 @@ export function buildTerrenoGeomorphology() {
     queryBridgeAt,
     queryLandformAt,
     isInsideLandformTreeExclusion,
+    isNaturallyBarrenOrSubmerged,
+    getLithoAt,
+    getNaturalWaterYAt,
     getClosestWaterfallDist,
     getTerrainHeightAt,
     getHeightAt,
