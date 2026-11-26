@@ -870,3 +870,393 @@ export function getPineBarkTexture() {
   cachedPineBarkTexture = tex;
   return tex;
 }
+
+// =========================================================================
+// TERRENO 4.0 EXTENDED BOTANICAL FLORA ATLAS (2048×1024, 4×2) FOR +20 SPECIES!
+//   Top Row    [v: 0.50..1.00]:
+//     Col 0 — Wild Sakura Blossom Spray (山桜・枝垂れ桜)
+//     Col 1 — Golden Ginkgo Fan Cluster (大銀杏)
+//     Col 2 — Giant Moso Bamboo Leaf Plume (孟宗竹)
+//     Col 3 — Japanese Larch Feathery Needle Spray (カラマツ)
+//   Bottom Row [v: 0.00..0.50]:
+//     Col 0 — Oak / Zelkova / Katsura Serrated Crown (ミズナラ・ケヤキ・カツラ)
+//     Col 1 — Hanging Lavender Wisteria Racemes (山藤)
+//     Col 2 — Glossy Camellia & White Magnolia Blooms (ツバキ・コブシ)
+//     Col 3 — Alpine Rowan Pinnate Leaf & Scarlet Berry Cluster (ナナカマド)
+// =========================================================================
+
+export const EXTENDED_BOTANICAL_UV = {
+  sakura:   [0.002, 0.504, 0.248, 0.996],
+  ginkgo:   [0.252, 0.504, 0.498, 0.996],
+  bamboo:   [0.502, 0.504, 0.748, 0.996],
+  larch:    [0.752, 0.504, 0.998, 0.996],
+  oak:      [0.002, 0.004, 0.248, 0.496],
+  wisteria: [0.252, 0.004, 0.498, 0.496],
+  blossom:  [0.502, 0.004, 0.748, 0.496],
+  rowan:    [0.752, 0.004, 0.998, 0.496],
+};
+
+let cachedExtAtlas = null;
+let cachedBambooBark = null;
+let cachedSakuraBark = null;
+
+export function getExtendedBotanicalAtlas() {
+  if (cachedExtAtlas) return cachedExtAtlas;
+  const W = 2048, H = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  const rng = makePrng(7788991);
+
+  const cell = (col, row, drawFn) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(col * 512, row * 512, 512, 512);
+    ctx.clip();
+    ctx.translate(col * 512, row * 512);
+    drawFn();
+    ctx.restore();
+  };
+
+  // --- [Top Row, canvas y=0..512 -> UV v=0.5..1.0] ---
+
+  // Col 0: Wild Yamazakura Blossom Spray (delicate clustered cherry blossoms + tender bronze-green young leaves!)
+  cell(0, 0, () => {
+    ctx.strokeStyle = 'rgba(68, 44, 38, 0.94)';
+    ctx.lineCap = 'round';
+    for (let b = 0; b < 6; b++) {
+      ctx.lineWidth = 6 - b * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(256, 485);
+      ctx.quadraticCurveTo(256 + (b - 2.5) * 56, 310, 256 + (b - 2.5) * 88 + (rng() - 0.5) * 35, 68 + rng() * 140);
+      ctx.stroke();
+    }
+    // Tender bronze-green Yamazakura leaves peeking behind blossoms
+    for (let l = 0; l < 65; l++) {
+      const cx = 64 + rng() * 384, cy = 54 + rng() * 375;
+      if (Math.hypot((cx - 256) / 215, (cy - 235) / 210) > 1.0) continue;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(rng() * Math.PI * 2);
+      ctx.fillStyle = `rgb(${112 + Math.floor(rng() * 34)}, ${128 + Math.floor(rng() * 36)}, ${76 + Math.floor(rng() * 22)})`;
+      ctx.beginPath(); ctx.ellipse(0, 0, 14 + rng() * 10, 5 + rng() * 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    for (let i = 0; i < 210; i++) {
+      const cx = 58 + rng() * 396;
+      const cy = 44 + rng() * 388;
+      if (Math.hypot((cx - 256) / 218, (cy - 235) / 212) > 1.0) continue;
+      const r = 7.5 + rng() * 8.5;
+      const rot = rng() * Math.PI * 2;
+      const sh = 0.84 + rng() * 0.16;
+      ctx.fillStyle = `rgb(${Math.round(248 * sh)}, ${Math.round(224 * sh)}, ${Math.round(230 * sh)})`;
+      for (let p = 0; p < 5; p++) {
+        const a = rot + (p * Math.PI * 2) / 5;
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * r * 0.60, cy + Math.sin(a) * r * 0.60, r * 0.56, r * 0.34, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(208, 142, 158, 0.78)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.19, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // Col 1: Golden Ginkgo Biloba Fan Leaf Cluster (distinct twin-lobed fan leaves!)
+  cell(1, 0, () => {
+    ctx.strokeStyle = 'rgba(92, 74, 48, 0.90)';
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(256, 488); ctx.lineTo(256, 110); ctx.stroke();
+    for (let i = 0; i < 135; i++) {
+      const cx = 56 + rng() * 400;
+      const cy = 44 + rng() * 395;
+      if (Math.hypot((cx - 256) / 220, (cy - 235) / 215) > 1.0) continue;
+      const r = 18 + rng() * 20;
+      const ang = -Math.PI * 0.5 + (rng() - 0.5) * 2.1;
+      const shade = 0.78 + rng() * 0.28;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(ang);
+      ctx.fillStyle = `rgb(${Math.min(255, Math.round(244 * shade))}, ${Math.min(255, Math.round(202 * shade))}, ${Math.round(58 * shade)})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, r, -0.78, -0.06);
+      ctx.lineTo(r * 0.66, 0);
+      ctx.arc(0, 0, r, 0.06, 0.78);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+
+  // Col 2: Giant Moso Bamboo Delicate Lanceolate Leaf Plumes (slender sweeping bamboo blades!)
+  cell(2, 0, () => {
+    ctx.strokeStyle = 'rgba(64, 96, 48, 0.92)';
+    ctx.lineWidth = 4;
+    for (let b = 0; b < 6; b++) {
+      const sx = 256 + (b - 2.5) * 28;
+      ctx.beginPath();
+      ctx.moveTo(sx, 485);
+      ctx.quadraticCurveTo(sx + (b - 2.5) * 44, 270, sx + (b - 2.5) * 76, 75 + rng() * 90);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 210; i++) {
+      const cx = 64 + rng() * 384;
+      const cy = 54 + rng() * 390;
+      if (Math.hypot((cx - 256) / 218, (cy - 245) / 210) > 1.0) continue;
+      const len = 34 + rng() * 44;
+      const w = 4.2 + rng() * 3.8;
+      const a = Math.PI * 0.18 + (rng() - 0.5) * 2.4;
+      const sh = 0.72 + rng() * 0.36;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a);
+      ctx.fillStyle = `rgb(${Math.round(92 * sh)}, ${Math.min(245, Math.round(166 * sh))}, ${Math.round(78 * sh)})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(len * 0.45, -w, len, 0);
+      ctx.quadraticCurveTo(len * 0.45, w, 0, 0);
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+
+  // Col 3: Japanese Larch (カラマツ) Airy Feathery Golden-Olive Rosette Needle Sprays!
+  cell(3, 0, () => {
+    ctx.strokeStyle = 'rgba(98, 68, 42, 0.92)';
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(256, 488); ctx.lineTo(256, 62); ctx.stroke();
+    for (let b = 0; b < 9; b++) {
+      const y = 90 + b * 42;
+      for (const side of [-1, 1]) {
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(256, y);
+        ctx.quadraticCurveTo(256 + side * 95, y - 10, 256 + side * (175 - b * 8), y + 22);
+        ctx.stroke();
+      }
+    }
+    for (let i = 0; i < 220; i++) {
+      const cx = 56 + rng() * 400;
+      const cy = 56 + rng() * 392;
+      if (Math.hypot((cx - 256) / 215, (cy - 245) / 210) > 1.0) continue;
+      const sh = 0.72 + rng() * 0.35;
+      ctx.strokeStyle = `rgb(${Math.min(248, Math.round(188 * sh))}, ${Math.min(240, Math.round(174 * sh))}, ${Math.round(74 * sh)})`;
+      ctx.lineWidth = 1.9;
+      const tufts = 8;
+      for (let t = 0; t < tufts; t++) {
+        const a = (t / tufts) * Math.PI * 2 + rng() * 0.3;
+        const nl = 10 + rng() * 14;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(a) * nl, cy + Math.sin(a) * nl);
+        ctx.stroke();
+      }
+    }
+  });
+
+  // --- [Bottom Row, canvas y=512..1024 -> UV v=0.0..0.5] ---
+
+  // Col 0: Oak / Zelkova / Katsura Lobed & Serrated Broadleaf Foliage
+  cell(0, 1, () => {
+    ctx.strokeStyle = 'rgba(72, 54, 38, 0.90)';
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(256, 485); ctx.lineTo(256, 95); ctx.stroke();
+    for (let i = 0; i < 140; i++) {
+      const cx = 54 + rng() * 404;
+      const cy = 48 + rng() * 395;
+      if (Math.hypot((cx - 256) / 222, (cy - 240) / 215) > 1.0) continue;
+      const rx = 18 + rng() * 18;
+      const ry = 10 + rng() * 10;
+      const a = rng() * Math.PI * 2;
+      const sh = 0.70 + rng() * 0.38;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a);
+      ctx.fillStyle = `rgb(${Math.round(112 * sh)}, ${Math.min(235, Math.round(158 * sh))}, ${Math.round(84 * sh)})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgb(${Math.round(92 * sh)}, ${Math.min(215, Math.round(138 * sh))}, ${Math.round(68 * sh)})`;
+      ctx.beginPath();
+      ctx.ellipse(rx * 0.32, -ry * 0.35, rx * 0.42, ry * 0.42, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(rx * 0.32, ry * 0.35, rx * 0.42, ry * 0.42, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  });
+
+  // Col 1: Hanging Lavender-Violet Japanese Wisteria (山藤) Cascading Racemes!
+  cell(1, 1, () => {
+    // Upper green vine leaves
+    for (let i = 0; i < 48; i++) {
+      const cx = 64 + rng() * 384;
+      const cy = 28 + rng() * 125;
+      ctx.fillStyle = `rgb(${78 + Math.floor(rng() * 35)}, ${134 + Math.floor(rng() * 42)}, ${66 + Math.floor(rng() * 28)})`;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, 18 + rng() * 12, 8 + rng() * 5, (rng() - 0.5) * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 11 long cascading tapering wisteria blossom chains!
+    for (let c = 0; c < 11; c++) {
+      const rx = 52 + c * 40 + (rng() - 0.5) * 14;
+      const len = 240 + rng() * 210;
+      const sway = (rng() - 0.5) * 28;
+      for (let y = 70; y < 70 + len; y += 11) {
+        const u = (y - 70) / len;
+        const spread = (1.0 - u * 0.72) * 16;
+        const x = rx + Math.sin(u * 2.5) * sway;
+        for (let f = 0; f < 3; f++) {
+          const fx = x + (rng() - 0.5) * spread * 1.5;
+          const fy = y + (rng() - 0.5) * 8;
+          const rad = (7 + rng() * 5.5) * (1.0 - u * 0.45);
+          const bright = 0.76 + (1.0 - u) * 0.22 + rng() * 0.14;
+          ctx.fillStyle = `rgb(${Math.min(255, Math.round(176 * bright))}, ${Math.min(255, Math.round(132 * bright))}, ${Math.min(255, Math.round(238 * bright))})`;
+          ctx.beginPath();
+          ctx.arc(fx, fy, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  });
+
+  // Col 2: Glossy Camellia & Wild Mountain Magnolia (emerald glossy leaves + jewel-like blossoms!)
+  cell(2, 1, () => {
+    for (let i = 0; i < 120; i++) {
+      const cx = 56 + rng() * 400;
+      const cy = 54 + rng() * 395;
+      if (Math.hypot((cx - 256) / 220, (cy - 245) / 215) > 1.0) continue;
+      const sh = 0.65 + rng() * 0.40;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rng() * Math.PI * 2);
+      ctx.fillStyle = `rgb(${Math.round(52 * sh)}, ${Math.round(128 * sh)}, ${Math.round(64 * sh)})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 22 + rng() * 14, 11 + rng() * 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Luminous star-petalled blossoms
+    for (let b = 0; b < 32; b++) {
+      const cx = 86 + rng() * 340;
+      const cy = 78 + rng() * 340;
+      if (Math.hypot((cx - 256) / 195, (cy - 240) / 195) > 1.0) continue;
+      const r = 16 + rng() * 14;
+      const rot = rng() * Math.PI * 2;
+      ctx.fillStyle = 'rgb(252, 246, 242)';
+      for (let p = 0; p < 6; p++) {
+        const a = rot + (p * Math.PI * 2) / 6;
+        ctx.beginPath();
+        ctx.ellipse(cx + Math.cos(a) * r * 0.58, cy + Math.sin(a) * r * 0.58, r * 0.55, r * 0.30, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = 'rgb(242, 198, 72)';
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.24, 0, Math.PI * 2); ctx.fill();
+    }
+  });
+
+  // Col 3: Alpine Rowan (ナナカマド) Pinnate Scarlet Foliage & Vivid Crimson Berry Clusters!
+  cell(3, 1, () => {
+    for (let i = 0; i < 150; i++) {
+      const cx = 56 + rng() * 400;
+      const cy = 50 + rng() * 400;
+      if (Math.hypot((cx - 256) / 218, (cy - 245) / 210) > 1.0) continue;
+      const a = rng() * Math.PI * 2;
+      const sh = 0.72 + rng() * 0.34;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(a);
+      ctx.fillStyle = `rgb(${Math.min(255, Math.round(225 * sh))}, ${Math.round(82 * sh)}, ${Math.round(46 * sh)})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 20 + rng() * 12, 6 + rng() * 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Bright vermilion berry clusters
+    for (let c = 0; c < 18; c++) {
+      const gx = 96 + rng() * 320;
+      const gy = 86 + rng() * 320;
+      for (let k = 0; k < 8; k++) {
+        ctx.fillStyle = `rgb(${235 + Math.floor(rng() * 20)}, ${42 + Math.floor(rng() * 30)}, ${32 + Math.floor(rng() * 20)})`;
+        ctx.beginPath();
+        ctx.arc(gx + (rng() - 0.5) * 28, gy + (rng() - 0.5) * 24, 4.5 + rng() * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  });
+
+  const img = ctx.getImageData(0, 0, W, H);
+  dilateTransparentRgb(img, 4);
+  ctx.putImageData(img, 0, 0);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  cachedExtAtlas = tex;
+  return tex;
+}
+
+/**
+ * Glossy Segmented Jade-Green Giant Moso Bamboo Culm Bark (孟宗竹): authentic internode rings!
+ */
+export function getBambooCulmTexture() {
+  if (cachedBambooBark) return cachedBambooBark;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const rng = makePrng(512389);
+  ctx.fillStyle = '#6c9142';
+  ctx.fillRect(0, 0, size, size);
+  for (let x = 0; x < size; x += 2) {
+    ctx.fillStyle = rng() > 0.5 ? 'rgba(182,212,118,0.14)' : 'rgba(38,62,24,0.14)';
+    ctx.fillRect(x, 0, 2, size);
+  }
+  // Authentic raised pale-chalky & dark nodal bamboo joints every 64px!
+  for (let y = 32; y < size; y += 64) {
+    ctx.fillStyle = 'rgba(218, 226, 178, 0.72)';
+    ctx.fillRect(0, y - 3, size, 3);
+    ctx.fillStyle = 'rgba(42, 54, 28, 0.85)';
+    ctx.fillRect(0, y, size, 4);
+    ctx.fillStyle = 'rgba(164, 192, 108, 0.42)';
+    ctx.fillRect(0, y + 4, size, 4);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.anisotropy = 4; tex.colorSpace = THREE.NoColorSpace; tex.needsUpdate = true;
+  cachedBambooBark = tex;
+  return tex;
+}
+
+/**
+ * Glossy Mahogany Japanese Wild Mountain Cherry Bark (山桜): horizontal reddish-silver lenticels!
+ */
+export function getSakuraBarkTexture() {
+  if (cachedSakuraBark) return cachedSakuraBark;
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  const rng = makePrng(619823);
+  ctx.fillStyle = '#563932';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 180; i++) {
+    const x = rng() * size, y = rng() * size;
+    const w = 14 + rng() * 38, h = 1.5 + rng() * 2.5;
+    ctx.fillStyle = rng() < 0.65 ? 'rgba(172, 128, 106, 0.75)' : 'rgba(34, 22, 18, 0.72)';
+    ctx.fillRect(x, y, w, h);
+    if (x + w > size) ctx.fillRect(x - size, y, w, h);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+  tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.anisotropy = 4; tex.colorSpace = THREE.NoColorSpace; tex.needsUpdate = true;
+  cachedSakuraBark = tex;
+  return tex;
+}
+

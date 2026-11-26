@@ -1,46 +1,61 @@
 /**
- * NARROW-50 / TERRENO AAA Procedural Spatial Audio & Foley Engine (v3.0 — Zero-Beep Immersion Edition)
+ * NARROW-50 / TERRENO Cinema/AAA Physical-Modeling Spatial Audio & Foley Engine (v4.0)
  *
- * Completely eliminates the legacy 4150Hz continuous pulsed oscillator ("ぴぴぴぴぴ") and replaces it
- * with a studio-grade procedural Web Audio DSP engine featuring:
- *  - Master DynamicsCompressor + strictly leak-free Master Mute Bus (0.0000 gain when muted)
- *  - Real-time Procedural Stereo Convolution Reverb (Warm Timber Room IR + 40m Cavern/Granite Spa IR)
- *  - 55+ ultra-realistic multi-layered procedural SFX covering every surface, door, prop, sauna,
- *    underground lab, elevator, vehicle, bridge, river, weather event, SILO-40, and Airship K-11
- *  - Living 3D Proximity Ambient Soundscape: stereo mountain wind, rushing Kurosugi River & rapids,
- *    village bamboo spring well, crackling fireplaces/irori, B3F thermal spa, underground HVAC,
- *    material-aware storm rain patter, and spacious natural wildlife (day birds / mellow night owl)
+ * Strictly zero continuous high-pitched beeps ("ぴぴぴぴぴ") + leak-free 0.0000 Master Mute Bus.
+ * Upgraded to Cinema/AAA physical-modeling & mastering architecture:
+ *  - Multi-stage Studio Mastering: 24Hz DC-block HPF -> Sub/Air Presence EQ -> Analog Transformer
+ *    Warmth WaveShaper -> DynamicsCompressor -> Brickwall Safety Limiter -> MasterGain -> Destination
+ *  - 4-Space Physically Modeled Stereo Convolution Reverb with Dual-Band Air Absorption:
+ *      (1) Hinoki Timber Room, (2) Wet Granite Spa / Garage, (3) 40m SILO-40 Launch Cavern,
+ *      (4) Alpine Mountain Valley Canyon Echo (real mountain-ridge reflections!)
+ *  - 7 Pre-Baked Stereo Micro-Physics Buffers (White, 7-pole Pink, Deep Brown, Hearth Crackle,
+ *    Minnaert Water Bubbles, Crystalline Gravel/Frost Grit, Dry Autumn Foliage Sibilance)
+ *  - 128 ultra-realistic multi-layered procedural SFX (69 upgraded core + 59 brand-new V4 SFX)
  */
 
+import {
+  HYPER_SFX_V4_IDS,
+  buildAnalogWarmthCurve,
+  buildCombustionCurve,
+  buildPhysicalIR,
+  buildExtendedNoiseBuffers,
+  playModalBody,
+  playGranularScatter,
+  playFormantVocal,
+  installHyperFoleyV4,
+} from './audioFoleyV4.js';
+
 export const SFX_CATALOG = [
-  // Footsteps & Player Foley (14)
+  // Footsteps & Player Foley (14 core)
   'footstep_wood', 'footstep_tatami', 'footstep_tile', 'footstep_wet_stone',
   'footstep_metal', 'footstep_earth', 'footstep_gravel', 'footstep_grass',
   'footstep_bridge', 'footstep_water', 'jump_pushoff', 'land_impact',
   'crouch_rustle', 'stair_step',
-  // Architectural Doors, Hatches & Shutters (10)
+  // Architectural Doors, Hatches & Shutters (10 core)
   'door_wood_swing', 'door_shoji_slide', 'door_airtight_bunker', 'door_glass_slide',
   'door_vehicle_cab', 'door_liftgate_strut', 'door_armor_airlock', 'door_k11_airlock',
   'garage_rollup_shutter', 'armor_storm_shutter',
-  // Interactive Props, Sauna, Hearth & Underground Lab (10)
+  // Interactive Props, Sauna, Hearth & Underground Lab (10 core)
   'flashlight_click', 'lamp_switch', 'washi_lantern_toggle', 'fireplace_toggle',
   'sauna_loyly_steam', 'thermal_console_cmd', 'cooling_plenum_boost', 'lab_uv_mode',
   'lab_containment_overdrive', 'tow_hitch_couple',
-  // Elevators, SILO-40 & Avionics (9)
+  // Elevators, SILO-40 & Avionics (9 core)
   'elevator_button', 'elevator_brake', 'elevator_door', 'elevator_chime',
   'elevator_safety_cue', 'elevator_motor_loop', 'silo_hydraulic_stage',
   'k11_refuel_pump', 'autopilot_cue',
-  // Ground Vehicles & Airship K-11 Flight (11)
+  // Ground Vehicles & Airship K-11 Flight (15 core)
   'engine_start_diesel', 'engine_start_armor', 'engine_start_kei', 'engine_start_k11',
   'engine_shutdown', 'vehicle_engine_loop', 'tire_surface_loop', 'tire_hydroplane_skid',
   'suspension_thud', 'bridge_expansion_joint', 'vehicle_collision_impact',
   'vehicle_headlight_relay', 'k11_takeoff_boost', 'k11_touchdown_struts',
   'k11_airship_flight_loop',
-  // Living World Nature, Weather & UI (11)
+  // Living World Nature, Weather & UI (11 core)
   'forest_wind_ambience', 'river_rapids_ambience', 'village_spring_ambience',
   'hearth_fire_ambience', 'sauna_spa_ambience', 'underground_hvac_ambience',
   'storm_rain_roof_ambience', 'thunder_lightning_crack', 'landslide_rockfall',
   'wildlife_bird_owl_woodpecker', 'ui_tactile_feedback',
+  // Hyper-Realism v4.0 Expansion (+59 brand-new physically modeled SFX -> 128 total!)
+  ...HYPER_SFX_V4_IDS,
 ];
 
 function clamp(v, lo, hi) {
@@ -57,23 +72,34 @@ export class SpatialForestAudio {
     this.enabled = false;
     this.muted = false;
 
-    // Master & Reverb Buses
+    // Cinema Studio Master Chain & 4-Space Reverb Buses
     this.masterGain = null;
     this.compressor = null;
+    this.limiter = null;
+    this.warmthShaper = null;
+    this.masterInBus = null;
     this.sfxBus = null;
     this.ambienceBus = null;
     this.vehicleBus = null;
     this.uiBus = null;
     this.roomReverbSend = null;
+    this.spaReverbSend = null;
     this.cavernReverbSend = null;
+    this.valleyReverbSend = null;
     this.roomWetGain = null;
+    this.spaWetGain = null;
     this.cavernWetGain = null;
+    this.valleyWetGain = null;
+    this.combustionCurve = null;
 
-    // Pre-baked Stereo Noise Buffers (zero GC during gameplay)
+    // 7 Pre-baked High-Definition Stereo Noise Buffers (zero GC during gameplay)
     this.whiteBuf = null;
     this.pinkBuf = null;
     this.brownBuf = null;
     this.crackleBuf = null;
+    this.dropletBuf = null;
+    this.gritBuf = null;
+    this.foliageBuf = null;
     // Keep alias for any legacy callers inspecting this.noiseBuffer
     this.noiseBuffer = null;
 
@@ -88,6 +114,7 @@ export class SpatialForestAudio {
     this.riverMidFilter = null;
     this.riverHighFilter = null;
     this.riverGain = null;
+    this.riverBubbleGain = null;
 
     this.springFilter = null;
     this.springGain = null;
@@ -109,12 +136,16 @@ export class SpatialForestAudio {
     this.elvNodes = null;
     this.airNodes = null;
 
-    // State Tracking
+    // State Tracking & Organic Living World Timers
     this._footParity = 1;
     this._lastOpenness = 0.25;
     this._lastStormIntensity = 0.0;
     this._lastAcousticZone = 'wood_room';
-    this._wildlifeTimer = 9.0;
+    this._wildlifeTimer = 7.5;
+    this._ambientEventTimer = 11.0;
+    this._shishiTimer = 8.0;
+    this._interiorTimer = 14.0;
+    this._stormMicroTimer = 4.5;
     this._lastJointTime = 0;
     this._lastSkidTime = 0;
     this._lastLandslideTime = 0;
@@ -122,9 +153,13 @@ export class SpatialForestAudio {
     this._envState = {
       isOutdoors: false,
       isNight: false,
+      altitudeASL: 320,
+      onBridge: false,
       riverDist: 999,
       riverFlowBoost: 0,
       springDist: 999,
+      shrineDist: 999,
+      compoundDist: 0,
       fireDist: 999,
       inSpa: false,
       inUnderground: false,
@@ -149,66 +184,141 @@ export class SpatialForestAudio {
     this.enabled = true;
 
     const sr = this.ctx.sampleRate;
+    this.combustionCurve = buildCombustionCurve(1024);
 
-    // 1. Studio Master Chain: Buses -> DynamicsCompressor -> MasterGain -> Destination
+    // 1. Cinema Studio Master Chain:
+    //    Buses -> MasterInBus -> 24Hz DC HPF -> Sub/Air EQ -> Analog Warmth -> Compressor -> Brickwall Limiter -> MasterGain -> Destination
     // STRICT MUTE GUARANTEE: EVERYTHING routes into masterGain! Zero direct destination bypasses!
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = this.muted ? 0.0 : 0.92;
+    this.masterGain.gain.value = this.muted ? 0.0 : 0.94;
+
+    this.limiter = this.ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -2.2;
+    this.limiter.knee.value = 3;
+    this.limiter.ratio.value = 18;
+    this.limiter.attack.value = 0.0015;
+    this.limiter.release.value = 0.08;
 
     this.compressor = this.ctx.createDynamicsCompressor();
-    this.compressor.threshold.value = -13;
-    this.compressor.knee.value = 18;
-    this.compressor.ratio.value = 3.8;
-    this.compressor.attack.value = 0.005;
+    this.compressor.threshold.value = -13.5;
+    this.compressor.knee.value = 16;
+    this.compressor.ratio.value = 3.4;
+    this.compressor.attack.value = 0.006;
     this.compressor.release.value = 0.16;
 
-    this.compressor.connect(this.masterGain);
+    this.warmthShaper = this.ctx.createWaveShaper();
+    this.warmthShaper.curve = buildAnalogWarmthCurve(1024);
+    this.warmthShaper.oversample = '2x';
+
+    const dcHpf = this.ctx.createBiquadFilter();
+    dcHpf.type = 'highpass';
+    dcHpf.frequency.value = 24;
+    dcHpf.Q.value = 0.7;
+
+    const subShelf = this.ctx.createBiquadFilter();
+    subShelf.type = 'lowshelf';
+    subShelf.frequency.value = 68;
+    subShelf.gain.value = 1.6;
+
+    const airShelf = this.ctx.createBiquadFilter();
+    airShelf.type = 'highshelf';
+    airShelf.frequency.value = 9200;
+    airShelf.gain.value = 1.3;
+
+    this.masterInBus = this.ctx.createGain();
+    this.masterInBus.gain.value = 1.0;
+
+    this.masterInBus.connect(dcHpf);
+    dcHpf.connect(subShelf);
+    subShelf.connect(airShelf);
+    airShelf.connect(this.warmthShaper);
+    this.warmthShaper.connect(this.compressor);
+    this.compressor.connect(this.limiter);
+    this.limiter.connect(this.masterGain);
     this.masterGain.connect(this.ctx.destination);
 
     this.sfxBus = this.ctx.createGain();
     this.sfxBus.gain.value = 1.0;
-    this.sfxBus.connect(this.compressor);
+    this.sfxBus.connect(this.masterInBus);
 
     this.ambienceBus = this.ctx.createGain();
-    this.ambienceBus.gain.value = 0.95;
-    this.ambienceBus.connect(this.compressor);
+    this.ambienceBus.gain.value = 0.96;
+    this.ambienceBus.connect(this.masterInBus);
 
     this.vehicleBus = this.ctx.createGain();
-    this.vehicleBus.gain.value = 0.92;
-    this.vehicleBus.connect(this.compressor);
+    this.vehicleBus.gain.value = 0.94;
+    this.vehicleBus.connect(this.masterInBus);
 
     this.uiBus = this.ctx.createGain();
-    this.uiBus.gain.value = 0.85;
-    this.uiBus.connect(this.compressor);
+    this.uiBus.gain.value = 0.86;
+    this.uiBus.connect(this.masterInBus);
 
-    // 2. Procedural Stereo Convolution Reverb Engine (Room IR + Deep Cavern/Granite Spa IR)
+    // 2. 4-Space Physically Modeled Stereo Convolution Reverb Engine
     this.roomReverbSend = this.ctx.createGain();
-    this.roomReverbSend.gain.value = 0.32;
+    this.roomReverbSend.gain.value = 0.34;
+    this.spaReverbSend = this.ctx.createGain();
+    this.spaReverbSend.gain.value = 0.04;
     this.cavernReverbSend = this.ctx.createGain();
-    this.cavernReverbSend.gain.value = 0.06;
+    this.cavernReverbSend.gain.value = 0.03;
+    this.valleyReverbSend = this.ctx.createGain();
+    this.valleyReverbSend.gain.value = 0.12;
 
     try {
+      // Space 1: Warm Hinoki Timber Room (0.68s, close early wall reflections)
       const roomConv = this.ctx.createConvolver();
-      roomConv.buffer = this._buildImpulseResponse(0.72, 2.8, 4200);
+      roomConv.buffer = buildPhysicalIR(this.ctx, {
+        durationSec: 0.72, lowDecay: 2.3, highDecay: 5.0, splitHz: 1450, lpfHz: 4600, gainScale: 0.56,
+        earlyTaps: [[0.008, 0.58, 0.002], [0.017, 0.42, 0.004], [0.029, 0.30, 0.003], [0.043, 0.22, 0.005]],
+      });
       this.roomWetGain = this.ctx.createGain();
       this.roomWetGain.gain.value = 0.34;
       this.roomReverbSend.connect(roomConv);
       roomConv.connect(this.roomWetGain);
-      this.roomWetGain.connect(this.compressor);
+      this.roomWetGain.connect(this.masterInBus);
 
+      // Space 2: Wet Granite Bathhouse / Garage (1.95s, crisp stone flutter)
+      const spaConv = this.ctx.createConvolver();
+      spaConv.buffer = buildPhysicalIR(this.ctx, {
+        durationSec: 1.95, preDelaySec: 0.012, lowDecay: 1.9, highDecay: 3.1, splitHz: 2200, lpfHz: 6200, gainScale: 0.50,
+        earlyTaps: [[0.014, 0.65, 0.003], [0.028, 0.52, 0.006], [0.049, 0.38, 0.004], [0.074, 0.28, 0.008]],
+      });
+      this.spaWetGain = this.ctx.createGain();
+      this.spaWetGain.gain.value = 0.04;
+      this.spaReverbSend.connect(spaConv);
+      spaConv.connect(this.spaWetGain);
+      this.spaWetGain.connect(this.masterInBus);
+
+      // Space 3: 40m SILO-40 Launch Cavern (3.20s, deep concrete slapback)
       const cavernConv = this.ctx.createConvolver();
-      cavernConv.buffer = this._buildImpulseResponse(2.35, 2.2, 2400);
+      cavernConv.buffer = buildPhysicalIR(this.ctx, {
+        durationSec: 3.20, preDelaySec: 0.042, lowDecay: 1.7, highDecay: 3.9, splitHz: 1100, lpfHz: 3200, gainScale: 0.52,
+        earlyTaps: [[0.045, 0.68, 0.008], [0.088, 0.50, 0.012], [0.142, 0.36, 0.015]],
+      });
       this.cavernWetGain = this.ctx.createGain();
-      this.cavernWetGain.gain.value = 0.08;
+      this.cavernWetGain.gain.value = 0.04;
       this.cavernReverbSend.connect(cavernConv);
       cavernConv.connect(this.cavernWetGain);
-      this.cavernWetGain.connect(this.compressor);
+      this.cavernWetGain.connect(this.masterInBus);
+
+      // Space 4: Alpine Mountain Valley Echo (2.65s, stereo ridge reflections at 95/168/245ms!)
+      const valleyConv = this.ctx.createConvolver();
+      valleyConv.buffer = buildPhysicalIR(this.ctx, {
+        durationSec: 2.65, preDelaySec: 0.068, lowDecay: 2.1, highDecay: 5.8, splitHz: 920, lpfHz: 2800, gainScale: 0.44,
+        earlyTaps: [[0.095, 0.54, 0.022, 0.85], [0.168, 0.40, -0.028, 1.05], [0.248, 0.28, 0.032, 0.90]],
+      });
+      this.valleyWetGain = this.ctx.createGain();
+      this.valleyWetGain.gain.value = 0.16;
+      this.valleyReverbSend.connect(valleyConv);
+      valleyConv.connect(this.valleyWetGain);
+      this.valleyWetGain.connect(this.masterInBus);
     } catch (_) {
       this.roomWetGain = this.ctx.createGain();
+      this.spaWetGain = this.ctx.createGain();
       this.cavernWetGain = this.ctx.createGain();
+      this.valleyWetGain = this.ctx.createGain();
     }
 
-    // 3. Generate High-Definition Stereo Noise Bank (White, Pink, Brown, Stochastic Crackle)
+    // 3. Generate 7 High-Definition Stereo Noise & Micro-Physics Buffers
     this._buildNoiseBuffers(sr);
 
     // 4. Initialize Organic Continuous Spatial Ambience Layers (ZERO high-pitched beep oscillators!)
@@ -218,27 +328,9 @@ export class SpatialForestAudio {
   }
 
   _buildImpulseResponse(durationSec, decayPower, lpfHz) {
-    const sr = this.ctx.sampleRate;
-    const len = Math.max(1024, Math.floor(sr * durationSec));
-    const buf = this.ctx.createBuffer(2, len, sr);
-    const alpha = Math.min(0.99, (2 * Math.PI * lpfHz) / (sr + 2 * Math.PI * lpfHz));
-    for (let ch = 0; ch < 2; ch++) {
-      const data = buf.getChannelData(ch);
-      let lp = 0;
-      for (let i = 0; i < len; i++) {
-        const t = i / len;
-        const env = Math.pow(1.0 - t, decayPower);
-        // Subtle early reflection clusters in first 45ms
-        let early = 0;
-        if (i === Math.floor(sr * (0.011 + ch * 0.003))) early = 0.55;
-        else if (i === Math.floor(sr * (0.024 + ch * 0.005))) early = 0.38;
-        else if (i === Math.floor(sr * (0.041 + ch * 0.004))) early = 0.25;
-        const raw = (Math.random() * 2 - 1) * env + early;
-        lp += alpha * (raw - lp);
-        data[i] = lp * 0.55;
-      }
-    }
-    return buf;
+    return buildPhysicalIR(this.ctx, {
+      durationSec, lowDecay: decayPower, highDecay: decayPower * 1.9, lpfHz,
+    });
   }
 
   _buildNoiseBuffers(sr) {
@@ -283,7 +375,7 @@ export class SpatialForestAudio {
     }
     this.noiseBuffer = this.brownBuf;
 
-    // Stochastic Micro-Crackle Buffer (for hearth wood crackle, droplets, gravel grit)
+    // Stochastic Micro-Crackle Buffer (for hearth wood crackle & embers)
     this.crackleBuf = this.ctx.createBuffer(2, len3, sr);
     for (let ch = 0; ch < 2; ch++) {
       const d = this.crackleBuf.getChannelData(ch);
@@ -296,6 +388,12 @@ export class SpatialForestAudio {
         decay *= 0.91;
       }
     }
+
+    // Extended V4 Physical Micro-Buffers: Minnaert Water Bubbles, Crystalline Grit, Dry Foliage
+    const ext = buildExtendedNoiseBuffers(this.ctx);
+    this.dropletBuf = ext.dropletBuf;
+    this.gritBuf = ext.gritBuf;
+    this.foliageBuf = ext.foliageBuf;
   }
 
   _initForestWindLayer() {
@@ -388,20 +486,37 @@ export class SpatialForestAudio {
     this.riverGain.connect(this.ambienceBus);
     rivSrc.start(0, 0.7);
 
-    // Village Bamboo Spring Well / B3F Spa Trickle (gentle clear babbling water)
+    // Live Minnaert Water Bubble Sparkle Layer (gives Kurosugi River authentic crystalline babble!)
+    const bubSrc = this.ctx.createBufferSource();
+    bubSrc.buffer = this.dropletBuf || this.crackleBuf;
+    bubSrc.loop = true;
+    const bubBp = this.ctx.createBiquadFilter();
+    bubBp.type = 'bandpass';
+    bubBp.frequency.value = 1520;
+    bubBp.Q.value = 0.85;
+    this.riverBubbleGain = this.ctx.createGain();
+    this.riverBubbleGain.gain.value = 0.0;
+    bubSrc.connect(bubBp);
+    bubBp.connect(this.riverBubbleGain);
+    this.riverBubbleGain.connect(this.ambienceBus);
+    if (this.valleyReverbSend) this.riverBubbleGain.connect(this.valleyReverbSend);
+    bubSrc.start(0, 0.4);
+
+    // Village Bamboo Spring Well / B3F Spa Trickle (clear Minnaert babbling water)
     const spSrc = this.ctx.createBufferSource();
-    spSrc.buffer = this.crackleBuf;
+    spSrc.buffer = this.dropletBuf || this.crackleBuf;
     spSrc.loop = true;
     this.springFilter = this.ctx.createBiquadFilter();
     this.springFilter.type = 'bandpass';
-    this.springFilter.frequency.value = 1750;
-    this.springFilter.Q.value = 1.9;
+    this.springFilter.frequency.value = 1850;
+    this.springFilter.Q.value = 1.4;
     this.springGain = this.ctx.createGain();
     this.springGain.gain.value = 0.0;
     spSrc.connect(this.springFilter);
     this.springFilter.connect(this.springGain);
     this.springGain.connect(this.ambienceBus);
     this.springGain.connect(this.roomReverbSend);
+    if (this.spaReverbSend) this.springGain.connect(this.spaReverbSend);
     spSrc.start(0, 0.2);
   }
 
@@ -463,11 +578,11 @@ export class SpatialForestAudio {
     spaSrc.connect(spaBp);
     spaBp.connect(this.spaGain);
     this.spaGain.connect(this.ambienceBus);
-    this.spaGain.connect(this.cavernReverbSend);
+    if (this.spaReverbSend) this.spaGain.connect(this.spaReverbSend);
     spaSrc.start(0, 1.9);
   }
 
-  _connectSfx(node, pan = 0, reverbAmt = 0.25) {
+  _connectSfx(node, pan = 0, reverbAmt = 0.25, spaceOverride = null) {
     let tail = node;
     if (typeof this.ctx.createStereoPanner === 'function' && Math.abs(pan) > 0.005) {
       const p = this.ctx.createStereoPanner();
@@ -480,8 +595,21 @@ export class SpatialForestAudio {
       const send = this.ctx.createGain();
       send.gain.value = reverbAmt;
       tail.connect(send);
-      send.connect(this.roomReverbSend);
-      if (this.cavernReverbSend) send.connect(this.cavernReverbSend);
+      if (spaceOverride === 'valley' && this.valleyReverbSend) {
+        send.connect(this.valleyReverbSend);
+      } else if (spaceOverride === 'spa' && this.spaReverbSend) {
+        send.connect(this.spaReverbSend);
+      } else if (spaceOverride === 'silo' && this.cavernReverbSend) {
+        send.connect(this.cavernReverbSend);
+      } else if (spaceOverride === 'room') {
+        send.connect(this.roomReverbSend);
+      } else {
+        // Automatic 4-space acoustic blend controlled by current acoustic zone wet gains
+        send.connect(this.roomReverbSend);
+        if (this.spaReverbSend) send.connect(this.spaReverbSend);
+        if (this.cavernReverbSend) send.connect(this.cavernReverbSend);
+        if (this.valleyReverbSend) send.connect(this.valleyReverbSend);
+      }
     }
   }
 
@@ -489,7 +617,7 @@ export class SpatialForestAudio {
     if (!this.ctx) this.init();
     this.muted = !this.muted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(this.muted ? 0.0 : 0.92, this.ctx.currentTime, 0.06);
+      this.masterGain.gain.setTargetAtTime(this.muted ? 0.0 : 0.94, this.ctx.currentTime, 0.06);
     }
     return !this.muted;
   }
@@ -499,22 +627,24 @@ export class SpatialForestAudio {
     if (zone === this._lastAcousticZone) return;
     this._lastAcousticZone = zone;
     const t = this.ctx.currentTime;
-    let roomW = 0.24, cavW = 0.04;
+    let roomW = 0.28, spaW = 0.03, cavW = 0.02, valW = 0.06;
     if (zone === 'outdoor') {
-      roomW = 0.14; cavW = 0.04;
+      roomW = 0.04; spaW = 0.01; cavW = 0.01; valW = 0.36;
     } else if (zone === 'wood_room') {
-      roomW = 0.34; cavW = 0.03;
+      roomW = 0.36; spaW = 0.02; cavW = 0.01; valW = 0.04;
     } else if (zone === 'stone_bath' || zone === 'garage') {
-      roomW = 0.28; cavW = 0.38;
+      roomW = 0.14; spaW = 0.46; cavW = 0.08; valW = 0.02;
     } else if (zone === 'basement_lab') {
-      roomW = 0.22; cavW = 0.32;
-    } else if (zone === 'silo_cavern') {
-      roomW = 0.18; cavW = 0.62;
-    } else if (zone === 'vehicle_cabin' || zone === 'airship_cabin') {
-      roomW = 0.16; cavW = 0.02;
+      roomW = 0.16; spaW = 0.28; cavW = 0.24; valW = 0.01;
+    } else if (zone === 'silo_cavern' || zone === 'cavern') {
+      roomW = 0.10; spaW = 0.16; cavW = 0.64; valW = 0.01;
+    } else if (zone === 'vehicle_cabin' || zone === 'metal_cabin' || zone === 'airship_cabin') {
+      roomW = 0.14; spaW = 0.05; cavW = 0.01; valW = 0.12;
     }
     this.roomWetGain.gain.setTargetAtTime(roomW, t, 0.25);
+    if (this.spaWetGain) this.spaWetGain.gain.setTargetAtTime(spaW, t, 0.25);
     this.cavernWetGain.gain.setTargetAtTime(cavW, t, 0.25);
+    if (this.valleyWetGain) this.valleyWetGain.gain.setTargetAtTime(valW, t, 0.25);
   }
 
   /**
@@ -525,8 +655,9 @@ export class SpatialForestAudio {
     if (!this.ctx || !this.windFilterL || !this.windGain) return;
     const t = this.ctx.currentTime;
     const stormBoost = this._lastStormIntensity;
-    const freq = 145 + this._lastOpenness * 520 + stormBoost * 340 * this._lastOpenness;
-    const gain = (0.042 + this._lastOpenness * 0.095) * (1.0 + stormBoost * 0.85);
+    const altBoost = clamp(((this._envState.altitudeASL || 320) - 550) / 800, 0, 1);
+    const freq = 145 + this._lastOpenness * 520 + stormBoost * 340 * this._lastOpenness + altBoost * 240;
+    const gain = (0.040 + this._lastOpenness * 0.095) * (1.0 + stormBoost * 0.85 + altBoost * 0.45);
     this.windFilterL.frequency.setTargetAtTime(freq, t, 0.22);
     this.windGain.gain.setTargetAtTime(gain, t, 0.22);
 
@@ -538,8 +669,8 @@ export class SpatialForestAudio {
 
   /**
    * Master spatial environment updater called every frame from scene3d.js!
-   * Smoothly blends river rapids, village spring, fireplaces, sauna spa, underground HVAC,
-   * landslide rockfall rumble, acoustic reverb space, & spacious organic wildlife!
+   * Smoothly blends river rapids + Minnaert water bubbles, village spring, fireplaces,
+   * sauna spa, underground HVAC, landslides, 4-space reverb, & rich living micro-events!
    */
   updateEnvironment(dt, state = {}) {
     if (!this.ctx || this.muted) return;
@@ -548,7 +679,7 @@ export class SpatialForestAudio {
 
     if (state.acousticZone) this.setAcousticZone(state.acousticZone);
 
-    // 1. Mountain River & Rapids Proximity (Kurosugi River + Tributaries)
+    // 1. Mountain River & Rapids Proximity (Kurosugi River + Tributaries + Minnaert Bubbles)
     const rDist = state.riverDist ?? 999;
     const rFlow = clamp(state.riverFlowBoost ?? 0, 0, 1.5);
     const rAtten = rDist < 260 ? (1.0 / (1.0 + Math.pow(Math.max(0, rDist - 8) / 28.0, 1.55))) : 0.0;
@@ -558,6 +689,9 @@ export class SpatialForestAudio {
       this.riverGain.gain.setTargetAtTime(rTarget, t, 0.18);
       if (this.riverMidFilter) {
         this.riverMidFilter.frequency.setTargetAtTime(860 + rAtten * 520 + rFlow * 340, t, 0.22);
+      }
+      if (this.riverBubbleGain) {
+        this.riverBubbleGain.gain.setTargetAtTime(rAtten * rAtten * occFactor * 0.135, t, 0.18);
       }
     }
 
@@ -596,32 +730,131 @@ export class SpatialForestAudio {
       this.playLandslideRumble(lsNear);
     }
 
-    // 7. Spacious Natural Forest Wildlife (Rare, Organic, Strictly Zero High-Pitched Beeps!)
-    if (this._lastOpenness > 0.45 && this._lastStormIntensity < 0.22 && !state.inUnderground && !state.inSiloCavern) {
+    const altASL = state.altitudeASL ?? 320;
+    const shrineDist = state.shrineDist ?? 999;
+    const compoundDist = state.compoundDist ?? 999;
+
+    // 7. Living Japanese Forest Wildlife Ecosystem (Organic, Rare, Strictly Zero High-Pitched Beeps!)
+    if (this._lastOpenness > 0.42 && this._lastStormIntensity < 0.25 && !state.inUnderground && !state.inSiloCavern) {
       this._wildlifeTimer -= dt;
       if (this._wildlifeTimer <= 0) {
-        this._wildlifeTimer = randRange(12.0, 26.0);
+        this._wildlifeTimer = randRange(8.5, 19.5);
         const pan = randRange(-0.82, 0.82);
         if (state.isNight) {
-          if (Math.random() < 0.65) this.playOwlHoot(pan);
+          const r = Math.random();
+          if (rDist < 55 && r < 0.34) this.playFrogChorus(pan);
+          else if (r < 0.62) this.playOwlHoot(pan);
+          else if (r < 0.80) this.playDeerBark(pan);
           else this.playBambooRustle(pan);
         } else {
           const r = Math.random();
-          if (r < 0.44) this.playBirdCall('uguisu', pan);
-          else if (r < 0.70) this.playBirdCall('mountain_hawk', pan);
-          else if (r < 0.88) this.playWoodpecker(pan);
+          if (rDist < 38 && r < 0.22) this.playKingfisherDive(pan);
+          else if (rDist < 42 && r < 0.34) this.playWaterFishJump(pan);
+          else if (r < 0.48) this.playBirdCall('uguisu', pan);
+          else if (r < 0.62) this.playCuckooCall(pan);
+          else if (r < 0.74) this.playBirdCall('mountain_hawk', pan);
+          else if (r < 0.84) this.playWoodpecker(pan);
+          else if (r < 0.93) this.playCrowCaw(pan);
           else this.playBambooRustle(pan);
+        }
+      }
+    }
+
+    // 8. Living Environmental Micro-Events (Alpine Gusts, Bridges, Pinecones, Tree Creaks, Furin, Shrine)
+    if (this._lastOpenness > 0.35 && !state.inUnderground && !state.inSiloCavern) {
+      this._ambientEventTimer -= dt;
+      if (this._ambientEventTimer <= 0) {
+        this._ambientEventTimer = randRange(9.0, 18.0);
+        const pan = randRange(-0.78, 0.78);
+        if (state.onBridge && (this._lastStormIntensity > 0.15 || altASL > 420)) {
+          this.playBridgeCableHum(0.45 + this._lastStormIntensity * 0.55);
+        } else if (altASL > 920) {
+          if (Math.random() < 0.55) this.playSnowBlizzardWhip(0.55 + this._lastStormIntensity * 0.45);
+          else this.playWindGustHowl(0.65 + this._lastStormIntensity * 0.45, pan);
+        } else if (shrineDist < 34 && Math.random() < 0.50) {
+          this.playShrineBellSuzu(pan, clamp(1 - shrineDist / 34, 0.25, 0.95));
+        } else if ((compoundDist < 28 || sDist < 42) && Math.random() < 0.45) {
+          this.playWindChimeFurin(pan, 0.55);
+        } else if (rDist < 28 && Math.random() < 0.45) {
+          if (Math.random() < 0.6) this.playStreamPebbleRoll(pan, 0.6);
+          else this.playDistantWaterfallSurge(0.45, pan);
+        } else {
+          const r = Math.random();
+          if (r < 0.28) this.playTreeCreakWind(pan, 0.55 + this._lastStormIntensity * 0.4);
+          else if (r < 0.54) this.playBranchSnap(pan, 0.55);
+          else if (r < 0.78) this.playPineconeDrop(pan);
+          else this.playWindGustHowl(0.45 + this._lastStormIntensity * 0.5, pan);
+        }
+      }
+    }
+
+    // 9. Authentic Suginosato Bamboo Shishi-Odoshi Water Cycle
+    if (sDist < 42 && !state.inUnderground) {
+      this._shishiTimer -= dt;
+      if (this._shishiTimer <= 0) {
+        this._shishiTimer = randRange(15.0, 23.0);
+        this.playShishiOdoshi(randRange(-0.4, 0.4), clamp(1.0 - sDist / 42, 0.2, 0.95));
+      }
+    }
+
+    // 10. Storm Micro-Texture Events (Leaf Drizzle, Metal/Timber Hail Patter, Distant Valley Rumble, Eave Drips)
+    if (this._lastStormIntensity > 0.18 && !state.inUnderground && !state.inSiloCavern) {
+      this._stormMicroTimer -= dt;
+      if (this._stormMicroTimer <= 0) {
+        this._stormMicroTimer = randRange(2.8, 6.2);
+        if (this._lastOpenness > 0.65) {
+          if (this._lastStormIntensity > 0.68 && Math.random() < 0.42) {
+            this.playHailPatter('timber', this._lastStormIntensity);
+          } else if (Math.random() < 0.65) {
+            this.playRainDrizzleLeaves(this._lastStormIntensity);
+          } else {
+            this.playDistantStormRumble(this._lastStormIntensity * 0.75);
+          }
+        } else {
+          if (this._lastStormIntensity > 0.62 && Math.random() < 0.45) {
+            this.playHailPatter(state.roofKind || 'metal', this._lastStormIntensity * 0.85);
+          } else {
+            this.playGlassRainDrip(randRange(-0.65, 0.65));
+          }
+        }
+      }
+    }
+
+    // 11. Living Traditional Interior & Underground Micro-Events
+    if (this._lastOpenness < 0.45) {
+      this._interiorTimer -= dt;
+      if (this._interiorTimer <= 0) {
+        this._interiorTimer = randRange(11.0, 22.0);
+        const pan = randRange(-0.65, 0.65);
+        if (state.inSpa) {
+          this.playSpaWaterLadle(pan);
+        } else if (state.inUnderground && !state.inSiloCavern) {
+          this.playGeneratorThrob(0.55);
+        } else if (fDist < 10) {
+          this.playKettleSimmer(clamp(1.0 - fDist / 10, 0.25, 0.95));
+        } else if (this._lastAcousticZone === 'wood_room') {
+          if (Math.random() < 0.68) this.playInteriorTimberSettle(pan);
+          else this.playInteriorTatamiCreak(pan);
         }
       }
     }
   }
 
   // =========================================================================
-  // CATEGORY A: MATERIAL-AWARE FOOTSTEPS & PLAYER FOLEY (14 SFX)
+  // CATEGORY A: MATERIAL-AWARE FOOTSTEPS & PLAYER FOLEY (24 SFX across 16 surfaces!)
   // =========================================================================
 
   playFootstep(surface = 'wood', opts = {}) {
     if (!this.ctx || this.muted || !this.pinkBuf) return;
+
+    // Delegate the 6 V4 hyper-realistic outdoor biome surfaces
+    if (surface === 'snow') return this.playFootstepSnow(opts);
+    if (surface === 'mud') return this.playFootstepMud(opts);
+    if (surface === 'leaves') return this.playFootstepLeaves(opts);
+    if (surface === 'moss') return this.playFootstepMoss(opts);
+    if (surface === 'asphalt') return this.playFootstepAsphalt(opts);
+    if (surface === 'sand') return this.playFootstepSand(opts);
+
     const t = this.ctx.currentTime;
     const sprint = Boolean(opts.sprint);
     const crouch = Boolean(opts.crouch);
@@ -631,109 +864,91 @@ export class SpatialForestAudio {
     const pitchJitter = randRange(0.90, 1.12);
 
     if (surface === 'water') {
-      // Splashing mountain stream wade: burst + bubble resonance + water droplets
+      // Upgraded mountain stream wade: rushing surge + Minnaert bubble droplets + trailing drips
       const spl = this.ctx.createBufferSource();
-      spl.buffer = this.whiteBuf;
+      spl.buffer = this.pinkBuf;
       const bp = this.ctx.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(1200 * pitchJitter, t);
-      bp.frequency.exponentialRampToValueAtTime(480, t + 0.24);
-      bp.Q.value = 1.1;
+      bp.frequency.setValueAtTime(1240 * pitchJitter, t);
+      bp.frequency.exponentialRampToValueAtTime(420, t + 0.26);
+      bp.Q.value = 1.05;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.001, t);
-      g.gain.linearRampToValueAtTime(0.14 * velScale, t + 0.018);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.145 * velScale, t + 0.018);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + 0.28);
       spl.connect(bp); bp.connect(g);
-      this._connectSfx(g, pan, 0.22);
-      spl.start(t, randRange(0, 2.2), 0.28);
+      this._connectSfx(g, pan, 0.24, 'valley');
+      spl.start(t, randRange(0, 2.2), 0.30);
 
-      // Liquid bubble plop harmonic
-      const bub = this.ctx.createOscillator();
-      const bg = this.ctx.createGain();
-      bub.type = 'sine';
-      bub.frequency.setValueAtTime(280 * pitchJitter, t + 0.03);
-      bub.frequency.exponentialRampToValueAtTime(760 * pitchJitter, t + 0.10);
-      bg.gain.setValueAtTime(0.045 * velScale, t + 0.03);
-      bg.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
-      bub.connect(bg);
-      this._connectSfx(bg, pan, 0.20);
-      bub.start(t + 0.03); bub.stop(t + 0.12);
+      playGranularScatter(this, {
+        buffer: this.dropletBuf || this.crackleBuf,
+        startTime: t + 0.03,
+        count: sprint ? 9 : 6, spreadSec: 0.19,
+        grainDurLo: 0.016, grainDurHi: 0.042,
+        freqLo: 680, freqHi: 2500,
+        gain: 0.068 * velScale, pan, panSpread: 0.26, reverb: 0.24, space: 'valley',
+      });
       return;
     }
 
     if (surface === 'bridge') {
-      // Hollow resonant timber/steel bridge deck thump + subtle steel girder ring
-      const thump = this.ctx.createOscillator();
-      const tg = this.ctx.createGain();
-      thump.type = 'triangle';
-      thump.frequency.setValueAtTime(118 * pitchJitter, t);
-      thump.frequency.exponentialRampToValueAtTime(48, t + 0.11);
-      tg.gain.setValueAtTime(0.16 * velScale, t);
-      tg.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
-      thump.connect(tg);
-      this._connectSfx(tg, pan, 0.26);
-      thump.start(t); thump.stop(t + 0.14);
-
-      const grit = this.ctx.createBufferSource();
-      grit.buffer = this.pinkBuf;
-      const bp = this.ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = 540 * pitchJitter;
-      bp.Q.value = 2.4;
-      const gg = this.ctx.createGain();
-      gg.gain.setValueAtTime(0.095 * velScale, t);
-      gg.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-      grit.connect(bp); bp.connect(gg);
-      this._connectSfx(gg, pan, 0.24);
-      grit.start(t, randRange(0, 3.0), 0.11);
+      // Upgraded hollow resonant steel/asphalt bridge deck: modal girder thump + toe-roll tarmac grit
+      playModalBody(this, [
+        [88, 0.15, 0.72, 8],
+        [182, 0.12, 0.55, 12],
+        [465, 0.075, 0.42, 16],
+        [1180, 0.04, 0.26, 20],
+      ], {
+        startTime: t, gain: 0.135 * velScale, pan, reverb: 0.30, space: 'valley',
+        strikerDur: 0.007, strikerHz: 3200, ringMix: 0.24, pitchMul: pitchJitter,
+      });
+      playGranularScatter(this, {
+        buffer: this.gritBuf || this.pinkBuf,
+        startTime: t + 0.052,
+        count: 4, spreadSec: 0.04,
+        grainDurLo: 0.010, grainDurHi: 0.024,
+        freqLo: 1100, freqHi: 3200,
+        gain: 0.044 * velScale, pan, panSpread: 0.10, reverb: 0.22, space: 'valley',
+      });
       return;
     }
 
     if (surface === 'metal') {
-      // Resonant steel grating / titanium ramp clank
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.whiteBuf;
-      const bp = this.ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = 1850 * pitchJitter;
-      bp.Q.value = 5.2;
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.095 * velScale, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
-      src.connect(bp); bp.connect(g);
-      this._connectSfx(g, pan, 0.36);
-      src.start(t, randRange(0, 2.4), 0.13);
-
-      const ring = this.ctx.createOscillator();
-      const rg = this.ctx.createGain();
-      ring.type = 'triangle';
-      ring.frequency.setValueAtTime(295 * pitchJitter, t);
-      ring.frequency.exponentialRampToValueAtTime(140, t + 0.085);
-      rg.gain.setValueAtTime(0.08 * velScale, t);
-      rg.gain.exponentialRampToValueAtTime(0.001, t + 0.095);
-      ring.connect(rg);
-      this._connectSfx(rg, pan, 0.32);
-      ring.start(t); ring.stop(t + 0.10);
+      // Upgraded steel grating / titanium ramp: authentic 5-mode metallic plate resonance + boot sole tap
+      playModalBody(this, [
+        [245, 0.14, 0.65, 16],
+        [592, 0.11, 0.58, 22],
+        [1240, 0.08, 0.46, 26],
+        [2380, 0.05, 0.30, 30],
+        [4120, 0.03, 0.18, 32],
+      ], {
+        startTime: t, gain: 0.105 * velScale, pan, reverb: 0.36,
+        strikerDur: 0.005, strikerHz: 5400, ringMix: 0.30, pitchMul: pitchJitter,
+      });
       return;
     }
 
     if (surface === 'gravel') {
-      // Multi-grain sharp crushed macadam gravel crunch (heel strike + rolling stone scatter)
-      for (let gIdx = 0; gIdx < 2; gIdx++) {
-        const dtOff = gIdx * 0.032;
-        const src = this.ctx.createBufferSource();
-        src.buffer = gIdx === 0 ? this.crackleBuf : this.whiteBuf;
-        const bp = this.ctx.createBiquadFilter();
-        bp.type = 'bandpass';
-        bp.frequency.value = (gIdx === 0 ? 2250 : 1480) * pitchJitter;
-        bp.Q.value = gIdx === 0 ? 1.5 : 1.1;
-        const g = this.ctx.createGain();
-        g.gain.setValueAtTime((gIdx === 0 ? 0.13 : 0.085) * velScale, t + dtOff);
-        g.gain.exponentialRampToValueAtTime(0.001, t + dtOff + 0.10);
-        src.connect(bp); bp.connect(g);
-        this._connectSfx(g, pan, 0.14);
-        src.start(t + dtOff, randRange(0, 2.2), 0.12);
-      }
+      // Upgraded 9-grain crushed forestry gravel crunch (heel press + rolling pebble scatter)
+      playGranularScatter(this, {
+        buffer: this.gritBuf || this.crackleBuf,
+        startTime: t,
+        count: sprint ? 11 : 8, spreadSec: 0.125,
+        grainDurLo: 0.010, grainDurHi: 0.028,
+        freqLo: 1200, freqHi: 4800,
+        qLo: 1.2, qHi: 3.4,
+        gain: 0.088 * velScale, pan, panSpread: 0.20, reverb: 0.18, space: 'valley',
+      });
+      const lo = this.ctx.createOscillator();
+      const lg = this.ctx.createGain();
+      lo.type = 'sine';
+      lo.frequency.setValueAtTime(104 * pitchJitter, t);
+      lo.frequency.exponentialRampToValueAtTime(38, t + 0.075);
+      lg.gain.setValueAtTime(0.068 * velScale, t);
+      lg.gain.exponentialRampToValueAtTime(0.0005, t + 0.085);
+      lo.connect(lg);
+      this._connectSfx(lg, pan, 0.14, 'valley');
+      lo.start(t); lo.stop(t + 0.095);
       return;
     }
 
@@ -1915,7 +2130,7 @@ export class SpatialForestAudio {
   updateEngine(active, speedNorm = 0, profile = 'diesel', opts = {}) {
     if (!this.ctx) return;
     if (!this.engineNodes) {
-      // Multi-layer engine synthesis: firing sawtooth + sub-harmonic rumble + turbo whistle + surface tire noise
+      // Multi-layer physical combustion synthesis: firing sawtooth + sub-harmonic + asymmetric combustion waveshaper
       const mainOsc = this.ctx.createOscillator();
       mainOsc.type = 'sawtooth';
       mainOsc.frequency.value = 46;
@@ -1924,16 +2139,21 @@ export class SpatialForestAudio {
       subOsc.type = 'triangle';
       subOsc.frequency.value = 23;
 
+      const combShaper = this.ctx.createWaveShaper();
+      if (this.combustionCurve) combShaper.curve = this.combustionCurve;
+      combShaper.oversample = '2x';
+
       const engFilt = this.ctx.createBiquadFilter();
       engFilt.type = 'lowpass';
-      engFilt.frequency.value = 130;
-      engFilt.Q.value = 1.6;
+      engFilt.frequency.value = 140;
+      engFilt.Q.value = 1.8;
 
       const engGain = this.ctx.createGain();
       engGain.gain.value = 0.0;
 
-      mainOsc.connect(engFilt);
-      subOsc.connect(engFilt);
+      mainOsc.connect(combShaper);
+      subOsc.connect(combShaper);
+      combShaper.connect(engFilt);
       engFilt.connect(engGain);
       engGain.connect(this.vehicleBus);
       mainOsc.start();
@@ -1987,7 +2207,7 @@ export class SpatialForestAudio {
     const baseFreq = isKei ? 68 : (isArmor ? 36 : 46);
     const spanFreq = isKei ? 82 : (isArmor ? 38 : 48);
     const targetFreq = baseFreq + Math.min(1.1, s) * spanFreq;
-    const targetCutoff = (isKei ? 205 : (isArmor ? 112 : 128)) + Math.min(1.1, s) * (isKei ? 280 : 185);
+    const targetCutoff = (isKei ? 225 : (isArmor ? 124 : 142)) + Math.min(1.1, s) * (isKei ? 300 : 205);
 
     this.engineNodes.engGain.gain.setTargetAtTime(targetGain, t, 0.09);
     this.engineNodes.mainOsc.frequency.setTargetAtTime(targetFreq, t, 0.08);
@@ -2021,20 +2241,19 @@ export class SpatialForestAudio {
     const t = this.ctx.currentTime;
     if (t - this._lastJointTime < 0.35) return;
     this._lastJointTime = t;
-    const amp = clamp(0.45 + speedNorm * 0.75, 0.3, 1.1);
-    // Authentic dual-axle steel bridge expansion joint "タタンッ!" (front + rear axle gap)
+    const amp = clamp(0.45 + speedNorm * 0.75, 0.3, 1.15);
+    // Authentic dual-axle steel bridge expansion joint "カタンッ！…カタンッ！" with modal steel I-beam resonance
     const axleDelay = clamp(0.16 / Math.max(0.25, speedNorm), 0.065, 0.24);
     [0, axleDelay].forEach((d, idx) => {
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(idx === 0 ? 110 : 98, t + d);
-      o.frequency.exponentialRampToValueAtTime(38, t + d + 0.075);
-      g.gain.setValueAtTime(0.14 * amp, t + d);
-      g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.085);
-      o.connect(g);
-      this._connectSfx(g, 0, 0.24);
-      o.start(t + d); o.stop(t + d + 0.095);
+      playModalBody(this, [
+        [idx === 0 ? 96 : 86, 0.12, 0.85, 8],
+        [248, 0.085, 0.58, 14],
+        [680, 0.055, 0.44, 18],
+        [1520, 0.032, 0.28, 22],
+      ], {
+        startTime: t + d, gain: 0.145 * amp, pan: 0, reverb: 0.30, space: 'valley',
+        strikerDur: 0.006, strikerHz: 3600, ringMix: 0.24, directMix: 0.26,
+      });
     });
   }
 
@@ -2052,6 +2271,14 @@ export class SpatialForestAudio {
     th.connect(g);
     this._connectSfx(g, 0, 0.18);
     th.start(t); th.stop(t + 0.16);
+    // Subtle coil-spring & hydraulic shock rebound creak
+    playModalBody(this, [
+      [165, 0.08, 0.45, 12],
+      [420, 0.05, 0.30, 16],
+    ], {
+      startTime: t + 0.025, gain: 0.055 * imp, pan: 0, reverb: 0.12,
+      strikerDur: 0.006, strikerHz: 1800, ringMix: 0.18,
+    });
   }
 
   playBump(reason = 'generic', impactNorm = 0.8) {
@@ -2071,27 +2298,25 @@ export class SpatialForestAudio {
     this._connectSfx(g, 0, 0.26);
     osc.start(t); osc.stop(t + 0.20);
 
-    // Material-specific crunch / clang / leaf-shake / splash layer
-    if (this.pinkBuf) {
-      const src = this.ctx.createBufferSource();
-      src.buffer = (reason === 'river') ? this.whiteBuf : this.pinkBuf;
-      const bp = this.ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      if (reason === 'vehicle' || reason === 'shutter' || reason === 'garage') {
-        bp.frequency.value = 1150; bp.Q.value = 3.8; // Metallic sheet clang
-      } else if (reason === 'forest') {
-        bp.frequency.value = 780; bp.Q.value = 1.4; // Bark thud + rustling canopy leaves
-      } else if (reason === 'river') {
-        bp.frequency.value = 1450; bp.Q.value = 0.9; // Heavy water splash
-      } else {
-        bp.frequency.value = 460; bp.Q.value = 1.6; // Rock / earth crunch
-      }
-      const ng = this.ctx.createGain();
-      ng.gain.setValueAtTime(0.12 * imp, t);
-      ng.gain.exponentialRampToValueAtTime(0.001, t + (reason === 'river' ? 0.36 : 0.22));
-      src.connect(bp); bp.connect(ng);
-      this._connectSfx(ng, 0, 0.28);
-      src.start(t, randRange(0, 2.0), 0.40);
+    // Material-specific modal clang / canopy rustle / water surge / granite crunch
+    if (reason === 'vehicle' || reason === 'shutter' || reason === 'garage') {
+      playModalBody(this, [
+        [285, 0.18, 0.72, 16], [710, 0.14, 0.62, 22], [1580, 0.09, 0.45, 26], [3100, 0.05, 0.25, 28],
+      ], { startTime: t, gain: 0.13 * imp, pan: 0, reverb: 0.30, strikerDur: 0.005, strikerHz: 5200, ringMix: 0.32 });
+    } else if (reason === 'forest') {
+      playGranularScatter(this, {
+        buffer: this.foliageBuf || this.pinkBuf, startTime: t + 0.02,
+        count: 9, spreadSec: 0.26, grainDurLo: 0.020, grainDurHi: 0.055,
+        freqLo: 850, freqHi: 3200, gain: 0.082 * imp, pan: 0, panSpread: 0.45, reverb: 0.28, space: 'valley',
+      });
+    } else if (reason === 'river') {
+      this.playWaterFordSurge(imp, 0.45);
+    } else {
+      playGranularScatter(this, {
+        buffer: this.gritBuf || this.pinkBuf, startTime: t,
+        count: 8, spreadSec: 0.16, grainDurLo: 0.014, grainDurHi: 0.036,
+        freqLo: 420, freqHi: 2200, gain: 0.095 * imp, pan: 0, panSpread: 0.32, reverb: 0.26, space: 'valley',
+      });
     }
   }
 
@@ -2107,7 +2332,7 @@ export class SpatialForestAudio {
     sg.gain.linearRampToValueAtTime(0.15, t + 0.25);
     sg.gain.exponentialRampToValueAtTime(0.001, t + 1.65);
     sub.connect(sg);
-    this._connectSfx(sg, 0, 0.42);
+    this._connectSfx(sg, 0, 0.46, 'valley');
     sub.start(t); sub.stop(t + 1.70);
 
     const jet = this.ctx.createBufferSource();
@@ -2122,13 +2347,14 @@ export class SpatialForestAudio {
     jg.gain.linearRampToValueAtTime(0.16, t + 0.28);
     jg.gain.exponentialRampToValueAtTime(0.001, t + 1.70);
     jet.connect(bp); bp.connect(jg);
-    this._connectSfx(jg, 0, 0.36);
+    this._connectSfx(jg, 0, 0.42, 'valley');
     jet.start(t, randRange(0, 1.5), 1.75);
   }
 
   playK11Touchdown(dockedInSilo = false) {
     if (!this.ctx || this.muted || !this.pinkBuf) return;
     const t = this.ctx.currentTime;
+    const sp = dockedInSilo ? 'silo' : 'valley';
     // Heavy pneumatic landing gear strut hiss + hull settle thump
     const th = this.ctx.createOscillator();
     const tg = this.ctx.createGain();
@@ -2138,7 +2364,7 @@ export class SpatialForestAudio {
     tg.gain.setValueAtTime(0.18, t);
     tg.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
     th.connect(tg);
-    this._connectSfx(tg, 0, dockedInSilo ? 0.60 : 0.28);
+    this._connectSfx(tg, 0, dockedInSilo ? 0.62 : 0.34, sp);
     th.start(t); th.stop(t + 0.35);
 
     const hiss = this.ctx.createBufferSource();
@@ -2152,7 +2378,7 @@ export class SpatialForestAudio {
     hg.gain.setValueAtTime(0.10, t + 0.04);
     hg.gain.exponentialRampToValueAtTime(0.001, t + 0.58);
     hiss.connect(bp); bp.connect(hg);
-    this._connectSfx(hg, 0, dockedInSilo ? 0.55 : 0.26);
+    this._connectSfx(hg, 0, dockedInSilo ? 0.58 : 0.30, sp);
     hiss.start(t + 0.04, randRange(0, 2.0), 0.62);
   }
 
@@ -2207,7 +2433,7 @@ export class SpatialForestAudio {
   }
 
   // =========================================================================
-  // CATEGORY F: WEATHER, THUNDER, LANDSLIDES, WILDLIFE & UI (11 SFX)
+  // CATEGORY F: WEATHER, THUNDER, LANDSLIDES, WILDLIFE & UI
   // =========================================================================
 
   updateStorm(intensity, muffle = 0.0, roofKind = 'outdoor') {
@@ -2229,14 +2455,14 @@ export class SpatialForestAudio {
       this.rainGain.connect(this.ambienceBus);
       rainSrc.start();
 
-      // Indoor roof rain patter layer (distinct wood / metal / composite resonance!)
+      // Indoor roof rain patter layer (Minnaert droplet buffer for lifelike roof drops!)
       const roofSrc = this.ctx.createBufferSource();
-      roofSrc.buffer = this.crackleBuf;
+      roofSrc.buffer = this.dropletBuf || this.crackleBuf;
       roofSrc.loop = true;
       this.rainRoofFilter = this.ctx.createBiquadFilter();
       this.rainRoofFilter.type = 'bandpass';
       this.rainRoofFilter.frequency.value = 820;
-      this.rainRoofFilter.Q.value = 1.6;
+      this.rainRoofFilter.Q.value = 1.4;
       this.rainRoofGain = this.ctx.createGain();
       this.rainRoofGain.gain.value = 0.0;
       roofSrc.connect(this.rainRoofFilter);
@@ -2247,14 +2473,12 @@ export class SpatialForestAudio {
 
     const t = this.ctx.currentTime;
     const active = this.muted ? 0 : this._lastStormIntensity;
-    // Notice scene3d passes `stormMuffle` where 1.0 = outdoors and 0.02 = deep underground!
     const exposure = clamp(muffle, 0.0, 1.0);
     this.rainGain.gain.setTargetAtTime(active * 0.175 * exposure, t, 0.18);
     this.rainFilter.frequency.setTargetAtTime(460 + 1500 * exposure, t, 0.18);
 
-    // Cozy roof patter when sheltered indoors / inside vehicle / garage (not underground!)
     const sheltered = exposure > 0.05 && exposure < 0.75;
-    const roofTarget = sheltered ? active * (roofKind === 'metal' ? 0.12 : 0.085) * (0.4 + exposure) : 0.0;
+    const roofTarget = sheltered ? active * (roofKind === 'metal' ? 0.13 : 0.095) * (0.4 + exposure) : 0.0;
     const roofFreq = roofKind === 'metal' ? 1420 : (roofKind === 'composite' ? 980 : 620);
     this.rainRoofGain.gain.setTargetAtTime(roofTarget, t, 0.22);
     this.rainRoofFilter.frequency.setTargetAtTime(roofFreq, t, 0.22);
@@ -2262,44 +2486,41 @@ export class SpatialForestAudio {
 
   playThunder(distanceM = 300) {
     if (!this.ctx || this.muted || !this.brownBuf) return;
-    const delay = clamp(distanceM / 343.0, 0.06, 1.9);
+    const pan = randRange(-0.68, 0.68);
+    if (distanceM < 240 && typeof this.playLightningArcSnap === 'function') {
+      this.playLightningArcSnap(pan);
+    }
+    const delay = clamp(distanceM / 343.0, 0.05, 1.9);
     const t = this.ctx.currentTime + delay;
-    const nearness = clamp(1.0 - distanceM / 900.0, 0.25, 1.0);
-    const pan = randRange(-0.65, 0.65);
+    const nearness = clamp(1.0 - distanceM / 920.0, 0.25, 1.0);
 
-    // 1. Close lightning electrostatic crack (only when < 450m)
-    if (distanceM < 450) {
-      const crack = this.ctx.createBufferSource();
-      crack.buffer = this.whiteBuf;
-      const bp = this.ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(2200, t);
-      bp.frequency.exponentialRampToValueAtTime(320, t + 0.34);
-      bp.Q.value = 0.8;
-      const cg = this.ctx.createGain();
-      cg.gain.setValueAtTime(0.001, t);
-      cg.gain.linearRampToValueAtTime(0.24 * nearness, t + 0.015);
-      cg.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
-      crack.connect(bp); bp.connect(cg);
-      this._connectSfx(cg, pan, 0.45);
-      crack.start(t, randRange(0, 1.8), 0.42);
+    // 1. Stepped-leader atmospheric crackle (when < 480m)
+    if (distanceM < 480) {
+      playGranularScatter(this, {
+        buffer: this.gritBuf || this.whiteBuf,
+        startTime: t,
+        count: 9, spreadSec: 0.22,
+        grainDurLo: 0.015, grainDurHi: 0.048,
+        freqLo: 650, freqHi: 3200,
+        gain: 0.16 * nearness, pan, panSpread: 0.35, reverb: 0.62, space: 'valley',
+      });
     }
 
-    // 2. Massive rolling mountain-valley thunder wave (dual-wave reverberant bass)
-    [0.02, 0.58].forEach((offset, wIdx) => {
+    // 2. Massive rolling mountain-valley thunder wave bouncing off surrounding ridges!
+    [0.02, 0.56].forEach((offset, wIdx) => {
       const src = this.ctx.createBufferSource();
       src.buffer = this.brownBuf;
       const filt = this.ctx.createBiquadFilter();
       filt.type = 'lowpass';
-      filt.frequency.setValueAtTime(wIdx === 0 ? (220 * nearness + 70) : 140, t + offset);
-      filt.frequency.exponentialRampToValueAtTime(38, t + offset + 2.8);
+      filt.frequency.setValueAtTime(wIdx === 0 ? (230 * nearness + 70) : 145, t + offset);
+      filt.frequency.exponentialRampToValueAtTime(36, t + offset + 3.0);
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.001, t + offset);
-      g.gain.linearRampToValueAtTime((wIdx === 0 ? 0.32 : 0.18) * nearness, t + offset + 0.16);
-      g.gain.exponentialRampToValueAtTime(0.001, t + offset + 3.2);
+      g.gain.setValueAtTime(0.0001, t + offset);
+      g.gain.linearRampToValueAtTime((wIdx === 0 ? 0.34 : 0.20) * nearness, t + offset + 0.14);
+      g.gain.exponentialRampToValueAtTime(0.0005, t + offset + 3.4);
       src.connect(filt); filt.connect(g);
-      this._connectSfx(g, pan * (wIdx === 0 ? 1 : -0.6), 0.50);
-      src.start(t + offset, randRange(0, 0.6), 3.3);
+      this._connectSfx(g, pan * (wIdx === 0 ? 1 : -0.65), 0.68, 'valley');
+      src.start(t + offset, randRange(0, 0.5), 3.5);
     });
   }
 
@@ -2307,195 +2528,156 @@ export class SpatialForestAudio {
     if (!this.ctx || this.muted || !this.brownBuf) return;
     const t = this.ctx.currentTime;
     const amp = clamp(intensity, 0.2, 1.0);
+    const pan = randRange(-0.55, 0.55);
     const rmb = this.ctx.createBufferSource();
     rmb.buffer = this.brownBuf;
     const lp = this.ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = 155;
     const rg = this.ctx.createGain();
-    rg.gain.setValueAtTime(0.001, t);
-    rg.gain.linearRampToValueAtTime(0.18 * amp, t + 0.28);
-    rg.gain.exponentialRampToValueAtTime(0.001, t + 1.65);
+    rg.gain.setValueAtTime(0.0001, t);
+    rg.gain.linearRampToValueAtTime(0.19 * amp, t + 0.28);
+    rg.gain.exponentialRampToValueAtTime(0.0005, t + 1.85);
     rmb.connect(lp); lp.connect(rg);
-    this._connectSfx(rg, randRange(-0.5, 0.5), 0.28);
-    rmb.start(t, randRange(0, 1.5), 1.75);
+    this._connectSfx(rg, pan, 0.52, 'valley');
+    rmb.start(t, randRange(0, 1.5), 1.95);
 
-    // Tumbling granite rock clatter
-    const rock = this.ctx.createBufferSource();
-    rock.buffer = this.crackleBuf;
-    const bp = this.ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 740;
-    bp.Q.value = 1.2;
-    const kg = this.ctx.createGain();
-    kg.gain.setValueAtTime(0.12 * amp, t + 0.15);
-    kg.gain.exponentialRampToValueAtTime(0.001, t + 1.25);
-    rock.connect(bp); bp.connect(kg);
-    this._connectSfx(kg, randRange(-0.6, 0.6), 0.24);
-    rock.start(t + 0.15, randRange(0, 1.2), 1.30);
+    // Granular tumbling granite boulders & talus scree
+    playGranularScatter(this, {
+      buffer: this.gritBuf || this.crackleBuf,
+      startTime: t + 0.12,
+      count: 14, spreadSec: 1.35,
+      grainDurLo: 0.025, grainDurHi: 0.085,
+      freqLo: 280, freqHi: 1850,
+      gain: 0.095 * amp, pan, panSpread: 0.45, reverb: 0.48, space: 'valley',
+    });
   }
 
   playBirdCall(species = 'uguisu', pan = 0) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
     if (species === 'uguisu') {
-      // Iconic Japanese Bush Warbler (ウグイス: soft airy "Hooo... ho-ke-kyo!")
-      const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      const lp = this.ctx.createBiquadFilter();
-      osc.type = 'sine';
-      lp.type = 'lowpass'; lp.frequency.value = 3400;
-      const base = randRange(1280, 1480);
-      // Long pure gentle whistle "hooo..."
-      osc.frequency.setValueAtTime(base, t);
-      osc.frequency.linearRampToValueAtTime(base * 1.18, t + 0.52);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(0.022, t + 0.18);
-      g.gain.exponentialRampToValueAtTime(0.0005, t + 0.56);
-      // Quick melodic "ho-ke-kyo" trill
-      osc.frequency.setValueAtTime(base * 1.58, t + 0.64);
-      osc.frequency.exponentialRampToValueAtTime(base * 1.05, t + 0.74);
-      osc.frequency.setValueAtTime(base * 1.88, t + 0.77);
-      osc.frequency.exponentialRampToValueAtTime(base * 1.24, t + 0.94);
-      g.gain.setValueAtTime(0.0001, t + 0.63);
-      g.gain.linearRampToValueAtTime(0.028, t + 0.66);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.75);
-      g.gain.linearRampToValueAtTime(0.030, t + 0.79);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.98);
-      osc.connect(lp); lp.connect(g);
-      this._connectSfx(g, pan, 0.48);
-      osc.start(t); osc.stop(t + 1.02);
+      // Iconic Japanese Bush Warbler (ウグイス) via syrinx formant synthesis + mountain valley echo
+      const base = randRange(1240, 1420);
+      playFormantVocal(this, {
+        startTime: t, dur: 0.54,
+        fStart: base, fMid: base * 1.10, fEnd: base * 1.18,
+        wave: 'triangle', formants: [[base * 1.08, 4.5, 0.95]],
+        vibHz: 5.5, vibDepth: 14, breathAmt: 0.16,
+        gain: 0.028, pan, reverb: 0.62, space: 'valley',
+      });
+      playFormantVocal(this, {
+        startTime: t + 0.62, dur: 0.14,
+        fStart: base * 1.52, fMid: base * 1.35, fEnd: base * 1.04,
+        wave: 'triangle', formants: [[base * 1.35, 4.2, 0.95]],
+        vibHz: 7.0, vibDepth: 16, breathAmt: 0.14,
+        gain: 0.032, pan, reverb: 0.62, space: 'valley',
+      });
+      playFormantVocal(this, {
+        startTime: t + 0.78, dur: 0.22,
+        fStart: base * 1.76, fMid: base * 1.48, fEnd: base * 1.22,
+        wave: 'triangle', formants: [[base * 1.48, 4.2, 0.95]],
+        vibHz: 6.5, vibDepth: 18, breathAmt: 0.16,
+        gain: 0.032, pan, reverb: 0.66, space: 'valley',
+      });
     } else {
-      // Distant Japanese Mountain Kite / Hawk soaring valley whistle ("peee-hyororo")
-      const osc = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      osc.type = 'triangle';
-      const f0 = randRange(1850, 2150);
-      osc.frequency.setValueAtTime(f0, t);
-      osc.frequency.exponentialRampToValueAtTime(f0 * 0.72, t + 0.55);
-      osc.frequency.linearRampToValueAtTime(f0 * 0.84, t + 0.78);
-      osc.frequency.exponentialRampToValueAtTime(f0 * 0.64, t + 1.15);
-      const lp = this.ctx.createBiquadFilter();
-      lp.type = 'lowpass'; lp.frequency.value = 2400;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(0.018, t + 0.14);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.20);
-      osc.connect(lp); lp.connect(g);
-      this._connectSfx(g, pan, 0.58);
-      osc.start(t); osc.stop(t + 1.24);
+      // Distant Japanese Mountain Kite / Hawk ("ピーヒョロロ") via formant soaring whistle
+      const f0 = randRange(1760, 2020);
+      playFormantVocal(this, {
+        startTime: t, dur: 1.18,
+        fStart: f0, fMid: f0 * 0.78, fEnd: f0 * 0.64,
+        wave: 'triangle', formants: [[f0 * 0.85, 3.8, 0.90], [f0 * 1.6, 5.0, 0.22]],
+        vibHz: 8.5, vibDepth: 32, breathAmt: 0.20,
+        gain: 0.026, pan, reverb: 0.72, space: 'valley',
+      });
     }
   }
 
   playOwlHoot(pan = 0) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
-    // Warm, deep, soothing distant Tawny Owl hoot ("Hooo... hoo-hooo") at mellow ~380Hz!
+    // Warm, deep, soothing Tawny Owl hoot ("ホォー…ホッ・ホォー") via airy syrinx formant + canyon reverb!
     const notes = [
-      [385, 0.0, 0.42, 0.028],
-      [352, 0.72, 0.24, 0.022],
-      [340, 1.02, 0.52, 0.026],
+      [382, 0.0, 0.44, 0.036],
+      [350, 0.72, 0.24, 0.028],
+      [338, 1.02, 0.56, 0.034],
     ];
     notes.forEach(([freq, d, dur, amp]) => {
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'sine';
-      o.frequency.setValueAtTime(freq * 0.96, t + d);
-      o.frequency.linearRampToValueAtTime(freq, t + d + 0.08);
-      o.frequency.linearRampToValueAtTime(freq * 0.91, t + d + dur);
-      g.gain.setValueAtTime(0.0001, t + d);
-      g.gain.linearRampToValueAtTime(amp, t + d + 0.09);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + d + dur);
-      o.connect(g);
-      this._connectSfx(g, pan, 0.62);
-      o.start(t + d); o.stop(t + d + dur + 0.04);
+      playFormantVocal(this, {
+        startTime: t + d, dur,
+        fStart: freq * 0.96, fMid: freq, fEnd: freq * 0.91,
+        wave: 'triangle', formants: [[freq, 5.2, 1.0], [freq * 2.0, 6.0, 0.14]],
+        vibHz: 4.5, vibDepth: 4.5, breathAmt: 0.22,
+        gain: amp, pan, reverb: 0.72, space: 'valley',
+      });
     });
   }
 
   playWoodpecker(pan = 0) {
     if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
-    const taps = 5 + Math.floor(Math.random() * 4);
-    const freq = randRange(580, 760);
+    // Authentic Akagera woodpecker drumming on hollow ancient Sugi trunk via 4-mode wood cavity!
+    const taps = 6 + Math.floor(Math.random() * 4);
+    const pitch = randRange(0.92, 1.10);
     for (let i = 0; i < taps; i++) {
-      const dt = i * 0.062;
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(freq, t + dt);
-      o.frequency.exponentialRampToValueAtTime(220, t + dt + 0.024);
-      g.gain.setValueAtTime(0.032, t + dt);
-      g.gain.exponentialRampToValueAtTime(0.0008, t + dt + 0.028);
-      o.connect(g);
-      this._connectSfx(g, pan, 0.48);
-      o.start(t + dt); o.stop(t + dt + 0.032);
+      const dt = i * 0.056 + randRange(0, 0.004);
+      playModalBody(this, [
+        [440, 0.042, 0.78, 16],
+        [790, 0.032, 0.65, 20],
+        [1340, 0.022, 0.45, 22],
+        [2280, 0.014, 0.24, 24],
+      ], {
+        startTime: t + dt, gain: 0.052 * (0.85 + Math.random() * 0.25),
+        pan, reverb: 0.58, space: 'valley',
+        strikerDur: 0.003, strikerHz: 4600, ringMix: 0.30, pitchMul: pitch,
+      });
     }
   }
 
   playBambooRustle(pan = 0) {
-    if (!this.ctx || this.muted || !this.pinkBuf) return;
+    if (!this.ctx || this.muted) return;
     const t = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
-    src.buffer = this.pinkBuf;
+    src.buffer = this.foliageBuf || this.pinkBuf;
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
     bp.frequency.setValueAtTime(2400, t);
-    bp.frequency.linearRampToValueAtTime(1600, t + 1.2);
-    bp.Q.value = 1.4;
+    bp.frequency.linearRampToValueAtTime(1550, t + 1.25);
+    bp.Q.value = 1.3;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.038, t + 0.35);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
+    g.gain.linearRampToValueAtTime(0.048, t + 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.40);
     src.connect(bp); bp.connect(g);
-    this._connectSfx(g, pan, 0.35);
-    src.start(t, randRange(0, 2.0), 1.40);
+    this._connectSfx(g, pan, 0.40, 'valley');
+    src.start(t, randRange(0, 2.0), 1.45);
   }
 
   playUiSound(kind = 'click') {
     if (!this.ctx || this.muted) return;
-    const t = this.ctx.currentTime;
     if (kind === 'map_open' || kind === 'map_close') {
-      // Crisp architectural blueprint paper unfold / fold
-      const src = this.ctx.createBufferSource();
-      src.buffer = this.pinkBuf;
-      const bp = this.ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(kind === 'map_open' ? 1450 : 2100, t);
-      bp.frequency.linearRampToValueAtTime(kind === 'map_open' ? 2350 : 1150, t + 0.14);
-      bp.Q.value = 1.6;
-      const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0.058, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-      src.connect(bp); bp.connect(g);
-      g.connect(this.uiBus);
-      src.start(t, randRange(0, 2.5), 0.18);
-      return;
+      return this.playMapPaperUnfold(kind === 'map_open');
+    }
+    if (kind === 'zoom_in' || kind === 'zoom_out') {
+      return this.playMapZoomTick(kind === 'zoom_in');
     }
     if (kind === 'camera_switch') {
-      // Optical lens shutter tick
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      o.type = 'triangle';
-      o.frequency.setValueAtTime(1320, t);
-      o.frequency.exponentialRampToValueAtTime(360, t + 0.025);
-      g.gain.setValueAtTime(0.055, t);
-      g.gain.exponentialRampToValueAtTime(0.001, t + 0.032);
-      o.connect(g); g.connect(this.uiBus);
-      o.start(t); o.stop(t + 0.036);
-      return;
+      return this.playCameraShutter();
     }
     if (kind === 'waypoint_set') {
-      this.playAutopilotCue('engage');
-      return;
+      return this.playMapWaypointLock();
     }
-    // Clean soft tactile UI click
-    const o = this.ctx.createOscillator();
-    const g = this.ctx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(kind === 'settings' ? 740 : 960, t);
-    o.frequency.exponentialRampToValueAtTime(420, t + 0.03);
-    g.gain.setValueAtTime(0.042, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.038);
-    o.connect(g); g.connect(this.uiBus);
-    o.start(t); o.stop(t + 0.042);
+    // Tactile Leica-grade soft mechanical UI click
+    playModalBody(this, [
+      [kind === 'settings' ? 760 : 980, 0.022, 0.65, 16],
+      [kind === 'settings' ? 1680 : 2150, 0.014, 0.38, 20],
+    ], {
+      gain: 0.046, bus: this.uiBus,
+      strikerDur: 0.0025, strikerHz: 4200, ringMix: 0.24,
+    });
   }
 }
+
+// Install all 59 V4 hyper-realistic SFX + unified 128-SFX playById() dispatcher!
+installHyperFoleyV4(SpatialForestAudio);
+

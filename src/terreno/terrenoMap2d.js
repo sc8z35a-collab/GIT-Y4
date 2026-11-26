@@ -832,6 +832,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     btnFocus.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8.5" opacity="0.55"/><line x1="12" y1="1.8" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22.2"/><line x1="1.8" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22.2" y2="12"/></svg>`;
     btnFocus.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (callbacks.onZoomTick) callbacks.onZoomTick(true);
       cycleFocus();
     });
 
@@ -842,6 +843,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     btnZoomIn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     btnZoomIn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (callbacks.onZoomTick) callbacks.onZoomTick(true);
       zoomCenteredBy(2.15);
     });
 
@@ -852,6 +854,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
     btnZoomOut.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
     btnZoomOut.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (callbacks.onZoomTick) callbacks.onZoomTick(false);
       zoomCenteredBy(1 / 2.15);
     });
 
@@ -1534,6 +1537,92 @@ export function createTerrenoMap2D(geomorph, callbacks = {}) {
         ctx.fillStyle = '#cbd5e1';
         ctx.strokeText(`${pk.elevASL}m`, p.px, p.py + tri + 12.5 * dpr);
         ctx.fillText(`${pk.elevASL}m`, p.px, p.py + tri + 12.5 * dpr);
+      }
+      ctx.restore();
+    }
+
+    // ---- 7b. ALL 22 REAL-WORLD LANDFORMS & NATURAL GEOLOGICAL LOCATIONS (Lakes, Waterfalls, Onsen, Caves, Cliffs) ----
+    const landforms = geomorph.landforms || [];
+    if (landforms.length > 0) {
+      ctx.save();
+      for (let i = 0; i < landforms.length; i++) {
+        const lf = landforms[i];
+        const p = worldToPx(lf.x, lf.z);
+        if (p.px < -140 || p.px > CW + 140 || p.py < -140 || p.py > CH + 140) continue;
+
+        // True-scale lakes, plunge pools, travertine pools & bog marsh shading
+        if (lf.hasLake) {
+          const rPx = Math.max(4.5 * dpr, (lf.lakeRadius || 200) * pxPerMeter);
+          ctx.fillStyle = lf.kind === 'caldera_lake' ? 'rgba(29, 108, 198, 0.88)' : 'rgba(42, 168, 192, 0.86)';
+          ctx.strokeStyle = 'rgba(186, 230, 253, 0.82)';
+          ctx.lineWidth = Math.max(1.0, 1.3 * dpr);
+          ctx.beginPath();
+          ctx.arc(p.px, p.py, rPx, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Central volcanic dome island inside Caldera Crater Lake
+          if (lf.kind === 'caldera_lake' && rPx > 10 * dpr) {
+            ctx.fillStyle = '#5c7c48';
+            ctx.beginPath();
+            ctx.arc(p.px, p.py, rPx * 0.16, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (lf.hasBogPools) {
+          const rPx = Math.max(6 * dpr, (lf.bogRadius || 380) * pxPerMeter);
+          ctx.fillStyle = 'rgba(56, 134, 108, 0.34)';
+          ctx.strokeStyle = 'rgba(110, 231, 183, 0.55)';
+          ctx.lineWidth = 1.1 * dpr;
+          ctx.beginPath();
+          ctx.arc(p.px, p.py, rPx, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (lf.hasWaterfall && zoom >= 2.2) {
+          const pr = Math.max(3.2 * dpr, (lf.poolRadius || 24) * pxPerMeter);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.78)';
+          ctx.strokeStyle = '#e0f2fe';
+          ctx.lineWidth = 1.3 * dpr;
+          ctx.beginPath();
+          ctx.arc(p.px, p.py, pr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (lf.hasHotSpring && zoom >= 2.0) {
+          const pr = Math.max(3.8 * dpr, 38 * pxPerMeter);
+          ctx.fillStyle = 'rgba(103, 232, 249, 0.76)';
+          ctx.strokeStyle = '#fef3c7';
+          ctx.lineWidth = 1.3 * dpr;
+          ctx.beginPath();
+          ctx.arc(p.px, p.py, pr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Crisp zoom-adaptive label & cartographic glyph (smartly decluttered!)
+        if (zoom < (lf.minZoomMap || 2.0) || zoom >= 160) continue;
+        if (!canPlaceLabel(p.px, p.py, 78 * dpr)) continue;
+
+        const accent = lf.hasWaterfall ? '#38bdf8'
+          : (lf.hasHotSpring ? '#67e8f9'
+            : (lf.hasLake ? '#7dd3fc'
+              : (lf.category === 'cave' ? '#a7f3d0' : '#fcd34d')));
+
+        // Small refined symbol dot/ring
+        ctx.fillStyle = 'rgba(8, 16, 26, 0.82)';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 1.4 * dpr;
+        ctx.beginPath();
+        ctx.arc(p.px, p.py, 3.2 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        const glyph = lf.hasWaterfall ? '≋ ' : (lf.hasHotSpring ? '♨ ' : (lf.category === 'cave' ? '∩ ' : ''));
+        ctx.font = `700 ${Math.round(8.2 * dpr)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3.0 * dpr;
+        ctx.strokeStyle = 'rgba(7, 13, 20, 0.88)';
+        ctx.fillStyle = accent;
+        ctx.strokeText(`${glyph}${lf.shortJp || lf.nameJp}`, p.px, p.py - 6 * dpr);
+        ctx.fillText(`${glyph}${lf.shortJp || lf.nameJp}`, p.px, p.py - 6 * dpr);
       }
       ctx.restore();
     }
