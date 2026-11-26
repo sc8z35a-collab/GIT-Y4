@@ -11,9 +11,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <title>NARROW-50</title>
-  <script type="module" crossorigin src="./assets/dev-DL0SeZ2G.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/three-vendor-yHBgYjMZ.js">
-  <link rel="stylesheet" crossorigin href="./assets/dev-D48x0cW-.css">
+  <script type="module" crossorigin src="./assets/dev-C6V6Pd6h.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/three-vendor-fd_qxMI7.js">
+  <link rel="stylesheet" crossorigin href="./assets/dev-wCyT0zsW.css">
 </head>
 <body>
   <div id="stage" class="stage">
@@ -182,82 +182,12 @@
       </button>
     </div>
 
-    <!-- Edge-to-Edge Fullscreen High-Precision 3D Map, Authentic 2D Route Map & 25-Sheet CAD Blueprint Modal -->
-    <section id="map-modal" class="map-modal mode-3d hidden" role="dialog" aria-modal="true" aria-label="地図">
-      <!-- Transparent Full-Screen Interactive Gesture Layer for Live 3D Topographic Map -->
-      <div id="map3d-gesture-layer" class="map3d-gesture-layer"></div>
-
-      <!-- Full-Screen Authentic 2D Topographic Map & Free-Destination Autonomous Route Selector -->
-      <div id="terreno-2d-panel" class="terreno-2d-panel hidden"></div>
-
-      <!-- Full-Screen Edge-to-Edge CAD Architectural Blueprint Layer (Crisp Vector ViewBox Zoom & Pan) -->
-      <div id="cad-map-body" class="cad-fullscreen hidden">
-        <div id="blueprint-viewport" class="blueprint-viewport">
-          <div id="blueprint-mount" class="blueprint-mount"></div>
-        </div>
-      </div>
-
-      <!-- Minimal Floating Top-Left 3D Camera & Autopilot Vehicle Controls -->
-      <div id="map3d-controls" class="map-float-tl">
-        <button id="btn-map3d-focus" class="map-icon-btn" type="button" aria-label="現在地・全景">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="4" />
-            <circle cx="12" cy="12" r="9" opacity="0.55" />
-          </svg>
-        </button>
-        <button id="btn-map3d-orbit" class="map-icon-btn" type="button" aria-label="回転モード">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-            <polyline points="21 3 21 9 15 9" />
-          </svg>
-        </button>
-        <button id="btn-map3d-veh-rv" class="map-pill-btn map2d-veh-btn active" data-veh-key="camper" type="button">RV自動</button>
-        <button id="btn-map3d-veh-armor" class="map-pill-btn map2d-veh-btn" data-veh-key="armor" type="button">装甲自動</button>
-        <button id="btn-map3d-veh-k11" class="map-pill-btn map2d-veh-btn" data-veh-key="k11" type="button">K-11自動</button>
-      </div>
-
-      <!-- Minimal Floating Top-Right Controls -->
+    <!-- Edge-to-Edge Fullscreen Pinnacle 2D-Only Cartographic Map Modal -->
+    <section id="map-modal" class="map-modal mode-2d hidden" role="dialog" aria-modal="true" aria-label="地図">
+      <div id="terreno-2d-panel" class="terreno-2d-panel"></div>
       <div class="map-float-tr">
-        <div id="bp-tools-group" class="bp-tools-group hidden">
-          <button id="btn-zoom-out" class="map-pill-btn" type="button" aria-label="縮小">−</button>
-          <button id="btn-zoom-in" class="map-pill-btn" type="button" aria-label="拡大">＋</button>
-          <button id="btn-export-svg" class="map-pill-btn" type="button">SVG</button>
-          <button id="btn-export-all-svg" class="map-pill-btn map-pill-accent" type="button">全SVG</button>
-          <button id="btn-export-all-zip" class="map-pill-btn" type="button">ZIP</button>
-        </div>
         <button id="btn-close-map" class="map-icon-btn map-close-icon" type="button" aria-label="閉じる">✕</button>
       </div>
-
-      <!-- Slim Floating Bottom Floor / 3D / 2D Switcher Pill Bar -->
-      <nav id="bp-floor-tabs" class="floor-pill-bar" role="tablist" aria-label="地図切替">
-        <button class="floor-tab floor-tab-3d active" data-floor="30" type="button" role="tab">3D</button>
-        <button class="floor-tab floor-tab-2d" data-floor="31" type="button" role="tab">2D</button>
-        <button class="floor-tab floor-tab-classified" data-floor="0" type="button" role="tab">B4</button>
-        <button class="floor-tab floor-tab-deep" data-floor="1" type="button" role="tab">B3</button>
-        <button class="floor-tab floor-tab-deep" data-floor="2" type="button" role="tab">B2</button>
-        <button class="floor-tab" data-floor="3" type="button" role="tab">B1</button>
-        <button class="floor-tab" data-floor="4" type="button" role="tab">1F</button>
-        <button class="floor-tab" data-floor="5" type="button" role="tab">2F</button>
-        <button class="floor-tab" data-floor="6" type="button" role="tab">3F</button>
-        <button class="floor-tab" data-floor="7" type="button" role="tab">4F</button>
-        <button class="floor-tab" data-floor="8" type="button" role="tab">5F</button>
-        <button class="floor-tab" data-floor="9" type="button" role="tab">6F</button>
-        <button class="floor-tab" data-floor="10" type="button" role="tab">RF</button>
-        <button class="floor-tab" data-floor="11" type="button" role="tab">隣1</button>
-        <button class="floor-tab" data-floor="12" type="button" role="tab">隣2</button>
-        <button class="floor-tab" data-floor="13" type="button" role="tab">隣3</button>
-        <button class="floor-tab" data-floor="14" type="button" role="tab">隣R</button>
-        <button class="floor-tab" data-floor="15" type="button" role="tab">倉1</button>
-        <button class="floor-tab" data-floor="16" type="button" role="tab">倉2</button>
-        <button class="floor-tab floor-tab-rv" data-floor="17" type="button" role="tab">RV1</button>
-        <button class="floor-tab floor-tab-rv" data-floor="18" type="button" role="tab">RV2</button>
-        <button class="floor-tab floor-tab-kei" data-floor="19" type="button" role="tab">軽</button>
-        <button class="floor-tab floor-tab-garage" data-floor="20" type="button" role="tab">車庫</button>
-        <button class="floor-tab floor-tab-armor" data-floor="21" type="button" role="tab">装甲</button>
-        <button class="floor-tab floor-tab-cont" data-floor="22" type="button" role="tab">箱</button>
-        <button class="floor-tab floor-tab-null" data-floor="23" type="button" role="tab">NULL車庫</button>
-        <button class="floor-tab floor-tab-k11" data-floor="24" type="button" role="tab">K-11</button>
-      </nav>
     </section>
   </div>
 

@@ -12,7 +12,8 @@ import {
   GARAGE, GARAGE_PLAN, ARMOR_CAMPER, ARMOR_CAMPER_PLAN, TOW_CONTAINER, TOW_CONTAINER_PLAN, EXT_ELEVATOR,
   NULL_EREA, NULL_ELEVATOR, NULL_HANGAR_PLAN, AIRSHIP_K11, AIRSHIP_K11_PLAN,
 } from './planData.js';
-import { TERRENO_WORLD, TERRENO_LANDMARKS, evalMainRiver } from './terreno/terrenoConfig.js';
+import { TERRENO_WORLD, TERRENO_LANDMARKS, evalMainRiver, evalRegionWeights } from './terreno/terrenoConfig.js';
+import { evalClosestTributary } from './terreno/terrenoGeomorphology.js';
 import { AUTOPILOT_WAYPOINTS } from './terreno/terrenoAutopilot.js';
 import {
   VILLAGE, VILLAGE_VEHICLE_OBSTACLES, isInsideVillagePaving, queryVillageHouseAt, isInVillagePrecinct,
@@ -109,9 +110,12 @@ export class FirstPersonHouseExplorer {
 
     this.flashlightOn = false;
     this.mapOpen = false;
-    this.map3dActive = false;
-    this.map3d = null;
     this.telemetryTimer = 0.25;
+    this._prevLightning = 0;
+    this._prevBridgeJointTime = 0;
+    this._prevSuspHitTime = 0;
+    this._prevLandslideRumbleTime = 0;
+    this._prevK11Airborne = false;
 
     this._initRenderer();
     this._initScene();
@@ -360,14 +364,16 @@ export class FirstPersonHouseExplorer {
     this.flashlightOn = force !== null ? force : !this.flashlightOn;
     this.flashlight.intensity = this.flashlightOn ? 6.8 : 0.0;
     this.adaptive.markShadowsDirty();
-    this.audio.playClick(this.flashlightOn);
+    this.audio.playClick(this.flashlightOn, 'flashlight');
     if (navigator.vibrate) navigator.vibrate(10);
     if (this.callbacks.onFlashlightChange) this.callbacks.onFlashlightChange(this.flashlightOn);
   }
 
   toggleCrouch() {
+    this.audio.init();
     this.crouching = !this.crouching;
     this.targetEyeHeight = this.crouching ? 1.04 : 1.56;
+    this.audio.playCrouch(this.crouching);
     if (navigator.vibrate) navigator.vibrate(6);
     if (this.callbacks.onCrouchChange) this.callbacks.onCrouchChange(this.crouching);
   }
@@ -548,7 +554,7 @@ export class FirstPersonHouseExplorer {
     const armor = this.house.armorCamper;
     if (!armor || !armor.shutters) return false;
     const closed = armor.shutters.toggleShutters(force);
-    this.audio.playShutterClank(closed);
+    this.audio.playShutterClank(closed, 'armor_shutter');
     this.adaptive.markShadowsDirty();
     if (navigator.vibrate) navigator.vibrate(14);
     return closed;
@@ -562,6 +568,7 @@ export class FirstPersonHouseExplorer {
     if (next) {
       const dist = Math.hypot(cont.pose.cx - armor.pose.cx, cont.pose.cz - armor.pose.cz);
       if (force !== true && dist > 30.0) {
+        this.audio.playAutopilotCue('error');
         return false;
       }
       cont.hitched = true;
@@ -588,7 +595,7 @@ export class FirstPersonHouseExplorer {
     this.house.interactiveProps.forEach((p) => {
       if (p.id === 'armor_hitch' || p.id === 'armor_hitch_cab') p.isOn = cont.hitched;
     });
-    this.audio.playShutterClank(cont.hitched);
+    this.audio.playTowHitch(cont.hitched);
     this.adaptive.markShadowsDirty();
     return cont.hitched;
   }
@@ -666,7 +673,7 @@ export class FirstPersonHouseExplorer {
     if (!k11) return false;
     const check = this.isK11AtRefuelStation();
     if (!check.canRefuel) {
-      this.audio.playBump();
+      this.audio.playAutopilotCue('error');
       this._notifyStatus('給油不可：車庫(NULL EREA)または自宅に戻って着陸してください', 'error');
       return false;
     }
@@ -701,7 +708,7 @@ export class FirstPersonHouseExplorer {
     );
 
     if (!check.valid) {
-      this.audio.playBump();
+      this.audio.playAutopilotCue('error');
       this._notifyStatus(check.reasonJp, 'error');
       return check;
     }
@@ -724,7 +731,7 @@ export class FirstPersonHouseExplorer {
       checkClock: 0,
     };
     this.autopilotRoutes[key] = route;
-    this.audio.playElevatorChime(1);
+    this.audio.playAutopilotCue('summon');
     const distKm = (check.distM / 1000).toFixed(2);
     this._notifyStatus(`${label} 呼出発進 → K-11直下 (${distKm} km・自律スタック修正ON)`, 'ok');
     this._notifyDriveHUD();
@@ -738,7 +745,7 @@ export class FirstPersonHouseExplorer {
     const k11 = this.house.airshipK11;
     if (!k11 || !this.terreno || !this.terreno.autopilot) return null;
     if (k11.fuelL <= 0.1) {
-      this.audio.playBump();
+      this.audio.playAutopilotCue('error');
       this._notifyStatus('燃料切れ(0L)：車庫または自宅で給油してください', 'error');
       return null;
     }
@@ -756,6 +763,8 @@ export class FirstPersonHouseExplorer {
     if (k11.dockedInSilo && this.house.nullErea && !this.house.nullErea.silo.isSurfaceReady()) {
       this.house.nullErea.silo.startLaunchSequence();
       this.audio.playSiloHydraulic('unlock');
+    } else {
+      this.audio.playAutopilotCue('engage');
     }
     const distKm = (Math.hypot(goalX - k11.pose.cx, goalZ - k11.pose.cz) / 1000).toFixed(2);
     this._notifyStatus(`K-11 自動飛行開始 (目標まで ${distKm} km)`, 'ok');
@@ -764,6 +773,7 @@ export class FirstPersonHouseExplorer {
   }
 
   cancelAutopilot(vehicleKey = null) {
+    const hadAny = vehicleKey ? Boolean(this.autopilotRoutes[vehicleKey]) : Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11);
     if (vehicleKey) {
       if (this.autopilotRoutes[vehicleKey]) this.autopilotRoutes[vehicleKey] = null;
       this.terreno?.autopilot?.neuralPolicy?.resetHidden?.(vehicleKey);
@@ -773,6 +783,7 @@ export class FirstPersonHouseExplorer {
       this.autopilotRoutes.k11 = null;
       this.terreno?.autopilot?.neuralPolicy?.resetHidden?.();
     }
+    if (hadAny) this.audio.playAutopilotCue('cancel');
     this._notifyDriveHUD();
   }
 
@@ -840,6 +851,7 @@ export class FirstPersonHouseExplorer {
     };
     this.autopilotRoutes[key] = route;
     this.selectedAutopilotVehicle = key;
+    this.audio.playAutopilotCue('engage');
     this._notifyDriveHUD();
     return route;
   }
@@ -1003,7 +1015,7 @@ export class FirstPersonHouseExplorer {
       h.intensity = veh.headlightsOn ? beamInt : 0.0;
     });
     this.adaptive.markShadowsDirty();
-    this.audio.playClick(veh.headlightsOn);
+    this.audio.playClick(veh.headlightsOn, 'headlight');
     if (this.drivingVehicle === key) {
       this._notifyDriveHUD();
     }
@@ -1048,6 +1060,7 @@ export class FirstPersonHouseExplorer {
       this.eyeHeight = 1.48;
       this.yaw = k11.pose.yaw;
       this.pitch = -0.05;
+      this.audio.playEngineStart('k11');
     } else {
       const standW = this.k11LocalToWorld(2.40, 2.85);
       this.playerPos.set(standW.x, 0, standW.z);
@@ -1058,6 +1071,7 @@ export class FirstPersonHouseExplorer {
       this.eyeHeight = 1.56;
       if (!this.autopilotRoutes.k11 && k11.altitudeAGL < 1.5) {
         this.audio.updateAirshipEngine(false, 0);
+        this.audio.playEngineStop('k11');
       }
     }
     this._syncCameraFrustum();
@@ -1164,6 +1178,7 @@ export class FirstPersonHouseExplorer {
 
     const activeKey = next ? vehicleKey : this.drivingVehicle;
     const veh = this._getVehicleObj(activeKey);
+    const engProfile = activeKey === 'kei' ? 'kei' : (activeKey === 'armor' ? 'armor' : 'diesel');
     const keepAutopilotRunning = !next && Boolean(this.autopilotRoutes[activeKey]);
 
     this.drivingVehicle = next ? activeKey : null;
@@ -1217,6 +1232,7 @@ export class FirstPersonHouseExplorer {
         this.yaw = veh.pose.yaw;
         this.pitch = -0.06;
       }
+      this.audio.playEngineStart(engProfile);
       this.toggleVehicleHeadlights(true, activeKey);
     } else {
       const exitInfo = this._findSafeVehicleExitWorld(activeKey);
@@ -1226,7 +1242,8 @@ export class FirstPersonHouseExplorer {
       this.floorY = exitInfo.floorY;
       this.eyeHeight = exitInfo.eye;
       if (!keepAutopilotRunning) {
-        this.audio.updateEngine(false, 0, activeKey === 'kei' ? 'kei' : 'diesel');
+        this.audio.updateEngine(false, 0, engProfile);
+        this.audio.playEngineStop(engProfile);
       }
     }
 
@@ -1432,23 +1449,25 @@ export class FirstPersonHouseExplorer {
       ) return { hit: true, reason: 'bounds', stepLift: 0 };
     }
 
-    // 1b. Directional Deep River & Flash-Flood Guard (21-road bridges remain passable in normal water!)
+    // 1b. 3D Bridge Deck Passability & Guardrail Containment + Deep River / Flash-Flood Guard!
     if (this.terreno) {
-      const rqBridge = this.terreno.geomorph?.roadIndex
-        ? this.terreno.geomorph.roadIndex.queryDist(ncx, ncz)
-        : { dist: 9999, width: 9.5 };
-      const onRoadBridge = rqBridge.dist < (rqBridge.width || 9.5) * 0.62;
-      const stormFloodRise = this.terreno.storm ? this.terreno.storm.getFloodRise() : 0;
-      if (!onRoadBridge || stormFloodRise > 2.2) {
+      const bHit = this.terreno.queryBridgeAt ? this.terreno.queryBridgeAt(ncx, ncz, 0.35) : null;
+      if (bHit && bHit.hitGuardrail) {
+        return { hit: true, reason: 'bridge_rail', stepLift: 0 };
+      }
+      const onSolidBridge = Boolean(bHit && bHit.onBridge);
+      if (!onSolidBridge) {
         const flood = this.terreno.storm
           ? this.terreno.storm.getFloodInfoAt(ncx, ncz)
           : null;
-        const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(ncz).waterY - this.terreno.getHeightAt(ncx, ncz));
+        const terrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(ncx, ncz) : this.terreno.getHeightAt(ncx, ncz);
+        const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(ncz).waterY - terrY);
         if (nextDepth > maxFordDepth) {
           const prevFlood = this.terreno.storm
             ? this.terreno.storm.getFloodInfoAt(prevCx, prevCz)
             : null;
-          const prevDepth = prevFlood ? prevFlood.depth : Math.max(0, evalMainRiver(prevCz).waterY - this.terreno.getHeightAt(prevCx, prevCz));
+          const prevTerrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(prevCx, prevCz) : this.terreno.getHeightAt(prevCx, prevCz);
+          const prevDepth = prevFlood ? prevFlood.depth : Math.max(0, evalMainRiver(prevCz).waterY - prevTerrY);
           if (nextDepth >= prevDepth - 0.02) {
             return { hit: true, reason: 'river', stepLift: 0 };
           }
@@ -2080,7 +2099,8 @@ export class FirstPersonHouseExplorer {
           if (isPlayerDriving) {
             this.vehicleBlockedTimer = 0.55;
             if (this.bumpCooldown <= 0) {
-              this.audio.playBump();
+              const impact = Math.max(0.35, Math.min(1.0, Math.abs(veh.speed) / 9.0 + 0.30));
+              this.audio.playBump(res.reason || 'generic', impact);
               if (navigator.vibrate) navigator.vibrate(isArmor ? 14 : 25);
               this.bumpCooldown = 0.45;
             }
@@ -2092,8 +2112,14 @@ export class FirstPersonHouseExplorer {
       const targetSusp = maxStepLift;
       const springK = isKei ? 58.0 : (isArmor ? 36.0 : 42.0);
       const dampC = isKei ? 11.5 : (isArmor ? 8.8 : 9.2);
+      const prevSuspVel = veh.suspVelY;
       veh.suspVelY += ((targetSusp - veh.suspLift) * springK - veh.suspVelY * dampC) * dt;
       veh.suspLift = Math.max(-0.08, Math.min(isArmor ? 0.85 : (isKei ? 0.45 : 0.65), veh.suspLift + veh.suspVelY * dt));
+      const nowSec = performance.now() * 0.001;
+      if (isPlayerDriving && maxStepLift > 0.16 && Math.abs(veh.suspVelY - prevSuspVel) > 1.15 && (nowSec - this._prevSuspHitTime) > 0.34) {
+        this._prevSuspHitTime = nowSec;
+        this.audio.playSuspensionThud(Math.min(1.0, maxStepLift * 2.1));
+      }
 
       if (Math.abs(totalMoved) > 0.0001 || Math.abs(veh.suspLift) > 0.002 || Math.abs(veh.slipSpeed) > 0.02) {
         this._applyVehicleTerrainPose(veh, vehicleKey, maxStepLift);
@@ -2485,6 +2511,14 @@ export class FirstPersonHouseExplorer {
       }
     }
 
+    const nowAirborne = !k11.dockedInSilo && (k11.pose.y - surfY) > 1.35;
+    if (nowAirborne && !this._prevK11Airborne) {
+      this.audio.playK11Takeoff();
+    } else if (!nowAirborne && this._prevK11Airborne) {
+      this.audio.playK11Touchdown(Boolean(k11.dockedInSilo));
+    }
+    this._prevK11Airborne = nowAirborne;
+
     // Exact 1L = 3.000 km Fuel Consumption (Breakthrough #1!)
     const dxMoved = k11.pose.cx - prevX;
     const dyMoved = k11.pose.y - prevY;
@@ -2576,15 +2610,33 @@ export class FirstPersonHouseExplorer {
           this.floorY = this._computeFloorY(this.playerPos.x, this.playerPos.z);
         }
       }
+      const sampleVehAudio = (veh) => {
+        const cx = veh.pose.cx, cz = veh.pose.cz;
+        const bHit = this.terreno?.queryBridgeAt ? this.terreno.queryBridgeAt(cx, cz, 0.0) : null;
+        const rq = this.terreno?.geomorph?.roadIndex ? this.terreno.geomorph.roadIndex.queryDist(cx, cz) : null;
+        const onBridge = Boolean(bHit && bHit.onBridge);
+        const onRoad = onBridge || (rq ? rq.dist < (rq.width || 8.0) * 0.65 : false);
+        let waterDepth = 0;
+        if (!onBridge && this.terreno) {
+          const terrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(cx, cz) : this.terreno.getHeightAt(cx, cz);
+          waterDepth = Math.max(0, evalMainRiver(cz).waterY - terrY);
+        }
+        if (bHit && bHit.nearJoint && Math.abs(veh.speed || 0) > 2.2 && (elapsed - this._prevBridgeJointTime) > 0.36) {
+          this._prevBridgeJointTime = elapsed;
+          this.audio.playBridgeJoint(Math.min(1, Math.abs(veh.speed || 0) / 22.0));
+        }
+        return { onBridge, onRoad, waterDepth, slipSpeed: Math.abs(veh.slipSpeed || 0) };
+      };
       if (riderKey === 'k11') {
         const k11 = this.house.airshipK11;
         this.audio.updateAirshipEngine(
           !k11.dockedInSilo || Boolean(this.autopilotRoutes.k11),
           Math.min(1, (k11.groundSpeedKmh || 0) / 250.0),
+          { climbRate: k11.velY || 0, altitudeAgl: k11.altitudeAGL || 0 },
         );
       } else if (coupledDriverKey && this.autopilotRoutes[coupledDriverKey]) {
         const rv = this._getVehicleObj(coupledDriverKey);
-        this.audio.updateEngine(true, Math.abs(rv.speed || 0) / 16.0, 'diesel');
+        this.audio.updateEngine(true, Math.abs(rv.speed || 0) / 16.0, coupledDriverKey === 'armor' ? 'armor' : 'diesel', sampleVehAudio(rv));
       }
     }
 
@@ -2598,7 +2650,10 @@ export class FirstPersonHouseExplorer {
       this.currentFloor = (k11.dockedInSilo && this.house.nullErea && this.house.nullErea.silo.liftProgress < 0.5) ? -40 : 1;
       this.eyeHeight += (1.48 - this.eyeHeight) * Math.min(1, dt * 10);
       this.bobAmount *= 0.85;
-      this.audio.updateAirshipEngine(true, Math.min(1, (k11.groundSpeedKmh || 0) / 250.0));
+      this.audio.updateAirshipEngine(true, Math.min(1, (k11.groundSpeedKmh || 0) / 250.0), {
+        climbRate: k11.velY || 0,
+        altitudeAgl: k11.altitudeAGL || 0,
+      });
       this._notifyDriveHUD();
     } else if (this.drivingVehicle && playerDriveResult) {
       const key = this.drivingVehicle;
@@ -2606,24 +2661,40 @@ export class FirstPersonHouseExplorer {
       if (Math.abs(playerDriveResult.totalDYaw) > 0.00001) {
         this.yaw += playerDriveResult.totalDYaw;
       }
+      const cx = veh.pose.cx, cz = veh.pose.cz;
+      const bHit = this.terreno?.queryBridgeAt ? this.terreno.queryBridgeAt(cx, cz, 0.0) : null;
+      const rq = this.terreno?.geomorph?.roadIndex ? this.terreno.geomorph.roadIndex.queryDist(cx, cz) : null;
+      const onBridge = Boolean(bHit && bHit.onBridge);
+      const onRoad = onBridge || (rq ? rq.dist < (rq.width || 8.0) * 0.65 : false);
+      let waterDepth = 0;
+      if (!onBridge && this.terreno) {
+        const terrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(cx, cz) : this.terreno.getHeightAt(cx, cz);
+        waterDepth = Math.max(0, evalMainRiver(cz).waterY - terrY);
+      }
+      if (bHit && bHit.nearJoint && Math.abs(veh.speed || 0) > 2.2 && (elapsed - this._prevBridgeJointTime) > 0.36) {
+        this._prevBridgeJointTime = elapsed;
+        this.audio.playBridgeJoint(Math.min(1, Math.abs(veh.speed || 0) / 22.0));
+      }
+      const surfOpts = { onBridge, onRoad, waterDepth, slipSpeed: Math.abs(veh.slipSpeed || 0) };
+
       if (key === 'kei') {
         const seatW = this.keiLocalToWorld(KEI.driverSeatLocal.x, 0.68);
         this.playerPos.set(seatW.x, 0, seatW.z);
         this.floorY = (veh.pose.y || 0) + KEI.floorWorldY;
         this.eyeHeight += (1.04 - this.eyeHeight) * Math.min(1, dt * 10);
-        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'kei');
+        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'kei', surfOpts);
       } else if (key === 'armor') {
         const seatW = this.armorLocalToWorld(ARMOR_CAMPER.driverSeatLocal.x, 1.06);
         this.playerPos.set(seatW.x, 0, seatW.z);
         this.floorY = (veh.pose.y || 0) + ARMOR_CAMPER.floorWorldY;
         this.eyeHeight += (1.54 - this.eyeHeight) * Math.min(1, dt * 10);
-        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'diesel');
+        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'armor', surfOpts);
       } else {
         const seatW = this.camperLocalToWorld(0.72, 0.68);
         this.playerPos.set(seatW.x, 0, seatW.z);
         this.floorY = (veh.pose.y || 0) + CAMPER.floor1WorldY;
         this.eyeHeight += (1.44 - this.eyeHeight) * Math.min(1, dt * 10);
-        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'diesel');
+        this.audio.updateEngine(true, Math.abs(veh.speed) / playerDriveResult.maxFwd, 'diesel', surfOpts);
       }
       this.bobAmount *= 0.85;
 
@@ -2647,41 +2718,9 @@ export class FirstPersonHouseExplorer {
 
   setMapOpen(open) {
     this.mapOpen = open;
-    if (!open) {
-      this.map3dActive = false;
-    }
     if (open && document.pointerLockElement === this.renderer.domElement) {
       document.exitPointerLock();
     }
-  }
-
-  setMap3DMode(active) {
-    this.map3dActive = Boolean(active);
-    if (this.map3dActive && this.terreno && this.terreno.getOrCreateMap3D) {
-      const firstInit = !this.map3d;
-      this.map3d = this.terreno.getOrCreateMap3D();
-      const w = this.container.clientWidth || window.innerWidth;
-      const h = this.container.clientHeight || window.innerHeight;
-      this.map3d.resize(w, h);
-      this.map3d.syncPlayerPose({
-        x: this.playerPos.x,
-        z: this.playerPos.z,
-        yaw: this.yaw,
-        camperPose: this.house.camper.pose,
-        keiPose: this.house.kei.pose,
-        armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
-        k11Pose: this.house.airshipK11 ? this.house.airshipK11.pose : null,
-        autopilotRoutes: {
-          camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
-          armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
-          k11: this.autopilotRoutes.k11 ? this.autopilotRoutes.k11.points : null,
-        },
-      });
-      if (firstInit) {
-        this.map3d.resetOverview(true);
-      }
-    }
-    return this.map3d;
   }
 
   _isPointInElevatorCab(x, z, floorIdx) {
@@ -2899,7 +2938,20 @@ export class FirstPersonHouseExplorer {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     if (this.postfx) this.postfx.resize();
-    if (this.map3d) this.map3d.resize(w, h);
+  }
+
+  _classifyDoorAudioKind(door) {
+    if (!door) return 'wood_swing';
+    const id = String(door.id || '');
+    if (door.isGarageGate || door.kind === 'rollup') return 'garage_rollup';
+    if (door.kind === 'liftgate') return 'liftgate';
+    if (door.isK11 || id.startsWith('DK11')) return 'k11_airlock';
+    if (id.startsWith('DAM') || id.startsWith('DCT')) return 'armor_airlock';
+    if (id.startsWith('DC-') || id.startsWith('DK-')) return 'vehicle';
+    if (id.startsWith('DB') || id.startsWith('DS-')) return 'airtight';
+    if (id.includes('-B') || id === 'D4-6' || id === 'D5-5' || id === 'D6-5' || id === 'DV2-1') return 'glass';
+    if (door.kind === 'pocket') return 'shoji';
+    return 'wood_swing';
   }
 
   _isPointInNullElevatorCab(x, z, floorIdx) {
@@ -2982,22 +3034,23 @@ export class FirstPersonHouseExplorer {
     if (hit.kind === 'door') {
       hit.item.isOpen = !hit.item.isOpen;
       hit.item.autoHoldTimer = 1.2;
-      this.audio.playDoor(hit.item.kind === 'pocket');
+      this.audio.playDoor(this._classifyDoorAudioKind(hit.item), hit.item.isOpen);
       this.adaptive.markShadowsDirty();
     } else if (hit.kind === 'prop') {
-      if (hit.item.id === 'camper_drive') {
+      const pid = hit.item.id || '';
+      if (pid === 'camper_drive') {
         this.toggleVehicleDrive('camper');
-      } else if (hit.item.id === 'kei_drive') {
+      } else if (pid === 'kei_drive') {
         this.toggleVehicleDrive('kei');
-      } else if (hit.item.id === 'armor_drive') {
+      } else if (pid === 'armor_drive') {
         this.toggleVehicleDrive('armor');
-      } else if (hit.item.id === 'k11_pilot') {
+      } else if (pid === 'k11_pilot') {
         this.toggleK11Pilot(true);
-      } else if (hit.item.id === 'k11_btn_silo' || hit.item.isNullSiloBtn) {
+      } else if (pid === 'k11_btn_silo' || hit.item.isNullSiloBtn) {
         this.toggleNullSilo();
-      } else if (hit.item.id === 'k11_btn_call_rv') {
+      } else if (pid === 'k11_btn_call_rv') {
         this.summonCamperToK11('camper');
-      } else if (hit.item.id === 'k11_btn_call_armor') {
+      } else if (pid === 'k11_btn_call_armor') {
         this.summonCamperToK11('armor');
       } else if (hit.item.isK11RefuelBtn) {
         this.refuelK11();
@@ -3009,9 +3062,9 @@ export class FirstPersonHouseExplorer {
       } else if (hit.item.isNullElevatorCall && this.house.nullElevator) {
         this.house.nullElevator.callToFloor(hit.item.callFloor);
         this.audio.playElevatorButton();
-      } else if (hit.item.id === 'armor_shutter') {
+      } else if (pid === 'armor_shutter') {
         this.toggleArmorShutters();
-      } else if (hit.item.id === 'armor_hitch' || hit.item.id === 'armor_hitch_cab') {
+      } else if (pid === 'armor_hitch' || pid === 'armor_hitch_cab') {
         this.toggleArmorHitch();
       } else if (hit.item.isExtElevatorBtn && this.house.extElevator) {
         if (hit.item.elvAction === 'open') this.house.extElevator.openDoorsNow();
@@ -3025,7 +3078,23 @@ export class FirstPersonHouseExplorer {
         hit.item.toggle();
       } else {
         hit.item.toggle();
-        this.audio.playClick(hit.item.isOn);
+        if (pid === 'b309_main_loyly' || pid === 'b311_priv_loyly') {
+          this.audio.playSaunaLoyly(pid === 'b311_priv_loyly');
+        } else if (pid === 'b308_thermal_cmd') {
+          this.audio.playThermalConsole(hit.item.isOn);
+        } else if (pid === 'b310_desk_cooling') {
+          this.audio.playCoolingPlenum(hit.item.isOn);
+        } else if (pid === 'lab_uv_mode') {
+          this.audio.playLabUvMode(hit.item.isOn);
+        } else if (pid === 'lab_containment') {
+          this.audio.playLabContainment(hit.item.isOn);
+        } else if (pid === 'fireplace_6f') {
+          this.audio.playFireplaceToggle(hit.item.isOn);
+        } else if (pid.includes('lantern')) {
+          this.audio.playClick(hit.item.isOn, 'washi_lantern');
+        } else {
+          this.audio.playClick(hit.item.isOn, 'lamp');
+        }
       }
     }
     if (navigator.vibrate) navigator.vibrate(12);
@@ -3360,12 +3429,12 @@ export class FirstPersonHouseExplorer {
   }
 
   _getSurfaceMaterial(x, z) {
-    if (this.inElevator || this.inExtElevator || this.inNullElevator) return 'tile';
+    if (this.inElevator || this.inExtElevator || this.inNullElevator || this.onNullLift) return 'metal';
     if (this.activeBuilding === 'k11') return 'wood';
-    if (this.currentFloor === -40 || this.activeBuilding === 'null_hangar' || this.onNullLift) return 'tile';
+    if (this.currentFloor === -40 || this.activeBuilding === 'null_hangar') return 'metal';
     if (this.activeFlight !== null) {
       if (this.activeFlight === 'st_b2' || this.activeFlight === 'st_b3') return 'tile';
-      if (this.activeStairBuilding === 'storage') return 'tile';
+      if (this.activeStairBuilding === 'storage') return 'metal';
       return this.activeStairBuilding === 'main' && this.activeFlight === 0 ? 'tile' : 'wood';
     }
     if (this.currentFloor === -3) return 'tile';
@@ -3376,16 +3445,16 @@ export class FirstPersonHouseExplorer {
       if (x < 0.0 && z >= 4.60 && z <= 8.60) return 'wood';
       if (x >= 3.35 && x <= 5.05 && z >= 6.00 && z <= 8.50) return 'wood';
       if (x >= 3.35 && x <= 6.35 && z >= 3.85 && z <= 5.85) return 'wood';
-      if (x > 3.25 || z < 3.60 || z > 16.15 || (x > 1.70 && z >= 8.55 && z <= 12.15)) return 'tile';
+      if (x > 3.25 || z < 3.60 || z > 16.15 || (x > 1.70 && z >= 8.55 && z <= 12.15)) return 'wet_stone';
       return 'wood';
     }
     if (this.activeBuilding === 'garage') return 'tile';
     if (this.activeBuilding === 'container') return 'wood';
     if (this.activeBuilding === 'armor') {
       const al = this.worldToArmorLocal(x, z);
-      return al.lz > 13.45 ? 'tile' : 'wood';
+      return al.lz > 13.45 ? 'metal' : 'wood';
     }
-    if (this.activeBuilding === 'kei') return 'tile';
+    if (this.activeBuilding === 'kei') return 'metal';
     if (this.activeBuilding === 'camper') {
       const cl = this.worldToCamperLocal(x, z);
       if (this.currentFloor === 2) return cl.lz < 2.17 || cl.lz > 5.25 ? 'tatami' : 'wood';
@@ -3408,11 +3477,26 @@ export class FirstPersonHouseExplorer {
       const sx = x - STORAGE.originX;
       const sz = z - STORAGE.originZ;
       if (sx >= 0.0 && sx <= STORAGE.width && sz >= 0.0 && sz <= STORAGE.depth) {
-        return 'tile';
+        return 'metal';
       }
       const vh = queryVillageHouseAt(x, z);
       if (vh) return vh.surface;
       if (isInVillagePrecinct(x, z) && isInsideVillagePaving(x, z)) return 'tile';
+      // Outdoors in TERRENO wilderness: distinguish Bridges, River Water, Gravel Roads, Grass Meadows & Forest Earth!
+      if (this.terreno) {
+        const bHit = this.terreno.queryBridgeAt ? this.terreno.queryBridgeAt(x, z, 0.0) : null;
+        if (bHit && bHit.onBridge) return 'bridge';
+        const terrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(x, z) : this.terreno.getHeightAt(x, z);
+        const rv = evalMainRiver(z);
+        const distRiv = Math.abs(x - rv.x);
+        if (distRiv < rv.halfWidth * 1.15 && rv.waterY - terrY > 0.04) return 'water';
+        const trib = evalClosestTributary(x, z);
+        if (trib && trib.dist < trib.width * 0.45) return 'water';
+        const rq = this.terreno.geomorph?.roadIndex ? this.terreno.geomorph.roadIndex.queryDist(x, z) : null;
+        if ((rq && rq.dist < (rq.width || 8.0) * 0.58) || distRiv < rv.halfWidth * 1.55 + 4.0) return 'gravel';
+        const rw = evalRegionWeights(x, z);
+        if (rw.meadow > 0.34 || rw.wetland > 0.38 || Math.hypot(x - 1.5, z - 3.5) < 28.0) return 'grass';
+      }
       return 'earth';
     }
     if (this.currentFloor === 2) {
@@ -3922,12 +4006,18 @@ export class FirstPersonHouseExplorer {
         }
         const dComp = Math.hypot(x - TERRENO_WORLD.compoundCenterX, z - TERRENO_WORLD.compoundCenterZ);
         if (dComp > 22.0) {
-          const flood = this.terreno.storm ? this.terreno.storm.getFloodInfoAt(x, z) : null;
-          const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(z).waterY - this.terreno.getHeightAt(x, z));
-          if (nextDepth > 1.15) {
-            const curFlood = this.terreno.storm ? this.terreno.storm.getFloodInfoAt(this.playerPos.x, this.playerPos.z) : null;
-            const curDepth = curFlood ? curFlood.depth : Math.max(0, evalMainRiver(this.playerPos.z).waterY - this.terreno.getHeightAt(this.playerPos.x, this.playerPos.z));
-            if (nextDepth >= curDepth - 0.02) return true;
+          const bHit = this.terreno.queryBridgeAt ? this.terreno.queryBridgeAt(x, z, 0.15) : null;
+          if (bHit && bHit.hitGuardrail) return true;
+          if (!(bHit && bHit.onBridge)) {
+            const flood = this.terreno.storm ? this.terreno.storm.getFloodInfoAt(x, z) : null;
+            const terrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(x, z) : this.terreno.getHeightAt(x, z);
+            const nextDepth = flood ? flood.depth : Math.max(0, evalMainRiver(z).waterY - terrY);
+            if (nextDepth > 1.15) {
+              const curFlood = this.terreno.storm ? this.terreno.storm.getFloodInfoAt(this.playerPos.x, this.playerPos.z) : null;
+              const curTerrY = this.terreno.getTerrainHeightAt ? this.terreno.getTerrainHeightAt(this.playerPos.x, this.playerPos.z) : this.terreno.getHeightAt(this.playerPos.x, this.playerPos.z);
+              const curDepth = curFlood ? curFlood.depth : Math.max(0, evalMainRiver(this.playerPos.z).waterY - curTerrY);
+              if (nextDepth >= curDepth - 0.02) return true;
+            }
           }
         }
       }
@@ -4297,7 +4387,7 @@ export class FirstPersonHouseExplorer {
           const apexH = Math.max(0.28, Math.min(0.86, triggerH + 0.18));
           this.jumpVelY = Math.sqrt(2.0 * 18.0 * apexH);
           this.autoJumpCooldown = 0.48;
-          this.audio.playFootstep('earth');
+          this.audio.playJump(this._getSurfaceMaterial(this.playerPos.x, this.playerPos.z));
         }
       }
 
@@ -4307,7 +4397,7 @@ export class FirstPersonHouseExplorer {
         if (this.jumpOffset <= 0) {
           this.jumpOffset = 0;
           this.jumpVelY = 0;
-          this.audio.playFootstep(this._getSurfaceMaterial(this.playerPos.x, this.playerPos.z));
+          this.audio.playLand(this._getSurfaceMaterial(this.playerPos.x, this.playerPos.z), 0.72);
         }
       }
     }
@@ -4321,7 +4411,12 @@ export class FirstPersonHouseExplorer {
       this.bobAmount += (1 - this.bobAmount) * Math.min(1, dt * 8);
       const curSin = Math.sin(this.bobPhase);
       if (this.prevBobSin > -0.82 && curSin <= -0.82) {
-        this.audio.playFootstep(this._getSurfaceMaterial(this.playerPos.x, this.playerPos.z));
+        const surf = this._getSurfaceMaterial(this.playerPos.x, this.playerPos.z);
+        if (this.activeFlight !== null) {
+          this.audio.playStairStep(surf === 'metal' || surf === 'tile' ? 'metal' : 'wood', (this.floorY - prevGroundY) >= -0.002);
+        } else {
+          this.audio.playFootstep(surf, { sprint: horizSpeed > 5.0, crouch: this.crouching });
+        }
       }
       this.prevBobSin = curSin;
     } else {
@@ -4465,13 +4560,13 @@ export class FirstPersonHouseExplorer {
         if (!d.isOpen && shouldOpenGate) {
           d.isOpen = true;
           d.autoHoldTimer = 1.0;
-          if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(false);
+          if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(false, 'garage_rollup');
           this.adaptive.markShadowsDirty();
         } else if (d.isOpen) {
           if (keepOpenGate) d.autoHoldTimer = 0.8;
           else if (closeGateReady && d.autoHoldTimer <= 0) {
             d.isOpen = false;
-            if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(true);
+            if (this.autoDoorsReadyTimer <= 0) this.audio.playShutterClank(true, 'garage_rollup');
             this.adaptive.markShadowsDirty();
           }
         }
@@ -4565,7 +4660,7 @@ export class FirstPersonHouseExplorer {
         if (shouldOpen) {
           d.isOpen = true;
           d.autoHoldTimer = 0.50;
-          if (this.autoDoorsReadyTimer <= 0) this.audio.playDoor(d.kind === 'pocket');
+          if (this.autoDoorsReadyTimer <= 0) this.audio.playDoor(this._classifyDoorAudioKind(d), true);
           this.adaptive.markShadowsDirty();
         }
       } else {
@@ -4573,7 +4668,7 @@ export class FirstPersonHouseExplorer {
           d.autoHoldTimer = 0.45;
         } else if (dist > closeDist && d.autoHoldTimer <= 0) {
           d.isOpen = false;
-          if (this.autoDoorsReadyTimer <= 0) this.audio.playDoor(d.kind === 'pocket');
+          if (this.autoDoorsReadyTimer <= 0) this.audio.playDoor(this._classifyDoorAudioKind(d), false);
           this.adaptive.markShadowsDirty();
         }
       }
@@ -4784,21 +4879,38 @@ export class FirstPersonHouseExplorer {
         }
       }
 
-      // Spatial Storm Rain & Wind Howl Audio with realistic acoustic shelter muffling!
+      // Spatial Storm Rain, Roof-Material Resonance, Thunder & Wind Howl Audio!
       let stormMuffle = 1.0;
+      let roofKind = 'outdoor';
       if (this.currentFloor === -40) {
         const roofOpen = nullSilo ? nullSilo.roofProgress : 0;
         stormMuffle = 0.02 + roofOpen * 0.62;
-      } else if (this.currentFloor <= 0) stormMuffle = 0.02;
-      else if (this.activeBuilding === 'k11') {
+        roofKind = 'underground';
+      } else if (this.currentFloor <= 0) {
+        stormMuffle = 0.02;
+        roofKind = 'underground';
+      } else if (this.activeBuilding === 'k11') {
         const hatchOpen = doorOpenMap['DK11-W'] || doorOpenMap['DK11-R'];
         stormMuffle = hatchOpen ? 0.54 : 0.16;
+        roofKind = 'metal';
       } else if (this.activeBuilding === 'armor') {
         const shClosed = this.house.armorCamper?.shutters?.shuttersClosed;
         stormMuffle = shClosed ? 0.08 : 0.24;
-      } else if (this.activeBuilding === 'garage' || this.activeBuilding === 'container') stormMuffle = 0.34;
-      else if (this.activeBuilding !== 'courtyard') stormMuffle = 0.22;
-      this.audio.updateStorm(stormInt, stormMuffle);
+        roofKind = 'metal';
+      } else if (this.activeBuilding === 'garage' || this.activeBuilding === 'container' || this.activeBuilding === 'kei' || this.activeBuilding === 'storage') {
+        stormMuffle = 0.34;
+        roofKind = 'metal';
+      } else if (this.activeBuilding !== 'courtyard') {
+        stormMuffle = 0.22;
+        roofKind = 'timber';
+      }
+      this.audio.updateStorm(stormInt, stormMuffle, roofKind);
+
+      // Real-time Thunder Crack & Valley Rolling Echo synchronized with storm lightning bolts!
+      if (lightning > 0.72 && this._prevLightning <= 0.72 && stormInt > 0.15) {
+        this.audio.playThunder(140 + Math.random() * 540);
+      }
+      this._prevLightning = lightning;
     }
     this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
 
@@ -4833,32 +4945,43 @@ export class FirstPersonHouseExplorer {
     }
     posAttr.needsUpdate = true;
 
-    // Acoustic occlusion across all compound units, vehicles, garage, NULL EREA & K-11
+    // Acoustic occlusion & Full 3D Spatial Soundscape Environment State!
+    let isFullyOutdoors = false;
+    let acousticZone = 'wood_room';
     if (this.currentFloor === -40) {
       const roofOpen = nullSilo ? nullSilo.roofProgress : 0;
       this.audio.updateOcclusion(0.015 + roofOpen * 0.58);
+      acousticZone = 'cavern';
     } else if (this.currentFloor <= 0) {
       this.audio.updateOcclusion(0.015);
+      acousticZone = (this.currentFloor === -2 || this.currentFloor === -3) ? 'cavern' : 'wood_room';
     } else if (this.activeBuilding === 'k11') {
       const hatchOpen = doorOpenMap['DK11-W'] || doorOpenMap['DK11-R'];
       this.audio.updateOcclusion(hatchOpen ? 0.56 : 0.18);
+      acousticZone = 'metal_cabin';
     } else if (this.activeBuilding === 'armor') {
       const shClosed = this.house.armorCamper?.shutters?.shuttersClosed;
       const doorOpen = doorOpenMap['DAM-1'] || doorOpenMap['DAM-R'];
       this.audio.updateOcclusion(doorOpen ? 0.58 : (shClosed ? 0.06 : 0.16));
+      acousticZone = 'metal_cabin';
     } else if (this.activeBuilding === 'container') {
       this.audio.updateOcclusion(doorOpenMap['DCT-1'] ? 0.60 : 0.12);
+      acousticZone = 'metal_cabin';
     } else if (this.activeBuilding === 'garage') {
       const gateOpen = doorOpenMap['DG-N'] || doorOpenMap['DG-S'] || doorOpenMap['DG-W'];
       this.audio.updateOcclusion(gateOpen ? 0.72 : 0.25);
+      acousticZone = 'cavern';
     } else if (this.activeBuilding === 'village') {
       const vDoorOpen = doorOpenMap['DV1-1'] || doorOpenMap['DV2-1'] || doorOpenMap['DV3-1'] || doorOpenMap['DV4-1'] || doorOpenMap['DV5-1'];
       this.audio.updateOcclusion(vDoorOpen ? 0.72 : 0.28);
+      acousticZone = 'wood_room';
     } else if (this.activeBuilding === 'kei') {
       const keiOpen = doorOpenMap['DK-L'] || doorOpenMap['DK-R'] || doorOpenMap['DK-D'];
       this.audio.updateOcclusion(keiOpen ? 0.72 : 0.22);
+      acousticZone = 'metal_cabin';
     } else if (this.activeBuilding === 'camper') {
       this.audio.updateOcclusion(doorOpenMap['DC-1'] ? 0.62 : 0.16);
+      acousticZone = 'wood_room';
     } else {
       const lxA = this.playerPos.x - ANNEX.originX;
       const lzA = this.playerPos.z - ANNEX.originZ;
@@ -4870,13 +4993,15 @@ export class FirstPersonHouseExplorer {
       const onStorageExt =
         (this.activeFlight !== null && this.activeStairBuilding === 'storage') ||
         (this.currentFloor === 2 && this.activeBuilding === 'storage' && this.playerPos.z < STORAGE.originZ + 0.05);
-      const isFullyOutdoors = outside1F || onMainBal4F || onMainBal5F || onMainBal6F || onAnnexBal3F || onStorageExt;
+      isFullyOutdoors = outside1F || onMainBal4F || onMainBal5F || onMainBal6F || onAnnexBal3F || onStorageExt;
 
       if (isFullyOutdoors) {
         this.audio.updateOcclusion(1.0);
+        acousticZone = 'outdoor';
       } else if (this.activeBuilding === 'storage') {
         const sDoorOpen = (this.currentFloor === 1 && doorOpenMap['DS-1']) || (this.currentFloor === 2 && doorOpenMap['DS-2']);
         this.audio.updateOcclusion(sDoorOpen ? 0.58 : 0.08);
+        acousticZone = 'metal_cabin';
       } else {
         const d1Boost = this.currentFloor === 1 && doorOpenMap['D1-1']
           ? Math.max(0, 1 - Math.hypot(this.playerPos.x - 1.10, this.playerPos.z) / 4.0) * 0.85 : 0;
@@ -4897,6 +5022,57 @@ export class FirstPersonHouseExplorer {
         this.audio.updateOcclusion(Math.min(1.0, Math.max(d1Boost, da1Boost, balDoorBoost, windowBoost, atticWindBoost)));
       }
     }
+
+    // Proximity environmental beds: Kurosugi River & 12 Tributary Streams, Village Bamboo Spring, Hearth Fire, Granite Spa & Storm Landslides
+    const pxW = this.playerPos.x;
+    const pzW = this.playerPos.z;
+    const rvP = evalMainRiver(pzW);
+    let riverDist = Math.max(0, Math.abs(pxW - rvP.x) - rvP.halfWidth);
+    const tribP = evalClosestTributary(pxW, pzW);
+    if (tribP) riverDist = Math.min(riverDist, Math.max(0, tribP.dist - tribP.width * 0.5));
+    const springDist = Math.hypot(pxW - VILLAGE.well.x, pzW - VILLAGE.well.z);
+
+    let fireDist = 999;
+    if (this.currentFloor === 6 && this.activeBuilding === 'main' && propStates.fireplace_6f) {
+      fireDist = Math.hypot(pxW - 2.5, pzW - 8.2);
+    } else if (this.activeBuilding === 'armor' && this.house.armorCamper) {
+      const al = this.worldToArmorLocal(pxW, pzW);
+      fireDist = Math.hypot(al.lx - 1.35, al.lz - 5.2);
+    }
+
+    let landslideNear = 0;
+    const stormIntNow = this.terreno?.storm ? this.terreno.storm.getIntensity() : 0;
+    if (this.terreno?.storm && stormIntNow > 0.25 && this.terreno.storm.landslides) {
+      let minLsD = 9999;
+      for (let i = 0; i < this.terreno.storm.landslides.length; i++) {
+        const ls = this.terreno.storm.landslides[i];
+        if (!ls.active) continue;
+        const d = Math.hypot(pxW - ls.x, pzW - ls.z);
+        if (d < minLsD) minLsD = d;
+      }
+      if (minLsD < 140) {
+        landslideNear = 1.0 - minLsD / 140;
+        if ((elapsed - this._prevLandslideRumbleTime) > 5.5) {
+          this._prevLandslideRumbleTime = elapsed;
+          this.audio.playLandslideRumble(landslideNear);
+        }
+      }
+    }
+
+    const todNow = this.terreno?.getTimeOfDay ? this.terreno.getTimeOfDay() : null;
+    this.audio.updateEnvironment(dt, {
+      acousticZone,
+      isOutdoors: isFullyOutdoors && this.currentFloor >= 1,
+      isNight: todNow ? (todNow.id === 'night' || todNow.id === 'dusk') : false,
+      riverDist,
+      riverFlowBoost: stormIntNow,
+      springDist,
+      fireDist,
+      inSpa: this.currentFloor === -2,
+      inUnderground: this.currentFloor <= -1,
+      inSiloCavern: this.currentFloor === -40,
+      landslideNear,
+    });
 
     return { anyDoorAnimating, doorOpenMap, propStates };
   }
@@ -5101,34 +5277,6 @@ export class FirstPersonHouseExplorer {
       const dt = Math.max(0, Math.min(0.05, rawDtMs / 1000));
       const elapsed = Math.max(0, (now - start) / 1000);
       prev = now;
-
-      if (this.map3dActive && this.map3d) {
-        // Keep autonomous campers & K-11 airship (plus Silo-40 launch sequence!) cruising live while viewing the 3D map!
-        if (this.house.nullErea?.silo && (this.house.nullErea.silo.state === 'LAUNCH_OPENING' || this.house.nullErea.silo.state === 'STOW_CLOSING')) {
-          this.house.nullErea.silo.update(dt, elapsed, null);
-        }
-        if (this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11) {
-          this._updateAllVehicles(dt, elapsed);
-          this._updateAutomaticDoors(dt);
-        }
-        this.map3d.syncPlayerPose({
-          x: this.playerPos.x,
-          z: this.playerPos.z,
-          yaw: this.yaw,
-          camperPose: this.house.camper.pose,
-          keiPose: this.house.kei.pose,
-          armorPose: this.house.armorCamper ? this.house.armorCamper.pose : null,
-          k11Pose: this.house.airshipK11 ? this.house.airshipK11.pose : null,
-          autopilotRoutes: {
-            camper: this.autopilotRoutes.camper ? this.autopilotRoutes.camper.points : null,
-            armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
-            k11: this.autopilotRoutes.k11 ? this.autopilotRoutes.k11.points : null,
-          },
-        });
-        this.map3d.render(this.renderer, dt, elapsed);
-        if (this.callbacks.onAimChange) this.callbacks.onAimChange(null);
-        return;
-      }
 
       this._updateMovement(dt, elapsed);
       this._updateCameraTransform(elapsed);

@@ -350,8 +350,12 @@ export function createTerrenoLocalPlanner(geomorph, storm, neuralPolicy) {
     let worstReason = null;
 
     if (geomorph) {
+      const bHit = geomorph.queryBridgeAt ? geomorph.queryBridgeAt(cx, cz) : null;
       const rq = geomorph.roadIndex ? geomorph.roadIndex.queryDist(cx, cz) : { dist: 9999, width: 9.5 };
-      const onRoadBridge = rq.dist < (rq.width || 9.5) * 0.62;
+      const onRoadBridge = Boolean(bHit && bHit.onBridge) || rq.dist < (rq.width || 9.5) * 0.65;
+      if (bHit && bHit.hitGuardrail) {
+        return { hit: true, clearance: -0.2, reason: 'bridge_rail' };
+      }
       if (!onRoadBridge) {
         const rv = evalMainRiver(cz);
         if (Math.abs(cx - rv.x) < rv.halfWidth * 1.35) {
@@ -364,7 +368,7 @@ export function createTerrenoLocalPlanner(geomorph, storm, neuralPolicy) {
         }
       }
       const nrm = geomorph.getMacroNormalAt(cx, cz, 3.2);
-      if (nrm.slope > spec.cliffHardSlope * 0.95) {
+      if (!onRoadBridge && nrm.slope > spec.cliffHardSlope * 0.95) {
         return { hit: true, clearance: -0.6, reason: 'cliff' };
       }
       if (nrm.slope > spec.maxClimbSlope) {

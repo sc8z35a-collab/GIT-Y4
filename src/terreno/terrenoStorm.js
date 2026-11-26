@@ -395,6 +395,10 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
   function getFloodInfoAt(wx, wz) {
     const rv = evalMainRiver(wz);
     const effectiveWaterY = rv.waterY + floodRise;
+    const bHit = geomorph.queryBridgeAt ? geomorph.queryBridgeAt(wx, wz) : null;
+    if (bHit && bHit.onBridge && bHit.deckY > effectiveWaterY - 0.15) {
+      return { depth: 0, submerged: false, currentX: 0, currentZ: 0, waterY: effectiveWaterY, onBridge: true };
+    }
     const effectiveHalfW = rv.halfWidth + floodRise * 11.2;
     const distRiv = Math.abs(wx - rv.x);
     if (distRiv > effectiveHalfW + 12.0) {

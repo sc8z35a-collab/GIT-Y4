@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   TERRENO_WORLD,
+  MOUNTAIN_PEAKS,
   TRIBUTARIES,
   ROAD_NETWORK,
   evalMainRiver,
@@ -8,11 +9,13 @@ import {
 } from './terrenoConfig.js';
 
 /**
- * TERRENO 2.0 Engine — Non-Mountainous Multi-Biome Geomorphology Solver (60 km × 60 km = 3,600 km²)
- * Synthesizes seamless rolling hills, alluvial river plains, broadleaf beech/birch plateaus,
- * misty wetlands & reed marshes, expansive sunlit susuki grasslands, and southern pine flats,
- * with D8 hydrological wetness, gentle soil drainage, 21 non-carving terrain-conforming roads,
- * and exact CPU-GPU height parity via RGBA32F Float32 + RGBA8 Horizon Atlas.
+ * TERRENO 3.0 Engine — Real-World Japanese Mountain-Valley & Old-Growth Forest Geomorphology Solver
+ * (60 km × 60 km = 3,600 km²):
+ *   - 18 Geological Mountain Massifs with directional radiating ridge spurs & alpine granite summits
+ *   - Multi-Octave Domain-Warped Ridged Multifractal + Folded Foothill Strata
+ *   - Topological D8 Stream-Power Fluvial Erosion + 33° Granite Talus Thermal Relaxation
+ *   - Organic Winding Forestry Road Corridor Grading (smoothly driveable grades, ZERO river mud-dams!)
+ *   - Exact CPU-GPU Height Parity via RGBA32F Atlas + Shared Micro-Relief + Live 3D Bridge Deck Hook!
  */
 
 function hash2(ix, iz) {
@@ -35,8 +38,8 @@ function smoothNoise2D(x, z) {
   return a + (b - a) * ux + (c - a) * uz + (a - b - c + d) * ux * uz;
 }
 
-// Smooth organic rotated-octave FBM for gentle rolling hills, plateaus, & meadows (zero jagged peaks!)
-function gentleLandFbm(x, z, octaves = 4) {
+// Organic rotated-octave FBM for foothills, forest slopes & valleys
+function landFbm(x, z, octaves = 4) {
   let sum = 0.0;
   let amp = 0.52;
   let norm = 0.0;
@@ -55,9 +58,33 @@ function gentleLandFbm(x, z, octaves = 4) {
   return sum / norm;
 }
 
+// Sharp Geological Ridged Multifractal (sculpts authentic Japanese Alps knife-ridges & mountain spurs!)
+function ridgedFbm(x, z, octaves = 4) {
+  let sum = 0.0;
+  let amp = 0.56;
+  let weight = 1.0;
+  let norm = 0.0;
+  let px = x;
+  let pz = z;
+  const m00 = 1.62, m01 = -1.22, m10 = 1.22, m11 = 1.62;
+  for (let o = 0; o < octaves; o++) {
+    let n = 1.0 - Math.abs(smoothNoise2D(px, pz) * 2.0 - 1.0);
+    n = n * n * weight;
+    weight = Math.max(0.18, Math.min(1.0, n * 1.65));
+    sum += n * amp;
+    norm += amp;
+    const nx = m00 * px + m01 * pz + 23.7;
+    const nz = m10 * px + m11 * pz - 14.9;
+    px = nx;
+    pz = nz;
+    amp *= 0.48;
+  }
+  return sum / norm;
+}
+
 /**
- * Exact Micro-Relief Function — IDENTICAL math runs on CPU and in GLSL vertex shader!
- * Adds subtle organic soil undulation (0.3m..0.8m) without harsh crags or mountain rocks.
+ * Exact Micro-Relief Function — IDENTICAL math runs on CPU and in GLSL vertex/fragment shaders!
+ * Adds realistic forest-floor hummocks, mossy root mounds, natural soil undulations & valley swells.
  */
 function sinHash2(x, z) {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453123;
@@ -80,10 +107,11 @@ function glslCompatibleNoise(x, z) {
 
 export function evalSharedMicroRelief(x, z, suppressFactor) {
   if (suppressFactor >= 0.999) return 0.0;
-  const n1 = glslCompatibleNoise(x * 0.042, z * 0.042) - 0.5;
-  const n2 = glslCompatibleNoise(x * 0.14 + 19.3, z * 0.14 - 7.1) - 0.5;
-  const swell = glslCompatibleNoise(x * 0.018 - 4.2, z * 0.018 + 11.8) - 0.5;
-  const micro = n1 * 0.44 + n2 * 0.14 + swell * 0.56;
+  const swell = glslCompatibleNoise(x * 0.015 - 4.2, z * 0.015 + 11.8) - 0.5;
+  const n1 = glslCompatibleNoise(x * 0.046, z * 0.046) - 0.5;
+  const n2 = glslCompatibleNoise(x * 0.145 + 19.3, z * 0.145 - 7.1) - 0.5;
+  const hummock = glslCompatibleNoise(x * 0.34 - 11.1, z * 0.34 + 6.4) - 0.5;
+  const micro = swell * 1.15 + n1 * 0.62 + n2 * 0.22 + hummock * 0.08;
   return micro * (1.0 - suppressFactor);
 }
 
@@ -115,7 +143,45 @@ export function isInsideSouthRect(wx, wz, margin = 0.0) {
 }
 
 /**
- * Sample Catmull-Rom splines densely for ALL 21 natural terrain-conforming roads across 60 km × 60 km.
+ * Exact Analytical Query for Closest Tributary Stream Centerline & Half-Width.
+ */
+const TRIB_CACHE = TRIBUTARIES.map((tr, ti) => {
+  const rv = evalMainRiver(tr.z0);
+  return {
+    ...tr,
+    ti,
+    x0: rv.x,
+    y0: rv.bedY,
+    invLen: 1.0 / tr.len,
+  };
+});
+
+export function evalClosestTributary(wx, wz) {
+  let bestDist = 99999;
+  let bestHalfW = 0;
+  let bestTrib = null;
+  let bestAlong = 0;
+  for (let i = 0; i < TRIB_CACHE.length; i++) {
+    const tr = TRIB_CACHE[i];
+    const rx = wx - tr.x0;
+    const rz = wz - tr.z0;
+    const along = rx * tr.dirX + rz * tr.dirZ;
+    if (along < -30.0 || along > tr.len * 0.74 + 30.0) continue;
+    const meander = Math.sin(along * 0.0014 + tr.ti * 2.1) * 160.0 + Math.cos(along * 0.0036) * 52.0;
+    const perp = Math.abs(-rx * tr.dirZ + rz * tr.dirX - meander);
+    if (perp < bestDist) {
+      const u = Math.max(0.0, Math.min(1.0, along / (tr.len * 0.72)));
+      bestDist = perp;
+      bestHalfW = Math.max(5.5, tr.width * 0.16 * (1.25 - 0.55 * u));
+      bestTrib = tr;
+      bestAlong = along;
+    }
+  }
+  return { dist: bestDist, halfWidth: bestHalfW, trib: bestTrib, along: bestAlong };
+}
+
+/**
+ * Sample Catmull-Rom splines densely for ALL winding mountain forestry roads across 60 km × 60 km.
  */
 function sampleSingleRoadSpline(pts) {
   const dense = [];
@@ -129,7 +195,7 @@ function sampleSingleRoadSpline(pts) {
     const p2 = pts[i + 1];
     const p3 = isClosed ? pts[(i + 2) % (n - 1)] : pts[Math.min(n - 1, i + 2)];
     const segLen = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-    const segSamples = Math.max(8, Math.min(80, Math.ceil(segLen / 85.0)));
+    const segSamples = Math.max(10, Math.min(90, Math.ceil(segLen / 65.0)));
     for (let s = 0; s < segSamples; s++) {
       const t = s / segSamples;
       const t2 = t * t;
@@ -157,20 +223,19 @@ function buildDenseRoadNetwork() {
   return ROAD_NETWORK.map((road) => ({
     id: road.id,
     nameJp: road.nameJp,
-    width: road.width || 9.5,
+    width: road.width || 8.2,
     pts: sampleSingleRoadSpline(road.points),
   }));
 }
 
 /**
- * Zero-GC integer-keyed spatial hash indexing ALL segments across all 21 roads in the 60 km × 60 km world.
+ * Zero-GC integer-keyed spatial hash indexing ALL segments across all mountain forestry roads.
  */
 function buildRoadSpatialIndex(roadPolylines) {
-  const bucketSize = 180.0;
+  const bucketSize = 160.0;
   const buckets = new Map();
   const keyOf = (bx, bz) => ((bx + 4096) << 14) | ((bz + 4096) & 0x3fff);
 
-  // Flat typed segment arrays for ultra-fast cache-friendly queries
   let totalSegs = 0;
   for (let r = 0; r < roadPolylines.length; r++) {
     totalSegs += Math.max(0, roadPolylines[r].pts.length - 1);
@@ -198,7 +263,7 @@ function buildRoadSpatialIndex(roadPolylines) {
       segW[sIdx] = rw;
       segRoad[sIdx] = r;
 
-      const pad = 42.0;
+      const pad = 48.0;
       const minBx = Math.floor((Math.min(x0, x1) - pad) / bucketSize);
       const maxBx = Math.floor((Math.max(x0, x1) + pad) / bucketSize);
       const minBz = Math.floor((Math.min(z0, z1) - pad) / bucketSize);
@@ -215,7 +280,7 @@ function buildRoadSpatialIndex(roadPolylines) {
     }
   }
 
-  const NO_HIT = { dist: 9999, segIdx: -1, roadIdx: -1, t: 0, width: 9.5, ax: 0, az: 0, bx: 0, bz: 0 };
+  const NO_HIT = { dist: 9999, segIdx: -1, roadIdx: -1, t: 0, width: 8.2, ax: 0, az: 0, bx: 0, bz: 0 };
   return {
     pts: roadPolylines[0].pts,
     polylines: roadPolylines,
@@ -264,10 +329,9 @@ function buildRoadSpatialIndex(roadPolylines) {
 }
 
 /**
- * Gentle Lowland/Hillside Micro-Drainage & Curvature Tensor Pass:
- * Computes subtle natural soil drainage swales and surface curvature without sharp mountain ravines.
+ * Curvature & Ridge Tensor Pass: highlights sharp alpine ridges, rocky outcrops & damp gullies!
  */
-function applyGentleDrainagePass(heights, W, H, cellX, cellZ) {
+function applyRidgeCurvaturePass(heights, W, H, cellX, cellZ) {
   const ridgeTensor = new Float32Array(W * H);
   const inv2CellX = 0.5 / cellX;
   const inv2CellZ = 0.5 / cellZ;
@@ -281,7 +345,7 @@ function applyGentleDrainagePass(heights, W, H, cellX, cellZ) {
       const gx = (heights[idx + 1] - heights[idx - 1]) * inv2CellX;
       const gz = (heights[idx + W] - heights[idx - W]) * inv2CellZ;
       const slope = Math.sqrt(gx * gx + gz * gz);
-      const curv = Math.max(-1.0, Math.min(1.0, -lap * 0.45 + slope * 0.35));
+      const curv = Math.max(-1.0, Math.min(1.0, -lap * 0.16 + slope * 0.42));
       ridgeTensor[idx] = curv;
     }
   }
@@ -289,16 +353,15 @@ function applyGentleDrainagePass(heights, W, H, cellX, cellZ) {
 }
 
 /**
- * Topological D8 Flow Accumulation + Gentle Soil Drainage Smoothing:
- * Computes accurate watershed wetness across all 1,048,576 cells (60 km × 60 km)
- * and gently relaxes any excess slopes to soft pastoral angles (<= 14°).
+ * Topological D8 Stream-Power Fluvial Erosion + 33° Alpine Granite Talus Relaxation!
+ * Carves realistic branching mountain gullies, waterfalls & alluvial aprons while preserving
+ * natural dramatic steep ridges & cliffs across the Japanese mountain ranges!
  */
-function runGentleHydrologyAndFlow(heights, W, H, cellX, cellZ) {
+function runAlpineHydrologyAndErosion(heights, W, H, cellX, cellZ) {
   const N = W * H;
   const flowArea = new Float32Array(N);
   flowArea.fill(1.0);
 
-  // O(N) descending bucket sort by elevation
   let minH = 1e9, maxH = -1e9;
   for (let i = 0; i < N; i++) {
     const h = heights[i];
@@ -355,21 +418,21 @@ function runGentleHydrologyAndFlow(heights, W, H, cellX, cellZ) {
       const a = flowArea[idx];
       flowArea[bestNeighbor] += a;
 
-      // Very gentle lowland stream drainage (never carves deep gullies or cliffs!)
+      // Authentic Stream-Power Mountain Gully Incision (protects immediate compound & village pads)
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
       const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
       const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
       const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
-      if (dComp > 45.0 && dVill > 60.0) {
-        const incise = Math.min(3.8, 0.055 * Math.pow(a, 0.34) * Math.pow(bestSlope, 1.05));
-        const protect = quinticSmoothstep(45.0, 140.0, dComp) * quinticSmoothstep(60.0, 165.0, dVill);
+      if (dComp > 42.0 && dVill > 58.0) {
+        const incise = Math.min(26.0, 0.24 * Math.pow(a, 0.38) * Math.pow(bestSlope, 1.12));
+        const protect = quinticSmoothstep(42.0, 120.0, dComp) * quinticSmoothstep(58.0, 145.0, dVill);
         heights[idx] -= incise * protect;
       }
     }
   }
 
-  // Soft pastoral slope relaxation (~16° max soil repose angle -> guarantees smooth rolling hills!)
-  const reposeTan = Math.tan((16.0 * Math.PI) / 180.0);
+  // Realistic 34° Alpine Talus Thermal Relaxation (keeps majestic granite crags while preventing jagged spikes!)
+  const reposeTan = Math.tan((34.0 * Math.PI) / 180.0);
   const delta = new Float32Array(N);
   for (let pass = 0; pass < 2; pass++) {
     delta.fill(0);
@@ -382,7 +445,7 @@ function runGentleHydrologyAndFlow(heights, W, H, cellX, cellZ) {
           const diff = h - heights[nIdx];
           const maxDiff = reposeTan * dDist[d];
           if (diff > maxDiff) {
-            const transfer = (diff - maxDiff) * 0.24;
+            const transfer = (diff - maxDiff) * 0.26;
             delta[idx] -= transfer;
             delta[nIdx] += transfer;
           }
@@ -396,7 +459,7 @@ function runGentleHydrologyAndFlow(heights, W, H, cellX, cellZ) {
 }
 
 /**
- * Dual-Azimuth Horizon Shadow + 8-Direction Sky-View AO + Multi-Biome Canopy Density Atlas (1024×1024).
+ * Dual-Azimuth Mountain Horizon Shadow + 8-Direction Sky-View AO + Ecological Canopy Density Atlas (1024×1024).
  */
 function computeHorizonAndSkyViewAtlas(heights, flowArea, roadMaskArr, W, H, cellX, cellZ) {
   const out = new Uint8Array(W * H * 4);
@@ -495,11 +558,11 @@ function computeHorizonAndSkyViewAtlas(heights, flowArea, roadMaskArr, W, H, cel
         }
         occSum += peakTan / Math.sqrt(1.0 + peakTan * peakTan);
       }
-      let skyView = 1.0 - (occSum * 0.125) * 1.05;
-      if (skyView < 0.35) skyView = 0.35;
+      let skyView = 1.0 - (occSum * 0.125) * 1.15;
+      if (skyView < 0.28) skyView = 0.28;
       else if (skyView > 1.0) skyView = 1.0;
 
-      // Biome-driven macro forest canopy density (dense in valley & plateau, dappled on hills & south plain, open in meadows & wetlands!)
+      // Ecological treeline + slope + biome forest canopy density
       const ixL = ix > 0 ? ix - 1 : 0;
       const ixR = ix < W - 1 ? ix + 1 : W - 1;
       const gx = (heights[rowBase + ixR] - heights[rowBase + ixL]) * inv2CellX;
@@ -507,18 +570,20 @@ function computeHorizonAndSkyViewAtlas(heights, flowArea, roadMaskArr, W, H, cel
       const slope = Math.sqrt(gx * gx + gz * gz);
 
       const rw = evalRegionWeights(wx, wz);
-      const grovePatch = smoothNoise2D(wx * 0.00055 + 3.1, wz * 0.00055 - 5.4);
+      const grovePatch = smoothNoise2D(wx * 0.00065 + 3.1, wz * 0.00065 - 5.4);
       const biomeCanopy =
-        rw.valley * 0.88 +
-        rw.plateau * 0.94 +
-        rw.hills * (0.48 + 0.44 * grovePatch) +
-        rw.wetland * (0.20 + 0.35 * grovePatch) +
-        rw.meadow * (0.12 + 0.32 * grovePatch) +
-        rw.southPlain * (0.38 + 0.40 * grovePatch);
+        rw.valley * 0.94 +
+        rw.plateau * 0.96 +
+        rw.hills * (0.62 + 0.36 * grovePatch) +
+        rw.wetland * (0.34 + 0.38 * grovePatch) +
+        rw.meadow * (0.20 + 0.34 * grovePatch) +
+        rw.southPlain * (0.52 + 0.36 * grovePatch);
 
-      const slopeTree = 1.0 - quinticSmoothstep(0.50, 0.88, slope);
+      const asl = TERRENO_WORLD.baseElevationASL + h0;
+      const alpineTreeline = 1.0 - quinticSmoothstep(1060.0, 1420.0, asl);
+      const slopeTree = 1.0 - quinticSmoothstep(0.56, 0.92, slope);
       const distRiv = wx > rivX ? wx - rivX : rivX - wx;
-      const riverClear = quinticSmoothstep(rivHW + 3.0, rivHW + 22.0, distRiv);
+      const riverClear = quinticSmoothstep(rivHW + 2.0, rivHW + 20.0, distRiv);
       const roadClear = 1.0 - roadMaskArr[idx];
       const flowWet = Math.min(1.0, Math.log1p(flowArea[idx]) / 7.2);
       const dxComp = wx - compX;
@@ -527,7 +592,7 @@ function computeHorizonAndSkyViewAtlas(heights, flowArea, roadMaskArr, W, H, cel
       const dxVill = wx - villX;
       const dVill2 = dxVill * dxVill + dzVill * dzVill;
       const villClear = dVill2 < 3136.0 ? quinticSmoothstep(34.0, 56.0, Math.sqrt(dVill2)) : 1.0;
-      let canopy = biomeCanopy * slopeTree * riverClear * roadClear * compClear * villClear * (0.86 + 0.14 * flowWet);
+      let canopy = biomeCanopy * alpineTreeline * slopeTree * riverClear * roadClear * compClear * villClear * (0.86 + 0.14 * flowWet);
       if (canopy < 0.0) canopy = 0.0;
       else if (canopy > 1.0) canopy = 1.0;
 
@@ -542,7 +607,7 @@ function computeHorizonAndSkyViewAtlas(heights, flowArea, roadMaskArr, W, H, cel
 }
 
 /**
- * Master Geomorphology Builder — creates the entire 60 km × 60 km (3,600 km²) non-mountainous world & GPU atlases!
+ * Master Geomorphology Builder — constructs the 60 km × 60 km photorealistic Japanese Alpine-Valley World!
  */
 export function buildTerrenoGeomorphology() {
   const tStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -557,7 +622,6 @@ export function buildTerrenoGeomorphology() {
   const heights = new Float32Array(N);
   const roadMaskArr = new Float32Array(N);
 
-  // Build spatial index for ALL 21 terrain-conforming roads
   const roadPolylines = buildDenseRoadNetwork();
   const roadDense = roadPolylines[0].pts;
   const roadIndex = buildRoadSpatialIndex(roadPolylines);
@@ -576,10 +640,27 @@ export function buildTerrenoGeomorphology() {
     riverRowHW[iz] = rv.halfWidth;
   }
 
+  // Precompute mountain peak rotated axes & bounding boxes for fast evaluation
+  const peaksPrepared = MOUNTAIN_PEAKS.map((pk, pi) => {
+    const maxR = Math.max(pk.radiusX, pk.radiusZ) * 1.42;
+    return {
+      ...pk,
+      pi,
+      cosA: Math.cos(pk.ridgeAngle),
+      sinA: Math.sin(pk.ridgeAngle),
+      invRx: 1.0 / pk.radiusX,
+      invRz: 1.0 / pk.radiusZ,
+      minX: pk.x - maxR,
+      maxX: pk.x + maxR,
+      minZ: pk.z - maxR,
+      maxZ: pk.z + maxR,
+    };
+  });
+
   const tribPrepared = TRIBUTARIES.map((tr, ti) => {
     const rv = evalMainRiver(tr.z0);
     const zEnd = tr.z0 + tr.dirZ * (tr.len + 320.0);
-    const margin = tr.width * 4.2 + 240.0;
+    const margin = tr.width * 4.5 + 260.0;
     return {
       ...tr,
       ti,
@@ -592,7 +673,7 @@ export function buildTerrenoGeomorphology() {
   });
 
   // =========================================================================
-  // PASS 1: SEAMLESS 60km × 60km NON-MOUNTAINOUS MULTI-BIOME LANDFORM SYNTHESIS
+  // PASS 1: REAL-WORLD JAPANESE ALPINE-VALLEY, FOOTHILLS & MASSIF SYNTHESIS
   // =========================================================================
   const compX = TERRENO_WORLD.compoundCenterX;
   const compZ = TERRENO_WORLD.compoundCenterZ;
@@ -614,49 +695,55 @@ export function buildTerrenoGeomorphology() {
       const tr = tribPrepared[ti];
       if (wz >= tr.minZ && wz <= tr.maxZ) rowTribs.push(tr);
     }
+    const rowPeaks = [];
+    for (let pi = 0; pi < peaksPrepared.length; pi++) {
+      const pk = peaksPrepared[pi];
+      if (wz >= pk.minZ && wz <= pk.maxZ) rowPeaks.push(pk);
+    }
 
     for (let ix = 0; ix < W; ix++) {
       const idx = rowBase + ix;
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
       const dxRiv = wx > rivX ? wx - rivX : rivX - wx;
 
-      // 1a. Continuous C2-smooth regional biome weights (zero seams across 60 km!)
       const rw = evalRegionWeights(wx, wz);
 
-      // Soft multi-scale domain-warped FBM components for gentle non-mountain landforms
-      const warpX = (smoothNoise2D(wx * 0.00011 + 4.1, wz * 0.00011 - 2.3) - 0.5) * 2400.0;
-      const warpZ = (smoothNoise2D(wx * 0.00011 - 8.7, wz * 0.00011 + 6.9) - 0.5) * 2400.0;
-      const fMacro = gentleLandFbm((wx + warpX) * 0.00014, (wz + warpZ) * 0.00014, 4); // [0..1]
-      const fMed = gentleLandFbm(wx * 0.00042 + 12.4, wz * 0.00042 - 6.8, 3);          // [0..1]
-      const fFine = smoothNoise2D(wx * 0.0012 - 3.7, wz * 0.0012 + 9.2);               // [0..1]
+      // Multi-scale tectonic domain warp -> natural geological folding & foothill spurs!
+      const warpX = (smoothNoise2D(wx * 0.00018 + 4.1, wz * 0.00018 - 2.3) - 0.5) * 1900.0;
+      const warpZ = (smoothNoise2D(wx * 0.00018 - 8.7, wz * 0.00018 + 6.9) - 0.5) * 1900.0;
+      const fMacro = landFbm((wx + warpX) * 0.00020, (wz + warpZ) * 0.00020, 4);
+      const rMacro = ridgedFbm((wx + warpX * 0.8) * 0.00024 + 5.2, (wz + warpZ * 0.8) * 0.00024 - 3.8, 4);
+      const fMed = landFbm(wx * 0.00072 + 12.4, wz * 0.00072 - 6.8, 3);
+      const rMed = ridgedFbm(wx * 0.0014 - 7.3, wz * 0.0014 + 9.6, 3);
+      const fFine = smoothNoise2D(wx * 0.0028 - 3.7, wz * 0.0028 + 9.2);
 
-      // Broad natural gentle relief per landform type (ALL gentle, zero alpine peaks or cliffs!)
-      // 1) Central Alluvial River Valley & Cedar Plain (naturally level near NARROW-50 & Suginosato Village!)
-      const dSettlement = Math.min(
-        Math.hypot(wx - compX, dzComp),
-        Math.hypot(wx - villX, dzVill),
-      );
-      const settleCalm = quinticSmoothstep(220.0, 2200.0, dSettlement);
-      const valleyH = rivBed + 4.82 + (fMed * 5.2 + fFine * 1.4 - 2.2) * settleCalm;
+      // Tight settlement apron — real undulating forest foothills start ~75m from the house (NO 2.2km flat pancake!)
+      const dComp = Math.hypot(wx - compX, dzComp);
+      const dVill = Math.hypot(wx - villX, dzVill);
+      const dSettlement = Math.min(dComp, dVill);
+      const settleRelief = quinticSmoothstep(62.0, 260.0, dSettlement);
 
-      // 2) Rolling Green Hills & Pastoral Uplands (West / NW — graceful soft rolling swells, max ~68m)
-      const rollWave = 0.5 + 0.5 * Math.sin((wx + warpX * 0.4) * 0.00075 + Math.cos(wz * 0.00055) * 1.2);
-      const hillsH = rivBed + 14.0 + fMacro * 42.0 + rollWave * 14.0 + fMed * 8.0;
+      // 1a. Rich Multi-Biome Natural Mountain-Foothill Base Landforms
+      // Central Valley rises naturally into wooded valley flanks away from the river channel!
+      const valleyFlank = quinticSmoothstep(rivHW + 95.0, rivHW + 1450.0, dxRiv);
+      const valleyH = rivBed + 4.90 + (fMed * 16.0 + rMed * 18.0 + fFine * 4.5 - 4.0) * settleRelief
+        + valleyFlank * (48.0 * fMacro + 76.0 * rMacro);
 
-      // 3) Broadleaf Beech & Birch Woodland Plateau (North / NE — smooth softly-terraced tablelands)
-      const plateauStep = quinticSmoothstep(0.24, 0.72, fMacro);
-      const plateauH = rivBed + 18.0 + plateauStep * 48.0 + fMed * 10.0 + fFine * 2.6;
+      // Western Forested Mountain Foothills (dramatic terraced slopes & spurs)
+      const hillsH = rivBed + 32.0 + fMacro * 95.0 + rMacro * 145.0 + rMed * 28.0 + fMed * 16.0;
 
-      // 4) Misty Wetlands, Reed Marshes & Quiet Lake Basins (East — low peaceful wet flats)
-      const wetlandH = rivBed + 3.2 + (fMacro - 0.35) * 6.5 + (fMed - 0.5) * 3.0;
+      // Northern Ancient Beech & Birch Mountain Highland
+      const plateauH = rivBed + 42.0 + quinticSmoothstep(0.18, 0.78, fMacro) * 110.0 + rMacro * 135.0 + fMed * 22.0;
 
-      // 5) Expansive Sunlit Susuki Grasslands & Prairies (SW / Mid-South — sweeping rolling prairie waves)
-      const meadowH = rivBed + 8.5 + fMacro * 24.0 + fMed * 7.5 + fFine * 1.8;
+      // Eastern Misty Mountain-Basin Wetlands & Wooded Knoll Ridges
+      const wetlandH = rivBed + 5.0 + (fMacro - 0.25) * 28.0 + rMacro * 42.0 + fMed * 8.0;
 
-      // 6) Southern Alluvial Plains & Pine Flats (Far South — broad tranquil sandy-loam plains)
-      const southPlainH = rivBed + 6.2 + fMacro * 13.0 + fMed * 4.0 + fFine * 1.2;
+      // Southwestern Sunlit Susuki Upland Meadows & Pine Ridges
+      const meadowH = rivBed + 20.0 + fMacro * 68.0 + rMacro * 88.0 + fMed * 16.0;
 
-      // Seamless C2 weighted blend across all 6 landforms
+      // Southern Forested Valley & Red-Pine Bluffs
+      const southPlainH = rivBed + 14.0 + fMacro * 44.0 + rMacro * 56.0 + fMed * 12.0;
+
       let h =
         valleyH * rw.valley +
         hillsH * rw.hills +
@@ -665,30 +752,62 @@ export function buildTerrenoGeomorphology() {
         meadowH * rw.meadow +
         southPlainH * rw.southPlain;
 
-      // 1b. Gentle Natural River Floodplain & Channel (broad grassy banks — zero canyon cliffs!)
-      const riverBankEnv = quinticSmoothstep(rivHW * 0.9, rivHW + 380.0, dxRiv);
-      const riverFloor = rivBed + quinticSmoothstep(0.0, rivHW * 1.25, dxRiv) * (rivWaterY - rivBed + 1.85);
+      // 1b. Add 18 Sculpted Geological Mountain Massifs with Radiating Ridge Spurs!
+      // Carefully modulated away from Kurosugi River bed & settlements so passes stay lush and scenic!
+      const riverValleyCarve = quinticSmoothstep(rivHW + 55.0, rivHW + 520.0, dxRiv);
+      const peakClear = settleRelief * riverValleyCarve;
+      if (peakClear > 0.002) {
+        let peakAdd = 0.0;
+        for (let pi = 0; pi < rowPeaks.length; pi++) {
+          const pk = rowPeaks[pi];
+          if (wx < pk.minX || wx > pk.maxX) continue;
+          const dx = wx - pk.x;
+          const dz = wz - pk.z;
+          // Rotate into mountain ridge strike orientation
+          const lx = (dx * pk.cosA + dz * pk.sinA) * pk.invRx;
+          const lz = (-dx * pk.sinA + dz * pk.cosA) * pk.invRz;
+          // Subtle radiating geological ridge ribs (star-like alpine buttress spurs!)
+          const ang = Math.atan2(lz, lx);
+          const spurWarp = 1.0
+            + 0.14 * Math.cos(ang * 3.0 + pk.pi * 1.7)
+            + 0.08 * Math.sin(ang * 5.0 - pk.pi * 2.3);
+          const distN = Math.hypot(lx, lz) / spurWarp;
+          if (distN < 1.32) {
+            const baseProf = Math.pow(Math.max(0.0, 1.0 - distN / 1.32), 1.65 * pk.sharpness);
+            // Multiply with local ridged multifractal so summits have authentic craggy alpine spines!
+            const ridgeSculpt = 0.58 + 0.56 * rMacro + 0.24 * rMed;
+            const contrib = pk.height * baseProf * ridgeSculpt;
+            if (contrib > peakAdd) peakAdd = contrib + peakAdd * 0.22;
+            else peakAdd += contrib * 0.28;
+          }
+        }
+        h += peakAdd * peakClear;
+      }
+
+      // 1c. Natural Mountain River Floodplain & Cobble Valley Floor (smooth stepped terraces)
+      const riverBankEnv = quinticSmoothstep(rivHW * 0.95, rivHW + 210.0, dxRiv);
+      const riverFloor = rivBed + quinticSmoothstep(0.0, rivHW * 1.25, dxRiv) * (rivWaterY - rivBed + 2.4);
       h = riverFloor + (h - riverFloor) * riverBankEnv;
 
-      // 1c. 12 Gentle Shallow Rural Tributary Streams (soft grassy swales, never deep gorges!)
+      // 1d. 12 Cascading Mountain Tributary Valleys carved naturally through forested ridges
       for (let ti = 0; ti < rowTribs.length; ti++) {
         const tr = rowTribs[ti];
         const rx = wx - tr.x0;
         const rz = wz - tr.z0;
         const along = rx * tr.dirX + rz * tr.dirZ;
-        if (along < -60.0 || along > tr.len + 280.0) continue;
+        if (along < -60.0 || along > tr.len + 260.0) continue;
         const meander = Math.sin(along * 0.0014 + tr.ti * 2.1) * 160.0 + Math.cos(along * 0.0036) * 52.0;
         const perp = Math.abs(-rx * tr.dirZ + rz * tr.dirX - meander);
         const u = along < 0.0 ? 0.0 : (along > tr.len ? 1.0 : along * tr.invLen);
-        const halfW = tr.width * (1.25 - 0.45 * u);
-        if (perp < halfW * 3.4) {
+        const halfW = tr.width * (1.20 - 0.42 * u);
+        if (perp < halfW * 3.2) {
           const swaleEnv =
-            (1.0 - quinticSmoothstep(0.0, halfW * 3.2, perp))
-            * (1.0 - u * 0.85)
-            * quinticSmoothstep(-60.0, 160.0, along)
-            * settleCalm;
-          const targetBed = h - tr.depth * (0.45 + 0.55 * (1.0 - u));
-          h = h * (1.0 - swaleEnv * 0.42) + targetBed * (swaleEnv * 0.42);
+            (1.0 - quinticSmoothstep(0.0, halfW * 3.0, perp))
+            * (1.0 - u * 0.80)
+            * quinticSmoothstep(-60.0, 150.0, along)
+            * settleRelief;
+          const targetBed = h - tr.depth * (0.42 + 0.58 * (1.0 - u));
+          h = h * (1.0 - swaleEnv * 0.48) + targetBed * (swaleEnv * 0.48);
         }
       }
 
@@ -697,18 +816,43 @@ export function buildTerrenoGeomorphology() {
   }
 
   // =========================================================================
-  // PASS 2: GENTLE CURVATURE & MICRO-DRAINAGE TENSOR
+  // PASS 2: RIDGE CURVATURE TENSOR + D8 FLUVIAL EROSION & 34° TALUS REPOSE
   // =========================================================================
-  const ridgeTensor = applyGentleDrainagePass(heights, W, H, cellX, cellZ);
+  const flowArea = runAlpineHydrologyAndErosion(heights, W, H, cellX, cellZ);
+  const ridgeTensor = applyRidgeCurvaturePass(heights, W, H, cellX, cellZ);
 
   // =========================================================================
-  // PASS 3: D8 HYDROLOGICAL FLOW ACCUMULATION & PASTORAL SLOPE RELAXATION
+  // PASS 3: CLEAN RIVER CHANNEL + SMOOTH MOUNTAIN ROAD CORRIDOR GRADING + FLUSH SETTLEMENTS
   // =========================================================================
-  const flowArea = runGentleHydrologyAndFlow(heights, W, H, cellX, cellZ);
+  // Note: Roads NEVER create ugly dirt causeways across rivers — the riverbed stays open & flowing
+  // underneath our real 3D Architectural Bridges (terrenoBridges.js)!
+  // Gently relax steep cross-slopes right along road corridors so cars climb mountain passes realistically!
+  const roadSmoothHeights = new Float32Array(heights);
+  for (let pass = 0; pass < 3; pass++) {
+    for (let iz = 2; iz < H - 2; iz++) {
+      const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
+      const rivX = riverRowX[iz];
+      const rivHW = riverRowHW[iz];
+      for (let ix = 2; ix < W - 2; ix++) {
+        const idx = iz * W + ix;
+        const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
+        const rq = roadIndex.queryDist(wx, wz);
+        if (rq.segIdx >= 0 && rq.dist < 85.0 && Math.abs(wx - rivX) > rivHW + 38.0) {
+          const avg = (
+            heights[idx - 1] + heights[idx + 1] +
+            heights[idx - W] + heights[idx + W] +
+            heights[idx - 2] + heights[idx + 2] +
+            heights[idx - 2 * W] + heights[idx + 2 * W] +
+            heights[idx] * 2.0
+          ) * 0.1;
+          const wRoad = 1.0 - quinticSmoothstep(12.0, 85.0, rq.dist);
+          roadSmoothHeights[idx] = heights[idx] * (1.0 - wRoad * 0.72) + avg * (wRoad * 0.72);
+        }
+      }
+    }
+    heights.set(roadSmoothHeights);
+  }
 
-  // =========================================================================
-  // PASS 4: CLEAN RIVER CHANNEL + 21 NON-CARVING ROADS + FLUSH SETTLEMENT LOCKS
-  // =========================================================================
   for (let iz = 0; iz < H; iz++) {
     const wz = minZ + (iz / (H - 1)) * TERRENO_WORLD.depth;
     const rivX = riverRowX[iz];
@@ -720,38 +864,31 @@ export function buildTerrenoGeomorphology() {
       const idx = iz * W + ix;
       const wx = minX + (ix / (W - 1)) * TERRENO_WORLD.width;
 
-      // 4a. Gentle shallow gravel riverbank shaping
+      // 3a. Clean Natural Emerald Mountain River Channel & Gravel Banks (open under every 3D Bridge!)
       const dxRiv = Math.abs(wx - rivX);
-      if (dxRiv < rivHW + 68.0) {
-        const bankBenchY = rivWaterY + 1.45;
+      if (dxRiv < rivHW + 62.0) {
+        const bankBenchY = rivWaterY + 2.25;
         let targetRivY;
-        if (dxRiv <= rivHW * 0.82) {
+        if (dxRiv <= rivHW * 0.80) {
           targetRivY = rivBed;
-        } else if (dxRiv <= rivHW + 16.0) {
-          const bankT = quinticSmoothstep(rivHW * 0.82, rivHW + 12.0, dxRiv);
+        } else if (dxRiv <= rivHW + 18.0) {
+          const bankT = quinticSmoothstep(rivHW * 0.80, rivHW + 15.0, dxRiv);
           targetRivY = rivBed + (bankBenchY - rivBed) * bankT;
         } else {
-          targetRivY = bankBenchY + (dxRiv - (rivHW + 16.0)) * 0.06;
+          targetRivY = bankBenchY + (dxRiv - (rivHW + 18.0)) * 0.11;
         }
-        const rivEnv = 1.0 - quinticSmoothstep(rivHW + 14.0, rivHW + 66.0, dxRiv);
+        const rivEnv = 1.0 - quinticSmoothstep(rivHW + 14.0, rivHW + 60.0, dxRiv);
         heights[idx] = heights[idx] * (1.0 - rivEnv) + targetRivY * rivEnv;
       }
 
-      // 4b. ZERO-CARVING 21-ROAD NETWORK:
-      // Roads drape naturally over untouched terrain (never cutting or slicing any hill!).
-      // Only across wet river channels do roads rise smoothly onto a low dry ford/causeway.
+      // 3b. Macro road mask (crisp 1.0m detail is rendered via uLocalDetailMap in clipmap!)
       const rq = roadIndex.queryDist(wx, wz);
-      if (rq.segIdx >= 0 && rq.dist < 32.0) {
+      if (rq.segIdx >= 0 && rq.dist < 30.0) {
         const halfW = rq.width * 0.5;
-        roadMaskArr[idx] = 1.0 - quinticSmoothstep(halfW * 0.85, halfW + 5.0, rq.dist);
-        if (dxRiv < rivHW + 22.0 && heights[idx] < rivWaterY + 0.72) {
-          const causewayT = (1.0 - quinticSmoothstep(halfW + 1.5, halfW + 11.0, rq.dist))
-            * (1.0 - quinticSmoothstep(rivHW + 4.0, rivHW + 22.0, dxRiv));
-          heights[idx] = heights[idx] * (1.0 - causewayT) + (rivWaterY + 0.72) * causewayT;
-        }
+        roadMaskArr[idx] = 1.0 - quinticSmoothstep(halfW * 0.85, halfW + 6.0, rq.dist);
       }
 
-      // 4c. Natural flush settlement settling (natural terrain is ALREADY ~ -1.2m / -0.35m flat plain -> zero carving!)
+      // 3c. Tight Flush Compound & Suginosato Village Terraces
       const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
       if (dVill < TERRENO_WORLD.villageBlendRadius) {
         const vLockT = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius, TERRENO_WORLD.villageBlendRadius, dVill);
@@ -766,7 +903,6 @@ export function buildTerrenoGeomorphology() {
     }
   }
 
-  // Sample natural ground elevations along primary trunk road for backward-compatible consumers
   const sampleGridH = (wx, wz) => {
     const u = Math.max(0, Math.min(W - 1.001, ((wx - minX) / TERRENO_WORLD.width) * (W - 1)));
     const v = Math.max(0, Math.min(H - 1.001, ((wz - minZ) / TERRENO_WORLD.depth) * (H - 1)));
@@ -784,7 +920,7 @@ export function buildTerrenoGeomorphology() {
   }
 
   // =========================================================================
-  // PASS 5: PACK RGBA32F GEOMORPHOLOGY ATLAS + RGBA8 DUAL-AZIMUTH HORIZON ATLAS
+  // PASS 4: PACK RGBA32F GEOMORPHOLOGY ATLAS + RGBA8 DUAL-AZIMUTH HORIZON ATLAS
   // =========================================================================
   const geoRGBA = new Float32Array(N * 4);
   for (let iz = 0; iz < H; iz++) {
@@ -800,21 +936,21 @@ export function buildTerrenoGeomorphology() {
       // R: exact float32 elevation (m)
       geoRGBA[o4] = heights[idx];
 
-      // G: hydrological wetness [0..1] combining D8 flow accumulation, main river proximity, & wetland region
-      const d8Wet = Math.min(1.0, Math.log1p(flowArea[idx]) / 7.4);
-      const rivWet = 1.0 - quinticSmoothstep(rivHW * 0.9, rivHW + 32.0, Math.abs(wx - rivX));
+      // G: hydrological wetness [0..1]
+      const d8Wet = Math.min(1.0, Math.log1p(flowArea[idx]) / 7.2);
+      const rivWet = 1.0 - quinticSmoothstep(rivHW * 0.9, rivHW + 30.0, Math.abs(wx - rivX));
       const marshWet = rw.wetland * (0.48 + 0.44 * smoothNoise2D(wx * 0.0007 + 2.1, wz * 0.0007 - 4.3));
       geoRGBA[o4 + 1] = Math.min(1.0, Math.max(d8Wet, rivWet, marshWet));
 
-      // B: curvature / gentle terrain relief tensor [-1..+1]
+      // B: geological ridge/curvature tensor [-1..+1]
       geoRGBA[o4 + 2] = ridgeTensor[idx];
 
-      // A: road, compound & village micro-suppression mask [0..1]
+      // A: road, compound & village micro-relief suppression mask [0..1]
       const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
-      const compMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, 52.0, dComp);
+      const compMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, 46.0, dComp);
       const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
-      const villMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius - 2.0, TERRENO_WORLD.villageFlatRadius + 24.0, dVill);
-      geoRGBA[o4 + 3] = Math.max(compMask, villMask, roadMaskArr[idx] * 0.92);
+      const villMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.villageFlatRadius - 2.0, TERRENO_WORLD.villageFlatRadius + 22.0, dVill);
+      geoRGBA[o4 + 3] = Math.max(compMask, villMask, roadMaskArr[idx] * 0.95);
     }
   }
 
@@ -869,7 +1005,21 @@ export function buildTerrenoGeomorphology() {
     (sr.minZ + sr.maxZ) * 0.5,
   ).hMacro;
 
-  function getHeightAt(wx, wz) {
+  // Live 3D Bridge Query Hook (registered by terrenoBridges.js right after geomorph build!)
+  let bridgeQueryFn = null;
+  let bridgeList = [];
+  function setBridgeSystem(queryFn, list = []) {
+    bridgeQueryFn = queryFn;
+    bridgeList = list;
+  }
+  function queryBridgeAt(wx, wz) {
+    return bridgeQueryFn ? bridgeQueryFn(wx, wz) : null;
+  }
+
+  /**
+   * Bare natural terrain height (excluding elevated bridge decks — used by water & bridge piers!).
+   */
+  function getTerrainHeightAt(wx, wz) {
     const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
     if (dComp <= TERRENO_WORLD.compoundFlatRadius - 2.0) {
       return TERRENO_WORLD.compoundGroundY;
@@ -881,8 +1031,28 @@ export function buildTerrenoGeomorphology() {
     const g = sampleGeoBilinear(wx, wz);
     const sW = evalSouthRectWeight(wx, wz);
     if (sW >= 0.999) return southRectY;
-    const hNat = g.hMacro + evalSharedMicroRelief(wx, wz, g.roadPad);
+    // Suppress micro-relief smoothly on road corridors (exact road distance, not coarse 58m atlas!)
+    const rq = roadIndex.queryDist(wx, wz);
+    const exactRoadSup = rq.segIdx >= 0 && rq.dist < rq.width * 0.72 + 2.0
+      ? (1.0 - quinticSmoothstep(rq.width * 0.45, rq.width * 0.72 + 2.0, rq.dist))
+      : 0.0;
+    const suppress = Math.max(g.roadPad, exactRoadSup);
+    const hNat = g.hMacro + evalSharedMicroRelief(wx, wz, suppress);
     return sW > 0.0 ? (hNat * (1.0 - sW) + southRectY * sW) : hNat;
+  }
+
+  /**
+   * Master Walkable / Driveable Surface Height: seamlessly lifts onto EVERY 3D Bridge Deck & Approach Ramp!
+   */
+  function getHeightAt(wx, wz) {
+    const hTerrain = getTerrainHeightAt(wx, wz);
+    if (bridgeQueryFn) {
+      const bHit = bridgeQueryFn(wx, wz);
+      if (bHit && bHit.onBridge && bHit.deckY > hTerrain - 0.15) {
+        return Math.max(hTerrain, bHit.deckY);
+      }
+    }
+    return hTerrain;
   }
 
   function getNormalAt(wx, wz, step = 1.2) {
@@ -898,6 +1068,13 @@ export function buildTerrenoGeomorphology() {
   }
 
   function getMacroNormalAt(wx, wz, step = 3.0) {
+    if (bridgeQueryFn) {
+      const bHit = bridgeQueryFn(wx, wz);
+      if (bHit && bHit.onBridge) {
+        // Bridges always present a smooth engineered road grade to vehicles & autopilot!
+        return { x: bHit.normalX || 0, y: bHit.normalY || 1, z: bHit.normalZ || 0, slope: bHit.slope || 0.04 };
+      }
+    }
     const hL = sampleGeoBilinear(wx - step, wz).hMacro;
     const hR = sampleGeoBilinear(wx + step, wz).hMacro;
     const hD = sampleGeoBilinear(wx, wz - step).hMacro;
@@ -915,26 +1092,32 @@ export function buildTerrenoGeomorphology() {
     const asl = TERRENO_WORLD.baseElevationASL + y;
     const n = getNormalAt(wx, wz, 2.0);
     const rv = evalMainRiver(wz);
-    const inRiver = Math.abs(wx - rv.x) < rv.halfWidth * 0.95 && y < rv.waterY + 0.4;
+    const bHit = queryBridgeAt(wx, wz);
+    const onBridge = Boolean(bHit && bHit.onBridge);
+    const inRiver = !onBridge && Math.abs(wx - rv.x) < rv.halfWidth * 0.95 && y < rv.waterY + 0.4;
     const dComp = Math.hypot(wx - TERRENO_WORLD.compoundCenterX, wz - TERRENO_WORLD.compoundCenterZ);
     const dVill = Math.hypot(wx - TERRENO_WORLD.villageCenterX, wz - TERRENO_WORLD.villageCenterZ);
     const inVillage = dVill < TERRENO_WORLD.villageFlatRadius;
-    const isRoad = g.roadPad > 0.42 && dComp > 22.0 && !inVillage;
+    const rq = roadIndex.queryDist(wx, wz);
+    const isRoad = (rq.segIdx >= 0 && rq.dist < rq.width * 0.56) && dComp > 22.0 && !inVillage;
     const rw = evalRegionWeights(wx, wz);
 
     const inNullErea = isInsideSouthRect(wx, wz, 2.0);
-    let zoneJp = 'スギ・ヒノキ平地林';
+    let zoneJp = '黒杉・紅葉の原生渓谷林';
     if (inNullErea) zoneJp = 'NULL EREA・地下40m飛行船基地';
+    else if (onBridge) zoneJp = bHit.bridge.nameJp || '黒杉川大橋';
     else if (inVillage) zoneJp = '杉ノ郷集落';
     else if (inRiver) zoneJp = '黒杉川の清流';
-    else if (isRoad) zoneJp = 'カントリーロード';
+    else if (isRoad) zoneJp = '山岳森林ロード';
+    else if (asl > 1180) zoneJp = '高山岩稜・雪渓帯';
+    else if (asl > 860) zoneJp = '亜高山針葉樹林帯';
     else {
       let bestW = rw.valley;
-      if (rw.hills > bestW) { bestW = rw.hills; zoneJp = '緑のなだらか丘陵'; }
-      if (rw.plateau > bestW) { bestW = rw.plateau; zoneJp = 'ブナ・白樺の森林台地'; }
-      if (rw.wetland > bestW) { bestW = rw.wetland; zoneJp = '水郷湿原・葦原'; }
-      if (rw.meadow > bestW) { bestW = rw.meadow; zoneJp = 'ススキ大草原'; }
-      if (rw.southPlain > bestW) { bestW = rw.southPlain; zoneJp = '南部松原平野'; }
+      if (rw.hills > bestW) { bestW = rw.hills; zoneJp = '西嶺もみじ・白樺山麓'; }
+      if (rw.plateau > bestW) { bestW = rw.plateau; zoneJp = '北部ブナ原生林高地'; }
+      if (rw.wetland > bestW) { bestW = rw.wetland; zoneJp = '東水郷・柳沢湿原'; }
+      if (rw.meadow > bestW) { bestW = rw.meadow; zoneJp = '南西ススキ高原・赤松尾根'; }
+      if (rw.southPlain > bestW) { bestW = rw.southPlain; zoneJp = '南部アカマツ渓谷林'; }
     }
 
     return {
@@ -947,6 +1130,8 @@ export function buildTerrenoGeomorphology() {
       roadPad: g.roadPad,
       regions: rw,
       isRoad,
+      onBridge,
+      bridge: bHit ? bHit.bridge : null,
       inRiver,
       inVillage,
       riverY: rv.waterY,
@@ -976,6 +1161,10 @@ export function buildTerrenoGeomorphology() {
     minElev,
     maxElev,
     bakeMs,
+    get bridges() { return bridgeList; },
+    setBridgeSystem,
+    queryBridgeAt,
+    getTerrainHeightAt,
     getHeightAt,
     getNormalAt,
     getMacroNormalAt,

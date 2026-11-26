@@ -12,22 +12,26 @@ import {
   applyAtmospherePresetToUniforms,
 } from './terrenoAtmosphereGlsl.js';
 import { createTerrenoClipmap } from './terrenoClipmap.js';
+import { createTerrenoBridges } from './terrenoBridges.js';
 import { createTerrenoWater } from './terrenoWater.js';
 import { createTerrenoForest } from './terrenoForest.js';
 import { createTerrenoMap2D } from './terrenoMap2d.js';
-import { createTerrenoMap3D } from './terrenoMap3d.js';
 import { createTerrenoStorm } from './terrenoStorm.js';
 import { createTerrenoAutopilot } from './terrenoAutopilot.js';
 
 /**
- * TERRENO 2.0 Engine — Unified 60 km × 60 km (3,600.0 km²) Non-Mountainous Countryside & Nature World Controller.
+ * TERRENO 3.0 Engine — Unified 60 km × 60 km (3,600.0 km²) Real-World Japanese Mountain-Valley Forest,
+ * Architectural 3D River Bridges & 2D Cartographic Map Controller.
  */
 export function createTerrenoEngine(scene, initialTodId = 'day') {
   const root = new THREE.Group();
   root.name = 'TERRENO_WORLD_60x60km';
 
-  // 1. Bake 60km × 60km multi-biome watershed & dual-azimuth horizon shadow atlas
+  // 1. Bake 60km × 60km alpine-valley geomorphology & dual-azimuth horizon shadow atlas
   const geomorph = buildTerrenoGeomorphology();
+
+  // 2. Construct ALL 3D Architectural River & Tributary Bridges (registers live deck heights on geomorph!)
+  const bridges = createTerrenoBridges(geomorph);
 
   let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'day';
   const atmoUniforms = createSharedAtmosphereUniforms(currentTodId, geomorph);
@@ -39,6 +43,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   const autopilot = createTerrenoAutopilot(geomorph, storm);
 
   root.add(clipmap.group);
+  root.add(bridges.group);
   root.add(water.group);
   root.add(forest.group);
   root.add(storm.group);
@@ -49,7 +54,6 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   forest.update(initPos);
 
   let map2dInstance = null;
-  let map3dInstance = null;
   let prevElapsed = 0;
 
   function setTimeOfDay(presetId) {
@@ -106,13 +110,6 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     return map2dInstance;
   }
 
-  function getOrCreateMap3D() {
-    if (!map3dInstance) {
-      map3dInstance = createTerrenoMap3D(geomorph);
-    }
-    return map3dInstance;
-  }
-
   function getStats() {
     const fStats = forest.getStats();
     return {
@@ -125,6 +122,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
       minElevationASL: Math.round(TERRENO_WORLD.baseElevationASL + geomorph.minElev),
       maxElevationASL: Math.round(TERRENO_WORLD.baseElevationASL + geomorph.maxElev),
       clipmapRings: clipmap.rings.length,
+      bridgeCount: bridges.bridges.length,
       timeOfDay: currentTodId,
       stormIntensity: Math.round(storm.getIntensity() * 100) / 100,
       floodRiseM: Math.round(storm.getFloodRise() * 10) / 10,
@@ -139,6 +137,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     landmarks: TERRENO_LANDMARKS,
     presets: ATMOSPHERE_PRESETS,
     geomorph,
+    bridges,
     atmoUniforms,
     clipmap,
     water,
@@ -146,8 +145,10 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     storm,
     autopilot,
     evalMainRiver,
+    queryBridgeAt: bridges.queryBridgeAt,
     getHeightAt: getHeightAtWithLandslides,
     getRawHeightAt: geomorph.getHeightAt,
+    getTerrainHeightAt: geomorph.getTerrainHeightAt,
     getNormalAt: geomorph.getNormalAt,
     getMacroNormalAt: geomorph.getMacroNormalAt,
     sampleGeoBilinear: geomorph.sampleGeoBilinear,
@@ -162,7 +163,6 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     setVisible,
     update,
     getOrCreateMap2D,
-    getOrCreateMap3D,
     getStats,
   };
 }
