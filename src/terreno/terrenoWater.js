@@ -139,22 +139,19 @@ float sampleBedMacro(vec2 xz) {
   return mix(mix(h00, h10, f.x), mix(h01, h11, f.x), f.y);
 }
 
-// Returns vec2(minDist, cellHash) — for domed rounded stones, fade stone mask to 0 before cell boundary!
+// Returns vec2(minDist, cellHash) — fast 2x2 rounded river cobble cell search
 vec2 wVoronoi(vec2 p) {
   vec2 n = floor(p);
   vec2 f = fract(p);
   float md = 8.0;
   float id = 0.0;
-  for (int j = -1; j <= 1; j++) {
-    for (int i = -1; i <= 1; i++) {
-      vec2 g = vec2(float(i), float(j));
-      vec2 o = wHash2(n + g) * 0.78 + 0.11;
+  for (int j = 0; j <= 1; j++) {
+    for (int i = 0; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j)) - step(f, vec2(0.5));
+      vec2 o = wHash2(n + g) * 0.72 + 0.14;
       vec2 r = g + o - f;
       float d = dot(r, r);
-      if (d < md) {
-        md = d;
-        id = o.x;
-      }
+      if (d < md) { md = d; id = o.x; }
     }
   }
   return vec2(sqrt(md), id);
@@ -333,19 +330,34 @@ void main() {
 }
 `;
 
-function buildMainRiverGeometry(geomorph) {
-  const segsZ = 2200;
-  const segsX = 16;
+function buildUnifiedHydrologyGeometry(geomorph) {
+  const segsZ = 640;
+  const segsX = 6;
   const zMin = TERRENO_WORLD.minZ + 20;
   const zMax = TERRENO_WORLD.maxZ - 20;
   const dz = (zMax - zMin) / segsZ;
+  const rawH = geomorph.getTerrainHeightAt || geomorph.getHeightAt;
 
-  const positions = [];
-  const normals = [];
-  const metas = [];
-  const indices = [];
+  // Pre-calculate exact vertex & index capacities across Main River + all 12 Tributaries -> ZERO reallocation!
+  const tribSegs = 40;
+  const tribSegsX = 3;
+  const mainVerts = (segsZ + 1) * (segsX + 1);
+  const tribVertsEach = (tribSegs + 1) * (tribSegsX + 1);
+  const totalVerts = mainVerts + TRIBUTARIES.length * tribVertsEach;
+  const mainTris = segsZ * segsX * 2;
+  const tribTrisEach = tribSegs * tribSegsX * 2;
+  const totalIdx = (mainTris + TRIBUTARIES.length * tribTrisEach) * 3;
 
-  const centerPts = [];
+  const positions = new Float32Array(totalVerts * 3);
+  const normals = new Float32Array(totalVerts * 3);
+  const metas = new Float32Array(totalVerts * 4);
+  const indices = new Uint32Array(totalIdx);
+
+  let vCursor = 0;
+  let iCursor = 0;
+
+  // 1. Main River Kurosugigawa
+  const centerPts = new Array(segsZ + 1);
   let accumDist = 0.0;
   for (let i = 0; i <= segsZ; i++) {
     const z = zMin + i * dz;
@@ -354,13 +366,14 @@ function buildMainRiverGeometry(geomorph) {
       const prev = centerPts[i - 1];
       accumDist += Math.hypot(rv.x - prev.x, z - prev.z);
     }
-    centerPts.push({ x: rv.x, z, waterY: rv.waterY, halfWidth: rv.halfWidth, flowDist: accumDist });
+    centerPts[i] = { x: rv.x, z, waterY: rv.waterY, halfWidth: rv.halfWidth, flowDist: accumDist };
   }
 
+  const mainBaseV = vCursor;
   for (let i = 0; i <= segsZ; i++) {
     const p = centerPts[i];
-    const pPrev = centerPts[Math.max(0, i - 1)];
-    const pNext = centerPts[Math.min(segsZ, i + 1)];
+    const pPrev = centerPts[i > 0 ? i - 1 : 0];
+    const pNext = centerPts[i < segsZ ? i + 1 : segsZ];
     const tx = pNext.x - pPrev.x;
     const tz = pNext.z - pPrev.z;
     const tLen = Math.hypot(tx, tz) || 1.0;
@@ -371,120 +384,109 @@ function buildMainRiverGeometry(geomorph) {
     const slope = Math.max(0.002, (pPrev.waterY - pNext.waterY) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
 
     const ribbonHW = p.halfWidth * 1.38;
-    const rawH = geomorph.getTerrainHeightAt || geomorph.getHeightAt;
+    const centerBed = rawH(p.x, p.z);
+    const safeWaterY = Math.max(p.waterY, Math.min(p.waterY + 0.4, centerBed + 0.95));
+
     for (let j = 0; j <= segsX; j++) {
       const crossT = (j / segsX) * 2.0 - 1.0;
       const wx = p.x + bx * crossT * ribbonHW;
       const wz = p.z + bz * crossT * ribbonHW;
       const bedY = rawH(wx, wz);
-      const centerBed = rawH(p.x, p.z);
-      const safeWaterY = Math.max(p.waterY, Math.min(p.waterY + 0.4, centerBed + 0.95));
       const depth = Math.max(0.0, safeWaterY - bedY);
 
-      positions.push(wx, safeWaterY, wz);
-      normals.push(ftx, 0.0, ftz);
-      metas.push(p.flowDist, crossT, depth, slope);
+      const p3 = vCursor * 3;
+      const p4 = vCursor * 4;
+      positions[p3] = wx; positions[p3 + 1] = safeWaterY; positions[p3 + 2] = wz;
+      normals[p3] = ftx; normals[p3 + 1] = 0.0; normals[p3 + 2] = ftz;
+      metas[p4] = p.flowDist; metas[p4 + 1] = crossT; metas[p4 + 2] = depth; metas[p4 + 3] = slope;
+      vCursor++;
     }
   }
 
-  const rowStride = segsX + 1;
+  const mainStride = segsX + 1;
   for (let i = 0; i < segsZ; i++) {
     for (let j = 0; j < segsX; j++) {
-      const a = i * rowStride + j;
+      const a = mainBaseV + i * mainStride + j;
       const b = a + 1;
-      const c = a + rowStride;
+      const c = a + mainStride;
       const d = c + 1;
-      indices.push(a, c, b);
-      indices.push(b, c, d);
+      indices[iCursor++] = a; indices[iCursor++] = c; indices[iCursor++] = b;
+      indices[iCursor++] = b; indices[iCursor++] = c; indices[iCursor++] = d;
     }
   }
 
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geo.setAttribute('aWaterMeta', new THREE.Float32BufferAttribute(metas, 4));
-  geo.setIndex(indices);
-  return geo;
-}
-
-function buildTributaryGeometry(geomorph, tr, ti) {
-  const segs = 80;
-  const segsX = 4;
-  const rv0 = evalMainRiver(tr.z0);
-  const startLen = tr.len * 0.72;
-  const rawH = geomorph.getTerrainHeightAt || geomorph.getHeightAt;
-
-  const pts = [];
-  let accumDist = 0.0;
-  for (let i = 0; i <= segs; i++) {
-    const u = 1.0 - i / segs;
-    const along = u * startLen;
-    const meander = Math.sin(along * 0.0014 + ti * 2.1) * 160.0 + Math.cos(along * 0.0036) * 52.0;
+  // 2. All 12 Mountain Tributaries merged directly into the same unified BufferGeometry (13 -> 1 draw call!)
+  const tribStride = tribSegsX + 1;
+  for (let ti = 0; ti < TRIBUTARIES.length; ti++) {
+    const tr = TRIBUTARIES[ti];
+    const rv0 = evalMainRiver(tr.z0);
+    const startLen = tr.len * 0.72;
+    const pts = new Array(tribSegs + 1);
+    let tAccum = 0.0;
     const perpX = -tr.dirZ;
     const perpZ = tr.dirX;
-    const wx = rv0.x + tr.dirX * along + perpX * meander;
-    const wz = tr.z0 + tr.dirZ * along + perpZ * meander;
-    const terrainY = rawH(wx, wz);
-    if (i > 0) {
-      accumDist += Math.hypot(wx - pts[i - 1].x, wz - pts[i - 1].z);
+    for (let i = 0; i <= tribSegs; i++) {
+      const u = 1.0 - i / tribSegs;
+      const along = u * startLen;
+      const meander = Math.sin(along * 0.0014 + ti * 2.1) * 160.0 + Math.cos(along * 0.0036) * 52.0;
+      const wx = rv0.x + tr.dirX * along + perpX * meander;
+      const wz = tr.z0 + tr.dirZ * along + perpZ * meander;
+      const terrainY = rawH(wx, wz);
+      if (i > 0) tAccum += Math.hypot(wx - pts[i - 1].x, wz - pts[i - 1].z);
+      const hw = Math.max(5.5, tr.width * 0.16 * (1.25 - 0.55 * u));
+      pts[i] = { x: wx, z: wz, y: terrainY + 0.42, hw, flowDist: tAccum };
     }
-    const hw = Math.max(5.5, tr.width * 0.16 * (1.25 - 0.55 * u));
-    pts.push({ x: wx, z: wz, y: terrainY + 0.42, hw, flowDist: accumDist });
-  }
-  for (let i = 1; i < pts.length; i++) {
-    if (pts[i].y > pts[i - 1].y - 0.04) {
-      pts[i].y = pts[i - 1].y - 0.04;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i].y > pts[i - 1].y - 0.04) pts[i].y = pts[i - 1].y - 0.04;
     }
-  }
-  pts[pts.length - 1].y = rv0.waterY - 0.15;
+    pts[pts.length - 1].y = rv0.waterY - 0.15;
 
-  const positions = [];
-  const normals = [];
-  const metas = [];
-  const indices = [];
+    const tribBaseV = vCursor;
+    for (let i = 0; i <= tribSegs; i++) {
+      const p = pts[i];
+      const pPrev = pts[i > 0 ? i - 1 : 0];
+      const pNext = pts[i < tribSegs ? i + 1 : tribSegs];
+      const tx = pNext.x - pPrev.x;
+      const tz = pNext.z - pPrev.z;
+      const tLen = Math.hypot(tx, tz) || 1.0;
+      const ftx = tx / tLen;
+      const ftz = tz / tLen;
+      const bx = -ftz;
+      const bz = ftx;
+      const slope = Math.max(0.010, (pPrev.y - pNext.y) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
 
-  for (let i = 0; i <= segs; i++) {
-    const p = pts[i];
-    const pPrev = pts[Math.max(0, i - 1)];
-    const pNext = pts[Math.min(segs, i + 1)];
-    const tx = pNext.x - pPrev.x;
-    const tz = pNext.z - pPrev.z;
-    const tLen = Math.hypot(tx, tz) || 1.0;
-    const ftx = tx / tLen;
-    const ftz = tz / tLen;
-    const bx = -ftz;
-    const bz = ftx;
-    const slope = Math.max(0.010, (pPrev.y - pNext.y) / Math.max(1.0, pNext.flowDist - pPrev.flowDist));
-
-    for (let j = 0; j <= segsX; j++) {
-      const crossT = (j / segsX) * 2.0 - 1.0;
-      const wx = p.x + bx * crossT * p.hw;
-      const wz = p.z + bz * crossT * p.hw;
-      const bedY = rawH(wx, wz);
-      const depth = Math.max(0.0, p.y - bedY + (1.0 - Math.abs(crossT)) * 0.35);
-      positions.push(wx, p.y, wz);
-      normals.push(ftx, 0.0, ftz);
-      metas.push(p.flowDist, crossT, depth, slope);
+      for (let j = 0; j <= tribSegsX; j++) {
+        const crossT = (j / tribSegsX) * 2.0 - 1.0;
+        const wx = p.x + bx * crossT * p.hw;
+        const wz = p.z + bz * crossT * p.hw;
+        const bedY = rawH(wx, wz);
+        const depth = Math.max(0.0, p.y - bedY + (1.0 - Math.abs(crossT)) * 0.35);
+        const p3 = vCursor * 3;
+        const p4 = vCursor * 4;
+        positions[p3] = wx; positions[p3 + 1] = p.y; positions[p3 + 2] = wz;
+        normals[p3] = ftx; normals[p3 + 1] = 0.0; normals[p3 + 2] = ftz;
+        metas[p4] = p.flowDist; metas[p4 + 1] = crossT; metas[p4 + 2] = depth; metas[p4 + 3] = slope;
+        vCursor++;
+      }
     }
-  }
 
-  const rowStride = segsX + 1;
-  for (let i = 0; i < segs; i++) {
-    for (let j = 0; j < segsX; j++) {
-      const a = i * rowStride + j;
-      const b = a + 1;
-      const c = a + rowStride;
-      const d = c + 1;
-      indices.push(a, c, b);
-      indices.push(b, c, d);
+    for (let i = 0; i < tribSegs; i++) {
+      for (let j = 0; j < tribSegsX; j++) {
+        const a = tribBaseV + i * tribStride + j;
+        const b = a + 1;
+        const c = a + tribStride;
+        const d = c + 1;
+        indices[iCursor++] = a; indices[iCursor++] = c; indices[iCursor++] = b;
+        indices[iCursor++] = b; indices[iCursor++] = c; indices[iCursor++] = d;
+      }
     }
   }
 
   const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geo.setAttribute('aWaterMeta', new THREE.Float32BufferAttribute(metas, 4));
-  geo.setIndex(indices);
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  geo.setAttribute('aWaterMeta', new THREE.BufferAttribute(metas, 4));
+  geo.setIndex(new THREE.BufferAttribute(indices, 1));
   return geo;
 }
 
@@ -506,20 +508,14 @@ export function createTerrenoWater(geomorph, atmoUniforms) {
     side: THREE.DoubleSide,
   });
 
-  const mainRiverGeo = buildMainRiverGeometry(geomorph);
-  const mainRiverMesh = new THREE.Mesh(mainRiverGeo, waterMat);
-  mainRiverMesh.name = 'TERRENO_MainRiver_Kurosugigawa';
-  mainRiverMesh.renderOrder = 2;
-  mainRiverMesh.frustumCulled = false;
-  group.add(mainRiverMesh);
-
-  TRIBUTARIES.forEach((tr, ti) => {
-    const tribGeo = buildTributaryGeometry(geomorph, tr, ti);
-    const tribMesh = new THREE.Mesh(tribGeo, waterMat);
-    tribMesh.name = `TERRENO_Tributary_${tr.id}`;
-    tribMesh.renderOrder = 2;
-    group.add(tribMesh);
-  });
+  const unifiedWaterGeo = buildUnifiedHydrologyGeometry(geomorph);
+  const unifiedWaterMesh = new THREE.Mesh(unifiedWaterGeo, waterMat);
+  unifiedWaterMesh.name = 'TERRENO_UnifiedRivers_Kurosugigawa';
+  unifiedWaterMesh.renderOrder = 2;
+  unifiedWaterMesh.frustumCulled = false;
+  unifiedWaterMesh.matrixAutoUpdate = false;
+  unifiedWaterMesh.updateMatrix();
+  group.add(unifiedWaterMesh);
 
   function setFlood(riseMeters, mudMix) {
     waterMat.uniforms.uFloodRise.value = Math.max(0, riseMeters);

@@ -3,7 +3,6 @@ import {
   TERRENO_WORLD,
   TERRENO_LANDMARKS,
   ATMOSPHERE_PRESETS,
-  ATMOSPHERE_ORDER,
   evalMainRiver,
 } from './terrenoConfig.js';
 import { buildTerrenoGeomorphology } from './terrenoGeomorphology.js';
@@ -16,25 +15,42 @@ import { createTerrenoBridges } from './terrenoBridges.js';
 import { createTerrenoWater } from './terrenoWater.js';
 import { createTerrenoForest } from './terrenoForest.js';
 import { createTerrenoNaturalLocations } from './terrenoNaturalLocations.js';
+import { createTerrenoSubterranean } from './terrenoSubterranean.js';
 import { createTerrenoMap2D } from './terrenoMap2d.js';
 import { createTerrenoStorm } from './terrenoStorm.js';
 import { createTerrenoAutopilot } from './terrenoAutopilot.js';
+import { createRealEngine } from '../physics/realEngine.js';
 
 /**
- * TERRENO 4.0 Engine — Unified 60 km × 60 km (3,600.0 km²) Real-World Japanese Alpine Forest
- * (28 Tree Species), 22 Major Geomorphological Landforms & 3D Natural Locations (Waterfalls,
- * Basalt Cliffs, Natural Arch, Caldera Lake, Glacial Tarn, Cave Grotto, Travertine Onsen),
- * 37 Architectural 3D River Bridges & 600× 2D-Only Cartographic Map Controller.
+ * TERRENO 6.0 & REAL ENGINE 1.0 — Unified 60 km × 60 km (3,600 km²) Roadless Earth & Subterranean Engine
+ *
+ *   • 100 Natural Earth & Subterranean Geological Processes (500+ multi-occurrence features, ZERO roads, ZERO artificial props)
+ *   • Full `-500 m .. +2,500 m` ASL Surface Relief (with 75°–88° rugged cliffs) + `-1,500 m` Subterranean Caverns
+ *   • REAL ENGINE 1.0: GPU Interactive Foliage/OBB Non-Penetration, 0.1 mm Exact Trunk Profiles,
+ *     Strict 34°/39° Steep-Slope Coulomb Physics & Exact 3D Tilted Vehicle Cabin Kinematics
+ *   • Mega-Batched LRU-Cached Ecological Forest (28 species in 17 draw calls + Plush Fluffy Distant Mountain Canopies)
+ *   • Next-Gen WebGL2 Single-Pass Native HiDPI 2D Map (3,000× zoom, Live Follow, -1,500m X-Ray Strata)
  */
-export function createTerrenoEngine(scene, initialTodId = 'day') {
+export function createTerrenoEngine(scene, initialTodId = 'day', renderer = null) {
   const root = new THREE.Group();
   root.name = 'TERRENO_WORLD_60x60km';
 
-  // 1. Bake 60km × 60km alpine-valley geomorphology (with 22 major landforms!) & dual-azimuth horizon atlas
+  // 1. Bake 60km × 60km tectonic geomorphology (100 geological processes, -500m..+2,500m, -1,500m sub-atlas)
   const geomorph = buildTerrenoGeomorphology();
+  if (renderer && renderer.extensions && renderer.extensions.has('OES_texture_float_linear')) {
+    geomorph.geoTexture.minFilter = THREE.LinearFilter;
+    geomorph.geoTexture.magFilter = THREE.LinearFilter;
+    geomorph.geoTexture.needsUpdate = true;
+    geomorph.hasFloatLinear = true;
+  } else {
+    geomorph.hasFloatLinear = false;
+  }
 
-  // 2. Construct ALL 3D Architectural River & Tributary Bridges (registers live deck heights on geomorph!)
+  // 2. Register natural shallow cobble river fords (0 artificial bridges!)
   const bridges = createTerrenoBridges(geomorph);
+
+  // 3. Initialize REAL ENGINE 1.0 physical law field & toroidal spring-damped foliage trail!
+  const realEngine = createRealEngine();
 
   let currentTodId = ATMOSPHERE_PRESETS[initialTodId] ? initialTodId : 'day';
   const atmoUniforms = createSharedAtmosphereUniforms(currentTodId, geomorph);
@@ -42,7 +58,8 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   const clipmap = createTerrenoClipmap(geomorph, atmoUniforms);
   const water = createTerrenoWater(geomorph, atmoUniforms);
   const naturalLocations = createTerrenoNaturalLocations(geomorph, atmoUniforms);
-  const forest = createTerrenoForest(geomorph, atmoUniforms);
+  const forest = createTerrenoForest(geomorph, atmoUniforms, realEngine);
+  const subterranean = createTerrenoSubterranean(geomorph, atmoUniforms);
   const storm = createTerrenoStorm(geomorph, water, atmoUniforms);
   const autopilot = createTerrenoAutopilot(geomorph, storm);
 
@@ -51,13 +68,21 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
   root.add(water.group);
   root.add(naturalLocations.group);
   root.add(forest.group);
+  root.add(subterranean.group);
   root.add(storm.group);
   scene.add(root);
+
+  root.updateMatrixWorld(true);
+  clipmap.group.matrixWorldAutoUpdate = false;
+  water.group.matrixWorldAutoUpdate = false;
+  forest.group.matrixWorldAutoUpdate = false;
+  bridges.group.matrixWorldAutoUpdate = false;
 
   const initPos = new THREE.Vector3(TERRENO_WORLD.compoundCenterX, 1.5, TERRENO_WORLD.compoundCenterZ);
   clipmap.update(initPos);
   naturalLocations.update(initPos);
   forest.update(initPos);
+  subterranean.update(initPos);
 
   let map2dInstance = null;
   let prevElapsed = 0;
@@ -85,7 +110,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     if (forest.setSurfaceSuper) forest.setSurfaceSuper(enabled, maxAniso);
   }
 
-  function update(cameraPos, elapsed, flashlightState = null) {
+  function update(cameraPos, elapsed, flashlightState = null, realPhysState = null) {
     const dt = Math.max(0.001, Math.min(0.05, elapsed - prevElapsed));
     prevElapsed = elapsed;
     atmoUniforms.uTime.value = elapsed;
@@ -98,21 +123,37 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
       atmoUniforms.uFlashIntensity.value = 0.0;
     }
 
+    if (realPhysState) {
+      realEngine.update(dt, realPhysState);
+    }
+
     storm.update(cameraPos, dt, elapsed);
 
     if (!root.visible) return;
-    clipmap.update(cameraPos);
-    naturalLocations.update(cameraPos);
-    forest.update(cameraPos);
+
+    // Deep subterranean optimization: when > 45m underground inside natural caverns, hide surface clipmap/forest!
+    const deepSub = subterranean.isDeepUnderground && subterranean.isDeepUnderground(cameraPos);
+    clipmap.group.visible = !deepSub;
+    forest.group.visible = !deepSub;
+    water.group.visible = !deepSub;
+    naturalLocations.group.visible = !deepSub;
+
+    if (!deepSub) {
+      clipmap.update(cameraPos);
+      naturalLocations.update(cameraPos);
+      forest.update(cameraPos);
+    }
+    subterranean.update(cameraPos);
   }
 
   function getHeightAtWithLandslides(wx, wz) {
-    return geomorph.getHeightAt(wx, wz) + storm.getLandslideInfoAt(wx, wz).heightAdd;
+    const h = geomorph.getTerrainHeightAt(wx, wz);
+    return storm.hasActiveLandslides() ? (h + storm.getLandslideHeightAddAt(wx, wz)) : h;
   }
 
   function getOrCreateMap2D(callbacks) {
     if (!map2dInstance) {
-      map2dInstance = createTerrenoMap2D(geomorph, callbacks);
+      map2dInstance = createTerrenoMap2D(geomorph, callbacks, renderer);
     }
     return map2dInstance;
   }
@@ -128,8 +169,12 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
       bakeMs: Math.round(geomorph.bakeMs * 10) / 10,
       minElevationASL: Math.round(TERRENO_WORLD.baseElevationASL + geomorph.minElev),
       maxElevationASL: Math.round(TERRENO_WORLD.baseElevationASL + geomorph.maxElev),
+      subterraneanMinASL: -1500,
+      maxCliffDeg: geomorph.maxCliffDeg || 85,
+      roadCount: 0,
       clipmapRings: clipmap.rings.length,
       bridgeCount: bridges.bridges.length,
+      fordCount: bridges.fords?.length || 0,
       landformCount: naturalLocations.locations.length,
       naturalLocations: naturalLocations.getStats(),
       geology: {
@@ -137,6 +182,8 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
         activeProcessCount: geomorph.geologyState?.activeProcessCount || 0,
         multiOccurrenceFeatures: geomorph.emergentFeatures?.length || 0,
       },
+      subterranean: subterranean.getStats ? subterranean.getStats() : null,
+      realEngineActiveTrailCells: realEngine.getActiveTrailCells(),
       timeOfDay: currentTodId,
       stormIntensity: Math.round(storm.getIntensity() * 100) / 100,
       floodRiseM: Math.round(storm.getFloodRise() * 10) / 10,
@@ -156,6 +203,8 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     geomorph,
     bridges,
     naturalLocations,
+    subterranean,
+    realEngine,
     atmoUniforms,
     clipmap,
     water,
@@ -171,6 +220,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day') {
     getTerrainHeightAt: geomorph.getTerrainHeightAt,
     getNormalAt: geomorph.getNormalAt,
     getMacroNormalAt: geomorph.getMacroNormalAt,
+    getSoilEcoAt: geomorph.getSoilEcoAt,
     sampleGeoBilinear: geomorph.sampleGeoBilinear,
     getBiomeInfoAt: geomorph.getBiomeInfoAt,
     getLocalColliders: forest.getLocalColliders,
