@@ -11,9 +11,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <title>NARROW-50</title>
-  <script type="module" crossorigin src="./assets/dev-BJB5awGE.js"></script>
-  <link rel="modulepreload" crossorigin href="./assets/three-vendor-CFsKdVlu.js">
-  <link rel="stylesheet" crossorigin href="./assets/dev-CZq7SBNz.css">
+  <script type="module" crossorigin src="./assets/dev-BqVq-_jq.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/three-vendor-CB8unDwF.js">
+  <link rel="stylesheet" crossorigin href="./assets/dev-D5YSSZ_P.css">
 </head>
 <body>
   <div id="stage" class="stage">
@@ -88,6 +88,34 @@
             <small>SURFACE MODE 1.1 SUPER</small>
           </div>
           <input id="toggle-sm11s" type="checkbox" />
+          <span class="switch-track"></span>
+        </label>
+
+        <div class="setting-row setting-row-col">
+          <div class="setting-label-row">
+            <span>天候（13種）</span>
+            <small id="weather-meta" class="mono-val">晴れ・浮雲</small>
+          </div>
+          <select id="select-weather" class="setting-select" aria-label="天候選択">
+            <option value="clear">快晴（青空・高積雲）</option>
+            <option value="partly_cloudy" selected>晴れ・浮雲（積雲＆雲影）</option>
+            <option value="overcast">曇天・層雲</option>
+            <option value="valley_mist">渓谷濃霧・雲海</option>
+            <option value="sunshower">天気雨・虹</option>
+            <option value="light_rain">小雨・霧雨</option>
+            <option value="heavy_rain">本降り・豪雨</option>
+            <option value="thunderstorm">雷雨・積乱雲</option>
+            <option value="snowfall">降雪・粉雪</option>
+            <option value="blizzard">猛吹雪</option>
+            <option value="hail">雹・霰</option>
+            <option value="sand_haze">黄砂・砂塵</option>
+            <option value="aurora">オーロラ・極光</option>
+          </select>
+        </div>
+
+        <label class="setting-row setting-toggle">
+          <span>天候自動変化</span>
+          <input id="toggle-auto-weather" type="checkbox" />
           <span class="switch-track"></span>
         </label>
 

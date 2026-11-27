@@ -158,30 +158,48 @@ export function buildExtendedNoiseBuffers(ctx) {
   const sr = ctx.sampleRate;
   const len4 = Math.floor(sr * 4.0);
 
-  // 1. Minnaert Water Bubble & Droplet Buffer (physically accurate upward pitch-chirped bubbles)
-  const dropletBuf = ctx.createBuffer(2, len4, sr);
+  // 1. Natural Organic Water Ripple & Soft Lapping Texture (ZERO synthetic sine-chirp bloops!)
+  const len6 = Math.floor(sr * 6.0);
+  const dropletBuf = ctx.createBuffer(2, len6, sr);
   for (let ch = 0; ch < 2; ch++) {
     const d = dropletBuf.getChannelData(ch);
-    const bubbleCount = 190;
-    for (let b = 0; b < bubbleCount; b++) {
-      const startIdx = Math.floor(Math.random() * (len4 - 2200));
-      const f0 = randRange(420, 2650);
-      const durSec = randRange(0.012, 0.042);
-      const nSamp = Math.min(len4 - startIdx, Math.floor(sr * durSec));
-      const amp = randRange(0.08, 0.36);
-      // Minnaert bubble physics: frequency rises ~12-22% as bubble rises/collapses
-      const chirpRate = randRange(1.8, 4.2);
-      let phase = 0;
+    // Soft continuous brook lapping bed (band-limited 180-1150 Hz pink/brown noise modulated by slow eddies)
+    let lpHi = 0, lpLo = 0;
+    let eddy1 = randRange(0, Math.PI * 2);
+    let eddy2 = randRange(0, Math.PI * 2);
+    const w1 = (2 * Math.PI * 0.3333) / sr; // exact 2 cycles per 6s for seamless loop!
+    const w2 = (2 * Math.PI * 0.8333) / sr; // exact 5 cycles per 6s for seamless loop!
+    for (let i = 0; i < len6; i++) {
+      const white = Math.random() * 2 - 1;
+      lpHi += 0.14 * (white - lpHi);
+      lpLo += 0.028 * (lpHi - lpLo);
+      const band = lpHi - lpLo;
+      const swell = 0.58 + 0.24 * Math.sin(eddy1 + i * w1) + 0.18 * Math.sin(eddy2 + i * w2);
+      d[i] = band * swell * 0.55;
+    }
+    // Sparse, delicate, non-tonal soft water-lap bursts (filtered noise, NEVER sine pitches!)
+    const lapCount = 54;
+    for (let b = 0; b < lapCount; b++) {
+      const startIdx = Math.floor(Math.random() * (len6 - 3200));
+      const durSec = randRange(0.022, 0.068);
+      const nSamp = Math.min(len6 - startIdx, Math.floor(sr * durSec));
+      const amp = randRange(0.05, 0.18);
+      const alpha = randRange(0.08, 0.20);
+      let flt = 0;
       for (let i = 0; i < nSamp; i++) {
-        const dt = i / sr;
-        const env = Math.sin((Math.PI * Math.min(1, dt / 0.0028)) * 0.5) * Math.exp(-dt / (durSec * 0.28));
-        const instF = f0 * (1.0 + chirpRate * dt);
-        phase += (2 * Math.PI * instF) / sr;
-        d[startIdx + i] += Math.sin(phase) * env * amp;
+        const u = i / Math.max(1, nSamp - 1);
+        const env = Math.sin(u * Math.PI) * Math.exp(-u * 1.4);
+        flt += alpha * ((Math.random() * 2 - 1) - flt);
+        d[startIdx + i] += flt * env * amp;
       }
     }
-    // Soft limit so overlapping bubbles stay silky
-    for (let i = 0; i < len4; i++) d[i] = Math.tanh(d[i] * 1.15);
+    // Seamless 120ms crossfade at loop boundary so 6s loop never clicks
+    const xf = Math.floor(sr * 0.12);
+    for (let i = 0; i < xf; i++) {
+      const t = i / xf;
+      d[i] = d[i] * t + d[len6 - xf + i] * (1 - t);
+    }
+    for (let i = 0; i < len6; i++) d[i] = Math.tanh(d[i] * 0.85);
   }
 
   // 2. Crystalline Gravel / Pebble / Snow-Crust Micro-Grit Buffer
@@ -732,31 +750,31 @@ export function installHyperFoleyV4(AudioClass) {
   P.playWaterWadeSplash = function (intensity = 0.75) {
     if (!this.ctx || this.muted || !this.pinkBuf) return;
     const t = this.ctx.currentTime;
-    const amp = clamp(intensity, 0.25, 1.3);
-    // Bow surge through clear mountain stream
+    const amp = clamp(intensity, 0.25, 1.2);
+    // Soft natural stream wade swirl
     const surge = this.ctx.createBufferSource();
     surge.buffer = this.pinkBuf;
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(980, t);
-    bp.frequency.exponentialRampToValueAtTime(340, t + 0.38);
-    bp.Q.value = 0.85;
+    bp.frequency.setValueAtTime(640, t);
+    bp.frequency.exponentialRampToValueAtTime(260, t + 0.34);
+    bp.Q.value = 0.65;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.14 * amp, t + 0.04);
-    g.gain.exponentialRampToValueAtTime(0.0005, t + 0.42);
+    g.gain.linearRampToValueAtTime(0.058 * amp, t + 0.045);
+    g.gain.exponentialRampToValueAtTime(0.0004, t + 0.38);
     surge.connect(bp); bp.connect(g);
-    this._connectSfx(g, randRange(-0.22, 0.22), 0.24, 'valley');
-    surge.start(t, randRange(0, 2.5), 0.46);
+    this._connectSfx(g, randRange(-0.18, 0.18), 0.14, 'valley');
+    surge.start(t, randRange(0, 2.5), 0.42);
 
-    // Trailing Minnaert water droplets dripping back into stream
+    // Subtle soft water trail
     playGranularScatter(this, {
-      buffer: this.dropletBuf || this.crackleBuf,
-      startTime: t + 0.09,
-      count: 10, spreadSec: 0.36,
-      grainDurLo: 0.018, grainDurHi: 0.048,
-      freqLo: 700, freqHi: 2800,
-      gain: 0.072 * amp, pan: 0, panSpread: 0.42, reverb: 0.28, space: 'valley',
+      buffer: this.dropletBuf || this.pinkBuf,
+      startTime: t + 0.08,
+      count: 6, spreadSec: 0.30,
+      grainDurLo: 0.018, grainDurHi: 0.044,
+      freqLo: 420, freqHi: 1250,
+      gain: 0.024 * amp, pan: 0, panSpread: 0.32, reverb: 0.14, space: 'valley',
     });
   };
 
@@ -1046,20 +1064,20 @@ export function installHyperFoleyV4(AudioClass) {
   };
 
   P.playDistantWaterfallSurge = function (intensity = 0.5, pan = 0) {
-    if (!this.ctx || this.muted || !this.pinkBuf) return;
+    if (!this.ctx || this.muted || !this.brownBuf) return;
     const t = this.ctx.currentTime;
     const amp = clamp(intensity, 0.15, 1.0);
     const src = this.ctx.createBufferSource();
-    src.buffer = this.pinkBuf;
+    src.buffer = this.brownBuf;
     const lp = this.ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 540 + amp * 680;
+    lp.type = 'lowpass'; lp.frequency.value = 320 + amp * 260;
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.095 * amp, t + 0.85);
-    g.gain.exponentialRampToValueAtTime(0.0004, t + 2.4);
+    g.gain.linearRampToValueAtTime(0.036 * amp, t + 0.95);
+    g.gain.exponentialRampToValueAtTime(0.0004, t + 2.6);
     src.connect(lp); lp.connect(g);
-    this._connectSfx(g, pan, 0.55, 'valley');
-    src.start(t, randRange(0, 1.5), 2.5);
+    this._connectSfx(g, pan, 0.32, 'valley');
+    src.start(t, randRange(0, 1.5), 2.7);
   };
 
   P.playTreeCreakWind = function (pan = 0, intensity = 0.7) {

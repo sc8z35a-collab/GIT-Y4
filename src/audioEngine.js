@@ -451,72 +451,85 @@ export class SpatialForestAudio {
   }
 
   _initRiverAndSpringLayers() {
-    // Multi-band Mountain River & Rapids (Kurosugi River + Tributaries)
+    // Silky, Warm, Realistic Mountain Stream & River Bed (ZERO harsh high hiss or creepy bloops!)
     const rivSrc = this.ctx.createBufferSource();
-    rivSrc.buffer = this.pinkBuf;
+    rivSrc.buffer = this.brownBuf;
     rivSrc.loop = true;
 
     const rivLow = this.ctx.createBiquadFilter();
     rivLow.type = 'lowpass';
-    rivLow.frequency.value = 260;
+    rivLow.frequency.value = 195;
+    rivLow.Q.value = 0.5;
     this.riverLowFilter = rivLow;
+
+    const rivMidSrc = this.ctx.createBufferSource();
+    rivMidSrc.buffer = this.pinkBuf;
+    rivMidSrc.loop = true;
 
     const rivMid = this.ctx.createBiquadFilter();
     rivMid.type = 'bandpass';
-    rivMid.frequency.value = 1080;
-    rivMid.Q.value = 0.65;
+    rivMid.frequency.value = 520;
+    rivMid.Q.value = 0.42;
     this.riverMidFilter = rivMid;
 
+    // Slow organic stream current modulation so water breathes naturally instead of static radio noise
+    const curLfo = this.ctx.createOscillator();
+    const curLfoG = this.ctx.createGain();
+    curLfo.type = 'sine';
+    curLfo.frequency.value = 0.11;
+    curLfoG.gain.value = 85;
+    curLfo.connect(curLfoG);
+    curLfoG.connect(rivMid.frequency);
+    curLfo.start();
+
     const rivHi = this.ctx.createBiquadFilter();
-    rivHi.type = 'bandpass';
-    rivHi.frequency.value = 3400;
-    rivHi.Q.value = 0.9;
+    rivHi.type = 'lowpass';
+    rivHi.frequency.value = 1550;
+    rivHi.Q.value = 0.4;
     this.riverHighFilter = rivHi;
 
-    const lowG = this.ctx.createGain(); lowG.gain.value = 0.58;
-    const midG = this.ctx.createGain(); midG.gain.value = 0.42;
-    const hiG = this.ctx.createGain();  hiG.gain.value = 0.18;
+    const lowG = this.ctx.createGain(); lowG.gain.value = 0.52;
+    const midG = this.ctx.createGain(); midG.gain.value = 0.34;
+    const hiG = this.ctx.createGain();  hiG.gain.value = 0.055;
 
     this.riverGain = this.ctx.createGain();
     this.riverGain.gain.value = 0.0;
 
-    rivSrc.connect(rivLow);  rivLow.connect(lowG);  lowG.connect(this.riverGain);
-    rivSrc.connect(rivMid);  rivMid.connect(midG);  midG.connect(this.riverGain);
-    rivSrc.connect(rivHi);   rivHi.connect(hiG);    hiG.connect(this.riverGain);
+    rivSrc.connect(rivLow);     rivLow.connect(lowG); lowG.connect(this.riverGain);
+    rivMidSrc.connect(rivMid);  rivMid.connect(midG); midG.connect(this.riverGain);
+    rivMidSrc.connect(rivHi);   rivHi.connect(hiG);   hiG.connect(this.riverGain);
     this.riverGain.connect(this.ambienceBus);
     rivSrc.start(0, 0.7);
+    rivMidSrc.start(0, 1.9);
 
-    // Live Minnaert Water Bubble Sparkle Layer (gives Kurosugi River authentic crystalline babble!)
+    // Subtle Close-Range Soft Water Lapping Layer (dry, low-volume, ZERO eerie valley reverb!)
     const bubSrc = this.ctx.createBufferSource();
-    bubSrc.buffer = this.dropletBuf || this.crackleBuf;
+    bubSrc.buffer = this.dropletBuf || this.pinkBuf;
     bubSrc.loop = true;
-    const bubBp = this.ctx.createBiquadFilter();
-    bubBp.type = 'bandpass';
-    bubBp.frequency.value = 1520;
-    bubBp.Q.value = 0.85;
+    const bubLp = this.ctx.createBiquadFilter();
+    bubLp.type = 'lowpass';
+    bubLp.frequency.value = 980;
+    bubLp.Q.value = 0.55;
     this.riverBubbleGain = this.ctx.createGain();
     this.riverBubbleGain.gain.value = 0.0;
-    bubSrc.connect(bubBp);
-    bubBp.connect(this.riverBubbleGain);
+    bubSrc.connect(bubLp);
+    bubLp.connect(this.riverBubbleGain);
     this.riverBubbleGain.connect(this.ambienceBus);
-    if (this.valleyReverbSend) this.riverBubbleGain.connect(this.valleyReverbSend);
     bubSrc.start(0, 0.4);
 
-    // Village Bamboo Spring Well / B3F Spa Trickle (clear Minnaert babbling water)
+    // Village Bamboo Spring Well / B3F Spa Gentle Warm Water Trickle
     const spSrc = this.ctx.createBufferSource();
-    spSrc.buffer = this.dropletBuf || this.crackleBuf;
+    spSrc.buffer = this.dropletBuf || this.pinkBuf;
     spSrc.loop = true;
     this.springFilter = this.ctx.createBiquadFilter();
-    this.springFilter.type = 'bandpass';
-    this.springFilter.frequency.value = 1850;
-    this.springFilter.Q.value = 1.4;
+    this.springFilter.type = 'lowpass';
+    this.springFilter.frequency.value = 820;
+    this.springFilter.Q.value = 0.5;
     this.springGain = this.ctx.createGain();
     this.springGain.gain.value = 0.0;
     spSrc.connect(this.springFilter);
     this.springFilter.connect(this.springGain);
     this.springGain.connect(this.ambienceBus);
-    this.springGain.connect(this.roomReverbSend);
-    if (this.spaReverbSend) this.springGain.connect(this.spaReverbSend);
     spSrc.start(0, 0.2);
   }
 
@@ -679,28 +692,28 @@ export class SpatialForestAudio {
 
     if (state.acousticZone) this.setAcousticZone(state.acousticZone);
 
-    // 1. Mountain River & Rapids Proximity (Kurosugi River + Tributaries + Minnaert Bubbles)
+    // 1. Mountain River & Stream Proximity (Realistic near-field rolloff — completely silent away from river!)
     const rDist = state.riverDist ?? 999;
     const rFlow = clamp(state.riverFlowBoost ?? 0, 0, 1.5);
-    const rAtten = rDist < 260 ? (1.0 / (1.0 + Math.pow(Math.max(0, rDist - 8) / 28.0, 1.55))) : 0.0;
-    const occFactor = 0.20 + 0.80 * this._lastOpenness;
+    const rAtten = rDist < 85 ? (1.0 / (1.0 + Math.pow(Math.max(0, rDist - 3) / 13.5, 2.25))) : 0.0;
+    const occFactor = 0.14 + 0.86 * this._lastOpenness;
     if (this.riverGain) {
-      const rTarget = rAtten * occFactor * (0.19 + rFlow * 0.16);
-      this.riverGain.gain.setTargetAtTime(rTarget, t, 0.18);
+      const rTarget = rAtten * occFactor * (0.052 + rFlow * 0.028);
+      this.riverGain.gain.setTargetAtTime(rTarget, t, 0.24);
       if (this.riverMidFilter) {
-        this.riverMidFilter.frequency.setTargetAtTime(860 + rAtten * 520 + rFlow * 340, t, 0.22);
+        this.riverMidFilter.frequency.setTargetAtTime(420 + rAtten * 240 + rFlow * 140, t, 0.28);
       }
       if (this.riverBubbleGain) {
-        this.riverBubbleGain.gain.setTargetAtTime(rAtten * rAtten * occFactor * 0.135, t, 0.18);
+        this.riverBubbleGain.gain.setTargetAtTime(rAtten * rAtten * occFactor * 0.016, t, 0.24);
       }
     }
 
-    // 2. Village Bamboo Spring Well / B3F Hydrotherapy Trickle
+    // 2. Village Bamboo Spring Well / B3F Hydrotherapy Gentle Trickle
     const sDist = state.springDist ?? 999;
-    const sAtten = sDist < 36 ? (1.0 / (1.0 + Math.pow(sDist / 6.5, 1.8))) : 0.0;
-    const spaWater = state.inSpa ? 0.42 : 0.0;
+    const sAtten = sDist < 18 ? (1.0 / (1.0 + Math.pow(sDist / 4.2, 2.2))) : 0.0;
+    const spaWater = state.inSpa ? 0.22 : 0.0;
     if (this.springGain) {
-      this.springGain.gain.setTargetAtTime(Math.max(sAtten * 0.24, spaWater * 0.14), t, 0.22);
+      this.springGain.gain.setTargetAtTime(Math.max(sAtten * 0.042, spaWater * 0.032), t, 0.28);
     }
 
     // 3. Fireplace & Irori Hearth Crackle

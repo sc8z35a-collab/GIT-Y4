@@ -204,48 +204,48 @@ export function buildCamper3D(ctx) {
   const headLensMat = new THREE.MeshStandardMaterial({ color: 0xf4f9ff, emissive: new THREE.Color(0xdbeeff), emissiveIntensity: 1.6, roughness: 0.15 });
 
   // Heavy steel chassis frame rails + underbody water/fuel tanks (strictly below 1F finished floor!)
-  addCBox(camperStatic, 2.46, 0.17, 7.34, armorDarkMat, 1.35, y1 - 0.095, 3.75, true);
-  // Lower rock-slider armored skirt bands between front & rear axles (vz=2.15..4.55)
-  addCBox(camperStatic, 0.08, 0.22, 2.40, armorDarkMat, 0.02, y1 + 0.01, 3.35, true);
-  addCBox(camperStatic, 0.08, 0.22, 2.40, armorDarkMat, 2.68, y1 + 0.01, 3.35, true);
+  addCBox(camperStatic, 2.46, 0.16, 7.30, armorDarkMat, 1.35, y1 - 0.10, 3.75, true);
+  // Lower rock-slider armored skirt bands strictly outside exterior wall skins (0 wall intersection!)
+  addCBox(camperStatic, 0.06, 0.22, 2.40, armorDarkMat, -0.036, y1 + 0.01, 3.35, true);
+  addCBox(camperStatic, 0.06, 0.22, 2.40, armorDarkMat, 2.736, y1 + 0.01, 3.35, true);
 
-  // Heavy Steel Expedition Front Bull-Bar Bumper & Rear Spare Tire Carrier
-  addCBox(camperStatic, 2.74, 0.34, 0.16, armorDarkMat, 1.35, y1 + 0.16, -0.08, true);
-  addCBox(camperStatic, 2.24, 0.06, 0.06, mat.darkIron, 1.35, y1 + 0.62, -0.14, false);
-  addCBox(camperStatic, 0.06, 0.38, 0.06, mat.darkIron, 0.55, y1 + 0.40, -0.14, false);
-  addCBox(camperStatic, 0.06, 0.38, 0.06, mat.darkIron, 2.15, y1 + 0.40, -0.14, false);
-  addCBox(camperStatic, 2.74, 0.28, 0.14, armorDarkMat, 1.35, y1 + 0.12, 7.57, true);
+  // Heavy Steel Expedition Front Bull-Bar Bumper & Rear Spare Tire Carrier (clean 6mm standoff!)
+  addCBox(camperStatic, 2.74, 0.34, 0.16, armorDarkMat, 1.35, y1 + 0.16, -0.088, true);
+  addCBox(camperStatic, 2.24, 0.06, 0.06, mat.darkIron, 1.35, y1 + 0.62, -0.15, false);
+  addCBox(camperStatic, 0.06, 0.38, 0.06, mat.darkIron, 0.55, y1 + 0.40, -0.15, false);
+  addCBox(camperStatic, 0.06, 0.38, 0.06, mat.darkIron, 2.15, y1 + 0.40, -0.15, false);
+  addCBox(camperStatic, 2.74, 0.28, 0.14, armorDarkMat, 1.35, y1 + 0.12, 7.578, true);
 
-  // Exterior Headlights (front), Brake Taillights (rear), Roof Amber Expedition Marker Bar
+  // Exterior Headlights (front), Brake Taillights (rear), Roof Amber Expedition Marker Bar (clean 6mm standoff!)
   [0.34, 2.36].forEach((hx) => {
-    addCBox(camperStatic, 0.36, 0.16, 0.04, headLensMat, hx, y1 + 0.46, -0.02, false);
-    addCBox(camperStatic, 0.32, 0.14, 0.04, tailMat, hx, y1 + 0.48, 7.52, false);
-    addCBox(camperStatic, 0.12, 0.08, 0.04, amberMat, hx, y2 + 0.96, -0.02, false);
+    addCBox(camperStatic, 0.36, 0.16, 0.04, headLensMat, hx, y1 + 0.46, -0.028, false);
+    addCBox(camperStatic, 0.32, 0.14, 0.04, tailMat, hx, y1 + 0.48, 7.528, false);
+    addCBox(camperStatic, 0.12, 0.08, 0.04, amberMat, hx, y2 + 0.96, -0.028, false);
   });
-  addCBox(camperStatic, 0.95, 0.07, 0.07, headLensMat, 1.35, y2 + 1.02, -0.02, false); // Roof LED light bar
+  addCBox(camperStatic, 0.95, 0.07, 0.07, headLensMat, 1.35, y2 + 1.02, -0.042, false); // Roof LED light bar
 
   // Side Mirrors (Left & Right at front cab)
   [-0.18, 2.88].forEach((mx) => {
     addCBox(camperStatic, 0.06, 0.28, 0.12, armorDarkMat, mx, y1 + 1.38, 0.35, false);
-    addCBox(camperStatic, 0.22, 0.03, 0.03, mat.darkIron, mx > 1 ? 2.76 : -0.06, y1 + 1.38, 0.35, false);
+    addCBox(camperStatic, 0.20, 0.03, 0.03, mat.darkIron, mx > 1 ? 2.81 : -0.11, y1 + 1.38, 0.35, false);
   });
 
   // Fold-Down Galvanized Steel Entry Steps outside DC-1 (West side vx=-0.34..0.00, vz=2.20..2.78)
   const grateMat = makeSurfaceMat('metal_grate', 0.6, 0.35);
-  addCBox(camperStatic, 0.32, 0.035, 0.58, grateMat, -0.16, y1 - 0.14, 2.49, false);
-  addCBox(camperStatic, 0.18, 0.035, 0.58, grateMat, -0.09, y1 - 0.03, 2.49, false);
+  addCBox(camperStatic, 0.32, 0.035, 0.58, grateMat, -0.17, y1 - 0.14, 2.49, false);
+  addCBox(camperStatic, 0.18, 0.035, 0.58, grateMat, -0.10, y1 - 0.03, 2.49, false);
 
-  // Matte-Black Armored Wheel-Well Arches & Fender Flares (100% clean tire clearance — zero hull clipping!)
+  // Matte-Black Armored Wheel-Well Arches & Fender Flares (strictly exterior of wall skins — 0 Z-fighting!)
   const archBackMat = new THREE.MeshStandardMaterial({ color: 0x0c0e11, roughness: 0.95, metalness: 0.05 });
   const buildFenderArch = (lxSide, zCenter, spanZ) => {
     const sign = lxSide < 1 ? -1 : 1;
-    const wallX = lxSide < 1 ? -0.015 : 2.715;
-    const flareX = lxSide < 1 ? -0.085 : 2.785;
-    addCBox(camperStatic, 0.04, 0.62, spanZ, archBackMat, wallX, y1 + 0.27, zCenter, false);
-    addCBox(camperStatic, 0.19, 0.065, spanZ + 0.14, armorDarkMat, flareX, y1 + 0.60, zCenter, true);
-    addCBox(camperStatic, 0.18, 0.54, 0.06, armorDarkMat, flareX, y1 + 0.295, zCenter - spanZ / 2 - 0.04, false);
-    addCBox(camperStatic, 0.18, 0.54, 0.06, armorDarkMat, flareX, y1 + 0.295, zCenter + spanZ / 2 + 0.04, false);
-    addCBox(camperStatic, 0.03, 0.04, 0.10, amberMat, flareX + sign * 0.09, y1 + 0.60, zCenter, false);
+    const wallX = lxSide < 1 ? -0.026 : 2.726;
+    const flareX = lxSide < 1 ? -0.095 : 2.795;
+    addCBox(camperStatic, 0.036, 0.62, spanZ, archBackMat, wallX, y1 + 0.27, zCenter, false);
+    addCBox(camperStatic, 0.18, 0.065, spanZ + 0.14, armorDarkMat, flareX, y1 + 0.60, zCenter, true);
+    addCBox(camperStatic, 0.17, 0.53, 0.06, armorDarkMat, flareX, y1 + 0.29, zCenter - spanZ / 2 - 0.04, false);
+    addCBox(camperStatic, 0.17, 0.53, 0.06, armorDarkMat, flareX, y1 + 0.29, zCenter + spanZ / 2 + 0.04, false);
+    addCBox(camperStatic, 0.03, 0.04, 0.10, amberMat, flareX + sign * 0.102, y1 + 0.60, zCenter, false);
   };
   [0, 2.70].forEach((side) => {
     buildFenderArch(side, CAMPER.axlesZ[0], 1.00);
@@ -282,52 +282,52 @@ export function buildCamper3D(ctx) {
   // Mounted Rear Spare Expedition Wheel on back bumper
   const spareTire = new THREE.Mesh(tireGeo, tireMat);
   spareTire.rotation.y = Math.PI / 2;
-  spareTire.position.set(rx(0.68), y1 + 0.85, rz(7.62));
+  spareTire.position.set(rx(0.68), y1 + 0.85, rz(7.64));
   camperStatic.add(spareTire);
 
   // =========================================================================
   // 2. FLOORS, 2F LOFT DECKS, SOARING CH 3.02m SKYLIGHT ROOF & SOLAR PANELS
   // =========================================================================
-  // 1F Room-Specific Finished Floor Panels (strictly above chassis top y1-0.01 — zero bath/shower Z-fighting!)
+  // 1F Room-Specific Finished Floor Panels (cleanly inset 5mm inside walls — ZERO floor/wall Z-fighting!)
   for (const r of CAMPER_1F.rooms) {
     const fMat = makeSurfaceMat(r.floorTex, r.w, r.d);
-    const hF = r.fl === 'C1FL-20' ? 0.008 : 0.016;
-    const yOff = r.fl === 'C1FL-20' ? 0.002 : 0.008;
-    addCBox(camperStatic, r.w, hF, r.d, fMat, r.x + r.w / 2, y1 + yOff, r.z + r.d / 2, false);
+    const hF = r.fl === 'C1FL-20' ? 0.008 : 0.014;
+    const yOff = r.fl === 'C1FL-20' ? 0.005 : 0.010;
+    addCBox(camperStatic, Math.max(0.05, r.w - 0.010), hF, Math.max(0.05, r.d - 0.010), fMat, r.x + r.w / 2, y1 + yOff, r.z + r.d / 2, false);
   }
-  // 2F Loft Structural Honeycomb Decks (thickness 60mm -> Y = y2-0.06 .. y2)
+  // 2F Loft Structural Honeycomb Decks (cleanly inset 6mm from walls & separated at joints!)
   const deckMat = makeSurfaceMat('wood_walnut_floor', 2.5, 2.2);
-  addCBox(camperStatic, 2.56, 0.06, 2.10, deckMat, 1.35, y2 - 0.03, 1.12, true);
-  addCBox(camperStatic, 1.00, 0.06, 3.08, deckMat, 0.57, y2 - 0.03, 3.71, true);
-  addCBox(camperStatic, 2.56, 0.06, 1.29, deckMat, 1.35, y2 - 0.03, 5.895, true);
-  addCBox(camperStatic, 1.00, 0.06, 0.42, deckMat, 0.57, y2 - 0.03, 6.75, true);
-  addCBox(camperStatic, 1.00, 0.06, 0.42, deckMat, 2.13, y2 - 0.03, 6.75, true);
-  addCBox(camperStatic, 2.56, 0.06, 0.47, deckMat, 1.35, y2 - 0.03, 7.195, true);
+  addCBox(camperStatic, 2.54, 0.056, 2.08, deckMat, 1.35, y2 - 0.032, 1.12, true);
+  addCBox(camperStatic, 0.98, 0.056, 3.06, deckMat, 0.57, y2 - 0.032, 3.71, true);
+  addCBox(camperStatic, 2.54, 0.056, 1.27, deckMat, 1.35, y2 - 0.032, 5.895, true);
+  addCBox(camperStatic, 0.98, 0.056, 0.40, deckMat, 0.57, y2 - 0.032, 6.75, true);
+  addCBox(camperStatic, 0.98, 0.056, 0.40, deckMat, 2.13, y2 - 0.032, 6.75, true);
+  addCBox(camperStatic, 2.54, 0.056, 0.45, deckMat, 1.35, y2 - 0.032, 7.195, true);
 
-  // 2F Loft Finish Carpets / Tatami (cleanly seated above deck top y2)
-  addCBox(camperStatic, 2.52, 0.012, 2.06, makeSurfaceMat('carpet_beige', 2.52, 2.06), 1.35, y2 + 0.007, 1.12, false);
-  addCBox(camperStatic, 2.52, 0.012, 1.24, makeSurfaceMat('tatami_ryukyu', 2.52, 1.24), 1.35, y2 + 0.007, 5.895, false);
+  // 2F Loft Finish Carpets / Tatami (cleanly seated 5mm above deck top y2)
+  addCBox(camperStatic, 2.50, 0.012, 2.04, makeSurfaceMat('carpet_beige', 2.50, 2.04), 1.35, y2 + 0.011, 1.12, false);
+  addCBox(camperStatic, 2.50, 0.012, 1.22, makeSurfaceMat('tatami_ryukyu', 2.50, 1.22), 1.35, y2 + 0.011, 5.895, false);
 
-  // Full-Length Insulated Aluminum Roof Shell (Y = +3.06 .. +3.14 -> EXACT 3.400m total height!)
+  // Full-Length Insulated Aluminum Roof Shell (Y = +3.06 .. +3.14 -> cleanly separated panels!)
   const roofExtMat = makeSurfaceMat('slate_charcoal', 2.7, 7.5);
   const roofIntMat = makeSurfaceMat('plywood_attic', 2.6, 7.4);
   const yRoof = y2 + CAMPER.loftClearH; // +3.06m (Roof top at +3.14m!)
-  addCBox(camperStatic, 2.74, 0.08, 0.90, roofExtMat, 1.35, yRoof + 0.04, 0.45, true);
-  addCBox(camperStatic, 2.74, 0.08, 1.00, roofExtMat, 1.35, yRoof + 0.04, 2.30, true);
-  addCBox(camperStatic, 2.74, 0.08, 2.75, roofExtMat, 1.35, yRoof + 0.04, 6.125, true);
+  addCBox(camperStatic, 2.74, 0.076, 0.89, roofExtMat, 1.35, yRoof + 0.044, 0.45, true);
+  addCBox(camperStatic, 2.74, 0.076, 0.99, roofExtMat, 1.35, yRoof + 0.044, 2.30, true);
+  addCBox(camperStatic, 2.74, 0.076, 2.74, roofExtMat, 1.35, yRoof + 0.044, 6.125, true);
   [0.36, 2.34].forEach((sx) => {
-    addCBox(camperStatic, 0.72, 0.08, 0.90, roofExtMat, sx, yRoof + 0.04, 1.35, true);
-    addCBox(camperStatic, 0.72, 0.08, 1.95, roofExtMat, sx, yRoof + 0.04, 3.775, true);
+    addCBox(camperStatic, 0.72, 0.076, 0.89, roofExtMat, sx, yRoof + 0.044, 1.35, true);
+    addCBox(camperStatic, 0.72, 0.076, 1.94, roofExtMat, sx, yRoof + 0.044, 3.775, true);
   });
-  addCBox(camperStatic, 1.26, 0.025, 0.90, mat.glassClear, 1.35, yRoof + 0.05, 1.35, false);
-  addCBox(camperStatic, 1.26, 0.025, 1.95, mat.glassClear, 1.35, yRoof + 0.05, 3.775, false);
-  addCBox(camperStatic, 2.56, 0.014, 2.68, roofIntMat, 1.35, yRoof - 0.008, 6.08, false);
+  addCBox(camperStatic, 1.24, 0.024, 0.88, mat.glassClear, 1.35, yRoof + 0.052, 1.35, false);
+  addCBox(camperStatic, 1.24, 0.024, 1.93, mat.glassClear, 1.35, yRoof + 0.052, 3.775, false);
+  addCBox(camperStatic, 2.54, 0.014, 2.66, roofIntMat, 1.35, yRoof - 0.012, 6.08, false);
   for (let ribZ = 2.40; ribZ <= 5.00; ribZ += 0.52) {
-    addCBox(camperStatic, 2.56, 0.05, 0.055, mat.walnut, 1.35, yRoof - 0.026, ribZ, false);
+    addCBox(camperStatic, 2.54, 0.046, 0.055, mat.walnut, 1.35, yRoof - 0.032, ribZ, false);
   }
-  addCBox(camperStatic, 1.85, 0.035, 1.95, solarMat, 1.35, yRoof + 0.10, 6.05, false);
+  addCBox(camperStatic, 1.85, 0.035, 1.95, solarMat, 1.35, yRoof + 0.106, 6.05, false);
   [0.10, 2.60].forEach((rxBar) => {
-    addCBox(camperStatic, 0.04, 0.08, 7.20, mat.darkIron, rxBar, yRoof + 0.122, 3.75, false);
+    addCBox(camperStatic, 0.04, 0.08, 7.20, mat.darkIron, rxBar, yRoof + 0.128, 3.75, false);
   });
 
   // =========================================================================
@@ -416,11 +416,11 @@ export function buildCamper3D(ctx) {
   buildCamperWalls(CAMPER_1F, 1);
   buildCamperWalls(CAMPER_2F, 2);
 
-  // Exterior Armored Upper Fascia Band (mitered corners — zero corner Z-fighting!)
-  addCBox(camperStatic, 2.76, 0.08, 0.04, armorDarkMat, 1.35, y2 - 0.02, -0.02, false);
-  addCBox(camperStatic, 2.76, 0.08, 0.04, armorDarkMat, 1.35, y2 - 0.02, 7.52, false);
-  addCBox(camperStatic, 0.04, 0.08, 7.49, armorDarkMat, -0.02, y2 - 0.02, 3.75, false);
-  addCBox(camperStatic, 0.04, 0.08, 7.49, armorDarkMat, 2.72, y2 - 0.02, 3.75, false);
+  // Exterior Armored Upper Fascia Band (6mm outward standoff — zero exterior wall Z-fighting!)
+  addCBox(camperStatic, 2.78, 0.08, 0.036, armorDarkMat, 1.35, y2 - 0.02, -0.026, false);
+  addCBox(camperStatic, 2.78, 0.08, 0.036, armorDarkMat, 1.35, y2 - 0.02, 7.526, false);
+  addCBox(camperStatic, 0.036, 0.08, 7.47, armorDarkMat, -0.026, y2 - 0.02, 3.75, false);
+  addCBox(camperStatic, 0.036, 0.08, 7.47, armorDarkMat, 2.726, y2 - 0.02, 3.75, false);
 
   // =========================================================================
   // 4. REAR LOFT SHIP'S LADDER / STAIR (STC1: 1F Y=0.04 -> 2F Y=2.08)

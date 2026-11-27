@@ -1,8 +1,9 @@
 /**
- * TERRENO 7.0 — Unified Continuous Geomorphology Facade (160 Natural Earth & Subterranean Processes)
+ * TERRENO 8.0 — Unified Continuous Geomorphology Facade (210 Natural Earth & Subterranean Processes)
  */
 
 import {
+  GEOLOGY_PROCESS_CATALOG_210,
   GEOLOGY_PROCESS_CATALOG_160,
   GEOLOGY_PROCESS_CATALOG_100,
   GEOLOGY_PROCESS_CATALOG_62,
@@ -12,16 +13,19 @@ import {
   runContinuousGeologyEngine,
 } from './terrenoGeologyEngine.js';
 
-export const ALL_LANDFORMS_160 = GEOLOGY_PROCESS_CATALOG_160;
-export const ALL_LANDFORMS_100 = GEOLOGY_PROCESS_CATALOG_160;
-export const ALL_LANDFORMS_62 = GEOLOGY_PROCESS_CATALOG_160;
-export const LEGACY_LANDFORMS_22 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => !g.isNewV5 && !g.isNewV6 && !g.isNewV7);
-export const NEW_LANDFORMS_40 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => g.isNewV5);
-export const NEW_LANDFORMS_V6_38 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => g.isNewV6);
-export const NEW_LANDFORMS_V7_60 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => g.isNewV7);
+export const ALL_LANDFORMS_210 = GEOLOGY_PROCESS_CATALOG_210;
+export const ALL_LANDFORMS_160 = GEOLOGY_PROCESS_CATALOG_210;
+export const ALL_LANDFORMS_100 = GEOLOGY_PROCESS_CATALOG_210;
+export const ALL_LANDFORMS_62 = GEOLOGY_PROCESS_CATALOG_210;
+export const LEGACY_LANDFORMS_22 = GEOLOGY_PROCESS_CATALOG_210.filter((g) => !g.isNewV5 && !g.isNewV6 && !g.isNewV7 && !g.isNewV8);
+export const NEW_LANDFORMS_40 = GEOLOGY_PROCESS_CATALOG_210.filter((g) => g.isNewV5);
+export const NEW_LANDFORMS_V6_38 = GEOLOGY_PROCESS_CATALOG_210.filter((g) => g.isNewV6);
+export const NEW_LANDFORMS_V7_60 = GEOLOGY_PROCESS_CATALOG_210.filter((g) => g.isNewV7);
+export const NEW_LANDFORMS_V8_50 = GEOLOGY_PROCESS_CATALOG_210.filter((g) => g.isNewV8);
 export const MAJOR_LANDFORMS_22 = LEGACY_LANDFORMS_22;
 
 export {
+  GEOLOGY_PROCESS_CATALOG_210,
   GEOLOGY_PROCESS_CATALOG_160,
   GEOLOGY_PROCESS_CATALOG_100,
   GEOLOGY_PROCESS_CATALOG_62,

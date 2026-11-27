@@ -28,6 +28,8 @@ attribute vec4 aWaterMeta; // x: flowDist(m), y: crossT(-1..+1), z: depth(m), w:
 uniform float uTime;
 uniform float uFloodRise;
 uniform float uFloodMud;
+uniform vec3 uPlayerBubbleCenter;
+uniform float uAnimBubbleHalf;
 
 varying vec3 vWorldPos;
 varying vec4 vWaterMeta;
@@ -42,9 +44,12 @@ void main() {
   vec3 ft = normalize(normal);
   vec3 bankDir = normalize(vec3(-ft.z, 0.0, ft.x));
   float midFactor = 1.0 - abs(aWaterMeta.y);
+  vec3 dBub = abs(pos - uPlayerBubbleCenter);
+  float in6m = 1.0 - smoothstep(uAnimBubbleHalf - 0.35, uAnimBubbleHalf, max(max(dBub.x, dBub.y), dBub.z));
   float floodWave = 1.0 + uFloodMud * 2.4;
-  float heave = sin(aWaterMeta.x * 0.42 - uTime * (3.8 + uFloodMud * 2.8)) * 0.048 * floodWave
-              + cos(aWaterMeta.x * 0.95 + aWaterMeta.y * 5.2 - uTime * 5.1) * 0.022 * floodWave;
+  float animT = uTime * in6m;
+  float heave = (sin(aWaterMeta.x * 0.42 - animT * (3.8 + uFloodMud * 2.8)) * 0.048 * floodWave
+              + cos(aWaterMeta.x * 0.95 + aWaterMeta.y * 5.2 - animT * 5.1) * 0.022 * floodWave) * in6m;
   pos.y += uFloodRise + heave * midFactor * clamp((aWaterMeta.z + uFloodRise) * 0.5, 0.0, 1.4);
   pos.xz += bankDir.xz * (aWaterMeta.y * uFloodRise * 10.5);
 
@@ -202,12 +207,15 @@ void main() {
   vec3 T = normalize(vec3(vFlowTangent.x, 0.0, vFlowTangent.z));
   vec3 B = normalize(vec3(-T.z, 0.0, T.x));
 
-  // 1. CRISP ISOTROPIC WORLD-SPACE ALPINE STREAM RIPPLES (raging velocity when flooded!)
+  // 1. CRISP ISOTROPIC WORLD-SPACE ALPINE STREAM RIPPLES (strictly animated inside 6m × 6m × 6m player bubble!)
+  vec3 dBubW = abs(vWorldPos - uPlayerBubbleCenter);
+  float in6mW = 1.0 - smoothstep(uAnimBubbleHalf - 0.35, uAnimBubbleHalf, max(max(dBubW.x, dBubW.y), dBubW.z));
+  float waterAnimT = uTime * in6mW;
   float flowSpeed = (1.65 + clamp(localSlope * 26.0, 0.0, 5.2)) * (1.0 + uFloodMud * 1.65);
   vec2 pMetric = vec2(dot(vWorldPos.xz, B.xz), dot(vWorldPos.xz, T.xz));
-  float adv1 = uTime * flowSpeed * 0.62;
-  float adv2 = uTime * flowSpeed * 1.02;
-  float adv3 = uTime * flowSpeed * 1.48;
+  float adv1 = waterAnimT * flowSpeed * 0.62;
+  float adv2 = waterAnimT * flowSpeed * 1.02;
+  float adv3 = waterAnimT * flowSpeed * 1.48;
 
   const mat2 rotW1  = mat2( 0.8988, -0.4384,  0.4384, 0.8988);
   const mat2 rotW1T = mat2( 0.8988,  0.4384, -0.4384, 0.8988);

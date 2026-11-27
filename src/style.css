@@ -1059,6 +1059,9 @@ html, body {
   font-weight: 600;
   color: rgba(248, 250, 252, 0.92);
   letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+  min-width: 48px;
+  display: inline-block;
 }
 
 .map2d-meta-line {
@@ -1067,6 +1070,24 @@ html, body {
   font-weight: 500;
   color: rgba(226, 232, 240, 0.88);
   letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.setting-select {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(12, 18, 28, 0.78);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+.setting-select:focus {
+  border-color: rgba(56, 189, 248, 0.65);
 }
 

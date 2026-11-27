@@ -159,13 +159,15 @@ void main() {
   float valleyAO = mix(0.74, 1.04, skyViewAO);
   float shade = clamp((sun1 * 0.86 * castShad + sun2 * 0.24 + 0.28) * valleyAO, 0.40, 1.26);
 
-  // Branchless SwissTopo × GSI Hypsometric Palette (-500m Rift Trench -> Valley -> Montane -> Alpine -> +2,500m Glacier)
-  vec3 col = mix(vec3(0.07, 0.22, 0.24), vec3(0.17, 0.40, 0.30), smoothstep(-500.0, 0.0, asl));
-  col = mix(col, vec3(0.31, 0.50, 0.31), smoothstep(0.0, 380.0, asl));
-  col = mix(col, vec3(0.52, 0.62, 0.40), smoothstep(380.0, 920.0, asl));
-  col = mix(col, vec3(0.73, 0.70, 0.54), smoothstep(920.0, 1520.0, asl));
-  col = mix(col, vec3(0.65, 0.64, 0.66), smoothstep(1520.0, 1960.0, asl));
-  col = mix(col, vec3(0.94, 0.97, 1.00), smoothstep(1960.0, 2300.0, asl));
+  // Branchless SwissTopo × GSI 4,800m Hypsometric Palette (-800m Abyss -> Sunken Cloud Forest -> Valley -> Alpine -> +4,000m Glacier!)
+  vec3 col = mix(vec3(0.06, 0.16, 0.25), vec3(0.11, 0.29, 0.31), smoothstep(-800.0, -420.0, asl));
+  col = mix(col, vec3(0.19, 0.42, 0.30), smoothstep(-420.0, 0.0, asl));
+  col = mix(col, vec3(0.30, 0.50, 0.30), smoothstep(0.0, 560.0, asl));
+  col = mix(col, vec3(0.52, 0.61, 0.39), smoothstep(560.0, 1380.0, asl));
+  col = mix(col, vec3(0.72, 0.68, 0.51), smoothstep(1380.0, 2200.0, asl));
+  col = mix(col, vec3(0.61, 0.61, 0.65), smoothstep(2200.0, 2820.0, asl));
+  col = mix(col, vec3(0.89, 0.94, 0.99), smoothstep(2820.0, 3420.0, asl));
+  col = mix(col, vec3(0.95, 0.98, 1.00), smoothstep(3420.0, 3980.0, asl));
 
   // 8-Lithology Geological Province Tinting (Volcanic Basalt, Karst Limestone, Red-Ochre Tuff/Sandstone, Peat Bog)
   col = mix(col, vec3(0.28, 0.29, 0.33), litho.r * 0.44);
@@ -174,21 +176,22 @@ void main() {
   col = mix(col, vec3(0.17, 0.35, 0.25), litho.a * 0.44);
 
   // Concave Alpine Talus / Scree Apron Stippling (ガレ場細点描画!)
-  float talusMask = smoothstep(0.50, 0.36, curv) * smoothstep(0.36, 0.58, slope) * (1.0 - smoothstep(0.65, 0.88, slope)) * smoothstep(560.0, 1100.0, asl);
+  float talusMask = smoothstep(0.50, 0.36, curv) * smoothstep(0.36, 0.58, slope) * (1.0 - smoothstep(0.65, 0.88, slope)) * smoothstep(820.0, 1520.0, asl);
   float screeDots = smoothstep(0.62, 0.86, m1.a) * smoothstep(4.0, 32.0, uZoom);
   col = mix(col, mix(vec3(0.58, 0.56, 0.53), vec3(0.26, 0.27, 0.29), screeDots * 0.65), talusMask * 0.68);
 
   // Exposed Cliff Rock Faces (dark basalt / pale limestone / ochre sandstone / alpine granite)
-  float rockMask = smoothstep(0.46, 0.86, slope + (1.0 - eco.r) * 0.35) * (1.0 - smoothstep(2050.0, 2350.0, asl) * 0.72);
+  float rockMask = smoothstep(0.46, 0.86, slope + (1.0 - eco.r) * 0.35) * (1.0 - smoothstep(2850.0, 3450.0, asl) * 0.70);
   vec3 rockInk = mix(vec3(0.44, 0.45, 0.49), vec3(0.27, 0.28, 0.32), litho.r);
   rockInk = mix(rockInk, vec3(0.68, 0.66, 0.60), litho.g * 0.65);
   rockInk = mix(rockInk, vec3(0.64, 0.44, 0.30), litho.b * 0.65);
   col = mix(col, rockInk, rockMask * 0.76);
 
-  // 4-Belt Forest Canopy Velvet + Zoom-Progressive Top-Down Botanical Tree Crowns (モフモフ樹冠!)
-  float forestMask = smoothstep(0.24, 0.52, eco.r) * canopyDensity * (1.0 - smoothstep(0.45, 0.68, slope)) * (1.0 - smoothstep(1840.0, 2060.0, asl));
+  // 6-Belt Forest Canopy Velvet + Zoom-Progressive Top-Down Botanical Tree Crowns (-720m .. +2,500m!)
+  float forestMask = smoothstep(0.24, 0.52, eco.r) * canopyDensity * (1.0 - smoothstep(0.45, 0.68, slope)) * (1.0 - smoothstep(2260.0, 2540.0, asl)) * smoothstep(-740.0, -560.0, asl);
   vec3 standTint = mix(vec3(0.76, 0.92, 0.80), vec3(0.98, 0.96, 0.78), eco.a);
-  standTint = mix(standTint, vec3(0.72, 0.84, 0.82), smoothstep(1380.0, 1740.0, asl));
+  standTint = mix(standTint, vec3(0.66, 0.88, 0.84), smoothstep(-150.0, -580.0, asl) * 0.65);
+  standTint = mix(standTint, vec3(0.72, 0.84, 0.82), smoothstep(1550.0, 2150.0, asl));
   // Domain-warped organic top-down tree crown domes with NW sunlit tip & SE shadow pocket at zoom >= 12!
   vec4 crownHi = texture(uMicroTex, (worldXZ * 0.24 + (m0.rg - 0.5) * 4.5 + 0.5) / 256.0);
   float crownZoom = smoothstep(8.0, 48.0, uZoom);
@@ -211,10 +214,10 @@ void main() {
   float crossFract = smoothstep(0.68, 0.95, abs(sin(dot(worldXZ, downDir) * hatchFreq * 0.42 + m0.a * 3.0)));
   col = mix(col, col * 0.48 + vec3(0.04, 0.05, 0.07), cliffAmt * clamp(hatchLine * 0.58 + crossFract * 0.22, 0.0, 0.72));
 
-  // Glacier Crevasse Blue-Ice Hatching on steep alpine snowfields (> 2,020 m)
-  float glacMask = smoothstep(2000.0, 2240.0, asl) * smoothstep(0.26, 0.64, slope);
+  // Glacier Crevasse Blue-Ice Hatching on high alpine snowfields (+2,820 m .. +4,100 m)
+  float glacMask = smoothstep(2800.0, 3240.0, asl) * smoothstep(0.24, 0.66, slope);
   float crev = smoothstep(0.74, 0.95, abs(sin(dot(worldXZ, downDir) * 0.14 + m1.r * 5.0)));
-  col = mix(col, vec3(0.42, 0.72, 0.94), glacMask * crev * 0.48);
+  col = mix(col, vec3(0.38, 0.70, 0.96), glacMask * crev * 0.52);
 
   // 3-Tier Adaptive Analytical fwidth() Contours (Index + Intermediate + Flat-Terrain Supplementary!)
   float powStep = exp2(floor(clamp(5.65 - logZ * 0.72, -2.0, 5.65)));
@@ -225,12 +228,12 @@ void main() {
   float cSupp = contourMask(asl, suppStep, 0.55) * flatMask;
   float cMinor = contourMask(asl, minorStep, 0.80);
   float cMajor = contourMask(asl, majorStep, 1.44);
-  vec3 contourInk = mix(vec3(0.18, 0.12, 0.08), vec3(0.18, 0.44, 0.68), step(2020.0, asl));
-  contourInk = mix(contourInk, vec3(0.10, 0.26, 0.34), step(asl, 0.0));
+  vec3 contourInk = mix(vec3(0.18, 0.12, 0.08), vec3(0.16, 0.46, 0.74), step(2820.0, asl));
+  contourInk = mix(contourInk, vec3(0.10, 0.28, 0.38), step(asl, 0.0));
   col = mix(col, contourInk, clamp(cSupp * 0.14 + cMinor * 0.26 + cMajor * 0.60, 0.0, 0.68));
 
   // Dendritic Mountain Brooks & Alpine Ravine Streams (extracted from hydraulic flow wetness + concave valleys!)
-  float brookFlow = smoothstep(0.56, 0.88, wetness) * smoothstep(0.54, 0.38, curv) * (1.0 - step(2080.0, asl) * 0.75);
+  float brookFlow = smoothstep(0.56, 0.88, wetness) * smoothstep(0.54, 0.38, curv) * (1.0 - step(2780.0, asl) * 0.75);
   col = mix(col, vec3(0.24, 0.68, 0.86), brookFlow * 0.62);
 
   // Exact Contour-Clipped Natural Basin Lakes + Bathymetric Depth Contours (等深線) + Shoal Rims!
@@ -251,7 +254,7 @@ void main() {
 }
 `;
 
-// DEDICATED SUBTERRANEAN -1,500m X-RAY STRATA SHADER WITH MULTI-DECK DEPTH PARALLAX (Lazy-compiled!)
+// DEDICATED SUBTERRANEAN -2,600m X-RAY STRATA SHADER WITH MULTI-DECK DEPTH PARALLAX (Lazy-compiled!)
 const MAP_XRAY_FRAG_GLSL3 = /* glsl */ `
 uniform sampler2D uGeoTex;
 uniform sampler2D uSubTex;
@@ -292,7 +295,7 @@ void main() {
   float cMinor = contourMask(asl, minorStep, 0.70);
   float cMajor = contourMask(asl, minorStep * 5.0, 1.25);
 
-  vec3 xrayBase = vec3(0.036, 0.062, 0.098) + vec3(0.05, 0.08, 0.11) * clamp((asl + 500.0) / 3000.0, 0.0, 1.0);
+  vec3 xrayBase = vec3(0.036, 0.062, 0.098) + vec3(0.05, 0.08, 0.11) * clamp((asl + 800.0) / 4800.0, 0.0, 1.0);
   xrayBase = mix(xrayBase, vec3(0.16, 0.30, 0.44), cMinor * 0.18 + cMajor * 0.46);
 
   vec4 sub = texture(uSubTex, safeUv);

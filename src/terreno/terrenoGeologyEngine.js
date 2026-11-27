@@ -278,15 +278,73 @@ export const GEOLOGY_PROCESS_CATALOG_160 = [
   { index: 153, id: 'alluvial_mudflat_playa',      kind: 'alluvial_mudflat_playa',      category: 'wetland',      isNewV7: true, nameJp: '乾湖プラヤ・塩類亀裂平地',         shortJp: '乾湖プラヤ原' },
   { index: 154, id: 'string_bog_aapa_mire',        kind: 'string_bog_aapa_mire',        category: 'wetland',      isNewV7: true, nameJp: 'アアパ湿原・縞状泥炭池塘群',       shortJp: 'アアパ縞状湿原', hasBogPools: true },
   { index: 155, id: 'spring_travertine_cascade',   kind: 'spring_travertine_cascade',   category: 'karst',        isNewV7: true, nameJp: '湧水石灰華階段滝・段丘池',         shortJp: '石灰華階段池', hasWaterfall: true, hasHotSpring: true },
-  { index: 156, id: 'coastal_drowned_ria_basin',   kind: 'coastal_drowned_ria_basin',   category: 'tectonic',     isNewV7: true, nameJp: '沈水リアス型複雑入り江盆地（-500m帯）', shortJp: '沈水リアス盆地', hasLake: true },
+  { index: 156, id: 'coastal_drowned_ria_basin',   kind: 'coastal_drowned_ria_basin',   category: 'tectonic',     isNewV7: true, nameJp: '沈水リアス型複雑入り江盆地（深淵帯）', shortJp: '沈水リアス盆地', hasLake: true },
   // Deep Subterranean (-280m .. -1,500m) (157..160)
   { index: 157, id: 'sub_sunken_cenote_lake',      kind: 'sub_sunken_cenote_lake',      category: 'subterranean', isNewV7: true, nameJp: '地底透水セノーテ大地下湖（-280m）', shortJp: '地底セノーテ湖', subDepthRange: [-120, -340] },
   { index: 158, id: 'sub_basalt_column_vault',     kind: 'sub_basalt_column_vault',     category: 'subterranean', isNewV7: true, nameJp: '地底柱状節理溶岩大聖堂（-640m）',   shortJp: '地底柱状溶岩堂', subDepthRange: [-380, -760] },
   { index: 159, id: 'sub_quartz_geode_cavern',     kind: 'sub_quartz_geode_cavern',     category: 'subterranean', isNewV7: true, nameJp: '深部熱水石英ジオード大空洞（-1,120m）', shortJp: '深部石英大空洞', subDepthRange: [-860, -1240] },
-  { index: 160, id: 'sub_mantle_plume_rift',       kind: 'sub_mantle_plume_rift',       category: 'subterranean', isNewV7: true, nameJp: '最深-1,500m マントル熱水深淵裂谷', shortJp: '深淵熱水裂谷',   subDepthRange: [-1250, -1500], hasHotSpring: true },
+  { index: 160, id: 'sub_mantle_plume_rift',       kind: 'sub_mantle_plume_rift',       category: 'subterranean', isNewV7: true, nameJp: '深部-1,500m マントル熱水深淵裂谷', shortJp: '深淵熱水裂谷',   subDepthRange: [-1250, -1500], hasHotSpring: true },
+
+  // --- 161..210: V8 +50 BRAND-NEW ULTRA-REALISTIC ALPINE 4,100m, ABYSSAL -2,000m, CANYON, VOLCANIC, KARST & -2,600m PROCESSES! ---
+  // High-Alpine 3,000m..4,100m Glacial & Nival Spires (161..170)
+  { index: 161, id: 'alpine_serac_icefall',        kind: 'alpine_serac_icefall',        category: 'glacial',      isNewV8: true, nameJp: 'セラック氷瀑・青氷クレバス帯',     shortJp: 'セラック氷瀑' },
+  { index: 162, id: 'glacial_berg_amphitheater',   kind: 'glacial_berg_amphitheater',   category: 'glacial',      isNewV8: true, nameJp: '4000m級大圏谷・氷食円形絶壁',      shortJp: '4000m大圏谷' },
+  { index: 163, id: 'nival_cornice_crest',         kind: 'nival_cornice_crest',         category: 'glacial',      isNewV8: true, nameJp: '雪庇懸垂稜線・極高ナイフエッジ',   shortJp: '雪庇極高稜線' },
+  { index: 164, id: 'alpine_nunatak_spire',        kind: 'alpine_nunatak_spire',        category: 'cliff',        isNewV8: true, nameJp: 'ヌナタク氷海孤立尖峰',             shortJp: 'ヌナタク尖峰' },
+  { index: 165, id: 'glacier_crevasse_field',      kind: 'glacier_crevasse_field',      category: 'glacial',      isNewV8: true, nameJp: '氷河縦横クレバス裂溝原',           shortJp: '氷河クレバス原' },
+  { index: 166, id: 'glacial_tarn_stairway',       kind: 'glacial_tarn_stairway',       category: 'glacial',      isNewV8: true, nameJp: '高山氷河湖・多段氷食池群',         shortJp: '氷食多段池群', hasLake: true },
+  { index: 167, id: 'permafrost_gelifluction_step',kind: 'permafrost_gelifluction_step',category: 'glacial',      isNewV8: true, nameJp: '永久凍土ジェリフラクション階段斜面', shortJp: '凍土階段斜面' },
+  { index: 168, id: 'cryo_granite_tor_ridge',      kind: 'cryo_granite_tor_ridge',      category: 'cliff',        isNewV8: true, nameJp: '凍結破砕花崗岩トア連稜',           shortJp: '花崗岩トア稜' },
+  { index: 169, id: 'snowmelt_proglacial_delta',   kind: 'snowmelt_proglacial_delta',   category: 'fluvial',      isNewV8: true, nameJp: '氷河末端融水デルタ礫原',           shortJp: '氷河融水原' },
+  { index: 170, id: 'alpine_heather_meadow_bench', kind: 'alpine_heather_meadow_bench', category: 'glacial',      isNewV8: true, nameJp: '高山お花畑・氷食テラス草原',       shortJp: '高山お花畑帯' },
+  // Abyssal -800m..-180m Tectonic Rifts, Brine Flats & Sunken Cloud-Forests (171..180)
+  { index: 171, id: 'abyssal_brine_salt_flat',     kind: 'abyssal_brine_salt_flat',     category: 'tectonic',     isNewV8: true, nameJp: '-800m深淵塩湖・岩塩多角形原',      shortJp: '深淵岩塩湖原', hasLake: true },
+  { index: 172, id: 'abyssal_rift_step_wall',      kind: 'abyssal_rift_step_wall',      category: 'tectonic',     isNewV8: true, nameJp: '深淵アビサル多段正断層大絶壁',     shortJp: '深淵多段断崖' },
+  { index: 173, id: 'sunken_cloud_fern_sink',      kind: 'sunken_cloud_fern_sink',      category: 'karst',        isNewV8: true, nameJp: '深谷雲霧シダ陥没原生窪地',         shortJp: '雲霧シダ深窪' },
+  { index: 174, id: 'abyssal_hydrothermal_terrace',kind: 'abyssal_hydrothermal_terrace',category: 'volcano',      isNewV8: true, nameJp: '深淵熱水チムニー・硫気段丘',       shortJp: '深淵熱水段丘', hasHotSpring: true },
+  { index: 175, id: 'abyssal_obsidian_flow_gorge', kind: 'abyssal_obsidian_flow_gorge', category: 'volcano',      isNewV8: true, nameJp: '深淵黒曜石溶岩流・暗黒峡谷',       shortJp: '黒曜暗黒峡谷' },
+  { index: 176, id: 'rift_horst_island_mesa',      kind: 'rift_horst_island_mesa',      category: 'tectonic',     isNewV8: true, nameJp: '裂谷内孤立ホルスト岩塊メサ',       shortJp: '裂谷孤立メサ' },
+  { index: 177, id: 'sunken_limestone_shaft_gorge',kind: 'sunken_limestone_shaft_gorge',category: 'karst',        isNewV8: true, nameJp: '深渓石灰岩陥没縦穴連峡',           shortJp: '石灰岩縦穴峡' },
+  { index: 178, id: 'abyssal_alkali_soda_lake',    kind: 'abyssal_alkali_soda_lake',    category: 'tectonic',     isNewV8: true, nameJp: '深淵アルカリ蒼碧塩水湖',           shortJp: '深淵蒼碧塩湖', hasLake: true },
+  { index: 179, id: 'deep_canyon_mist_waterfall',  kind: 'deep_canyon_mist_waterfall',  category: 'fluvial',      isNewV8: true, nameJp: '深淵断崖・雲霧落差大瀑布',         shortJp: '深淵雲霧大滝', hasWaterfall: true },
+  { index: 180, id: 'abyssal_alluvial_megacone',   kind: 'abyssal_alluvial_megacone',   category: 'erosion',      isNewV8: true, nameJp: '深淵裂谷壁・巨大崖錐扇状錐',       shortJp: '深淵大崖錐扇' },
+  // Fluvial, Canyon, Red-Rock & Karst Wonders (181..192)
+  { index: 181, id: 'redrock_amphitheater_canyon', kind: 'redrock_amphitheater_canyon', category: 'erosion',      isNewV8: true, nameJp: '朱岩赤色砂岩アンフィシアター峡谷', shortJp: '朱岩大円峡谷' },
+  { index: 182, id: 'narrow_slot_narrows',         kind: 'narrow_slot_narrows',         category: 'fluvial',      isNewV8: true, nameJp: '暗黒狭隘スロットナローズ岩溝',     shortJp: '狭隘ナローズ' },
+  { index: 183, id: 'sandstone_monolith_temple',   kind: 'sandstone_monolith_temple',   category: 'cliff',        isNewV8: true, nameJp: '赤色砂岩巨大モノリス岩殿',         shortJp: '砂岩モノリス' },
+  { index: 184, id: 'terraced_canyon_esplanade',   kind: 'terraced_canyon_esplanade',   category: 'erosion',      isNewV8: true, nameJp: '多段キャニオン・エスプラネード台地', shortJp: '多段峡谷台地' },
+  { index: 185, id: 'double_waterfall_gorge',      kind: 'double_waterfall_gorge',      category: 'fluvial',      isNewV8: true, nameJp: '二段大瀑布・深淵滝壺峡谷',         shortJp: '二段大瀑布峡', hasWaterfall: true, hasLake: true },
+  { index: 186, id: 'braided_glacial_delta_fan',   kind: 'braided_glacial_delta_fan',   category: 'fluvial',      isNewV8: true, nameJp: '網状大河原・礫州合流デルタ',       shortJp: '網状礫州原' },
+  { index: 187, id: 'karst_cenote_chain',          kind: 'karst_cenote_chain',          category: 'karst',        isNewV8: true, nameJp: '連鎖カルスト・セノーテ蒼碧池群',   shortJp: '連鎖セノーテ', hasLake: true },
+  { index: 188, id: 'limestone_gorge_pinnacles',   kind: 'limestone_gorge_pinnacles',   category: 'karst',        isNewV8: true, nameJp: '石灰岩剣山・尖塔大渓谷',           shortJp: '石灰岩尖塔峡' },
+  { index: 189, id: 'travertine_dam_pools',        kind: 'travertine_dam_pools',        category: 'karst',        isNewV8: true, nameJp: '石灰華天然ダム・瑠璃段丘池群',     shortJp: '瑠璃段丘池群', hasLake: true, hasHotSpring: true },
+  { index: 190, id: 'karst_polje_sinking_river',   kind: 'karst_polje_sinking_river',   category: 'karst',        isNewV8: true, nameJp: '伏流吸い込みポリエ・消滅河川盆地', shortJp: '伏流ポリエ盆', hasBogPools: true },
+  { index: 191, id: 'moss_gorge_emerald_pools',    kind: 'moss_gorge_emerald_pools',    category: 'fluvial',      isNewV8: true, nameJp: '苔渓谷・翡翠色甌穴連淵',           shortJp: '苔渓翡翠連淵', hasWaterfall: true },
+  { index: 192, id: 'meandering_canyon_buttes',    kind: 'meandering_canyon_buttes',    category: 'erosion',      isNewV8: true, nameJp: '曲流峡谷・取り残され孤立残丘',     shortJp: '曲流孤立残丘' },
+  // Volcanic, Tectonic, Badlands & Wetland Biomes (193..204)
+  { index: 193, id: 'stratovolcano_parasitic_cone',kind: 'stratovolcano_parasitic_cone',category: 'volcano',      isNewV8: true, nameJp: '成層火山側火山・寄生スコリア峰',   shortJp: '寄生火山峰' },
+  { index: 194, id: 'columnar_lava_canyon',        kind: 'columnar_lava_canyon',        category: 'volcano',      isNewV8: true, nameJp: '柱状節理溶岩峡谷・玄武岩壁廊',     shortJp: '柱状溶岩峡廊' },
+  { index: 195, id: 'caldera_crater_twin_lakes',   kind: 'caldera_crater_twin_lakes',   category: 'volcano',      isNewV8: true, nameJp: '双子火口湖・複成カルデラ盆地',     shortJp: '双子火口湖',   hasLake: true },
+  { index: 196, id: 'geothermal_boiling_spring_field', kind: 'geothermal_boiling_spring_field', category: 'volcano', isNewV8: true, nameJp: '沸騰泉・間欠泉熱水荒原', shortJp: '間欠泉熱水原', hasHotSpring: true },
+  { index: 197, id: 'basalt_shield_fissure_rift',  kind: 'basalt_shield_fissure_rift',  category: 'volcano',      isNewV8: true, nameJp: '玄武岩楯状火山・割れ目噴火裂溝',   shortJp: '割れ目噴火溝' },
+  { index: 198, id: 'volcanic_ignimbrite_pillars', kind: 'volcanic_ignimbrite_pillars', category: 'volcano',      isNewV8: true, nameJp: '溶結凝灰岩・浸食奇岩柱廊',         shortJp: '凝灰岩奇岩廊' },
+  { index: 199, id: 'fold_belt_hogback_ribs',      kind: 'fold_belt_hogback_ribs',      category: 'tectonic',     isNewV8: true, nameJp: '褶曲山脈ホッグバック鋸歯連脈',     shortJp: '褶曲鋸歯連脈' },
+  { index: 200, id: 'tectonic_wrench_basin',       kind: 'tectonic_wrench_basin',       category: 'tectonic',     isNewV8: true, nameJp: '横ずれ断層レンチ構造盆地',         shortJp: '断層レンチ盆', hasLake: true },
+  { index: 201, id: 'multicolored_badland_stripes',kind: 'multicolored_badland_stripes',category: 'erosion',      isNewV8: true, nameJp: '彩層バッドランド・赤黄互層ガリー', shortJp: '彩層ガリー原' },
+  { index: 202, id: 'ancient_landslide_lake_chain',kind: 'ancient_landslide_lake_chain',category: 'erosion',      isNewV8: true, nameJp: '大規模崩壊・天然堰止連湖',         shortJp: '天然堰止連湖', hasLake: true },
+  { index: 203, id: 'subalpine_peat_tarn_plateau', kind: 'subalpine_peat_tarn_plateau', category: 'wetland',      isNewV8: true, nameJp: '亜高山池塘高原・湿原連池',         shortJp: '亜高山池塘原', hasBogPools: true },
+  { index: 204, id: 'bamboo_mist_ravine_terrace',  kind: 'bamboo_mist_ravine_terrace',  category: 'fluvial',      isNewV8: true, nameJp: '雲霧竹林・段丘湧水渓谷',           shortJp: '雲霧湧水渓' },
+  // Deep Subterranean Strata (-801m .. -1,900m) (205..210)
+  { index: 205, id: 'sub_abyssal_karst_cathedral', kind: 'sub_abyssal_karst_cathedral', category: 'subterranean', isNewV8: true, nameJp: '地下-960m 巨大カルスト大聖堂空洞', shortJp: '地下カルスト堂', subDepthRange: [-801, -1080] },
+  { index: 206, id: 'sub_columnar_obsidian_gallery',kind: 'sub_columnar_obsidian_gallery', category: 'subterranean', isNewV8: true, nameJp: '地下-1,220m 黒曜柱状節理溶岩回廊', shortJp: '黒曜溶岩回廊', subDepthRange: [-1080, -1340] },
+  { index: 207, id: 'sub_brine_underground_sea',   kind: 'sub_brine_underground_sea',   category: 'subterranean', isNewV8: true, nameJp: '地下-1,440m 地底塩水暗黒海',       shortJp: '地底暗黒塩海', subDepthRange: [-1300, -1540] },
+  { index: 208, id: 'sub_amethyst_hydrothermal_vault', kind: 'sub_amethyst_hydrothermal_vault', category: 'subterranean', isNewV8: true, nameJp: '地下-1,620m 熱水鉱脈巨晶空洞', shortJp: '深部巨晶空洞', subDepthRange: [-1500, -1720] },
+  { index: 209, id: 'sub_superheated_geyser_chamber', kind: 'sub_superheated_geyser_chamber', category: 'subterranean', isNewV8: true, nameJp: '地下-1,780m 超臨界地熱蒸気空洞', shortJp: '超臨界地熱洞', subDepthRange: [-1680, -1840], hasHotSpring: true },
+  { index: 210, id: 'sub_ultra_abyss_2600_trench', kind: 'sub_ultra_abyss_2600_trench', category: 'subterranean', isNewV8: true, nameJp: '最深-1,900m 地殻マントル深淵裂谷', shortJp: '最深-1900m裂谷', subDepthRange: [-1780, -1900], hasHotSpring: true },
 ];
 
 // Backwards-compatible exports
+export const GEOLOGY_PROCESS_CATALOG_210 = GEOLOGY_PROCESS_CATALOG_160;
 export const GEOLOGY_PROCESS_CATALOG_100 = GEOLOGY_PROCESS_CATALOG_160;
 export const GEOLOGY_PROCESS_CATALOG_62 = GEOLOGY_PROCESS_CATALOG_160;
 export const GEOLOGY_BY_INDEX = new Map(GEOLOGY_PROCESS_CATALOG_160.map((g) => [g.index, g]));
@@ -313,10 +371,11 @@ export function evalGeologicalProvinces(wx, wz) {
 }
 
 // ============================================================================
-// MULTI-OCCURRENCE FEATURE FIELD GENERATOR (ALL 100 PROCESSES -> 540+ FEATURES!)
+// TERRENO 8.0 — TERRAIN-AWARE GEOMORPHOLOGICAL AFFINITY GENERATOR (210 PROCESSES -> 1,620+ FORMATIONS!)
+// Places every natural landform strictly where real geology, slope breaks, hydrology & elevation demand it!
 // ============================================================================
-function generateMultiOccurrenceFeatures100(sampleGrid) {
-  const rng = makeRng(2026112606);
+function generateMultiOccurrenceFeatures210(sampleGrid, sampleSlope) {
+  const rng = makeRng(2026112808);
   const features = [];
   const compX = TERRENO_WORLD.compoundCenterX;
   const compZ = TERRENO_WORLD.compoundCenterZ;
@@ -324,11 +383,16 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
   const villZ = TERRENO_WORLD.villageCenterZ;
   const sr = TERRENO_WORLD.southRect;
 
+  const posChains = OROGENIC_CHAINS.filter((c) => c.sign > 0);
+  const riftChains = OROGENIC_CHAINS.filter((c) => c.sign < 0);
+  const volcChains = OROGENIC_CHAINS.filter((c) => c.kind === 'volcanic_arc' || c.id === 'chain_central_east_highlands');
+  const redRockChains = OROGENIC_CHAINS.filter((c) => c.id === 'chain_sw_hogback_mesa' || c.id === 'chain_west_escarpment' || c.id === 'chain_south_flank_scarp');
+
   function isSafeFromSettlements(x, z, radius) {
     if (x < -28600 || x > 28600 || z < -28600 || z > 28600) return false;
-    const minD = Math.min(260, radius * 0.48) + 95;
+    const minD = Math.min(230, radius * 0.48) + 88;
     if (Math.hypot(x - compX, z - compZ) < minD) return false;
-    if (Math.hypot(x - villX, z - villZ) < minD + 35) return false;
+    if (Math.hypot(x - villX, z - villZ) < minD + 36) return false;
     if (x > sr.minX - radius - 140 && x < sr.maxX + radius + 140 && z > sr.minZ - radius - 140) return false;
     return true;
   }
@@ -358,10 +422,11 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
     });
   }
 
-  // Helper to spawn N occurrences organically in ecologically/geologically valid zones
+  // Spawn N occurrences organically via geomorphological affinity picker (with soft fallback)
   function spawnSuite(id, count, minR, maxR, strMin, strMax, pickerFn, extraFn = null) {
     let placed = 0;
-    for (let attempt = 0; attempt < count * 14 && placed < count; attempt++) {
+    const maxAttempts = count * 18;
+    for (let attempt = 0; attempt < maxAttempts && placed < count; attempt++) {
       const cand = pickerFn(attempt, placed);
       if (!cand) continue;
       const r = minR + rng() * (maxR - minR);
@@ -371,53 +436,69 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
       addFeat(id, cand.x, cand.z, r, str, ex);
       placed++;
     }
-    // Guarantee at least 3 multi-occurrence placements even under tight filters
-    while (placed < Math.min(3, count)) {
+    let guard = 0;
+    while (placed < Math.min(4, count) && guard++ < 48) {
       const wx = (rng() - 0.5) * 52000;
       const wz = (rng() - 0.5) * 52000;
       const r = minR + rng() * (maxR - minR);
       if (!isSafeFromSettlements(wx, wz, r)) continue;
-      addFeat(id, wx, wz, r, (strMin + strMax) * 0.5, {});
+      const ex = extraFn ? extraFn({ x: wx, z: wz }, r, placed) : {};
+      addFeat(id, wx, wz, r, (strMin + strMax) * 0.5, ex);
       placed++;
     }
   }
 
-  const pickWild = () => ({ x: (rng() - 0.5) * 54000, z: (rng() - 0.5) * 54000 });
-  const pickHighAlpine = () => {
-    const chain = OROGENIC_CHAINS[Math.floor(rng() * 4)];
+  function sampleNearChain(chains, spreadScale = 0.58) {
+    const chain = chains[Math.floor(rng() * chains.length)];
     const node = chain.nodes[Math.floor(rng() * chain.nodes.length)];
     const ang = rng() * Math.PI * 2;
-    const d = 300 + rng() * (node[3] * 0.55);
-    const x = node[0] + Math.cos(ang) * d;
-    const z = node[1] + Math.sin(ang) * d;
-    if (sampleGrid(x, z) + TERRENO_WORLD.baseElevationASL < 920) return null;
-    return { x, z };
+    const d = 180 + rng() * (node[3] * spreadScale);
+    return { x: node[0] + Math.cos(ang) * d, z: node[1] + Math.sin(ang) * d };
+  }
+
+  const pickWild = () => ({ x: (rng() - 0.5) * 54000, z: (rng() - 0.5) * 54000 });
+  const pickExtreme4000 = () => {
+    const p = sampleNearChain([OROGENIC_CHAINS[0], OROGENIC_CHAINS[1], OROGENIC_CHAINS[4]], 0.42);
+    if (sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL < 2450) return null;
+    return p;
   };
   const pickGlacialPeak = () => {
-    const chain = OROGENIC_CHAINS[0];
-    const node = chain.nodes[Math.floor(rng() * chain.nodes.length)];
-    const ang = rng() * Math.PI * 2;
-    const d = 200 + rng() * 2400;
-    const x = node[0] + Math.cos(ang) * d;
-    const z = node[1] + Math.sin(ang) * d;
-    if (sampleGrid(x, z) + TERRENO_WORLD.baseElevationASL < 1450) return null;
-    return { x, z };
+    const p = sampleNearChain([OROGENIC_CHAINS[0], OROGENIC_CHAINS[1], OROGENIC_CHAINS[4]], 0.52);
+    if (sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL < 1850) return null;
+    return p;
+  };
+  const pickHighAlpine = () => {
+    const p = sampleNearChain(posChains, 0.62);
+    if (sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL < 1120) return null;
+    return p;
   };
   const pickVolcanic = () => {
-    const chain = OROGENIC_CHAINS[4];
-    const node = chain.nodes[Math.floor(rng() * chain.nodes.length)];
-    const ang = rng() * Math.PI * 2;
-    const d = 400 + rng() * 4800;
-    return { x: node[0] + Math.cos(ang) * d, z: node[1] + Math.sin(ang) * d };
+    const p = sampleNearChain(volcChains, 0.78);
+    return p;
+  };
+  const pickRiftAbyss = () => {
+    const p = sampleNearChain(riftChains, 0.46);
+    if (sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL > -240) return null;
+    return p;
   };
   const pickRift = () => {
-    const chain = rng() < 0.72 ? OROGENIC_CHAINS[5] : OROGENIC_CHAINS[6];
-    const node = chain.nodes[Math.floor(rng() * chain.nodes.length)];
-    const ang = rng() * Math.PI * 2;
-    const d = 150 + rng() * 1900;
-    return { x: node[0] + Math.cos(ang) * d, z: node[1] + Math.sin(ang) * d };
+    const p = sampleNearChain(riftChains, 0.68);
+    if (sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL > 360) return null;
+    return p;
   };
-  const pickRiverFlank = (minOff = 180, maxOff = 980) => {
+  const pickRedRock = () => {
+    const p = sampleNearChain(redRockChains, 0.72);
+    const asl = sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL;
+    if (asl < 180 || asl > 2350) return null;
+    return p;
+  };
+  const pickKarst = () => {
+    const p = rng() < 0.45 ? sampleNearChain([riftChains[1] || riftChains[0], posChains[1], posChains[7]], 0.85) : pickWild();
+    const asl = sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL;
+    if (asl < -1200 || asl > 1900) return null;
+    return p;
+  };
+  const pickRiverFlank = (minOff = 140, maxOff = 780) => {
     const z = -25500 + rng() * 51000;
     const rv = evalMainRiver(z);
     const side = rng() < 0.5 ? -1 : 1;
@@ -427,209 +508,274 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
   const pickTributary = () => {
     const tr = TRIBUTARIES[Math.floor(rng() * TRIBUTARIES.length)];
     const rv = evalMainRiver(tr.z0);
-    const along = 700 + rng() * (tr.len * 0.75);
-    const x = rv.x + tr.dirX * along + (rng() - 0.5) * 180;
-    const z = tr.z0 + tr.dirZ * along + (rng() - 0.5) * 180;
+    const along = 520 + rng() * (tr.len * 0.82);
+    const x = rv.x + tr.dirX * along + (rng() - 0.5) * 240;
+    const z = tr.z0 + tr.dirZ * along + (rng() - 0.5) * 240;
     return { x, z, extra: { angle: Math.atan2(tr.dirZ, tr.dirX) } };
   };
+  const pickTributaryCliff = () => {
+    const p = rng() < 0.70 ? pickTributary() : sampleNearChain(posChains, 0.72);
+    if (sampleSlope(p.x, p.z) < 0.08) return null;
+    return p;
+  };
   const pickSlopeMid = () => {
-    const x = (rng() - 0.5) * 52000;
-    const z = (rng() - 0.5) * 52000;
+    const p = rng() < 0.55 ? sampleNearChain(posChains, 0.85) : pickWild();
+    const asl = sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL;
+    if (asl < 320 || asl > 2250 || sampleSlope(p.x, p.z) < 0.06) return null;
+    return p;
+  };
+  const pickLowWetland = () => {
+    const x = (rng() - 0.35) * 44000;
+    const z = (rng() - 0.5) * 48000;
     const asl = sampleGrid(x, z) + TERRENO_WORLD.baseElevationASL;
-    if (asl < 380 || asl > 1750) return null;
+    if (asl < -220 || asl > 960 || sampleSlope(x, z) > 0.22) return null;
     return { x, z };
+  };
+  const pickSubalpineWetland = () => {
+    const p = sampleNearChain(posChains, 0.68);
+    const asl = sampleGrid(p.x, p.z) + TERRENO_WORLD.baseElevationASL;
+    if (asl < 1150 || asl > 2280 || sampleSlope(p.x, p.z) > 0.28) return null;
+    return p;
   };
 
   // --- A. Iconic Dramatic Cliffs & Near-Home Natural Wonders (Immediate breathtaking vistas!) ---
-  addFeat('sheer_dihedral_wall', -1420, -640, 560, 1.35, { angle: 0.42 });
-  addFeat('granite_exfoliation_dome', 1840, -920, 620, 1.30, { angle: -0.35 });
-  addFeat('waterfall_multitier', -980, -1420, 380, 1.25, { angle: 0.25 });
-  addFeat('basalt_cliff', 2180, 680, 520, 1.25, { angle: -0.58 });
-  addFeat('slot_canyon_labyrinth', -2240, 1180, 520, 1.25, { angle: 0.72 });
-  addFeat('karst_tiankeng_shaft', -680, 620, 290, 1.35, { isPortal: true });
+  addFeat('sheer_dihedral_wall', -1360, -610, 480, 1.38, { angle: 0.42 });
+  addFeat('granite_exfoliation_dome', 1760, -880, 520, 1.32, { angle: -0.35 });
+  addFeat('waterfall_multitier', -940, -1380, 340, 1.28, { angle: 0.25 });
+  addFeat('basalt_cliff', 2080, 640, 440, 1.28, { angle: -0.58 });
+  addFeat('slot_canyon_labyrinth', -2140, 1140, 450, 1.28, { angle: 0.72 });
+  addFeat('karst_tiankeng_shaft', -680, 620, 260, 1.38, { isPortal: true });
+  addFeat('columnar_basalt_organ', 1560, 400, 420, 1.40, { angle: -0.45 });
+  addFeat('flatiron_triangular_facet', -2540, -1760, 580, 1.36, { angle: 0.62 });
+  addFeat('box_canyon_headwall', -1820, 1620, 440, 1.34, { angle: -0.85 });
+  addFeat('butte_caprock_pillar', 2740, -2060, 390, 1.32, { angle: 0.20 });
+  addFeat('double_waterfall_gorge', 1420, -1680, 380, 1.32, { angle: 0.88, lakeKind: 'tarn' });
+  addFeat('moss_gorge_emerald_pools', -1120, 1280, 340, 1.26, { angle: -0.52 });
 
-  // --- B. ALL 62 UPGRADED PROCESSES (Multi-Occurrence Organic Suites: 4..9 each!) ---
-  spawnSuite('waterfall_multitier', 6, 260, 440, 0.9, 1.3, pickTributary);
-  spawnSuite('waterfall_veil', 5, 240, 400, 0.9, 1.2, pickTributary);
-  spawnSuite('v_gorge', 7, 520, 960, 1.0, 1.4, pickTributary);
-  spawnSuite('basalt_cliff', 7, 460, 820, 1.0, 1.4, pickVolcanic);
-  spawnSuite('natural_arch', 5, 260, 420, 0.9, 1.2, pickSlopeMid);
-  spawnSuite('river_terraces', 8, 520, 920, 0.9, 1.2, () => pickRiverFlank(90, 480));
-  spawnSuite('drumlin_hills', 5, 780, 1300, 0.9, 1.2, pickWild);
-  spawnSuite('volcanic_mesa', 6, 560, 980, 1.0, 1.4, pickVolcanic);
-  spawnSuite('caldera_lake', 4, 680, 1120, 1.1, 1.4, pickVolcanic, () => ({ lakeKind: 'caldera' }));
-  spawnSuite('glacial_cirque', 7, 580, 980, 1.1, 1.4, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
-  spawnSuite('karst_doline', 7, 460, 820, 0.9, 1.3, pickWild);
-  spawnSuite('cave_grotto', 6, 280, 460, 0.9, 1.3, pickSlopeMid);
-  spawnSuite('travertine_onsen', 5, 320, 540, 0.9, 1.2, pickVolcanic);
-  spawnSuite('alluvial_fan', 7, 560, 980, 0.9, 1.2, pickTributary);
-  spawnSuite('peat_bog', 6, 540, 960, 0.9, 1.2, () => ({ x: 4500 + rng() * 14000, z: -7000 + rng() * 18000 }), () => ({ lakeKind: 'bog' }));
-  spawnSuite('granite_hoodoos', 6, 380, 680, 1.0, 1.3, pickHighAlpine);
-  spawnSuite('talus_chute', 8, 420, 760, 1.0, 1.3, pickHighAlpine);
-  spawnSuite('cuesta_ridge', 7, 680, 1200, 1.0, 1.4, pickSlopeMid);
-  spawnSuite('alpine_saddle', 6, 520, 860, 1.0, 1.3, pickHighAlpine);
-  spawnSuite('scoria_cone', 6, 380, 680, 1.0, 1.3, pickVolcanic);
-  spawnSuite('braided_island', 8, 130, 220, 1.0, 1.2, () => {
-    const z = -22000 + rng() * 44000;
+  // --- B. ALL 62 CORE & V5 PROCESSES (8..10 organic placements each -> ~520 formations!) ---
+  spawnSuite('waterfall_multitier', 9, 220, 380, 0.95, 1.35, pickTributaryCliff);
+  spawnSuite('waterfall_veil', 8, 210, 360, 0.90, 1.25, pickTributaryCliff);
+  spawnSuite('v_gorge', 10, 400, 720, 1.05, 1.42, pickTributaryCliff);
+  spawnSuite('basalt_cliff', 10, 360, 640, 1.05, 1.42, pickVolcanic);
+  spawnSuite('natural_arch', 8, 220, 360, 0.95, 1.25, pickRedRock);
+  spawnSuite('river_terraces', 10, 400, 680, 0.95, 1.25, () => pickRiverFlank(85, 420));
+  spawnSuite('drumlin_hills', 8, 520, 860, 0.95, 1.25, pickSlopeMid);
+  spawnSuite('volcanic_mesa', 9, 440, 740, 1.05, 1.42, pickVolcanic);
+  spawnSuite('caldera_lake', 6, 540, 860, 1.12, 1.45, pickVolcanic, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('glacial_cirque', 10, 460, 760, 1.12, 1.45, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('karst_doline', 10, 360, 620, 0.95, 1.32, pickKarst);
+  spawnSuite('cave_grotto', 9, 240, 400, 0.95, 1.32, pickKarst);
+  spawnSuite('travertine_onsen', 8, 260, 440, 0.95, 1.25, pickVolcanic);
+  spawnSuite('alluvial_fan', 10, 420, 720, 0.95, 1.25, pickTributary);
+  spawnSuite('peat_bog', 9, 420, 720, 0.95, 1.25, pickLowWetland, () => ({ lakeKind: 'bog' }));
+  spawnSuite('granite_hoodoos', 9, 320, 560, 1.02, 1.35, pickHighAlpine);
+  spawnSuite('talus_chute', 10, 340, 620, 1.02, 1.35, pickHighAlpine);
+  spawnSuite('cuesta_ridge', 10, 500, 840, 1.05, 1.42, pickSlopeMid);
+  spawnSuite('alpine_saddle', 9, 400, 680, 1.00, 1.32, pickHighAlpine);
+  spawnSuite('scoria_cone', 9, 300, 540, 1.02, 1.35, pickVolcanic);
+  spawnSuite('braided_island', 11, 120, 210, 1.00, 1.22, () => {
+    const z = -23000 + rng() * 46000;
     const rv = evalMainRiver(z);
     return { x: rv.x + (rng() - 0.5) * rv.halfWidth * 0.45, z };
   });
-  spawnSuite('moss_cascade_ravine', 6, 280, 480, 0.9, 1.2, pickTributary);
+  spawnSuite('moss_cascade_ravine', 9, 240, 420, 0.95, 1.28, pickTributaryCliff);
 
   // V5 Fluvial (23..31)
-  spawnSuite('oxbow_cutoff_lake', 6, 280, 480, 1.0, 1.25, () => pickRiverFlank(110, 380), () => ({ lakeKind: 'oxbow' }));
-  spawnSuite('incised_meander_gorge', 6, 580, 1020, 1.0, 1.35, pickTributary);
-  spawnSuite('point_bar_scroll_plain', 6, 420, 720, 0.9, 1.2, () => pickRiverFlank(70, 320));
-  spawnSuite('natural_levee_backswamp', 6, 480, 860, 0.9, 1.2, () => pickRiverFlank(160, 620), () => ({ lakeKind: 'bog' }));
-  spawnSuite('knickpoint_rock_rapids', 6, 260, 460, 1.0, 1.3, pickTributary);
-  spawnSuite('hanging_tributary_valley', 6, 440, 780, 1.0, 1.3, pickHighAlpine);
-  spawnSuite('dry_paleochannel_valley', 5, 520, 880, 0.9, 1.2, pickWild);
-  spawnSuite('compound_bajada_apron', 5, 760, 1280, 0.9, 1.2, pickSlopeMid);
-  spawnSuite('interlocking_valley_spurs', 6, 580, 980, 1.0, 1.3, pickTributary);
+  spawnSuite('oxbow_cutoff_lake', 9, 240, 420, 1.00, 1.28, () => pickRiverFlank(95, 340), () => ({ lakeKind: 'oxbow' }));
+  spawnSuite('incised_meander_gorge', 9, 440, 760, 1.05, 1.38, pickTributaryCliff);
+  spawnSuite('point_bar_scroll_plain', 8, 340, 580, 0.92, 1.22, () => pickRiverFlank(65, 290));
+  spawnSuite('natural_levee_backswamp', 8, 380, 660, 0.92, 1.22, () => pickRiverFlank(140, 520), () => ({ lakeKind: 'bog' }));
+  spawnSuite('knickpoint_rock_rapids', 9, 230, 400, 1.02, 1.32, pickTributaryCliff);
+  spawnSuite('hanging_tributary_valley', 9, 360, 620, 1.02, 1.34, pickHighAlpine);
+  spawnSuite('dry_paleochannel_valley', 8, 400, 680, 0.92, 1.22, pickRedRock);
+  spawnSuite('compound_bajada_apron', 8, 540, 880, 0.95, 1.25, pickSlopeMid);
+  spawnSuite('interlocking_valley_spurs', 9, 440, 740, 1.02, 1.34, pickTributaryCliff);
 
   // V5 Glacial (32..39)
-  spawnSuite('glacial_u_trough', 7, 720, 1240, 1.1, 1.4, pickHighAlpine);
-  spawnSuite('knife_edge_arete', 8, 560, 980, 1.1, 1.45, pickGlacialPeak);
-  spawnSuite('glacial_horn_peak', 6, 520, 880, 1.1, 1.45, pickGlacialPeak);
-  spawnSuite('lateral_moraine_ridge', 6, 520, 920, 0.9, 1.2, pickHighAlpine);
-  spawnSuite('kettle_hole_ponds', 5, 420, 720, 0.95, 1.25, pickWild, () => ({ lakeKind: 'kettle' }));
-  spawnSuite('roche_moutonnee_knolls', 5, 460, 780, 0.95, 1.25, pickHighAlpine);
-  spawnSuite('solifluction_lobe_slope', 5, 520, 860, 0.9, 1.2, pickHighAlpine);
-  spawnSuite('nivation_snow_hollow', 6, 380, 660, 1.0, 1.3, pickGlacialPeak);
+  spawnSuite('glacial_u_trough', 10, 540, 880, 1.12, 1.44, pickGlacialPeak);
+  spawnSuite('knife_edge_arete', 10, 440, 740, 1.14, 1.48, pickGlacialPeak);
+  spawnSuite('glacial_horn_peak', 9, 420, 680, 1.14, 1.48, pickExtreme4000);
+  spawnSuite('lateral_moraine_ridge', 9, 420, 700, 0.95, 1.24, pickHighAlpine);
+  spawnSuite('kettle_hole_ponds', 8, 340, 580, 0.96, 1.26, pickLowWetland, () => ({ lakeKind: 'kettle' }));
+  spawnSuite('roche_moutonnee_knolls', 8, 360, 620, 0.96, 1.26, pickHighAlpine);
+  spawnSuite('solifluction_lobe_slope', 8, 400, 660, 0.92, 1.22, pickGlacialPeak);
+  spawnSuite('nivation_snow_hollow', 9, 320, 540, 1.02, 1.34, pickGlacialPeak);
 
   // V5 Volcanic (40..46)
-  spawnSuite('maar_crater_lake', 5, 380, 660, 1.05, 1.35, pickVolcanic, () => ({ lakeKind: 'maar' }));
-  spawnSuite('lava_dome_extrusion', 6, 360, 640, 1.0, 1.35, pickVolcanic);
-  spawnSuite('ignimbrite_sheet_bench', 5, 680, 1180, 1.0, 1.3, pickVolcanic);
-  spawnSuite('shield_lava_apron', 5, 680, 1150, 0.95, 1.25, pickVolcanic);
-  spawnSuite('tuff_ring_amphitheater', 5, 420, 720, 1.0, 1.3, pickVolcanic);
-  spawnSuite('lahar_debris_lobe', 5, 580, 980, 0.95, 1.25, pickVolcanic);
-  spawnSuite('fumarole_sulfur_basin', 5, 340, 580, 1.0, 1.3, pickVolcanic);
+  spawnSuite('maar_crater_lake', 8, 320, 540, 1.06, 1.36, pickVolcanic, () => ({ lakeKind: 'maar' }));
+  spawnSuite('lava_dome_extrusion', 9, 300, 520, 1.02, 1.36, pickVolcanic);
+  spawnSuite('ignimbrite_sheet_bench', 8, 500, 840, 1.02, 1.34, pickVolcanic);
+  spawnSuite('shield_lava_apron', 8, 500, 820, 0.96, 1.26, pickVolcanic);
+  spawnSuite('tuff_ring_amphitheater', 8, 340, 580, 1.02, 1.32, pickVolcanic);
+  spawnSuite('lahar_debris_lobe', 8, 440, 740, 0.96, 1.26, pickVolcanic);
+  spawnSuite('fumarole_sulfur_basin', 8, 280, 480, 1.02, 1.32, pickVolcanic);
 
   // V5 Tectonic / Erosion / Karst (47..62)
-  spawnSuite('fault_scarp_step', 8, 680, 1250, 1.1, 1.45, pickSlopeMid);
-  spawnSuite('graben_rift_trough', 6, 720, 1280, 1.1, 1.45, pickRift);
-  spawnSuite('hogback_strike_ridge', 6, 560, 960, 1.05, 1.35, pickSlopeMid);
-  spawnSuite('anticline_folded_dome', 5, 680, 1180, 0.95, 1.25, pickWild);
-  spawnSuite('fault_line_wind_gap', 5, 420, 740, 0.95, 1.25, pickHighAlpine);
-  spawnSuite('structural_bench_steps', 6, 620, 1080, 1.05, 1.35, pickSlopeMid);
-  spawnSuite('landslide_scar_hummocks', 6, 460, 820, 1.0, 1.35, pickSlopeMid);
-  spawnSuite('landslide_dammed_lake', 4, 380, 620, 1.05, 1.3, pickTributary, () => ({ lakeKind: 'dammed' }));
-  spawnSuite('badlands_rilled_gullies', 6, 540, 960, 1.05, 1.35, pickSlopeMid);
-  spawnSuite('avalanche_chute_couloir', 7, 460, 820, 1.05, 1.35, pickGlacialPeak);
-  spawnSuite('debris_flow_levee_cone', 5, 420, 720, 0.95, 1.25, pickTributary);
-  spawnSuite('pediment_inselberg_knoll', 5, 620, 1080, 1.0, 1.3, pickWild);
-  spawnSuite('karst_polje_flat_basin', 4, 620, 1020, 1.0, 1.3, pickWild, () => ({ lakeKind: 'bog' }));
-  spawnSuite('karst_uvala_compound', 5, 420, 720, 1.0, 1.3, pickWild);
-  spawnSuite('spring_sapping_alcove', 5, 320, 560, 1.0, 1.3, pickSlopeMid);
-  spawnSuite('alpine_seepage_fen_terrace', 5, 420, 720, 0.95, 1.25, pickHighAlpine, () => ({ lakeKind: 'bog' }));
+  spawnSuite('fault_scarp_step', 10, 500, 860, 1.12, 1.46, pickSlopeMid);
+  spawnSuite('graben_rift_trough', 9, 540, 880, 1.14, 1.48, pickRift);
+  spawnSuite('hogback_strike_ridge', 9, 440, 720, 1.08, 1.38, pickRedRock);
+  spawnSuite('anticline_folded_dome', 8, 500, 820, 0.98, 1.28, pickSlopeMid);
+  spawnSuite('fault_line_wind_gap', 8, 340, 580, 0.98, 1.28, pickHighAlpine);
+  spawnSuite('structural_bench_steps', 9, 460, 760, 1.06, 1.36, pickRedRock);
+  spawnSuite('landslide_scar_hummocks', 9, 360, 620, 1.02, 1.36, pickSlopeMid);
+  spawnSuite('landslide_dammed_lake', 6, 320, 520, 1.06, 1.34, pickTributaryCliff, () => ({ lakeKind: 'dammed' }));
+  spawnSuite('badlands_rilled_gullies', 9, 420, 720, 1.08, 1.38, pickRedRock);
+  spawnSuite('avalanche_chute_couloir', 10, 380, 640, 1.08, 1.38, pickGlacialPeak);
+  spawnSuite('debris_flow_levee_cone', 8, 340, 580, 0.98, 1.28, pickTributary);
+  spawnSuite('pediment_inselberg_knoll', 8, 460, 760, 1.02, 1.32, pickRedRock);
+  spawnSuite('karst_polje_flat_basin', 7, 460, 760, 1.02, 1.32, pickKarst, () => ({ lakeKind: 'bog' }));
+  spawnSuite('karst_uvala_compound', 8, 340, 580, 1.02, 1.32, pickKarst);
+  spawnSuite('spring_sapping_alcove', 8, 280, 480, 1.02, 1.32, pickSlopeMid);
+  spawnSuite('alpine_seepage_fen_terrace', 8, 340, 580, 0.98, 1.28, pickSubalpineWetland, () => ({ lakeKind: 'bog' }));
 
-  // --- C. ALL 38 BRAND-NEW V6 PROCESSES (63..100 — Sheer Cliffs, Glaciers, Abyssal Rifts & Subterranean!) ---
-  spawnSuite('granite_exfoliation_dome', 6, 520, 940, 1.15, 1.50, pickHighAlpine);
-  spawnSuite('sheer_dihedral_wall', 8, 540, 980, 1.20, 1.55, pickHighAlpine);
-  spawnSuite('slot_canyon_labyrinth', 6, 480, 860, 1.15, 1.45, pickSlopeMid);
-  spawnSuite('stepped_basalt_traps', 6, 680, 1220, 1.15, 1.50, pickVolcanic);
-  spawnSuite('rift_abyss_trench', 6, 780, 1380, 1.25, 1.60, pickRift);
-  spawnSuite('karst_tiankeng_shaft', 5, 240, 420, 1.20, 1.55, pickWild);
-  spawnSuite('glacial_hanging_glacier', 6, 580, 1020, 1.15, 1.45, pickGlacialPeak);
-  spawnSuite('alpine_rock_glacier', 5, 460, 820, 1.00, 1.30, pickGlacialPeak);
-  spawnSuite('frost_patterned_ground', 5, 480, 840, 0.95, 1.25, pickGlacialPeak);
-  spawnSuite('bergshrund_headwall', 6, 520, 920, 1.20, 1.50, pickGlacialPeak);
-  spawnSuite('terminal_moraine_arc', 5, 560, 980, 1.00, 1.30, pickHighAlpine);
-  spawnSuite('esker_sinuous_ridge', 5, 580, 1020, 0.95, 1.25, pickWild);
-  spawnSuite('kame_terrace_bench', 5, 480, 820, 0.95, 1.25, pickHighAlpine);
-  spawnSuite('outwash_sandur_plain', 5, 680, 1180, 0.95, 1.25, pickHighAlpine);
-  spawnSuite('volcanic_rhyolite_spine', 6, 380, 680, 1.15, 1.50, pickVolcanic);
-  spawnSuite('collapsed_caldera_rim', 5, 680, 1180, 1.15, 1.45, pickVolcanic);
-  spawnSuite('phreatic_explosion_pit', 5, 320, 560, 1.05, 1.35, pickVolcanic);
-  spawnSuite('pyroclastic_gully_fan', 5, 520, 920, 1.00, 1.30, pickVolcanic);
-  spawnSuite('pillow_lava_mound_field', 5, 480, 820, 1.00, 1.30, pickVolcanic);
-  spawnSuite('gorge_pothole_terraces', 6, 360, 640, 1.05, 1.35, pickTributary);
-  spawnSuite('alluvial_terrace_riser', 6, 560, 960, 1.05, 1.35, () => pickRiverFlank(140, 540));
-  spawnSuite('river_piracy_elbow', 5, 520, 880, 1.05, 1.35, pickTributary);
-  spawnSuite('braided_gravel_apron', 6, 420, 740, 0.95, 1.25, () => pickRiverFlank(60, 260));
-  spawnSuite('syncline_perched_ridge', 5, 620, 1080, 1.05, 1.35, pickSlopeMid);
-  spawnSuite('thrust_nappe_escarpment', 7, 720, 1280, 1.20, 1.55, pickHighAlpine);
-  spawnSuite('strike_slip_shutter_ridge', 5, 540, 940, 1.05, 1.35, pickSlopeMid);
-  spawnSuite('karst_tower_fengcong', 6, 520, 920, 1.15, 1.45, pickWild);
-  spawnSuite('karst_blind_valley', 5, 420, 740, 1.05, 1.35, pickTributary);
-  spawnSuite('karst_limestone_pavement', 5, 480, 840, 0.95, 1.25, pickWild);
-  spawnSuite('rockfall_megablock_apron', 6, 560, 980, 1.10, 1.40, pickHighAlpine);
+  // --- C. ALL 38 V6 PROCESSES (63..100 — Sheer Cliffs, Glaciers, Abyssal Rifts!) ---
+  spawnSuite('granite_exfoliation_dome', 9, 420, 720, 1.16, 1.50, pickHighAlpine);
+  spawnSuite('sheer_dihedral_wall', 10, 420, 740, 1.20, 1.55, pickHighAlpine);
+  spawnSuite('slot_canyon_labyrinth', 9, 380, 660, 1.16, 1.48, pickRedRock);
+  spawnSuite('stepped_basalt_traps', 9, 500, 840, 1.16, 1.50, pickVolcanic);
+  spawnSuite('rift_abyss_trench', 9, 580, 960, 1.28, 1.62, pickRiftAbyss);
+  spawnSuite('karst_tiankeng_shaft', 8, 220, 380, 1.22, 1.55, pickKarst);
+  spawnSuite('glacial_hanging_glacier', 9, 440, 740, 1.18, 1.48, pickExtreme4000);
+  spawnSuite('alpine_rock_glacier', 8, 360, 640, 1.02, 1.32, pickGlacialPeak);
+  spawnSuite('frost_patterned_ground', 8, 380, 660, 0.96, 1.26, pickGlacialPeak);
+  spawnSuite('bergshrund_headwall', 9, 420, 700, 1.20, 1.50, pickExtreme4000);
+  spawnSuite('terminal_moraine_arc', 8, 440, 740, 1.02, 1.32, pickHighAlpine);
+  spawnSuite('esker_sinuous_ridge', 8, 440, 740, 0.96, 1.26, pickSlopeMid);
+  spawnSuite('kame_terrace_bench', 8, 380, 640, 0.96, 1.26, pickHighAlpine);
+  spawnSuite('outwash_sandur_plain', 8, 500, 820, 0.96, 1.26, pickHighAlpine);
+  spawnSuite('volcanic_rhyolite_spine', 9, 320, 560, 1.16, 1.50, pickVolcanic);
+  spawnSuite('collapsed_caldera_rim', 8, 500, 820, 1.16, 1.46, pickVolcanic);
+  spawnSuite('phreatic_explosion_pit', 8, 280, 480, 1.06, 1.36, pickVolcanic);
+  spawnSuite('pyroclastic_gully_fan', 8, 400, 680, 1.02, 1.32, pickVolcanic);
+  spawnSuite('pillow_lava_mound_field', 8, 380, 640, 1.02, 1.32, pickVolcanic);
+  spawnSuite('gorge_pothole_terraces', 9, 300, 520, 1.06, 1.36, pickTributaryCliff);
+  spawnSuite('alluvial_terrace_riser', 9, 440, 720, 1.06, 1.36, () => pickRiverFlank(120, 460));
+  spawnSuite('river_piracy_elbow', 8, 400, 680, 1.06, 1.36, pickTributaryCliff);
+  spawnSuite('braided_gravel_apron', 9, 340, 580, 0.96, 1.26, () => pickRiverFlank(55, 240));
+  spawnSuite('syncline_perched_ridge', 8, 460, 760, 1.06, 1.36, pickSlopeMid);
+  spawnSuite('thrust_nappe_escarpment', 10, 520, 880, 1.20, 1.55, pickHighAlpine);
+  spawnSuite('strike_slip_shutter_ridge', 8, 420, 700, 1.06, 1.36, pickSlopeMid);
+  spawnSuite('karst_tower_fengcong', 9, 400, 680, 1.16, 1.46, pickKarst);
+  spawnSuite('karst_blind_valley', 8, 340, 580, 1.06, 1.36, pickKarst);
+  spawnSuite('karst_limestone_pavement', 8, 380, 640, 0.96, 1.26, pickKarst);
+  spawnSuite('rockfall_megablock_apron', 9, 440, 720, 1.10, 1.40, pickHighAlpine);
 
-  // --- D. ALL 60 BRAND-NEW V7 HIGH-REALISM PROCESSES (101..160 — 930+ Total Multi-Occurrence Formations!) ---
-  // Near-home dramatic natural landmarks showcasing v7 morphology immediately on horizon
-  addFeat('columnar_basalt_organ', 1620, 420, 480, 1.38, { angle: -0.45 });
-  addFeat('flatiron_triangular_facet', -2680, -1820, 680, 1.35, { angle: 0.62 });
-  addFeat('box_canyon_headwall', -1880, 1680, 520, 1.32, { angle: -0.85 });
-  addFeat('butte_caprock_pillar', 2840, -2140, 440, 1.30, { angle: 0.20 });
+  // --- D. ALL 60 V7 HIGH-REALISM PROCESSES (101..160) ---
+  spawnSuite('columnar_basalt_organ', 9, 320, 560, 1.12, 1.46, pickVolcanic);
+  spawnSuite('pahoehoe_rope_sheet', 8, 400, 680, 0.96, 1.26, pickVolcanic);
+  spawnSuite('aa_clinker_badland', 8, 380, 640, 1.02, 1.32, pickVolcanic);
+  spawnSuite('volcanic_neck_plug', 9, 280, 480, 1.20, 1.55, pickVolcanic);
+  spawnSuite('radial_dike_wall', 9, 380, 640, 1.16, 1.46, pickVolcanic);
+  spawnSuite('obsidian_coulee_flow', 8, 380, 640, 1.06, 1.36, pickVolcanic);
+  spawnSuite('sinter_geyser_mound', 8, 250, 420, 0.98, 1.28, pickVolcanic);
+  spawnSuite('collapse_pit_crater', 8, 250, 420, 1.16, 1.46, pickVolcanic);
+  spawnSuite('ash_tuff_hoodoo_yard', 8, 340, 580, 1.06, 1.36, pickVolcanic);
+  spawnSuite('cinder_breached_cone', 8, 320, 540, 1.10, 1.40, pickVolcanic);
+  spawnSuite('caldera_resurgent_dome', 6, 480, 760, 1.16, 1.46, pickVolcanic, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('mud_pot_solfatara_flat', 8, 280, 480, 0.96, 1.26, pickVolcanic);
 
-  // V7 Volcanic & Igneous (101..112)
-  spawnSuite('columnar_basalt_organ', 6, 380, 680, 1.10, 1.45, pickVolcanic);
-  spawnSuite('pahoehoe_rope_sheet', 5, 520, 880, 0.95, 1.25, pickVolcanic);
-  spawnSuite('aa_clinker_badland', 5, 480, 820, 1.00, 1.30, pickVolcanic);
-  spawnSuite('volcanic_neck_plug', 6, 320, 560, 1.20, 1.55, pickVolcanic);
-  spawnSuite('radial_dike_wall', 6, 460, 820, 1.15, 1.45, pickVolcanic);
-  spawnSuite('obsidian_coulee_flow', 5, 480, 820, 1.05, 1.35, pickVolcanic);
-  spawnSuite('sinter_geyser_mound', 5, 280, 480, 0.95, 1.25, pickVolcanic);
-  spawnSuite('collapse_pit_crater', 5, 280, 480, 1.15, 1.45, pickVolcanic);
-  spawnSuite('ash_tuff_hoodoo_yard', 5, 420, 740, 1.05, 1.35, pickVolcanic);
-  spawnSuite('cinder_breached_cone', 5, 380, 660, 1.10, 1.40, pickVolcanic);
-  spawnSuite('caldera_resurgent_dome', 4, 620, 980, 1.15, 1.45, pickVolcanic, () => ({ lakeKind: 'caldera' }));
-  spawnSuite('mud_pot_solfatara_flat', 5, 320, 560, 0.95, 1.25, pickVolcanic);
+  spawnSuite('box_canyon_headwall', 9, 340, 600, 1.16, 1.46, pickRedRock);
+  spawnSuite('stepped_cascade_chasm', 9, 300, 520, 1.12, 1.42, pickTributaryCliff);
+  spawnSuite('entrenched_gooseneck', 8, 440, 720, 1.16, 1.46, pickTributaryCliff);
+  spawnSuite('alluvial_megafan_delta', 8, 480, 780, 0.96, 1.26, pickTributary);
+  spawnSuite('terrace_strath_bench', 9, 380, 640, 1.02, 1.32, () => pickRiverFlank(95, 400));
+  spawnSuite('plunging_amphitheater', 8, 280, 480, 1.16, 1.46, pickTributaryCliff, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('crevasse_splay_lobe', 8, 340, 580, 0.92, 1.22, () => pickRiverFlank(75, 310));
+  spawnSuite('cutbank_slipoff_bend', 9, 360, 600, 1.06, 1.36, () => pickRiverFlank(85, 340));
+  spawnSuite('braided_glaciofluvial', 8, 420, 700, 0.96, 1.26, pickHighAlpine);
+  spawnSuite('canyon_alcove_overhang', 8, 300, 520, 1.16, 1.46, pickRedRock);
+  spawnSuite('abandoned_waterfall_dry', 8, 280, 480, 1.10, 1.40, pickSlopeMid);
+  spawnSuite('confluence_eddy_bar', 8, 230, 380, 0.95, 1.22, () => pickRiverFlank(45, 175));
 
-  // V7 Fluvial, Canyon & Waterfall (113..124)
-  spawnSuite('box_canyon_headwall', 6, 420, 760, 1.15, 1.45, pickTributary);
-  spawnSuite('stepped_cascade_chasm', 6, 360, 640, 1.10, 1.40, pickTributary);
-  spawnSuite('entrenched_gooseneck', 5, 560, 920, 1.15, 1.45, pickTributary);
-  spawnSuite('alluvial_megafan_delta', 5, 640, 1020, 0.95, 1.25, pickTributary);
-  spawnSuite('terrace_strath_bench', 6, 480, 820, 1.00, 1.30, () => pickRiverFlank(110, 460));
-  spawnSuite('plunging_amphitheater', 5, 320, 560, 1.15, 1.45, pickTributary, () => ({ lakeKind: 'tarn' }));
-  spawnSuite('crevasse_splay_lobe', 5, 420, 720, 0.90, 1.20, () => pickRiverFlank(80, 340));
-  spawnSuite('cutbank_slipoff_bend', 6, 440, 760, 1.05, 1.35, () => pickRiverFlank(90, 360));
-  spawnSuite('braided_glaciofluvial', 5, 540, 900, 0.95, 1.25, pickHighAlpine);
-  spawnSuite('canyon_alcove_overhang', 5, 360, 620, 1.15, 1.45, pickSlopeMid);
-  spawnSuite('abandoned_waterfall_dry', 5, 320, 560, 1.10, 1.40, pickSlopeMid);
-  spawnSuite('confluence_eddy_bar', 5, 260, 440, 0.95, 1.20, () => pickRiverFlank(45, 180));
+  spawnSuite('flatiron_triangular_facet', 10, 440, 740, 1.16, 1.50, pickHighAlpine);
+  spawnSuite('monocline_flexure_ramp', 9, 480, 780, 1.12, 1.42, pickSlopeMid);
+  spawnSuite('horst_block_massif', 9, 480, 780, 1.16, 1.46, pickHighAlpine);
+  spawnSuite('pull_apart_rift_basin', 8, 440, 720, 1.16, 1.46, pickRift, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('chevron_folded_ridges', 9, 460, 740, 1.12, 1.42, pickSlopeMid);
+  spawnSuite('domal_batholith_monolith', 9, 380, 640, 1.24, 1.55, pickHighAlpine);
+  spawnSuite('shattered_fault_gouge', 9, 440, 720, 1.12, 1.42, pickRift);
+  spawnSuite('tilted_fault_block_range', 9, 480, 780, 1.16, 1.46, pickHighAlpine);
+  spawnSuite('breached_anticline_valley', 8, 440, 720, 1.06, 1.36, pickSlopeMid);
+  spawnSuite('step_fault_staircase', 9, 460, 740, 1.16, 1.46, pickSlopeMid);
+  spawnSuite('alpine_gendarmes_crest', 9, 380, 640, 1.22, 1.52, pickExtreme4000);
+  spawnSuite('tectonic_sag_pond', 8, 250, 420, 1.06, 1.36, pickRift, () => ({ lakeKind: 'kettle' }));
 
-  // V7 Tectonic, Structural & Alpine Cliff (125..136)
-  spawnSuite('flatiron_triangular_facet', 7, 560, 960, 1.15, 1.50, pickHighAlpine);
-  spawnSuite('monocline_flexure_ramp', 6, 620, 1020, 1.10, 1.40, pickSlopeMid);
-  spawnSuite('horst_block_massif', 6, 620, 1040, 1.15, 1.45, pickHighAlpine);
-  spawnSuite('pull_apart_rift_basin', 5, 560, 920, 1.15, 1.45, pickRift, () => ({ lakeKind: 'caldera' }));
-  spawnSuite('chevron_folded_ridges', 6, 600, 980, 1.10, 1.40, pickSlopeMid);
-  spawnSuite('domal_batholith_monolith', 6, 460, 820, 1.25, 1.55, pickHighAlpine);
-  spawnSuite('shattered_fault_gouge', 6, 560, 940, 1.10, 1.40, pickRift);
-  spawnSuite('tilted_fault_block_range', 6, 640, 1040, 1.15, 1.45, pickHighAlpine);
-  spawnSuite('breached_anticline_valley', 5, 580, 960, 1.05, 1.35, pickSlopeMid);
-  spawnSuite('step_fault_staircase', 6, 580, 980, 1.15, 1.45, pickSlopeMid);
-  spawnSuite('alpine_gendarmes_crest', 6, 460, 820, 1.20, 1.50, pickGlacialPeak);
-  spawnSuite('tectonic_sag_pond', 5, 280, 480, 1.05, 1.35, pickRift, () => ({ lakeKind: 'kettle' }));
+  spawnSuite('paternoster_lake_chain', 8, 440, 720, 1.12, 1.42, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('glacial_col_transfluence', 8, 380, 620, 1.06, 1.36, pickGlacialPeak);
+  spawnSuite('trimline_ice_scoured_wall', 9, 420, 680, 1.16, 1.46, pickGlacialPeak);
+  spawnSuite('fjord_deep_trough_lake', 6, 500, 800, 1.20, 1.50, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('cryoplanation_summit_step', 8, 380, 620, 1.02, 1.32, pickExtreme4000);
+  spawnSuite('blockfield_felsenmeer', 8, 380, 640, 0.96, 1.26, pickGlacialPeak);
+  spawnSuite('pingo_frost_mound', 8, 250, 420, 1.02, 1.32, pickHighAlpine);
+  spawnSuite('talus_protalus_rampart', 8, 340, 580, 1.02, 1.32, pickGlacialPeak);
+  spawnSuite('recessional_moraine_waves', 8, 420, 680, 0.96, 1.26, pickHighAlpine);
+  spawnSuite('glacial_erratic_apron', 8, 380, 640, 0.96, 1.26, pickHighAlpine);
 
-  // V7 Glacial, Periglacial & High-Alpine (137..146)
-  spawnSuite('paternoster_lake_chain', 5, 560, 920, 1.10, 1.40, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
-  spawnSuite('glacial_col_transfluence', 5, 460, 780, 1.05, 1.35, pickGlacialPeak);
-  spawnSuite('trimline_ice_scoured_wall', 6, 520, 880, 1.15, 1.45, pickGlacialPeak);
-  spawnSuite('fjord_deep_trough_lake', 4, 640, 1040, 1.20, 1.50, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
-  spawnSuite('cryoplanation_summit_step', 5, 460, 780, 1.00, 1.30, pickGlacialPeak);
-  spawnSuite('blockfield_felsenmeer', 5, 480, 820, 0.95, 1.25, pickGlacialPeak);
-  spawnSuite('pingo_frost_mound', 5, 280, 480, 1.00, 1.30, pickHighAlpine);
-  spawnSuite('talus_protalus_rampart', 5, 420, 740, 1.00, 1.30, pickGlacialPeak);
-  spawnSuite('recessional_moraine_waves', 5, 520, 880, 0.95, 1.25, pickHighAlpine);
-  spawnSuite('glacial_erratic_apron', 5, 480, 820, 0.95, 1.25, pickHighAlpine);
+  spawnSuite('karst_mogote_haystack', 9, 360, 600, 1.16, 1.46, pickKarst);
+  spawnSuite('karst_collapse_bridge_gorge', 8, 340, 580, 1.16, 1.46, pickKarst);
+  spawnSuite('sandstone_fins_labyrinth', 9, 380, 640, 1.16, 1.46, pickRedRock);
+  spawnSuite('butte_caprock_pillar', 9, 300, 520, 1.20, 1.50, pickRedRock);
+  spawnSuite('yardang_wind_scoured_keels', 8, 400, 660, 1.06, 1.36, pickRedRock);
+  spawnSuite('earth_pillar_demoiselles', 8, 300, 520, 1.12, 1.42, pickRedRock);
+  spawnSuite('alluvial_mudflat_playa', 7, 440, 720, 0.96, 1.26, pickLowWetland);
+  spawnSuite('string_bog_aapa_mire', 8, 420, 680, 0.96, 1.26, pickLowWetland, () => ({ lakeKind: 'bog' }));
+  spawnSuite('spring_travertine_cascade', 8, 290, 480, 1.06, 1.36, pickVolcanic);
+  spawnSuite('coastal_drowned_ria_basin', 6, 520, 820, 1.16, 1.46, pickRiftAbyss, () => ({ lakeKind: 'caldera' }));
 
-  // V7 Karst, Sandstone, Erosion, Aeolian & Wetland (147..156)
-  spawnSuite('karst_mogote_haystack', 6, 440, 760, 1.15, 1.45, pickWild);
-  spawnSuite('karst_collapse_bridge_gorge', 5, 420, 720, 1.15, 1.45, pickWild);
-  spawnSuite('sandstone_fins_labyrinth', 6, 480, 840, 1.15, 1.45, pickSlopeMid);
-  spawnSuite('butte_caprock_pillar', 6, 360, 620, 1.20, 1.50, pickSlopeMid);
-  spawnSuite('yardang_wind_scoured_keels', 5, 500, 860, 1.05, 1.35, pickWild);
-  spawnSuite('earth_pillar_demoiselles', 5, 360, 620, 1.10, 1.40, pickSlopeMid);
-  spawnSuite('alluvial_mudflat_playa', 4, 560, 920, 0.95, 1.25, pickWild);
-  spawnSuite('string_bog_aapa_mire', 5, 520, 880, 0.95, 1.25, () => ({ x: 4200 + rng() * 14500, z: -8000 + rng() * 19000 }), () => ({ lakeKind: 'bog' }));
-  spawnSuite('spring_travertine_cascade', 5, 340, 580, 1.05, 1.35, pickVolcanic);
-  spawnSuite('coastal_drowned_ria_basin', 4, 680, 1080, 1.15, 1.45, pickRift, () => ({ lakeKind: 'caldera' }));
+  // --- E. ALL 50 BRAND-NEW V8 PROCESSES (161..210 — 4,100m Glaciers, -2,000m Abyssal Rifts, Canyons, Karst & -2,600m Strata!) ---
+  // High-Alpine 3,000m..4,100m (161..170)
+  spawnSuite('alpine_serac_icefall', 9, 380, 660, 1.20, 1.52, pickExtreme4000);
+  spawnSuite('glacial_berg_amphitheater', 8, 480, 780, 1.22, 1.54, pickExtreme4000);
+  spawnSuite('nival_cornice_crest', 9, 380, 660, 1.18, 1.50, pickExtreme4000);
+  spawnSuite('alpine_nunatak_spire', 9, 340, 580, 1.26, 1.58, pickExtreme4000);
+  spawnSuite('glacier_crevasse_field', 8, 420, 700, 1.12, 1.42, pickExtreme4000);
+  spawnSuite('glacial_tarn_stairway', 8, 400, 660, 1.12, 1.42, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('permafrost_gelifluction_step', 8, 380, 640, 1.02, 1.32, pickGlacialPeak);
+  spawnSuite('cryo_granite_tor_ridge', 8, 360, 620, 1.16, 1.46, pickGlacialPeak);
+  spawnSuite('snowmelt_proglacial_delta', 8, 420, 700, 1.00, 1.30, pickHighAlpine);
+  spawnSuite('alpine_heather_meadow_bench', 8, 380, 640, 0.96, 1.26, pickGlacialPeak);
 
-  // Subterranean Deep Geological Processes (93..100 + 157..160 — tied to portals + organic deep crust networks!)
+  // Abyssal -2,000m..-300m Tectonic Rifts, Brine Flats & Sunken Cloud-Forests (171..180)
+  spawnSuite('abyssal_brine_salt_flat', 8, 480, 780, 1.18, 1.50, pickRiftAbyss, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('abyssal_rift_step_wall', 9, 480, 800, 1.24, 1.56, pickRiftAbyss);
+  spawnSuite('sunken_cloud_fern_sink', 9, 340, 580, 1.16, 1.46, pickRift);
+  spawnSuite('abyssal_hydrothermal_terrace', 8, 300, 520, 1.12, 1.42, pickRiftAbyss);
+  spawnSuite('abyssal_obsidian_flow_gorge', 8, 380, 640, 1.18, 1.48, pickRiftAbyss);
+  spawnSuite('rift_horst_island_mesa', 8, 380, 640, 1.20, 1.50, pickRiftAbyss);
+  spawnSuite('sunken_limestone_shaft_gorge', 8, 300, 520, 1.18, 1.48, pickRift);
+  spawnSuite('abyssal_alkali_soda_lake', 7, 420, 700, 1.14, 1.44, pickRiftAbyss, () => ({ lakeKind: 'maar' }));
+  spawnSuite('deep_canyon_mist_waterfall', 9, 300, 520, 1.18, 1.48, pickRift);
+  spawnSuite('abyssal_alluvial_megacone', 8, 420, 700, 1.08, 1.38, pickRift);
+
+  // Fluvial, Canyon, Red-Rock & Karst Wonders (181..192)
+  spawnSuite('redrock_amphitheater_canyon', 9, 440, 740, 1.18, 1.48, pickRedRock);
+  spawnSuite('narrow_slot_narrows', 9, 340, 580, 1.18, 1.48, pickRedRock);
+  spawnSuite('sandstone_monolith_temple', 9, 320, 560, 1.24, 1.54, pickRedRock);
+  spawnSuite('terraced_canyon_esplanade', 8, 460, 760, 1.12, 1.42, pickRedRock);
+  spawnSuite('double_waterfall_gorge', 8, 300, 520, 1.16, 1.46, pickTributaryCliff, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('braided_glacial_delta_fan', 8, 420, 700, 0.98, 1.28, pickTributary);
+  spawnSuite('karst_cenote_chain', 8, 360, 600, 1.14, 1.44, pickKarst, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('limestone_gorge_pinnacles', 9, 360, 620, 1.18, 1.48, pickKarst);
+  spawnSuite('travertine_dam_pools', 8, 320, 540, 1.10, 1.40, pickKarst, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('karst_polje_sinking_river', 7, 440, 720, 1.06, 1.36, pickKarst, () => ({ lakeKind: 'bog' }));
+  spawnSuite('moss_gorge_emerald_pools', 9, 280, 480, 1.08, 1.38, pickTributaryCliff);
+  spawnSuite('meandering_canyon_buttes', 8, 400, 680, 1.16, 1.46, pickRedRock);
+
+  // Volcanic, Tectonic, Badlands & Wetland Biomes (193..204)
+  spawnSuite('stratovolcano_parasitic_cone', 8, 340, 580, 1.16, 1.46, pickVolcanic);
+  spawnSuite('columnar_lava_canyon', 9, 360, 620, 1.18, 1.48, pickVolcanic);
+  spawnSuite('caldera_crater_twin_lakes', 6, 520, 820, 1.18, 1.48, pickVolcanic, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('geothermal_boiling_spring_field', 8, 280, 480, 1.04, 1.34, pickVolcanic);
+  spawnSuite('basalt_shield_fissure_rift', 8, 440, 720, 1.14, 1.44, pickVolcanic);
+  spawnSuite('volcanic_ignimbrite_pillars', 8, 340, 580, 1.16, 1.46, pickVolcanic);
+  spawnSuite('fold_belt_hogback_ribs', 9, 460, 760, 1.16, 1.46, pickSlopeMid);
+  spawnSuite('tectonic_wrench_basin', 7, 460, 740, 1.14, 1.44, pickRift, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('multicolored_badland_stripes', 9, 420, 700, 1.14, 1.44, pickRedRock);
+  spawnSuite('ancient_landslide_lake_chain', 7, 380, 640, 1.10, 1.40, pickTributaryCliff, () => ({ lakeKind: 'dammed' }));
+  spawnSuite('subalpine_peat_tarn_plateau', 8, 400, 660, 1.00, 1.30, pickSubalpineWetland, () => ({ lakeKind: 'bog' }));
+  spawnSuite('bamboo_mist_ravine_terrace', 8, 340, 580, 1.02, 1.32, () => pickRiverFlank(110, 460));
+
+  // Subterranean Deep Geological Processes (93..100 + 157..160 + 205..210 = 18 deep subterranean strata types down to -2,600m!)
   const subTypes = [
     'sub_karst_cenote_hall',
     'sub_phreatic_river_gorge',
@@ -643,12 +789,18 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
     'sub_basalt_column_vault',
     'sub_quartz_geode_cavern',
     'sub_mantle_plume_rift',
+    'sub_abyssal_karst_cathedral',
+    'sub_columnar_obsidian_gallery',
+    'sub_brine_underground_sea',
+    'sub_amethyst_hydrothermal_vault',
+    'sub_superheated_geyser_chamber',
+    'sub_ultra_abyss_2600_trench',
   ];
   for (let si = 0; si < subTypes.length; si++) {
     const id = subTypes[si];
     const portal = SUBTERRANEAN_PORTALS[si % SUBTERRANEAN_PORTALS.length];
-    addFeat(id, portal.x, portal.z, 540 + (si % 3) * 180, 1.2, { isSubterranean: true });
-    spawnSuite(id, 4, 480, 880, 1.0, 1.3, si >= 5 ? pickRift : pickWild, () => ({ isSubterranean: true }));
+    addFeat(id, portal.x, portal.z, 460 + (si % 3) * 140, 1.2, { isSubterranean: true });
+    spawnSuite(id, 5, 380, 720, 1.0, 1.3, si >= 8 ? pickRift : pickWild, () => ({ isSubterranean: true }));
   }
 
   return features;
@@ -664,6 +816,19 @@ function sampleGridTop(heights, W, H, minX, minZ, invWorldW, invWorldD, wx, wz) 
 
 function makeGridSampler(heights, W, H, minX, minZ, invWorldW, invWorldD) {
   return (wx, wz) => sampleGridTop(heights, W, H, minX, minZ, invWorldW, invWorldD, wx, wz);
+}
+
+function makeSlopeSampler(heights, W, H, minX, minZ, invWorldW, invWorldD, inv2CellX, inv2CellZ) {
+  return (wx, wz) => {
+    let ix = (((wx - minX) * invWorldW) + 0.5) | 0;
+    let iz = (((wz - minZ) * invWorldD) + 0.5) | 0;
+    if (ix < 1) ix = 1; else if (ix > W - 2) ix = W - 2;
+    if (iz < 1) iz = 1; else if (iz > H - 2) iz = H - 2;
+    const row = iz * W;
+    const gx = (heights[row + ix + 1] - heights[row + ix - 1]) * inv2CellX;
+    const gz = (heights[row + W + ix] - heights[row - W + ix]) * inv2CellZ;
+    return Math.sqrt(gx * gx + gz * gz);
+  };
 }
 
 function addLithoTop(lithoRGBA, o4, r, g, b, a) {
@@ -775,14 +940,19 @@ export function runContinuousGeologyEngine({
       if (v > 0.30) { const vv = ((v - 0.25) * 210) | 0; lithoRGBA[o4] = vv > 255 ? 255 : vv; }
       if (k > 0.30) { const kv = ((k - 0.25) * 200) | 0; lithoRGBA[o4 + 1] = kv > 255 ? 255 : kv; }
       if (e > 0.34) { const ev = ((e - 0.30) * 190) | 0; lithoRGBA[o4 + 2] = ev > 255 ? 255 : ev; }
-      if (wet > 0.36 && asl < 680.0) { const wv = ((wet - 0.32) * 185) | 0; lithoRGBA[o4 + 3] = wv > 255 ? 255 : wv; }
+      if (wet > 0.36 && asl < 960.0) { const wv = ((wet - 0.32) * 185) | 0; lithoRGBA[o4 + 3] = wv > 255 ? 255 : wv; }
     }
   }
 
   // =========================================================================
-  // PHASE B: MULTI-OCCURRENCE 100-PROCESS GEOLOGICAL OPERATORS (575 FEATURES!)
+  // PHASE B: MULTI-OCCURRENCE 210-PROCESS GEOLOGICAL OPERATORS (~1,620+ FORMATIONS!)
   // =========================================================================
-  const features = generateMultiOccurrenceFeatures100(makeGridSampler(heights, W, H, minX, minZ, invWorldW, invWorldD));
+  const inv2CellX = 0.5 / (worldW * invWm1);
+  const inv2CellZ = 0.5 / (worldD * invHm1);
+  const features = generateMultiOccurrenceFeatures210(
+    makeGridSampler(heights, W, H, minX, minZ, invWorldW, invWorldD),
+    makeSlopeSampler(heights, W, H, minX, minZ, invWorldW, invWorldD, inv2CellX, inv2CellZ),
+  );
   const emergentWaterBasins = [];
   const emergentVaporSites = [];
 
@@ -792,11 +962,14 @@ export function runContinuousGeologyEngine({
     OP_BASIN = 12, OP_BADLANDS = 13, OP_LANDSLIDE = 14, OP_FUMAROLE = 15, OP_LAVA = 16,
     OP_TERRACE = 17, OP_WATERFALL = 18, OP_BRAIDED = 19, OP_DRUMLIN = 20, OP_ESKER = 21,
     OP_ROCKGLACIER = 22, OP_SUB = 23, OP_SADDLE = 24,
-    // V7 +14 BRAND-NEW Distinct Geomorphological Operators!
+    // V7 +14 Distinct Geomorphological Operators
     OP_COLUMNAR = 25, OP_VOLC_PLUG = 26, OP_BOX_CANYON = 27, OP_GOOSENECK = 28,
     OP_FLATIRON = 29, OP_CHEVRON = 30, OP_STEP_FAULT = 31, OP_PATERNOSTER = 32,
     OP_FINS = 33, OP_BUTTE = 34, OP_YARDANG = 35, OP_AAPA_BOG = 36,
-    OP_SINTER = 37, OP_RIA_BASIN = 38;
+    OP_SINTER = 37, OP_RIA_BASIN = 38,
+    // V8 +8 BRAND-NEW Distinct Geomorphological Operators (4,100m Glaciers, -2,000m Abyss, Red-Rock, Cenotes & Twin Calderas!)
+    OP_ARETE_SPINE = 39, OP_SERAC_ICEFALL = 40, OP_ABYSSAL_BRINE_FLAT = 41, OP_ABYSSAL_STEP_RIFT = 42,
+    OP_REDROCK_TEMPLE = 43, OP_CENOTE_CHAIN = 44, OP_TWIN_CALDERA = 45, OP_COLORED_BADLANDS = 46;
 
   function getOpCode(kind, isSub) {
     if (isSub) return OP_SUB;
@@ -805,56 +978,78 @@ export function runContinuousGeologyEngine({
       case 'monocline_flexure_ramp': case 'tilted_fault_block_range': case 'trimline_ice_scoured_wall': return OP_CLIFF;
       case 'granite_exfoliation_dome': case 'domal_batholith_monolith': return OP_DOME;
       case 'stepped_basalt_traps': case 'volcanic_mesa': case 'ignimbrite_sheet_bench': case 'structural_bench_steps':
-      case 'horst_block_massif': case 'cryoplanation_summit_step': return OP_TRAPS;
+      case 'horst_block_massif': case 'cryoplanation_summit_step': case 'rift_horst_island_mesa':
+      case 'terraced_canyon_esplanade': return OP_TRAPS;
       case 'basalt_cliff': case 'volcanic_rhyolite_spine': case 'hogback_strike_ridge': case 'knife_edge_arete':
-      case 'radial_dike_wall': case 'alpine_gendarmes_crest': return OP_SPINE;
+      case 'radial_dike_wall': case 'alpine_gendarmes_crest': case 'fold_belt_hogback_ribs': return OP_SPINE;
       case 'slot_canyon_labyrinth': case 'v_gorge': case 'incised_meander_gorge': case 'gorge_pothole_terraces':
-      case 'river_piracy_elbow': case 'karst_collapse_bridge_gorge': case 'shattered_fault_gouge': return OP_SLOT;
-      case 'rift_abyss_trench': case 'graben_rift_trough': case 'breached_anticline_valley': return OP_RIFT;
+      case 'river_piracy_elbow': case 'karst_collapse_bridge_gorge': case 'shattered_fault_gouge':
+      case 'narrow_slot_narrows': case 'abyssal_obsidian_flow_gorge': case 'sunken_limestone_shaft_gorge': return OP_SLOT;
+      case 'rift_abyss_trench': case 'graben_rift_trough': case 'breached_anticline_valley':
+      case 'basalt_shield_fissure_rift': return OP_RIFT;
       case 'karst_tiankeng_shaft': case 'karst_doline': case 'karst_uvala_compound': case 'karst_blind_valley':
-      case 'cave_grotto': case 'collapse_pit_crater': return OP_TIANKENG;
+      case 'cave_grotto': case 'collapse_pit_crater': case 'sunken_cloud_fern_sink': return OP_TIANKENG;
       case 'caldera_lake': case 'maar_crater_lake': case 'tuff_ring_amphitheater': case 'collapsed_caldera_rim':
       case 'phreatic_explosion_pit': case 'cinder_breached_cone': case 'caldera_resurgent_dome': return OP_CALDERA;
       case 'glacial_cirque': case 'bergshrund_headwall': case 'glacial_hanging_glacier': case 'nivation_snow_hollow':
-      case 'canyon_alcove_overhang': return OP_CIRQUE;
+      case 'canyon_alcove_overhang': case 'glacial_berg_amphitheater': return OP_CIRQUE;
       case 'glacial_u_trough': case 'hanging_tributary_valley': case 'fjord_deep_trough_lake': return OP_UTROUGH;
       case 'glacial_horn_peak': case 'karst_tower_fengcong': case 'granite_hoodoos':
-      case 'karst_mogote_haystack': case 'ash_tuff_hoodoo_yard': case 'earth_pillar_demoiselles': return OP_HORN;
+      case 'karst_mogote_haystack': case 'ash_tuff_hoodoo_yard': case 'earth_pillar_demoiselles':
+      case 'limestone_gorge_pinnacles': case 'volcanic_ignimbrite_pillars': case 'cryo_granite_tor_ridge': return OP_HORN;
       case 'oxbow_cutoff_lake': case 'kettle_hole_ponds': case 'landslide_dammed_lake': case 'peat_bog':
       case 'natural_levee_backswamp': case 'karst_polje_flat_basin': case 'alpine_seepage_fen_terrace':
-      case 'tectonic_sag_pond': case 'pull_apart_rift_basin': case 'alluvial_mudflat_playa': return OP_BASIN;
+      case 'tectonic_sag_pond': case 'pull_apart_rift_basin': case 'alluvial_mudflat_playa':
+      case 'karst_polje_sinking_river': case 'tectonic_wrench_basin': case 'ancient_landslide_lake_chain':
+      case 'subalpine_peat_tarn_plateau': return OP_BASIN;
       case 'badlands_rilled_gullies': case 'pyroclastic_gully_fan': case 'avalanche_chute_couloir': case 'talus_chute': return OP_BADLANDS;
       case 'landslide_scar_hummocks': case 'rockfall_megablock_apron': case 'lahar_debris_lobe':
-      case 'debris_flow_levee_cone': case 'alluvial_megafan_delta': case 'crevasse_splay_lobe': return OP_LANDSLIDE;
-      case 'fumarole_sulfur_basin': case 'travertine_onsen': case 'mud_pot_solfatara_flat': return OP_FUMAROLE;
+      case 'debris_flow_levee_cone': case 'alluvial_megafan_delta': case 'crevasse_splay_lobe':
+      case 'abyssal_alluvial_megacone': return OP_LANDSLIDE;
+      case 'fumarole_sulfur_basin': case 'travertine_onsen': case 'mud_pot_solfatara_flat':
+      case 'abyssal_hydrothermal_terrace': case 'geothermal_boiling_spring_field': return OP_FUMAROLE;
       case 'lava_dome_extrusion': case 'scoria_cone': case 'shield_lava_apron': case 'pillow_lava_mound_field':
-      case 'pahoehoe_rope_sheet': case 'aa_clinker_badland': case 'obsidian_coulee_flow': return OP_LAVA;
-      case 'river_terraces': case 'alluvial_terrace_riser': case 'kame_terrace_bench': case 'terrace_strath_bench': return OP_TERRACE;
+      case 'pahoehoe_rope_sheet': case 'aa_clinker_badland': case 'obsidian_coulee_flow':
+      case 'stratovolcano_parasitic_cone': return OP_LAVA;
+      case 'river_terraces': case 'alluvial_terrace_riser': case 'kame_terrace_bench': case 'terrace_strath_bench':
+      case 'alpine_heather_meadow_bench': case 'bamboo_mist_ravine_terrace': return OP_TERRACE;
       case 'waterfall_multitier': case 'waterfall_veil': case 'knickpoint_rock_rapids': case 'moss_cascade_ravine':
-      case 'spring_sapping_alcove': case 'stepped_cascade_chasm': case 'plunging_amphitheater': case 'abandoned_waterfall_dry': return OP_WATERFALL;
+      case 'spring_sapping_alcove': case 'stepped_cascade_chasm': case 'plunging_amphitheater': case 'abandoned_waterfall_dry':
+      case 'deep_canyon_mist_waterfall': case 'double_waterfall_gorge': case 'moss_gorge_emerald_pools': return OP_WATERFALL;
       case 'braided_island': case 'braided_gravel_apron': case 'point_bar_scroll_plain': case 'outwash_sandur_plain':
-      case 'braided_glaciofluvial': case 'confluence_eddy_bar': case 'cutbank_slipoff_bend': return OP_BRAIDED;
+      case 'braided_glaciofluvial': case 'confluence_eddy_bar': case 'cutbank_slipoff_bend':
+      case 'snowmelt_proglacial_delta': case 'braided_glacial_delta_fan': return OP_BRAIDED;
       case 'drumlin_hills': case 'roche_moutonnee_knolls': case 'anticline_folded_dome': case 'pediment_inselberg_knoll':
       case 'syncline_perched_ridge': case 'strike_slip_shutter_ridge': case 'pingo_frost_mound': return OP_DRUMLIN;
       case 'esker_sinuous_ridge': case 'lateral_moraine_ridge': case 'terminal_moraine_arc':
       case 'talus_protalus_rampart': case 'recessional_moraine_waves': return OP_ESKER;
       case 'alpine_rock_glacier': case 'solifluction_lobe_slope': case 'frost_patterned_ground':
-      case 'karst_limestone_pavement': case 'blockfield_felsenmeer': case 'glacial_erratic_apron': return OP_ROCKGLACIER;
-      // V7 Specialized Distinct Morphology Operators!
-      case 'columnar_basalt_organ': return OP_COLUMNAR;
+      case 'karst_limestone_pavement': case 'blockfield_felsenmeer': case 'glacial_erratic_apron':
+      case 'permafrost_gelifluction_step': return OP_ROCKGLACIER;
+      // V7 Specialized Distinct Morphology Operators
+      case 'columnar_basalt_organ': case 'columnar_lava_canyon': return OP_COLUMNAR;
       case 'volcanic_neck_plug': return OP_VOLC_PLUG;
       case 'box_canyon_headwall': return OP_BOX_CANYON;
       case 'entrenched_gooseneck': return OP_GOOSENECK;
       case 'flatiron_triangular_facet': return OP_FLATIRON;
       case 'chevron_folded_ridges': return OP_CHEVRON;
       case 'step_fault_staircase': return OP_STEP_FAULT;
-      case 'paternoster_lake_chain': return OP_PATERNOSTER;
+      case 'paternoster_lake_chain': case 'glacial_tarn_stairway': return OP_PATERNOSTER;
       case 'sandstone_fins_labyrinth': return OP_FINS;
-      case 'butte_caprock_pillar': return OP_BUTTE;
+      case 'butte_caprock_pillar': case 'meandering_canyon_buttes': return OP_BUTTE;
       case 'yardang_wind_scoured_keels': return OP_YARDANG;
       case 'string_bog_aapa_mire': return OP_AAPA_BOG;
-      case 'sinter_geyser_mound': case 'spring_travertine_cascade': return OP_SINTER;
+      case 'sinter_geyser_mound': case 'spring_travertine_cascade': case 'travertine_dam_pools': return OP_SINTER;
       case 'coastal_drowned_ria_basin': return OP_RIA_BASIN;
+      // V8 +8 Specialized High-Realism Operators!
+      case 'alpine_nunatak_spire': case 'nival_cornice_crest': return OP_ARETE_SPINE;
+      case 'alpine_serac_icefall': case 'glacier_crevasse_field': return OP_SERAC_ICEFALL;
+      case 'abyssal_brine_salt_flat': case 'abyssal_alkali_soda_lake': return OP_ABYSSAL_BRINE_FLAT;
+      case 'abyssal_rift_step_wall': return OP_ABYSSAL_STEP_RIFT;
+      case 'sandstone_monolith_temple': case 'redrock_amphitheater_canyon': return OP_REDROCK_TEMPLE;
+      case 'karst_cenote_chain': return OP_CENOTE_CHAIN;
+      case 'caldera_crater_twin_lakes': return OP_TWIN_CALDERA;
+      case 'multicolored_badland_stripes': return OP_COLORED_BADLANDS;
       default: return OP_SADDLE;
     }
   }
@@ -1299,6 +1494,93 @@ export function runContinuousGeologyEngine({
             if (armCut > 0.22) setWater = true;
             break;
           }
+          // --- V8 +8 BRAND-NEW DISTINCT HIGH-REALISM MORPHOLOGY OPERATORS ---
+          case OP_ARETE_SPINE: {
+            // 4,000m-class knife-edge nunatak spire & overhanging nival cornice ridge
+            const ax = rx < 0 ? -rx : rx;
+            const ridge = 1.0 / (1.0 + ax * ax * 14.0);
+            const teeth = 0.72 + 0.28 * Math.cos(rz * 12.0 + seed);
+            const spire = ridge * (1.0 - rz * rz * 0.55) * teeth;
+            dh = (spire * 255.0 + (nR - 0.38) * 32.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.12 * env, 0.16 * env, 0.0, 0.35 * env);
+            break;
+          }
+          case OP_SERAC_ICEFALL: {
+            // Stepped crevasse-riven serac icefall & transverse blue-ice fracture staircase
+            const stairT = clamp01((rz + 0.75) * 0.666);
+            const stepFrac = stairT * 6.0;
+            const stepIdx = stepFrac | 0;
+            const iceDrop = (stepIdx + smoothstep(0.0, 0.18, stepFrac - stepIdx)) * (1 / 6.0);
+            const crev = Math.sin(rz * 30.0 + nF * 4.5) * 12.5;
+            dh = ((iceDrop - 0.5) * 145.0 + crev) * (1.0 - rx * rx * 0.6) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.15 * env, 0.0, 0.52 * env);
+            break;
+          }
+          case OP_ABYSSAL_BRINE_FLAT: {
+            // Flat-floored sunken -2,000m abyssal salt/alkali basin ringed by sheer rift walls
+            const u = (0.58 - rClamped) * 16.0;
+            const floor = 0.5 + 0.5 * (u / (1.0 + (u < 0 ? -u : u)));
+            const rim = (1.0 / (1.0 + (rClamped - 0.68) * (rClamped - 0.68) * 32.0)) * 45.0;
+            dh = (-floor * 165.0 + rim + (nR - 0.5) * 12.0 * (1.0 - floor)) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.28 * env, 0.76 * floor, 0.42 * floor, 0.35 * floor);
+            if (floor > 0.35) setWater = true;
+            break;
+          }
+          case OP_ABYSSAL_STEP_RIFT: {
+            // 5-tier cascading normal-fault graben wall plunging into the -2,000m abyssal trench
+            const ax = rx < 0 ? -rx : rx;
+            const sNorm = clamp01(ax * 1.18);
+            const st = sNorm * 5.0;
+            const si = st | 0;
+            const stepVal = (si + smoothstep(0.0, 0.16, st - si)) * 0.2;
+            dh = ((stepVal - 0.85) * 285.0 + (nR - 0.5) * 22.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.68 * env, 0.20 * env, 0.30 * env, 0.0);
+            break;
+          }
+          case OP_REDROCK_TEMPLE: {
+            // Monumental terraced red-rock sandstone monolith temple & concentric canyon esplanade
+            const t1 = 0.5 + 0.5 * (((0.26 - rClamped) * 20.0) / (1.0 + Math.abs((0.26 - rClamped) * 20.0)));
+            const t2 = 0.5 + 0.5 * (((0.54 - rClamped) * 15.0) / (1.0 + Math.abs((0.54 - rClamped) * 15.0)));
+            const t3 = 0.5 + 0.5 * (((0.78 - rClamped) * 12.0) / (1.0 + Math.abs((0.78 - rClamped) * 12.0)));
+            dh = (t1 * 115.0 + t2 * 72.0 + t3 * 38.0 + (nR - 0.45) * 16.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.14 * env, 0.18 * env, 0.94 * env, 0.0);
+            break;
+          }
+          case OP_CENOTE_CHAIN: {
+            // Chain of 3 vertical-walled flooded limestone karst cenotes along a subterranean conduit
+            const c1 = 1.0 - smoothstep(0.14, 0.25, Math.hypot(rx, rz + 0.46));
+            const c2 = 1.0 - smoothstep(0.16, 0.27, Math.hypot(rx - 0.06, rz));
+            const c3 = 1.0 - smoothstep(0.14, 0.25, Math.hypot(rx + 0.04, rz - 0.46));
+            const pits = c1 > c2 ? (c1 > c3 ? c1 : c3) : (c2 > c3 ? c2 : c3);
+            dh = -pits * 125.0 * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.92 * env, 0.0, 0.72 * pits);
+            if (pits > 0.22) setWater = true;
+            break;
+          }
+          case OP_TWIN_CALDERA: {
+            // Nested composite double-crater volcanic caldera with twin emerald crater lakes
+            const dA = Math.hypot(rx + 0.24, rz * 1.1);
+            const dB = Math.hypot(rx - 0.24, rz * 1.1);
+            const bowlA = 1.0 - smoothstep(0.0, 0.34, dA);
+            const bowlB = 1.0 - smoothstep(0.0, 0.30, dB);
+            const rimA = 1.0 / (1.0 + (dA - 0.38) * (dA - 0.38) * 32.0);
+            const rimB = 1.0 / (1.0 + (dB - 0.34) * (dB - 0.34) * 32.0);
+            const bowls = bowlA > bowlB ? bowlA : bowlB;
+            const rims = rimA > rimB ? rimA : rimB;
+            dh = (rims * 138.0 - bowls * 92.0 + (nR - 0.45) * 18.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.88 * env, 0.0, 0.22 * rims, 0.45 * bowls);
+            if (bowls > 0.18) setWater = true;
+            break;
+          }
+          case OP_COLORED_BADLANDS: {
+            // Deep multicolored banded dendritic badland fin ridges (alternating red/ochre/chalk strata!)
+            const rillA = Math.abs(Math.sin(rx * 20.0 + rz * 6.0 + nF * 4.2));
+            const rillB = Math.abs(Math.cos(rx * 11.0 - rz * 14.0 + seed));
+            const fin = (rillA * 0.62 + rillB * 0.38);
+            dh = ((fin - 0.45) * 86.0 + (nR - 0.5) * 18.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.10 * env, 0.48 * (1.0 - rillA) * env, 0.94 * env, 0.0);
+            break;
+          }
           default: {
             dh = isSaddle
               ? ((rx * rx - rz * rz) * 52.0 * str * env)
@@ -1359,8 +1641,8 @@ export function runContinuousGeologyEngine({
     }
   }
 
-  // Ensure every single one of the 160 processes has active coverage (guarantee 160/160!)
-  const TOTAL_PROCESSES = GEOLOGY_PROCESS_CATALOG_160.length;
+  // Ensure every single one of the 210 processes has active coverage (guarantee 210/210!)
+  const TOTAL_PROCESSES = GEOLOGY_PROCESS_CATALOG_210.length;
   const processCellCounts = new Int32Array(TOTAL_PROCESSES + 1);
   for (let i = 0; i < N; i++) {
     const k = dominantKindId[i];
@@ -1392,11 +1674,11 @@ export function runContinuousGeologyEngine({
   }
 
   // =========================================================================
-  // PHASE C: BAKE 512×512 SUBTERRANEAN -1,500m CAVERN/STRATA ATLAS (FOR 2D MAP X-RAY & 3D CAVES!)
-  //   R: Shallow Karst Cave Density (-50m..-350m)
-  //   G: Mid Crustal Lava-Tube / Fault Cavern Density (-350m..-900m)
-  //   B: Deep Abyssal Geothermal Chasm Density (-900m..-1,500m)
-  //   A: Max Cavern Depth normalized [0..1] -> [0..-1500m]
+  // PHASE C: BAKE 256×256 SUBTERRANEAN (-801m .. -1,900m) CAVERN/STRATA ATLAS (FOR 2D MAP X-RAY & 3D CAVES!)
+  //   R: Upper Subterranean Karst Cave Density (-801m..-1,150m)
+  //   G: Mid Crustal Lava-Tube / Fault Cavern Density (-1,150m..-1,520m)
+  //   B: Deep Abyssal Geothermal Chasm Density (-1,520m..-1,900m)
+  //   A: Max Cavern Depth normalized [0..1] -> [-801m..-1,900m]
   // =========================================================================
   const subRGBA = new Uint8Array(PW * PH * 4);
   for (let pz = 0; pz < PH; pz++) {
@@ -1407,7 +1689,6 @@ export function runContinuousGeologyEngine({
       const pi = row + px;
       const o4 = pi << 2;
 
-      // Sinuous filament cavern networks via ridged-abs domain-warped tunnels!
       const warpX = (fastNoiseLUT(wx * 0.00025 + 4.1, wz * 0.00025 - 8.2) - 0.5) * 2400.0;
       const warpZ = (fastNoiseLUT(wx * 0.00025 - 6.7, wz * 0.00025 + 3.9) - 0.5) * 2400.0;
 
@@ -1415,7 +1696,6 @@ export function runContinuousGeologyEngine({
       const tMid = Math.pow(Math.max(0.0, 1.0 - Math.abs(fastNoiseLUT((wx - warpZ * 0.8) * 0.00036 + 17.0, (wz + warpX * 0.8) * 0.00036 - 9.0) * 2.0 - 1.0)), 4.2);
       const tDeep = Math.pow(Math.max(0.0, 1.0 - Math.abs(fastNoiseLUT((wx + warpX * 1.2) * 0.00026 - 23.0, (wz - warpZ * 1.2) * 0.00026 + 31.0) * 2.0 - 1.0)), 4.0);
 
-      // Amplify naturally around subterranean portals & deep rift trenches!
       let portalBoost = 0.0;
       let maxDepthNorm = 0.20 + tKarst * 0.25 + tMid * 0.30 + tDeep * 0.45;
       for (let k = 0; k < SUBTERRANEAN_PORTALS.length; k++) {
@@ -1424,7 +1704,7 @@ export function runContinuousGeologyEngine({
         if (d < 3200) {
           const b = 1.0 - smoothstep(180, 3200, d);
           if (b > portalBoost) portalBoost = b;
-          const dn = Math.abs(sp.targetDepthM) / 1500.0;
+          const dn = clamp01((Math.abs(sp.targetDepthM) - 801.0) / 1099.0);
           if (dn * b > maxDepthNorm) maxDepthNorm = Math.min(1.0, dn * b + 0.15);
         }
       }
@@ -1441,7 +1721,7 @@ export function runContinuousGeologyEngine({
   }
 
   return {
-    catalog: GEOLOGY_PROCESS_CATALOG_160,
+    catalog: GEOLOGY_PROCESS_CATALOG_210,
     features,
     emergentWaterBasins,
     emergentVaporSites,

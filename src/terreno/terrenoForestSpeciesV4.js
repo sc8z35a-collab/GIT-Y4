@@ -130,17 +130,20 @@ function unitCard(opts) {
   const [ox, oy, oz] = origin;
   const [cx, cyC, cz] = crownCenter;
 
+  const segU = 2; // 3D V-cupped cross-arch leaf bough -> plush botanical volume, zero flat cardboard cards!
   for (let iv = 0; iv <= segV; iv++) {
     const t = iv / segV;
     const wt = 1.0 + (tipTaper - 1.0) * t;
-    for (let iu = 0; iu <= 1; iu++) {
-      const s = iu;
+    for (let iu = 0; iu <= segU; iu++) {
+      const s = iu / segU;
+      const uCentered = (s - 0.5) * 2.0; // -1 .. +1
       const sw = (s - 0.5) * width * wt;
       const sl = t * length;
+      const archCup = (1.0 - uCentered * uCentered) * width * 0.12 * Math.sin(t * Math.PI);
       const dy = -droop * t * t;
-      const px = ox + fwd[0] * sl + right[0] * sw;
-      const py = oy + fwd[1] * sl + right[1] * sw + dy;
-      const pz = oz + fwd[2] * sl + right[2] * sw;
+      const px = ox + fwd[0] * sl + right[0] * sw + up[0] * archCup;
+      const py = oy + fwd[1] * sl + right[1] * sw + up[1] * archCup + dy;
+      const pz = oz + fwd[2] * sl + right[2] * sw + up[2] * archCup;
       pos.push(px, py, pz);
 
       // SpeedTree-grade spherical crown normal transfer -> plush pillowy shading!
@@ -158,9 +161,12 @@ function unitCard(opts) {
       meta.push(ao, 0.15 + 0.85 * t * t);
     }
   }
+  const strideU = segU + 1;
   for (let iv = 0; iv < segV; iv++) {
-    const a = iv * 2, b = a + 1, c = a + 2, d = c + 1;
-    idx.push(a, b, c, b, d, c);
+    for (let iu = 0; iu < segU; iu++) {
+      const a = iv * strideU + iu, b = a + 1, c = a + strideU, d = c + 1;
+      idx.push(a, b, c, b, d, c);
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -637,8 +643,8 @@ export const EXTENDED_TREE_SPECIES_V4 = ALL_TREE_SPECIES_28.slice(7, 27);
  * Returns index `0..27` into `ALL_TREE_SPECIES_28`, or `-1` if soil/climate forbids trees!
  */
 export function pickPhytosociologicalSpecies(wx, wz, elevASL, slope, onRiverBank, eco, lfKind, roll) {
-  // 1. Strict ecological rejection: ZERO trees on bare rock, cliffs, lava, badlands, snow summits!
-  if (elevASL > 2050 || elevASL < -180) return -1;
+  // 1. Strict ecological rejection: ZERO trees on bare rock, cliffs, lava, badlands, snow summits (>2,520m) or abyssal brine floor (<-700m)!
+  if (elevASL > 2520 || elevASL < -700) return -1;
   const soil = eco ? eco.soilDepth : 0.65;
   const moist = eco ? eco.moisture : 0.55;
   const stand = eco ? eco.stand : 0.5;
@@ -647,18 +653,18 @@ export function pickPhytosociologicalSpecies(wx, wz, elevASL, slope, onRiverBank
   // Steep rock slopes (> 29° ≈ 0.56): only rare tenacious pines on ledges with pockets of soil
   if (slope > 0.56) {
     if (slope > 0.64 || soil < 0.25 || roll > 0.28) return -1;
-    return elevASL > 1350 ? 27 : (roll < 0.18 ? 5 : 14); // Akamatsu / Kuromatsu / Himekomatsu
+    return elevASL > 1650 ? 27 : (roll < 0.18 ? 5 : 14); // Akamatsu / Kuromatsu / Himekomatsu
   }
 
-  // 2. High Alpine Timberline Krummholz Belt (1,760m .. 2,050m ASL)
-  if (elevASL > 1760) {
+  // 2. High Alpine Timberline Krummholz Belt (+2,100m .. +2,520m ASL)
+  if (elevASL > 2100) {
     if (roll < 0.74) return 17; // Haimatsu Dwarf Stone Pine (74% pure alpine pine carpet!)
     if (roll < 0.90) return 18; // Dakekanba Subalpine Birch (16%)
     return 26;                  // Weathered Karekigi Silver Snag (10%)
   }
 
-  // 3. Subalpine Conifer & Birch Highlands (1,280m .. 1,760m ASL)
-  if (elevASL > 1280) {
+  // 3. Subalpine Conifer & Birch Highlands (+1,480m .. +2,100m ASL)
+  if (elevASL > 1480) {
     if (stand < 0.42) {
       // Pure Subalpine Conifer Belt: Momi Fir + Kometsuga Hemlock + Himekomatsu
       if (roll < 0.52) return 16; // Kometsuga Hemlock
@@ -675,6 +681,15 @@ export function pickPhytosociologicalSpecies(wx, wz, elevASL, slope, onRiverBank
     if (roll < 0.72) return 4;    // Shirakaba White Birch
     if (roll < 0.90) return 11;   // Karamatsu Larch
     return 16;                    // Kometsuga Hemlock
+  }
+
+  // 3b. Sunken Cloud-Forest Gorge Guild (-700m .. -150m ASL — warm humid sheltered chasms!)
+  if (elevASL < -150) {
+    if (roll < 0.36) return 0;    // Ancient Giant Sugi Cedar
+    if (roll < 0.62) return 19;   // Great Katsura
+    if (roll < 0.80) return 22;   // Glossy Camellia Laurel
+    if (roll < 0.92) return 10;   // Moso Bamboo Groove
+    return 25;                    // Sawara Wetland Cypress
   }
 
   // 4. Riparian Valley & Moist Gorge Guild (along rivers, waterfalls, oxbows, seepage fens)

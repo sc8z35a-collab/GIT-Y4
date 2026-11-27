@@ -20,6 +20,9 @@ const btnCloseSettings = document.getElementById('btn-close-settings');
 const inputSens = document.getElementById('input-sens');
 const sensValEl = document.getElementById('sens-val');
 const toggleSm11s = document.getElementById('toggle-sm11s');
+const selectWeather = document.getElementById('select-weather');
+const weatherMetaEl = document.getElementById('weather-meta');
+const toggleAutoWeather = document.getElementById('toggle-auto-weather');
 const toggleStorm = document.getElementById('toggle-storm');
 const toggleLight = document.getElementById('toggle-light');
 const toggleAudio = document.getElementById('toggle-audio');
@@ -395,6 +398,12 @@ try {
     onStormChange: (on) => {
       if (toggleStorm) toggleStorm.checked = Boolean(on);
     },
+    onWeatherChange: (st) => {
+      if (!st) return;
+      if (selectWeather && st.id && selectWeather.value !== st.id) selectWeather.value = st.id;
+      if (weatherMetaEl) weatherMetaEl.textContent = `${st.nameJp} ${Math.round(st.localTempC)}℃`;
+      if (toggleAutoWeather) toggleAutoWeather.checked = Boolean(st.autoCycle);
+    },
     onToggleMap: () => toggleMap(),
     onToggleTelemetry: () => togglePerf(),
     onTelemetry: (t) => {
@@ -446,6 +455,18 @@ btnCloseSettings.addEventListener('click', () => toggleSettings(false));
 
 inputSens.addEventListener('input', () => applySensitivity(Number(inputSens.value), true));
 toggleSm11s.addEventListener('change', () => { playUi('ui_toggle'); applySm11s(toggleSm11s.checked, true); });
+if (selectWeather) {
+  selectWeather.addEventListener('change', () => {
+    playUi('ui_toggle');
+    if (explorer && explorer.setWeather) explorer.setWeather(selectWeather.value, false);
+  });
+}
+if (toggleAutoWeather) {
+  toggleAutoWeather.addEventListener('change', () => {
+    playUi('ui_toggle');
+    if (explorer && explorer.setAutoWeather) explorer.setAutoWeather(toggleAutoWeather.checked);
+  });
+}
 if (toggleStorm) {
   toggleStorm.addEventListener('change', () => { playUi('ui_toggle'); applyStorm(toggleStorm.checked, false); });
 }

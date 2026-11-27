@@ -46,6 +46,17 @@ export function createSharedAtmosphereUniforms(initialPresetId = 'night', geomor
     uFlashPos: { value: new THREE.Vector3(0, -999, 0) },
     uFlashDir: { value: new THREE.Vector3(0, 0, -1) },
     uFlashIntensity: { value: 0.0 },
+    // TERRENO 9.0 Shared Live Weather & 3D Floating Cloud Shadow Uniforms
+    uWeatherWetness: { value: 0.0 },
+    uWeatherSnowAccum: { value: 0.0 },
+    uWeatherWind: { value: new THREE.Vector3(3.2, 0.35, 2.2) },
+    uCloudCoverage: { value: 0.50 },
+    uCloudWindOffset: { value: new THREE.Vector2(0.0, 0.0) },
+    uWeatherLightning: { value: 0.0 },
+    uWeatherDust: { value: 0.0 },
+    // TERRENO 9.0 Ultra-Lightweight Strict 6m × 6m × 6m Dynamic Animation Bubble (±3.0m around player!)
+    uPlayerBubbleCenter: { value: new THREE.Vector3(0.0, 1.2, 0.0) },
+    uAnimBubbleHalf: { value: 3.0 },
   };
 }
 
@@ -101,6 +112,15 @@ uniform vec2 uAtmoAtlasSize;
 uniform vec3 uFlashPos;
 uniform vec3 uFlashDir;
 uniform float uFlashIntensity;
+uniform float uWeatherWetness;
+uniform float uWeatherSnowAccum;
+uniform vec3 uWeatherWind;
+uniform float uCloudCoverage;
+uniform vec2 uCloudWindOffset;
+uniform float uWeatherLightning;
+uniform float uWeatherDust;
+uniform vec3 uPlayerBubbleCenter;
+uniform float uAnimBubbleHalf;
 `;
 
 export const TERRENO_ATMO_FUNCTIONS_GLSL = /* glsl */ `

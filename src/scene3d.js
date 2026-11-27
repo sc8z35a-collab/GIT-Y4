@@ -19,6 +19,7 @@ import {
 } from './villageData.js';
 import {
   vehicleLocalToWorld3D,
+  worldToVehicleLocal3D,
   evalTiltedCabinFloorY,
   evalCharacterSlopePhysics,
   evalExactTrunkAtHeight,
@@ -552,8 +553,95 @@ export class FirstPersonHouseExplorer {
     if (this.terreno && this.terreno.storm) {
       this.terreno.storm.setStormEnabled(this.stormEnabled, instant);
     }
+    if (this.terreno && this.terreno.weather) {
+      if (this.stormEnabled && this.terreno.weather.getWeatherId() !== 'thunderstorm') {
+        this._preStormWeatherId = this.terreno.weather.getWeatherId();
+        this.terreno.weather.setWeather('thunderstorm', instant);
+      } else if (!this.stormEnabled && this.terreno.weather.getWeatherId() === 'thunderstorm') {
+        this.terreno.weather.setWeather(this._preStormWeatherId || 'partly_cloudy', instant);
+      }
+    }
     if (this.callbacks.onStormChange) this.callbacks.onStormChange(this.stormEnabled);
+    if (this.callbacks.onWeatherChange && this.terreno?.weather) {
+      this.callbacks.onWeatherChange(this.terreno.weather.getState(this.floorY));
+    }
     return this.stormEnabled;
+  }
+
+  setWeather(weatherId, instant = false) {
+    if (!this.terreno || !this.terreno.weather) return null;
+    const st = this.terreno.weather.setWeather(weatherId, instant);
+    this.stormEnabled = weatherId === 'thunderstorm';
+    if (this.callbacks.onStormChange) this.callbacks.onStormChange(this.stormEnabled);
+    if (this.callbacks.onWeatherChange) this.callbacks.onWeatherChange(st);
+    if (st && st.nameJp) {
+      this._notifyStatus(`天候：${st.nameJp}（${st.localTempC}℃ / 気圧 ${st.pressureHpa}hPa）`, 'info');
+    }
+    return st;
+  }
+
+  cycleWeather(instant = false) {
+    if (!this.terreno || !this.terreno.weather) return null;
+    const st = this.terreno.weather.cycleWeather(instant);
+    this.stormEnabled = st && st.id === 'thunderstorm';
+    if (this.callbacks.onStormChange) this.callbacks.onStormChange(this.stormEnabled);
+    if (this.callbacks.onWeatherChange) this.callbacks.onWeatherChange(st);
+    if (st && st.nameJp) {
+      this._notifyStatus(`天候：${st.nameJp}（${st.localTempC}℃）`, 'info');
+    }
+    return st;
+  }
+
+  setAutoWeather(enabled) {
+    if (!this.terreno || !this.terreno.weather) return false;
+    const on = this.terreno.weather.setAutoCycle(enabled);
+    if (this.callbacks.onWeatherChange) this.callbacks.onWeatherChange(this.terreno.weather.getState(this.floorY));
+    return on;
+  }
+
+  getWeatherState() {
+    if (!this.terreno || !this.terreno.weather) return null;
+    return this.terreno.weather.getState(this.floorY);
+  }
+
+  /**
+   * TERRENO 9.0 — Strict 6 m × 6 m × 6 m Player-Bubble Dynamic Animation Gate (±3.0 m on X/Y/Z).
+   * Elevators and active Autopilot vehicles are explicitly exempt!
+   */
+  _in6mBubble(wx, wy, wz) {
+    const px = this.playerPos.x;
+    const py = this.floorY + this.jumpOffset + 1.0;
+    const pz = this.playerPos.z;
+    return Math.abs(wx - px) <= 3.0 && Math.abs(wy - py) <= 3.0 && Math.abs(wz - pz) <= 3.0;
+  }
+
+  getLiveAutopilotPredictions() {
+    if (!this.terreno || !this.terreno.autopilot || !this.terreno.autopilot.predictLiveTrajectory) {
+      return { camper: null, armor: null, k11: null };
+    }
+    const pred = this.terreno.autopilot.predictLiveTrajectory;
+    const rc = this.autopilotRoutes.camper;
+    const ra = this.autopilotRoutes.armor;
+    const rk = this.autopilotRoutes.k11;
+    return {
+      camper: rc ? pred('camper', this.house.camper.pose, this.house.camper.speed, this.house.camper.steerAngle, rc) : null,
+      armor: ra ? pred('armor', this.house.armorCamper.pose, this.house.armorCamper.speed, this.house.armorCamper.steerAngle, ra) : null,
+      k11: rk && this.house.airshipK11 ? pred('k11', this.house.airshipK11.pose, (this.house.airshipK11.groundSpeedKmh || 0) / 3.6, 0, rk) : null,
+    };
+  }
+
+  getAutopilotPickupStatus(vehicleKey = 'camper') {
+    const route = this.autopilotRoutes[vehicleKey];
+    const veh = this._getVehicleObj(vehicleKey);
+    const dist = veh ? Math.hypot(veh.pose.cx - this.playerPos.x, veh.pose.cz - this.playerPos.z) : 0;
+    return {
+      vehicleKey,
+      active: Boolean(route),
+      isPickupMode: Boolean(route && route.isPickupMode),
+      phase: route ? (route.pickupPhase || route.mode || 'CRUISE') : (this._lastPickupEvent?.vehicleKey === vehicleKey ? this._lastPickupEvent.phase : 'IDLE'),
+      distToPlayerM: Math.round(dist * 100) / 100,
+      lastEvent: this._lastPickupEvent || null,
+    };
   }
 
   toggleArmorShutters(force = null) {
@@ -1107,26 +1195,26 @@ export class FirstPersonHouseExplorer {
         [1.35, 0.92],
       ];
       for (const [lx, lz] of cands) {
-        const w = this.camperLocalToWorld(lx, lz);
+        const w = vehicleLocalToWorld3D(this.house.camper.pose, CAMPER.width, CAMPER.length, lx, CAMPER.floor1WorldY, lz);
         if (!this._collidesAt(w.x, w.z)) {
           chosen = {
             x: w.x,
             z: w.z,
             building: 'camper',
             eye: 1.54,
-            floorY: evalTiltedCabinFloorY(this.house.camper.pose, CAMPER.width, CAMPER.length, lx, CAMPER.floor1WorldY, lz),
+            floorY: w.y,
           };
           break;
         }
       }
       if (!chosen) {
-        const w = this.camperLocalToWorld(1.35, 1.54);
+        const w = vehicleLocalToWorld3D(this.house.camper.pose, CAMPER.width, CAMPER.length, 1.35, CAMPER.floor1WorldY, 1.54);
         chosen = {
           x: w.x,
           z: w.z,
           building: 'camper',
           eye: 1.54,
-          floorY: evalTiltedCabinFloorY(this.house.camper.pose, CAMPER.width, CAMPER.length, 1.35, CAMPER.floor1WorldY, 1.54),
+          floorY: w.y,
         };
       }
     } else if (activeKey === 'armor') {
@@ -1137,26 +1225,26 @@ export class FirstPersonHouseExplorer {
         [1.15, 3.60],
       ];
       for (const [lx, lz] of cands) {
-        const w = this.armorLocalToWorld(lx, lz);
+        const w = vehicleLocalToWorld3D(this.house.armorCamper.pose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, lx, ARMOR_CAMPER.floorWorldY, lz);
         if (!this._collidesAt(w.x, w.z)) {
           chosen = {
             x: w.x,
             z: w.z,
             building: 'armor',
             eye: 1.56,
-            floorY: evalTiltedCabinFloorY(this.house.armorCamper.pose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, lx, ARMOR_CAMPER.floorWorldY, lz),
+            floorY: w.y,
           };
           break;
         }
       }
       if (!chosen) {
-        const w = this.armorLocalToWorld(1.55, 2.15);
+        const w = vehicleLocalToWorld3D(this.house.armorCamper.pose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, 1.55, ARMOR_CAMPER.floorWorldY, 2.15);
         chosen = {
           x: w.x,
           z: w.z,
           building: 'armor',
           eye: 1.56,
-          floorY: evalTiltedCabinFloorY(this.house.armorCamper.pose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, 1.55, ARMOR_CAMPER.floorWorldY, 2.15),
+          floorY: w.y,
         };
       }
     } else {
@@ -1188,13 +1276,13 @@ export class FirstPersonHouseExplorer {
             dkL.progress = Math.max(dkL.progress, 0.85);
             dkL.autoHoldTimer = 2.4;
           }
-          const inCargo = this.keiLocalToWorld(0.64, 1.66);
+          const inCargo = vehicleLocalToWorld3D(this.house.kei.pose, KEI.width, KEI.length, 0.64, KEI.floorWorldY, 1.66);
           chosen = {
             x: inCargo.x,
             z: inCargo.z,
             building: 'kei',
             eye: 1.04,
-            floorY: evalTiltedCabinFloorY(this.house.kei.pose, KEI.width, KEI.length, 0.64, KEI.floorWorldY, 1.66),
+            floorY: inCargo.y,
           };
         }
       }
@@ -1290,13 +1378,13 @@ export class FirstPersonHouseExplorer {
     this._notifyDriveHUD();
   }
 
-  _applyVehicleTerrainPose(veh, kind, stepLift = 0) {
+  _applyVehicleTerrainPose(veh, kind, stepLift = 0, dt = 0, instant = false) {
     const cx = veh.pose.cx;
     const cz = veh.pose.cz;
     const yaw = veh.pose.yaw;
-    let baseY = 0;
-    let pitch = 0;
-    let roll = 0;
+    let targetY = 0;
+    let targetPitch = 0;
+    let targetRoll = 0;
 
     if (this.terreno) {
       const isKei = kind === true || kind === 'kei';
@@ -1309,28 +1397,70 @@ export class FirstPersonHouseExplorer {
       const rx = Math.cos(yaw);
       const rz = -Math.sin(yaw);
 
+      // Smooth 7-point multi-wheel tire contact patch (eliminates single-point bump jitter!)
       const yCenter = this.terreno.getHeightAt(cx, cz);
-      const yFront = this.terreno.getHeightAt(cx + fx * halfWB, cz + fz * halfWB);
-      const yRear = this.terreno.getHeightAt(cx - fx * halfWB, cz - fz * halfWB);
-      const yRight = this.terreno.getHeightAt(cx + rx * halfTr, cz + rz * halfTr);
-      const yLeft = this.terreno.getHeightAt(cx - rx * halfTr, cz - rz * halfTr);
+      const yFL = this.terreno.getHeightAt(cx + fx * halfWB - rx * halfTr, cz + fz * halfWB - rz * halfTr);
+      const yFR = this.terreno.getHeightAt(cx + fx * halfWB + rx * halfTr, cz + fz * halfWB + rz * halfTr);
+      const yRL = this.terreno.getHeightAt(cx - fx * halfWB - rx * halfTr, cz - fz * halfWB - rz * halfTr);
+      const yRR = this.terreno.getHeightAt(cx - fx * halfWB + rx * halfTr, cz - fz * halfWB + rz * halfTr);
+      const yML = this.terreno.getHeightAt(cx - rx * halfTr, cz - rz * halfTr);
+      const yMR = this.terreno.getHeightAt(cx + rx * halfTr, cz + rz * halfTr);
 
-      const avgGround = 0.4 * yCenter + 0.15 * (yFront + yRear + yRight + yLeft);
-      baseY = avgGround + 0.35 + (veh.suspLift || 0) + stepLift * 0.25;
-      pitch = Math.max(-0.46, Math.min(0.46, Math.atan2(yFront - yRear, 2 * halfWB)));
-      roll = Math.max(-0.42, Math.min(0.42, Math.atan2(yRight - yLeft, 2 * halfTr)));
+      const yFront = (yFL + yFR) * 0.5;
+      const yRear = (yRL + yRR) * 0.5;
+      const yLeft = (yFL + yML + yRL) / 3.0;
+      const yRight = (yFR + yMR + yRR) / 3.0;
+
+      const avgGround = 0.28 * yCenter + 0.18 * (yFront + yRear + yLeft + yRight);
+      targetY = avgGround + 0.35 + (veh.suspLift || 0) + stepLift * 0.22;
+      targetPitch = Math.max(-0.46, Math.min(0.46, Math.atan2(yFront - yRear, 2 * halfWB)));
+      targetRoll = Math.max(-0.42, Math.min(0.42, Math.atan2(yRight - yLeft, 2 * halfTr)));
     }
 
-    veh.pose.y = baseY;
-    veh.pose.pitch = pitch;
-    veh.pose.roll = roll;
-    veh.root.position.set(cx, baseY, cz);
+    // Critically-damped 2nd-order hydraulic overland suspension spring-damper -> buttery smooth tilt!
+    if (instant || !dt || dt <= 0 || veh.pose.y === undefined || Number.isNaN(veh.pose.pitch)) {
+      veh.pose.y = targetY;
+      veh.pose.pitch = targetPitch;
+      veh.pose.roll = targetRoll;
+      veh._pitchVel = 0;
+      veh._rollVel = 0;
+      veh._heaveVel = 0;
+    } else {
+      const clampedDt = Math.min(dt, 0.05);
+      const isKei = kind === true || kind === 'kei';
+      const isArmor = kind === 'armor';
+      const wPitch = isArmor ? 5.6 : (isKei ? 8.2 : 6.6);
+      const wRoll = isArmor ? 5.4 : (isKei ? 7.8 : 6.2);
+      const wHeave = isArmor ? 10.5 : 12.5;
+      const zeta = 0.94; // Critically damped -> silky zero-oscillation response!
+
+      // Semi-implicit Euler spring integration (unconditionally stable at 60/120 Hz!)
+      let pv = veh._pitchVel || 0;
+      let rv = veh._rollVel || 0;
+      let yv = veh._heaveVel || 0;
+
+      pv += ((targetPitch - (veh.pose.pitch || 0)) * (wPitch * wPitch) - pv * (2 * zeta * wPitch)) * clampedDt;
+      rv += ((targetRoll - (veh.pose.roll || 0)) * (wRoll * wRoll) - rv * (2 * zeta * wRoll)) * clampedDt;
+      yv += ((targetY - (veh.pose.y || targetY)) * (wHeave * wHeave) - yv * (2 * zeta * wHeave)) * clampedDt;
+
+      veh.pose.pitch = Math.max(-0.48, Math.min(0.48, (veh.pose.pitch || 0) + pv * clampedDt));
+      veh.pose.roll = Math.max(-0.44, Math.min(0.44, (veh.pose.roll || 0) + rv * clampedDt));
+      // Keep chassis height tightly tracked to ground while damping sharp bumps
+      const nextY = (veh.pose.y || targetY) + yv * clampedDt;
+      veh.pose.y = Math.abs(nextY - targetY) > 1.2 ? targetY : nextY;
+
+      veh._pitchVel = pv;
+      veh._rollVel = rv;
+      veh._heaveVel = yv;
+    }
+
+    veh.root.position.set(cx, veh.pose.y, cz);
     veh.root.rotation.order = 'YXZ';
-    veh.root.rotation.set(pitch, yaw, roll);
+    veh.root.rotation.set(veh.pose.pitch, yaw, veh.pose.roll);
     veh.root.updateMatrixWorld(true);
   }
 
-  _updateTowedContainer(movedDist = 0) {
+  _updateTowedContainer(movedDist = 0, dt = 0) {
     const cont = this.house.towContainer;
     if (!cont || !cont.hitched) return;
     const armor = this.house.armorCamper;
@@ -1355,7 +1485,7 @@ export class FirstPersonHouseExplorer {
 
     cont.pose.cx = hx + Math.sin(cont.pose.yaw) * dHitch;
     cont.pose.cz = hz + Math.cos(cont.pose.yaw) * dHitch;
-    this._applyVehicleTerrainPose(cont, 'container');
+    this._applyVehicleTerrainPose(cont, 'container', 0, dt, dt <= 0);
     if (Math.abs(movedDist) > 0.0001) {
       const spin = movedDist / TOW_CONTAINER.wheelRadius;
       cont.wheelMeshes.forEach((w) => { w.rotation.x -= spin; });
@@ -1879,6 +2009,7 @@ export class FirstPersonHouseExplorer {
     // ---- APEX-DRIVE v4.0 Autonomous Driving Controller (RoadGraph A* + 1.25m Local C-Space + 19-Cand MPPI + 32-Ray LiDAR + Smart K-Turn + Shielded Neural Policy) ----
     let autopilotActive = false;
     let unmannedFarTransit = false;
+    let holdEmergencyBrake = false;
     const route = (vehicleKey === 'camper' || vehicleKey === 'armor') ? this.autopilotRoutes[vehicleKey] : null;
     if (route && this.terreno && this.terreno.autopilot) {
       if (isPlayerDriving && (Math.abs(throttle) > 0.18 || Math.abs(steerIn) > 0.18)) {
@@ -1887,78 +2018,213 @@ export class FirstPersonHouseExplorer {
       } else {
         if (isArmor) this._ensureGarageGatesOpenForArmor();
         const distToPlayer = Math.hypot(veh.pose.cx - this.playerPos.x, veh.pose.cz - this.playerPos.z);
-        if (!isPlayerDriving && this.activeBuilding !== vehicleKey && distToPlayer > 280.0 && route.isSummon) {
-          unmannedFarTransit = true;
-        }
-        const rqNow = this.terreno.geomorph?.roadIndex
-          ? this.terreno.geomorph.roadIndex.queryDist(veh.pose.cx, veh.pose.cz)
-          : { dist: 9999, width: 9.5 };
-        const onRoad = rqNow.dist < (rqNow.width || 9.5) * 0.65 + 1.5;
+        const driverOutsideVehicle = !isPlayerDriving && this.activeBuilding !== vehicleKey;
 
-        const baseAccelFwd = (unmannedFarTransit ? 16.0 : (isArmor ? (openRoad ? 7.8 : 5.0) : (openRoad ? 8.4 : 5.2))) * towMassScale;
-        const baseAccelRev = (isArmor ? 4.2 : 4.6) * towMassScale;
-        const baseMaxFwd = (unmannedFarTransit ? 36.0 : (isArmor ? (openRoad ? 17.5 : 7.2) : (openRoad ? 18.5 : 7.0))) * (towingTrailer ? 0.90 : 1.0);
-
-        const apexSpec = {
-          hw: (isArmor ? ARMOR_CAMPER.width : CAMPER.width) * 0.5,
-          hl: (isArmor ? ARMOR_CAMPER.length : CAMPER.length) * 0.5,
-          wheelbase,
-          maxSteer,
-          steerRate,
-          accelFwd: baseAccelFwd,
-          accelRev: baseAccelRev,
-          maxSpeed: baseMaxFwd,
-          minSpeed: isArmor ? 3.2 : 3.4,
-          maxStepH: isArmor ? 0.95 : 0.62,
-          maxFordDepth: isArmor ? 1.95 : 0.92,
-          maxClimbSlope,
-          cliffHardSlope,
-          isArmor,
-          arriveDist: isArmor ? 5.5 : 4.5,
-          lookaheadMin: isArmor ? 13.5 : 9.5,
-          lookaheadMax: isArmor ? 32.0 : 25.0,
-        };
-
-        const providers = this._gatherApexObstacleProviders(vehicleKey, veh.pose.cx, veh.pose.cz, veh.pose.yaw);
-        const ctrl = this.terreno.autopilot.evaluateApexControl({
-          pose: veh.pose,
-          speed: veh.speed,
-          velX: veh.velX,
-          velZ: veh.velZ,
-          steerAngle: veh.steerAngle,
-          grip,
-          route,
-          vehicleKey,
-          spec: apexSpec,
-          providers,
-          dt,
-          wasBlocked: Boolean(route.lastFrameBlocked),
-          onRoad,
-          isTowing: towingTrailer,
-          fwdUphill,
-          latSlope,
-        });
-
-        route.mode = ctrl.mode || 'CRUISE';
-        route.lidarFrontMin = ctrl.lidarFrontMin ?? 45.0;
-
-        if (ctrl.arrived) {
-          const wasSummon = Boolean(route.isSummon);
-          this.autopilotRoutes[vehicleKey] = null;
-          throttle = 0;
-          steerIn = 0;
-          if (wasSummon) {
-            this.audio.playElevatorChime(1);
+        // TERRENO 9.0 — 30 m Driver-Separation Auto-Detection -> Emergency Stop -> Precision Player Pickup Mode!
+        if (driverOutsideVehicle && !route.isSummon) {
+          if (!route.isPickupMode && distToPlayer >= 30.0) {
+            route.isPickupMode = true;
+            route.pickupPhase = 'EMERGENCY_STOP';
+            route.emergencyStopTimer = 0.85;
+            route.pickupGoalPlayerX = this.playerPos.x;
+            route.pickupGoalPlayerZ = this.playerPos.z;
+            route.se2Plan = null;
+            this._lastPickupEvent = {
+              vehicleKey,
+              phase: 'EMERGENCY_STOP',
+              triggerDistM: Math.round(distToPlayer * 10) / 10,
+              ts: performance.now(),
+            };
+            if (this.audio && this.audio.playAutopilotCue) this.audio.playAutopilotCue('error');
             this._notifyStatus(
-              vehicleKey === 'armor' ? '装甲RV (ARMOR-155) がK-11直下に到着しました！' : 'RV (CAMPER-75) がK-11直下に到着しました！',
-              'ok',
+              `🚨 運転手離脱検知（${Math.round(distToPlayer)}m）→ 緊急停止 → プレイヤー送迎モード発動`,
+              'warn',
             );
           }
-          this._notifyDriveHUD();
-        } else {
-          throttle = ctrl.throttle;
-          steerIn = ctrl.steer;
-          autopilotActive = true;
+        }
+
+        if (route.isPickupMode) {
+          const safeBoardDist = isArmor ? 6.6 : 5.2;
+          if (!driverOutsideVehicle) {
+            // Player safely boarded back inside the vehicle -> clear pickup flag!
+            route.isPickupMode = false;
+            route.pickupPhase = null;
+          } else if (route.pickupPhase === 'EMERGENCY_STOP') {
+            // PHASE 1: Instant Maximum-Deceleration Emergency Stop until full standstill!
+            holdEmergencyBrake = true;
+            route.emergencyStopTimer = Math.max(0, (route.emergencyStopTimer || 0) - dt);
+            veh.speed *= Math.max(0, 1.0 - dt * 14.0);
+            if (Math.abs(veh.speed) < 0.08) veh.speed = 0;
+            veh.velX *= Math.max(0, 1.0 - dt * 14.0);
+            veh.velZ *= Math.max(0, 1.0 - dt * 14.0);
+            throttle = 0;
+            steerIn = 0;
+            route.mode = 'EMERGENCY_STOP';
+            autopilotActive = true;
+
+            if (Math.abs(veh.speed) < 0.12 && route.emergencyStopTimer <= 0) {
+              // PHASE 2: Transition into Precision Autonomous Player Pickup Mode!
+              const toVehX = veh.pose.cx - this.playerPos.x;
+              const toVehZ = veh.pose.cz - this.playerPos.z;
+              const invD = 1.0 / Math.max(0.01, Math.hypot(toVehX, toVehZ));
+              const boardOffset = isArmor ? 5.2 : 4.0;
+              const boardX = this.playerPos.x + toVehX * invD * boardOffset;
+              const boardZ = this.playerPos.z + toVehZ * invD * boardOffset;
+              const pickupPts = this.terreno.autopilot.computeSafeRoute(veh.pose.cx, veh.pose.cz, boardX, boardZ);
+              route.points = pickupPts && pickupPts.length >= 2 ? pickupPts : [[veh.pose.cx, veh.pose.cz], [boardX, boardZ]];
+              route.cursor = 0;
+              route.se2Plan = null;
+              route.targetId = 'player_pickup';
+              route.pickupPhase = 'PICKUP_PLAYER';
+              route.pickupGoalPlayerX = this.playerPos.x;
+              route.pickupGoalPlayerZ = this.playerPos.z;
+              this._lastPickupEvent = {
+                vehicleKey,
+                phase: 'PICKUP_PLAYER',
+                startDistM: Math.round(distToPlayer * 10) / 10,
+                ts: performance.now(),
+              };
+              if (this.audio && this.audio.playAutopilotCue) this.audio.playAutopilotCue('start');
+              this._notifyStatus('🚕 正確送迎モード：プレイヤーの元へ自律帰還中', 'info');
+            }
+          } else if (route.pickupPhase === 'PICKUP_PLAYER') {
+            // Re-plan dynamically if player walks > 7.5m while vehicle is approaching!
+            const pMoved = Math.hypot(
+              this.playerPos.x - (route.pickupGoalPlayerX ?? this.playerPos.x),
+              this.playerPos.z - (route.pickupGoalPlayerZ ?? this.playerPos.z),
+            );
+            if (pMoved > 7.5 && distToPlayer > safeBoardDist + 2.0) {
+              const toVehX = veh.pose.cx - this.playerPos.x;
+              const toVehZ = veh.pose.cz - this.playerPos.z;
+              const invD = 1.0 / Math.max(0.01, Math.hypot(toVehX, toVehZ));
+              const boardOffset = isArmor ? 5.2 : 4.0;
+              const boardX = this.playerPos.x + toVehX * invD * boardOffset;
+              const boardZ = this.playerPos.z + toVehZ * invD * boardOffset;
+              const pickupPts = this.terreno.autopilot.computeSafeRoute(veh.pose.cx, veh.pose.cz, boardX, boardZ);
+              if (pickupPts && pickupPts.length >= 2) {
+                route.points = pickupPts;
+                route.cursor = 0;
+                route.se2Plan = null;
+              }
+              route.pickupGoalPlayerX = this.playerPos.x;
+              route.pickupGoalPlayerZ = this.playerPos.z;
+            }
+            // Hard anti-collision gentle stop right beside player upon arrival!
+            if (distToPlayer <= safeBoardDist) {
+              holdEmergencyBrake = true;
+              veh.speed *= Math.max(0, 1.0 - dt * 12.0);
+              if (Math.abs(veh.speed) < 0.12) {
+                veh.speed = 0;
+                veh.velX = 0;
+                veh.velZ = 0;
+                this._lastPickupEvent = {
+                  vehicleKey,
+                  phase: 'PICKUP_ARRIVED',
+                  finalDistM: Math.round(distToPlayer * 100) / 100,
+                  ts: performance.now(),
+                };
+                this.autopilotRoutes[vehicleKey] = null;
+                throttle = 0;
+                steerIn = 0;
+                if (this.audio && this.audio.playElevatorChime) this.audio.playElevatorChime(1);
+                this._notifyStatus('✅ 送迎完了：車両がプレイヤー横の安全位置に停車しました', 'ok');
+                this._notifyDriveHUD();
+              } else {
+                throttle = 0;
+                steerIn = 0;
+                autopilotActive = true;
+              }
+            }
+          }
+        }
+
+        if (!holdEmergencyBrake && this.autopilotRoutes[vehicleKey]) {
+          if (!isPlayerDriving && this.activeBuilding !== vehicleKey && distToPlayer > 280.0 && route.isSummon) {
+            unmannedFarTransit = true;
+          }
+          const rqNow = this.terreno.geomorph?.roadIndex
+            ? this.terreno.geomorph.roadIndex.queryDist(veh.pose.cx, veh.pose.cz)
+            : { dist: 9999, width: 9.5 };
+          const onRoad = rqNow.dist < (rqNow.width || 9.5) * 0.65 + 1.5;
+
+          const pickupSlowScale = route.isPickupMode && distToPlayer < 18.0 ? Math.max(0.32, (distToPlayer - 4.0) / 14.0) : 1.0;
+          const baseAccelFwd = (unmannedFarTransit ? 16.0 : (isArmor ? (openRoad ? 7.8 : 5.0) : (openRoad ? 8.4 : 5.2))) * towMassScale;
+          const baseAccelRev = (isArmor ? 4.2 : 4.6) * towMassScale;
+          const baseMaxFwd = (unmannedFarTransit ? 36.0 : (isArmor ? (openRoad ? 17.5 : 7.2) : (openRoad ? 18.5 : 7.0))) * (towingTrailer ? 0.90 : 1.0) * pickupSlowScale;
+
+          const apexSpec = {
+            hw: (isArmor ? ARMOR_CAMPER.width : CAMPER.width) * 0.5,
+            hl: (isArmor ? ARMOR_CAMPER.length : CAMPER.length) * 0.5,
+            wheelbase,
+            maxSteer,
+            steerRate,
+            accelFwd: baseAccelFwd,
+            accelRev: baseAccelRev,
+            maxSpeed: baseMaxFwd,
+            minSpeed: isArmor ? 3.2 : 3.4,
+            maxStepH: isArmor ? 0.95 : 0.62,
+            maxFordDepth: isArmor ? 1.95 : 0.92,
+            maxClimbSlope,
+            cliffHardSlope,
+            isArmor,
+            arriveDist: route.isPickupMode ? (isArmor ? 5.6 : 4.4) : (isArmor ? 5.5 : 4.5),
+            lookaheadMin: isArmor ? 13.5 : 9.5,
+            lookaheadMax: isArmor ? 32.0 : 25.0,
+          };
+
+          const providers = this._gatherApexObstacleProviders(vehicleKey, veh.pose.cx, veh.pose.cz, veh.pose.yaw);
+          const ctrl = this.terreno.autopilot.evaluateApexControl({
+            pose: veh.pose,
+            speed: veh.speed,
+            velX: veh.velX,
+            velZ: veh.velZ,
+            steerAngle: veh.steerAngle,
+            grip,
+            route,
+            vehicleKey,
+            spec: apexSpec,
+            providers,
+            dt,
+            wasBlocked: Boolean(route.lastFrameBlocked),
+            onRoad,
+            isTowing: towingTrailer,
+            fwdUphill,
+            latSlope,
+          });
+
+          route.mode = route.pickupPhase || ctrl.mode || 'CRUISE';
+          route.lidarFrontMin = ctrl.lidarFrontMin ?? 45.0;
+
+          if (ctrl.arrived) {
+            const wasSummon = Boolean(route.isSummon);
+            const wasPickup = Boolean(route.isPickupMode);
+            if (wasPickup) {
+              this._lastPickupEvent = {
+                vehicleKey,
+                phase: 'PICKUP_ARRIVED',
+                finalDistM: Math.round(distToPlayer * 100) / 100,
+                ts: performance.now(),
+              };
+            }
+            this.autopilotRoutes[vehicleKey] = null;
+            throttle = 0;
+            steerIn = 0;
+            if (wasSummon) {
+              this.audio.playElevatorChime(1);
+              this._notifyStatus(
+                vehicleKey === 'armor' ? '装甲RV (ARMOR-155) がK-11直下に到着しました！' : 'RV (CAMPER-75) がK-11直下に到着しました！',
+                'ok',
+              );
+            } else if (wasPickup) {
+              if (this.audio && this.audio.playElevatorChime) this.audio.playElevatorChime(1);
+              this._notifyStatus('✅ 送迎完了：車両がプレイヤー横の安全位置に停車しました', 'ok');
+            }
+            this._notifyDriveHUD();
+          } else {
+            throttle = ctrl.throttle;
+            steerIn = ctrl.steer;
+            autopilotActive = true;
+          }
         }
       }
     }
@@ -1978,32 +2244,40 @@ export class FirstPersonHouseExplorer {
     const tractionAccelScale = 0.42 + 0.58 * grip;
     const coastDrag = 1.4 + 2.5 * grip;
 
-    if (throttle > 0.02) {
-      veh.speed += throttle * accelFwd * tractionAccelScale * dt;
-    } else if (throttle < -0.02) {
-      veh.speed += throttle * accelRev * tractionAccelScale * dt;
+    if (holdEmergencyBrake) {
+      // Hydraulic ABS Emergency Brake Lock: stops dead cleanly even on steep 25-deg mountain slopes!
+      veh.speed *= Math.max(0, 1 - dt * 16.0);
+      if (Math.abs(veh.speed) < 0.14) veh.speed = 0;
+      veh.velX = -Math.sin(veh.pose.yaw) * veh.speed;
+      veh.velZ = -Math.cos(veh.pose.yaw) * veh.speed;
     } else {
-      veh.speed *= Math.max(0, 1 - dt * coastDrag);
-      if (Math.abs(veh.speed) < 0.03 && Math.abs(climbGravAccel) < 2.2) veh.speed = 0;
+      if (throttle > 0.02) {
+        veh.speed += throttle * accelFwd * tractionAccelScale * dt;
+      } else if (throttle < -0.02) {
+        veh.speed += throttle * accelRev * tractionAccelScale * dt;
+      } else {
+        veh.speed *= Math.max(0, 1 - dt * coastDrag);
+        if (Math.abs(veh.speed) < 0.03 && Math.abs(climbGravAccel) < 2.2) veh.speed = 0;
+      }
+
+      if (flood.depth > 0.12) {
+        const waterDrag = Math.min(4.8, flood.depth * (isArmor ? 1.4 : 2.9));
+        veh.speed *= Math.max(0, 1 - waterDrag * dt);
+      }
+
+      if (Math.abs(climbGravAccel) > 1.8) {
+        const effectiveGrav = Math.sign(climbGravAccel) * (Math.abs(climbGravAccel) - 1.8);
+        veh.speed += effectiveGrav * dt;
+      }
+
+      veh.speed = Math.max(-maxRev, Math.min(maxFwd, veh.speed));
+
+      const targetVx = -Math.sin(veh.pose.yaw) * veh.speed;
+      const targetVz = -Math.cos(veh.pose.yaw) * veh.speed;
+      const latResponse = Math.min(1, dt * (0.42 + grip * grip * 12.8));
+      veh.velX += (targetVx - veh.velX) * latResponse;
+      veh.velZ += (targetVz - veh.velZ) * latResponse;
     }
-
-    if (flood.depth > 0.12) {
-      const waterDrag = Math.min(4.8, flood.depth * (isArmor ? 1.4 : 2.9));
-      veh.speed *= Math.max(0, 1 - waterDrag * dt);
-    }
-
-    if (Math.abs(climbGravAccel) > 1.8) {
-      const effectiveGrav = Math.sign(climbGravAccel) * (Math.abs(climbGravAccel) - 1.8);
-      veh.speed += effectiveGrav * dt;
-    }
-
-    veh.speed = Math.max(-maxRev, Math.min(maxFwd, veh.speed));
-
-    const targetVx = -Math.sin(veh.pose.yaw) * veh.speed;
-    const targetVz = -Math.cos(veh.pose.yaw) * veh.speed;
-    const latResponse = Math.min(1, dt * (0.42 + grip * grip * 12.8));
-    veh.velX += (targetVx - veh.velX) * latResponse;
-    veh.velZ += (targetVz - veh.velZ) * latResponse;
 
     if (grip < 0.65 && Math.abs(veh.speed) > 1.5) {
       const hydroSeverity = (0.65 - grip) / 0.47;
@@ -2165,10 +2439,11 @@ export class FirstPersonHouseExplorer {
         this.audio.playSuspensionThud(Math.min(1.0, maxStepLift * 2.1));
       }
 
-      if (Math.abs(totalMoved) > 0.0001 || Math.abs(veh.suspLift) > 0.002 || Math.abs(veh.slipSpeed) > 0.02) {
-        this._applyVehicleTerrainPose(veh, vehicleKey, maxStepLift);
+      const hasSuspActivity = Math.abs(veh.suspLift) > 0.002 || Math.abs(veh._pitchVel || 0) > 0.0005 || Math.abs(veh._rollVel || 0) > 0.0005 || Math.abs(veh._heaveVel || 0) > 0.001;
+      if (Math.abs(totalMoved) > 0.0001 || hasSuspActivity || Math.abs(veh.slipSpeed) > 0.02) {
+        this._applyVehicleTerrainPose(veh, vehicleKey, maxStepLift, dt, false);
         if (isArmor && this.house.towContainer && this.house.towContainer.hitched) {
-          this._updateTowedContainer(totalMoved);
+          this._updateTowedContainer(totalMoved, dt);
         }
         if (Math.abs(totalMoved) > 0.0001) {
           const wheelSpin = totalMoved / wheelRad;
@@ -2176,13 +2451,14 @@ export class FirstPersonHouseExplorer {
           this.adaptive.markShadowsDirty();
         }
       }
-    } else if (Math.abs(veh.suspLift) > 0.002 || Math.abs(veh.suspVelY) > 0.002) {
+    } else if (Math.abs(veh.suspLift) > 0.002 || Math.abs(veh.suspVelY) > 0.002 || Math.abs(veh._pitchVel || 0) > 0.0005 || Math.abs(veh._rollVel || 0) > 0.0005 || Math.abs(veh._heaveVel || 0) > 0.001) {
       veh.suspVelY += (-veh.suspLift * 44.0 - veh.suspVelY * 10.0) * dt;
       veh.suspLift += veh.suspVelY * dt;
-      this._applyVehicleTerrainPose(veh, vehicleKey, 0);
+      this._applyVehicleTerrainPose(veh, vehicleKey, 0, dt, false);
     }
 
     // ---- APEX-DRIVE v4.0 EMERGENCY DEADLOCK GUARD (Only triggers if physically wedged after K-Turns!) ----
+    let emergencyMoved = false;
     if (autopilotActive && route) {
       if (blocked && !route.lastFrameBlocked) {
         route.collisionCount = (route.collisionCount || 0) + 1;
@@ -2234,13 +2510,16 @@ export class FirstPersonHouseExplorer {
           }
         }
         if (bestEsc) {
+          const prevY = veh.pose.yaw;
           veh.pose.cx = bestEsc.px;
           veh.pose.cz = bestEsc.pz;
           veh.pose.yaw = bestEsc.probeYaw;
+          totalDYaw += bestEsc.probeYaw - prevY;
+          emergencyMoved = true;
           veh.speed = 3.8;
           veh.velX = -Math.sin(bestEsc.probeYaw) * 3.8;
           veh.velZ = -Math.cos(bestEsc.probeYaw) * 3.8;
-          this._applyVehicleTerrainPose(veh, vehicleKey, 0);
+          this._applyVehicleTerrainPose(veh, vehicleKey, 0, dt, true);
           route.localPlanTimer = 0;
           route.stuckTimer = 2.5;
         }
@@ -2259,15 +2538,18 @@ export class FirstPersonHouseExplorer {
             const tz = nxt[1] + offsets[oi][1];
             const checkCol = testVehCollision(tx, tz, aimYaw, tx, tz);
             if (!checkCol.hit) {
+              const prevY = veh.pose.yaw;
               veh.pose.cx = tx;
               veh.pose.cz = tz;
               veh.pose.yaw = aimYaw;
+              totalDYaw += aimYaw - prevY;
+              emergencyMoved = true;
               veh.speed = 4.5;
               veh.velX = -Math.sin(aimYaw) * 4.5;
               veh.velZ = -Math.cos(aimYaw) * 4.5;
-              this._applyVehicleTerrainPose(veh, vehicleKey, 0);
+              this._applyVehicleTerrainPose(veh, vehicleKey, 0, dt, true);
               if (isArmor && this.house.towContainer && this.house.towContainer.hitched) {
-                this._updateTowedContainer(0);
+                this._updateTowedContainer(0, 0);
               }
               route.cursor = nextIdx;
               route.stuckTimer = 0;
@@ -2283,7 +2565,7 @@ export class FirstPersonHouseExplorer {
     }
 
     return {
-      moved: Math.abs(totalMoved) > 0.0001 || Math.abs(totalDYaw) > 0.00001,
+      moved: emergencyMoved || Math.abs(totalMoved) > 0.0001 || Math.abs(totalDYaw) > 0.00001,
       totalDYaw,
       blocked,
       blockedReason,
@@ -2601,23 +2883,40 @@ export class FirstPersonHouseExplorer {
     if (this.bumpCooldown > 0) this.bumpCooldown -= dt;
     if (this.vehicleBlockedTimer > 0) this.vehicleBlockedTimer -= dt;
 
-    // Record exact vehicle-local rider coordinates before stepping vehicle / airship physics!
-    const riderKey = (!this.drivingVehicle && (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'container' || this.activeBuilding === 'k11'))
+    // Record exact 3D vehicle-local rider coordinates & full 6-DOF pose BEFORE stepping vehicle / airship physics!
+    const riderKey = (!this.drivingVehicle && (this.activeBuilding === 'camper' || this.activeBuilding === 'armor' || this.activeBuilding === 'container' || this.activeBuilding === 'k11' || this.activeBuilding === 'kei'))
       ? this.activeBuilding
       : null;
-    let riderLocal = null;
-    if (riderKey === 'camper') riderLocal = this.worldToCamperLocal(this.playerPos.x, this.playerPos.z);
-    else if (riderKey === 'armor') riderLocal = this.worldToArmorLocal(this.playerPos.x, this.playerPos.z);
-    else if (riderKey === 'container') riderLocal = this.worldToContainerLocal(this.playerPos.x, this.playerPos.z);
-    else if (riderKey === 'k11') riderLocal = this.worldToK11Local(this.playerPos.x, this.playerPos.z);
+    const getVehicleSpec = (k) => {
+      if (k === 'camper') return { veh: this.house.camper, w: CAMPER.width, l: CAMPER.length };
+      if (k === 'armor') return { veh: this.house.armorCamper, w: ARMOR_CAMPER.width, l: ARMOR_CAMPER.length };
+      if (k === 'container') return { veh: this.house.towContainer, w: TOW_CONTAINER.width, l: TOW_CONTAINER.length };
+      if (k === 'kei') return { veh: this.house.kei, w: KEI.width, l: KEI.length };
+      if (k === 'k11') return { veh: this.house.airshipK11, w: AIRSHIP_K11.cabin.outerWidth, l: AIRSHIP_K11.cabin.outerLength };
+      return null;
+    };
+    let riderLocal3D = null;
+    let prevRiderPose = null;
+    if (riderKey) {
+      const sp = getVehicleSpec(riderKey);
+      if (sp && sp.veh && sp.veh.pose) {
+        const p = sp.veh.pose;
+        prevRiderPose = { cx: p.cx, y: p.y || 0, cz: p.cz, yaw: p.yaw || 0, pitch: p.pitch || 0, roll: p.roll || 0 };
+        riderLocal3D = worldToVehicleLocal3D(p, sp.w, sp.l, this.playerPos.x, this.floorY, this.playerPos.z);
+        // Keep interior rider coordinates cleanly clamped inside cabin envelope against numeric tilt epsilon
+        riderLocal3D.lx = Math.max(0.14, Math.min(sp.w - 0.14, riderLocal3D.lx));
+        riderLocal3D.lz = Math.max(0.14, Math.min(sp.l - 0.14, riderLocal3D.lz));
+      }
+    }
 
     // Step Flagship Airship K-11!
     const k11Res = this._stepAirshipK11(dt, elapsed);
 
     const toStep = new Set();
     if (this.drivingVehicle && this.drivingVehicle !== 'k11') toStep.add(this.drivingVehicle);
-    if (this.autopilotRoutes.camper || Math.abs(this.house.camper.speed || 0) > 0.02) toStep.add('camper');
-    if (this.autopilotRoutes.armor || Math.abs(this.house.armorCamper.speed || 0) > 0.02) toStep.add('armor');
+    if (this.autopilotRoutes.camper || Math.abs(this.house.camper.speed || 0) > 0.02 || Math.abs(this.house.camper._pitchVel || 0) > 0.0005 || Math.abs(this.house.camper._rollVel || 0) > 0.0005) toStep.add('camper');
+    if (this.autopilotRoutes.armor || Math.abs(this.house.armorCamper.speed || 0) > 0.02 || Math.abs(this.house.armorCamper._pitchVel || 0) > 0.0005 || Math.abs(this.house.armorCamper._rollVel || 0) > 0.0005) toStep.add('armor');
+    if (Math.abs(this.house.kei?.speed || 0) > 0.02 || Math.abs(this.house.kei?._pitchVel || 0) > 0.0005) toStep.add('kei');
 
     let playerDriveResult = null;
     const stepResults = { k11: k11Res };
@@ -2628,40 +2927,46 @@ export class FirstPersonHouseExplorer {
       if (isDriven) playerDriveResult = res;
     }
 
-    // Apply exact rigid-body platform coupling to walking rider inside a moving camper, container, OR flying Airship K-11!
-    if (riderKey && riderLocal) {
+    // Apply EXACT 6-DOF rigid-body platform coupling to walking/standing rider inside a moving camper, armor, container, kei, OR flying Airship K-11!
+    if (riderKey && riderLocal3D && prevRiderPose) {
+      const sp = getVehicleSpec(riderKey);
       const coupledDriverKey = riderKey === 'container'
         ? (this.house.towContainer?.hitched ? 'armor' : null)
         : riderKey;
-      const res = coupledDriverKey ? stepResults[coupledDriverKey] : null;
-      if (res && res.moved) {
-        this.yaw += res.totalDYaw;
-        if (riderKey === 'k11') {
-          const w3 = vehicleLocalToWorld3D(this.house.airshipK11.pose, AIRSHIP_K11.cabin.outerWidth, AIRSHIP_K11.cabin.outerLength, riderLocal.lx, AIRSHIP_K11.cabin.floorLocalY, riderLocal.lz);
-          this.playerPos.x = w3.x;
-          this.playerPos.z = w3.z;
-          this.floorY = w3.y;
-          if (!this.house.airshipK11.dockedInSilo || (this.house.nullErea && this.house.nullErea.silo.liftProgress > 0.5)) {
-            this.currentFloor = 1;
+      if (sp && sp.veh && sp.veh.pose) {
+        const p = sp.veh.pose;
+        const dYaw = (p.yaw || 0) - prevRiderPose.yaw;
+        const poseDelta = Math.abs(p.cx - prevRiderPose.cx)
+          + Math.abs((p.y || 0) - prevRiderPose.y)
+          + Math.abs(p.cz - prevRiderPose.cz)
+          + Math.abs(dYaw)
+          + Math.abs((p.pitch || 0) - prevRiderPose.pitch)
+          + Math.abs((p.roll || 0) - prevRiderPose.roll);
+        if (poseDelta > 1e-6) {
+          this.yaw += dYaw;
+          let localY = riderLocal3D.ly;
+          if (riderKey === 'k11') {
+            localY = AIRSHIP_K11.cabin.floorLocalY;
+            if (!this.house.airshipK11.dockedInSilo || (this.house.nullErea && this.house.nullErea.silo.liftProgress > 0.5)) {
+              this.currentFloor = 1;
+            }
+          } else if (riderKey === 'camper') {
+            localY = this.currentFloor === 2
+              ? CAMPER.loft2WorldY
+              : (riderLocal3D.lx < 1.03 && riderLocal3D.lz > 3.69 && riderLocal3D.lz < 5.25 ? CAMPER.floor1WorldY - 0.02 : CAMPER.floor1WorldY);
+          } else if (riderKey === 'armor') {
+            localY = ARMOR_CAMPER.floorWorldY;
+          } else if (riderKey === 'kei') {
+            localY = KEI.floorWorldY;
+          } else {
+            localY = TOW_CONTAINER.floorWorldY;
           }
-        } else if (riderKey === 'camper') {
-          const localY = this.currentFloor === 2
-            ? CAMPER.loft2WorldY
-            : (riderLocal.lx < 1.03 && riderLocal.lz > 3.69 && riderLocal.lz < 5.25 ? CAMPER.floor1WorldY - 0.02 : CAMPER.floor1WorldY);
-          const w3 = vehicleLocalToWorld3D(this.house.camper.pose, CAMPER.width, CAMPER.length, riderLocal.lx, localY, riderLocal.lz);
+          const w3 = vehicleLocalToWorld3D(p, sp.w, sp.l, riderLocal3D.lx, localY, riderLocal3D.lz);
           this.playerPos.x = w3.x;
           this.playerPos.z = w3.z;
           this.floorY = w3.y;
-        } else if (riderKey === 'armor') {
-          const w3 = vehicleLocalToWorld3D(this.house.armorCamper.pose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, riderLocal.lx, ARMOR_CAMPER.floorWorldY, riderLocal.lz);
-          this.playerPos.x = w3.x;
-          this.playerPos.z = w3.z;
-          this.floorY = w3.y;
-        } else {
-          const w3 = vehicleLocalToWorld3D(this.house.towContainer.pose, TOW_CONTAINER.width, TOW_CONTAINER.length, riderLocal.lx, TOW_CONTAINER.floorWorldY, riderLocal.lz);
-          this.playerPos.x = w3.x;
-          this.playerPos.z = w3.z;
-          this.floorY = w3.y;
+          // Preserve activeBuilding lock while riding inside the moving cabin!
+          this.activeBuilding = riderKey;
         }
       }
       const sampleVehAudio = (veh) => {
@@ -3233,13 +3538,14 @@ export class FirstPersonHouseExplorer {
 
   _getBuildingAt(x, z) {
     if (this.drivingVehicle) return this.drivingVehicle;
+    const py = this.floorY || 0;
     // Check Flagship Airship K-11 walkable 4.50×15.00×3.20m cabin FIRST (works at -40m, 0m, AND airborne!)
     if (this.house.airshipK11) {
       const k11 = this.house.airshipK11;
-      const kl11 = this.worldToK11Local(x, z);
+      const kl11 = worldToVehicleLocal3D(k11.pose, AIRSHIP_K11.cabin.outerWidth, AIRSHIP_K11.cabin.outerLength, x, py, z);
       const inK11Fp = kl11.lx >= 0.0 && kl11.lx <= AIRSHIP_K11.cabin.outerWidth && kl11.lz >= 0.0 && kl11.lz <= AIRSHIP_K11.cabin.outerLength;
-      const k11FloorY = k11.pose.y + AIRSHIP_K11.cabin.floorLocalY;
-      if (inK11Fp && (this.activeBuilding === 'k11' || Math.abs(this.floorY - k11FloorY) < 2.2)) {
+      const k11FloorY = (k11.pose.y || 0) + AIRSHIP_K11.cabin.floorLocalY;
+      if (inK11Fp && (this.activeBuilding === 'k11' || Math.abs(py - k11FloorY) < 2.2)) {
         return 'k11';
       }
     }
@@ -3247,13 +3553,13 @@ export class FirstPersonHouseExplorer {
     if (this.currentFloor < 0) return 'main';
     if (this.activeFlight !== null) return this.activeStairBuilding;
 
-    const cl = this.worldToCamperLocal(x, z);
+    const cl = worldToVehicleLocal3D(this.house.camper.pose, CAMPER.width, CAMPER.length, x, py, z);
     const inCamperFootprint = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
-    const kl = this.worldToKeiLocal(x, z);
+    const kl = worldToVehicleLocal3D(this.house.kei.pose, KEI.width, KEI.length, x, py, z);
     const inKeiFootprint = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
-    const al = this.worldToArmorLocal(x, z);
+    const al = worldToVehicleLocal3D(this.house.armorCamper.pose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, x, py, z);
     const inArmorFootprint = al.lx >= 0.0 && al.lx <= ARMOR_CAMPER.width && al.lz >= 0.0 && al.lz <= ARMOR_CAMPER.length;
-    const tl = this.worldToContainerLocal(x, z);
+    const tl = worldToVehicleLocal3D(this.house.towContainer.pose, TOW_CONTAINER.width, TOW_CONTAINER.length, x, py, z);
     const inContainerFootprint = tl.lx >= 0.0 && tl.lx <= TOW_CONTAINER.width && tl.lz >= 0.0 && tl.lz <= TOW_CONTAINER.length;
 
     if (this.currentFloor === 1) {
@@ -3433,19 +3739,20 @@ export class FirstPersonHouseExplorer {
       return FLOOR_B2F.baseY;
     }
 
-    const cl = this.worldToCamperLocal(x, z);
-    const inCamper = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
-    const kl = this.worldToKeiLocal(x, z);
-    const inKei = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
-    const al = this.worldToArmorLocal(x, z);
-    const inArmor = al.lx >= 0.0 && al.lx <= ARMOR_CAMPER.width && al.lz >= 0.0 && al.lz <= ARMOR_CAMPER.length;
-    const tl = this.worldToContainerLocal(x, z);
-    const inCont = tl.lx >= 0.0 && tl.lx <= TOW_CONTAINER.width && tl.lz >= 0.0 && tl.lz <= TOW_CONTAINER.length;
-
+    const pyRef = this.floorY || 0;
     const camperPose = this.house.camper.pose;
     const keiPose = this.house.kei.pose;
     const armorPose = this.house.armorCamper.pose;
     const contPose = this.house.towContainer.pose;
+
+    const cl = worldToVehicleLocal3D(camperPose, CAMPER.width, CAMPER.length, x, pyRef, z);
+    const inCamper = cl.lx >= 0.0 && cl.lx <= CAMPER.width && cl.lz >= 0.0 && cl.lz <= CAMPER.length;
+    const kl = worldToVehicleLocal3D(keiPose, KEI.width, KEI.length, x, pyRef, z);
+    const inKei = kl.lx >= 0.0 && kl.lx <= KEI.width && kl.lz >= 0.0 && kl.lz <= KEI.length;
+    const al = worldToVehicleLocal3D(armorPose, ARMOR_CAMPER.width, ARMOR_CAMPER.length, x, pyRef, z);
+    const inArmor = al.lx >= 0.0 && al.lx <= ARMOR_CAMPER.width && al.lz >= 0.0 && al.lz <= ARMOR_CAMPER.length;
+    const tl = worldToVehicleLocal3D(contPose, TOW_CONTAINER.width, TOW_CONTAINER.length, x, pyRef, z);
+    const inCont = tl.lx >= 0.0 && tl.lx <= TOW_CONTAINER.width && tl.lz >= 0.0 && tl.lz <= TOW_CONTAINER.length;
 
     const baseY = getFloorByPhysicalIndex(this.currentFloor).baseY;
     if (this.currentFloor === 1) {
@@ -4389,75 +4696,88 @@ export class FirstPersonHouseExplorer {
       this.activeBuilding === 'k11'
     ) {
       const bld = this.activeBuilding;
-      const pose = bld === 'k11'
-        ? this.house.airshipK11.pose
+      const spec = bld === 'k11'
+        ? { pose: this.house.airshipK11.pose, w: AIRSHIP_K11.cabin.outerWidth, l: AIRSHIP_K11.cabin.outerLength, ly: AIRSHIP_K11.cabin.floorLocalY }
         : (bld === 'kei'
-          ? this.house.kei.pose
+          ? { pose: this.house.kei.pose, w: KEI.width, l: KEI.length, ly: KEI.floorWorldY }
           : (bld === 'armor'
-            ? this.house.armorCamper.pose
-            : (bld === 'container' ? this.house.towContainer.pose : this.house.camper.pose)));
-      const toLocal = (wx, wz) => (bld === 'k11'
-        ? this.worldToK11Local(wx, wz)
-        : (bld === 'kei'
-          ? this.worldToKeiLocal(wx, wz)
-          : (bld === 'armor'
-            ? this.worldToArmorLocal(wx, wz)
-            : (bld === 'container' ? this.worldToContainerLocal(wx, wz) : this.worldToCamperLocal(wx, wz)))));
-      const toWorld = (lx, lz) => (bld === 'k11'
-        ? this.k11LocalToWorld(lx, lz)
-        : (bld === 'kei'
-          ? this.keiLocalToWorld(lx, lz)
-          : (bld === 'armor'
-            ? this.armorLocalToWorld(lx, lz)
-            : (bld === 'container' ? this.containerLocalToWorld(lx, lz) : this.camperLocalToWorld(lx, lz)))));
+            ? { pose: this.house.armorCamper.pose, w: ARMOR_CAMPER.width, l: ARMOR_CAMPER.length, ly: ARMOR_CAMPER.floorWorldY }
+            : (bld === 'container'
+              ? { pose: this.house.towContainer.pose, w: TOW_CONTAINER.width, l: TOW_CONTAINER.length, ly: TOW_CONTAINER.floorWorldY }
+              : { pose: this.house.camper.pose, w: CAMPER.width, l: CAMPER.length, ly: this.currentFloor === 2 ? CAMPER.loft2WorldY : CAMPER.floor1WorldY })));
+      const pose = spec.pose;
       const c = Math.cos(pose.yaw);
       const s = Math.sin(pose.yaw);
-      const curL = toLocal(this.playerPos.x, this.playerPos.z);
+      const curL = worldToVehicleLocal3D(pose, spec.w, spec.l, this.playerPos.x, this.floorY, this.playerPos.z);
       const vxL = this.playerVel.x * c - this.playerVel.z * s;
       const vzL = this.playerVel.x * s + this.playerVel.z * c;
 
-      const cand1 = toWorld(curL.lx + vxL * dt, curL.lz);
+      const cand1 = vehicleLocalToWorld3D(pose, spec.w, spec.l, curL.lx + vxL * dt, spec.ly, curL.lz);
       if (!this._collidesAt(cand1.x, cand1.z)) {
         this.playerPos.x = cand1.x;
         this.playerPos.z = cand1.z;
+        this.floorY = cand1.y;
       }
-      const midL = toLocal(this.playerPos.x, this.playerPos.z);
-      const cand2 = toWorld(midL.lx, midL.lz + vzL * dt);
+      const midL = worldToVehicleLocal3D(pose, spec.w, spec.l, this.playerPos.x, this.floorY, this.playerPos.z);
+      const cand2 = vehicleLocalToWorld3D(pose, spec.w, spec.l, midL.lx, spec.ly, midL.lz + vzL * dt);
       if (!this._collidesAt(cand2.x, cand2.z)) {
         this.playerPos.x = cand2.x;
         this.playerPos.z = cand2.z;
+        this.floorY = cand2.y;
       }
     } else {
+      // Smooth isotropic 2D vector step (eliminates X/Z axis-split diagonal judder & snagging!)
       const MAX_CLIMB_TAN = 0.6745; // tan(34.0°) hard human climb limit!
-      const nextX = this.playerPos.x + this.playerVel.x * dt;
-      if (!this._collidesAt(nextX, this.playerPos.z)) {
-        let cliffBlockX = false;
-        if (outdoorHike && this.terreno) {
-          const nmFineX = this.terreno.getNormalAt ? this.terreno.getNormalAt(nextX, this.playerPos.z, 1.0) : cliffNrm;
-          const nmMacX = this.terreno.getMacroNormalAt ? this.terreno.getMacroNormalAt(nextX, this.playerPos.z, 2.2) : nmFineX;
-          const nmX = (nmFineX && nmMacX && nmFineX.slope > nmMacX.slope) ? nmFineX : nmMacX;
-          const stepH = this.terreno.getHeightAt(nextX, this.playerPos.z) - prevGroundY;
-          const stepDist = Math.abs(nextX - this.playerPos.x);
-          const localGrad = stepDist > 1e-4 ? stepH / stepDist : 0;
-          const upX = nmX ? -((nextX - this.playerPos.x) * nmX.x) : 0;
-          if ((nmX && nmX.slope > MAX_CLIMB_TAN && upX > 0) || localGrad > MAX_CLIMB_TAN) cliffBlockX = true;
+      let stepX = this.playerVel.x * dt;
+      let stepZ = this.playerVel.z * dt;
+      const stepMag = Math.hypot(stepX, stepZ);
+
+      if (outdoorHike && this.terreno && stepMag > 1e-5) {
+        const dirX = stepX / stepMag;
+        const dirZ = stepZ / stepMag;
+        // Stride-scale 0.72 m lookahead using IDENTICAL getHeightAt on both endpoints (zero micro-step amplification!)
+        const probeD = Math.max(0.72, stepMag);
+        const hNow = this.terreno.getHeightAt(this.playerPos.x, this.playerPos.z);
+        const hAhead = this.terreno.getHeightAt(this.playerPos.x + dirX * probeD, this.playerPos.z + dirZ * probeD);
+        const strideGrad = (hAhead - hNow) / probeD;
+        const aheadNrm = this.terreno.getNormalAt ? this.terreno.getNormalAt(this.playerPos.x + dirX * probeD, this.playerPos.z + dirZ * probeD, 1.4) : cliffNrm;
+        const nLen = aheadNrm ? Math.hypot(aheadNrm.x, aheadNrm.z) : 0;
+        const downX = nLen > 1e-4 ? aheadNrm.x / nLen : 0;
+        const downZ = nLen > 1e-4 ? aheadNrm.z / nLen : 0;
+        const uphillDot = -(dirX * downX + dirZ * downZ);
+
+        if ((aheadNrm && aheadNrm.slope > MAX_CLIMB_TAN && uphillDot > 0.08) || strideGrad > MAX_CLIMB_TAN) {
+          // Project combined 2D velocity smoothly along horizontal contour tangent (-downZ, downX) — silky zero-snag traverse!
+          const upComp = stepX * (-downX) + stepZ * (-downZ);
+          if (upComp > 0 && nLen > 1e-4) {
+            stepX += downX * upComp;
+            stepZ += downZ * upComp;
+            const vUp = this.playerVel.x * (-downX) + this.playerVel.z * (-downZ);
+            if (vUp > 0) {
+              this.playerVel.x += downX * vUp;
+              this.playerVel.z += downZ * vUp;
+            }
+          } else if (strideGrad > MAX_CLIMB_TAN) {
+            stepX = 0;
+            stepZ = 0;
+          }
         }
-        if (!cliffBlockX) this.playerPos.x = nextX;
       }
-      const nextZ = this.playerPos.z + this.playerVel.z * dt;
-      if (!this._collidesAt(this.playerPos.x, nextZ)) {
-        let cliffBlockZ = false;
-        if (outdoorHike && this.terreno) {
-          const nmFineZ = this.terreno.getNormalAt ? this.terreno.getNormalAt(this.playerPos.x, nextZ, 1.0) : cliffNrm;
-          const nmMacZ = this.terreno.getMacroNormalAt ? this.terreno.getMacroNormalAt(this.playerPos.x, nextZ, 2.2) : nmFineZ;
-          const nmZ = (nmFineZ && nmMacZ && nmFineZ.slope > nmMacZ.slope) ? nmFineZ : nmMacZ;
-          const stepH = this.terreno.getHeightAt(this.playerPos.x, nextZ) - this.terreno.getHeightAt(this.playerPos.x, this.playerPos.z);
-          const stepDist = Math.abs(nextZ - this.playerPos.z);
-          const localGrad = stepDist > 1e-4 ? stepH / stepDist : 0;
-          const upZ = nmZ ? -((nextZ - this.playerPos.z) * nmZ.z) : 0;
-          if ((nmZ && nmZ.slope > MAX_CLIMB_TAN && upZ > 0) || localGrad > MAX_CLIMB_TAN) cliffBlockZ = true;
+
+      // First try full combined 2D diagonal vector step (smooth, zero diagonal stair-stepping!)
+      const fullX = this.playerPos.x + stepX;
+      const fullZ = this.playerPos.z + stepZ;
+      if (!this._collidesAt(fullX, fullZ)) {
+        this.playerPos.x = fullX;
+        this.playerPos.z = fullZ;
+      } else {
+        // Obstacle hit (building wall or 0.1 mm tree trunk): slide smoothly along whichever axis is clear!
+        if (!this._collidesAt(fullX, this.playerPos.z)) {
+          this.playerPos.x = fullX;
         }
-        if (!cliffBlockZ) this.playerPos.z = nextZ;
+        if (!this._collidesAt(this.playerPos.x, fullZ)) {
+          this.playerPos.z = fullZ;
+        }
       }
     }
 
@@ -4993,10 +5313,17 @@ export class FirstPersonHouseExplorer {
 
     let anyDoorAnimating = false;
     const doorOpenMap = {};
+    const anyAutopilotActive = Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11);
     for (const d of this.house.interactiveDoors) {
       doorOpenMap[d.id] = d.progress > 0.12;
       const target = d.isOpen ? 1 : 0;
       if (Math.abs(d.progress - target) > 0.002) {
+        // Strict 6m × 6m × 6m player-bubble dynamic animation gate (garage gates exempted during active autopilot!)
+        const pPos = d.pivot.position;
+        const isAutoGate = anyAutopilotActive && d.kind === 'rollup';
+        if (!isAutoGate && !this._in6mBubble(pPos.x, pPos.y, pPos.z)) {
+          continue;
+        }
         anyDoorAnimating = true;
         const speed = d.kind === 'rollup' ? 3.8 : 8.2;
         d.progress += (target - d.progress) * Math.min(1, dt * speed);
@@ -5010,14 +5337,17 @@ export class FirstPersonHouseExplorer {
       }
     }
 
-    // Update ARMOR-155 Motorized Iron Storm Shutters!
+    // Update ARMOR-155 Motorized Iron Storm Shutters (strictly inside 6m × 6m × 6m bubble unless armor autopilot active!)
     if (this.house.armorCamper && this.house.armorCamper.shutters) {
-      const sh = this.house.armorCamper.shutters;
-      const prevP = sh.shutterProgress;
-      sh.updateShutters(dt);
-      if (Math.abs(sh.shutterProgress - prevP) > 0.0005) {
-        anyDoorAnimating = true;
-        if (this.house.armorCamper.root) this.house.armorCamper.root.updateMatrixWorld(true);
+      const ap = this.house.armorCamper.pose;
+      if (this.autopilotRoutes.armor || this._in6mBubble(ap.cx, ap.groundY + 1.5, ap.cz)) {
+        const sh = this.house.armorCamper.shutters;
+        const prevP = sh.shutterProgress;
+        sh.updateShutters(dt);
+        if (Math.abs(sh.shutterProgress - prevP) > 0.0005) {
+          anyDoorAnimating = true;
+          if (this.house.armorCamper.root) this.house.armorCamper.root.updateMatrixWorld(true);
+        }
       }
     }
 
@@ -5286,15 +5616,24 @@ export class FirstPersonHouseExplorer {
         roofKind = 'timber';
       }
       this._activeRoofKind = roofKind;
-      this.audio.updateStorm(stormInt, stormMuffle, roofKind);
+      const wSt = this.terreno.weather ? this.terreno.weather.getState(this.floorY) : null;
+      const effectivePrecipAudio = Math.max(
+        stormInt,
+        wSt ? Math.min(0.88, (wSt.rainRate || 0) * 0.72 + (wSt.hailRate || 0) * 0.55) : 0,
+      );
+      this.audio.updateStorm(effectivePrecipAudio, stormMuffle, roofKind);
 
-      // Real-time Thunder Crack & Valley Rolling Echo synchronized with storm lightning bolts!
-      if (lightning > 0.72 && this._prevLightning <= 0.72 && stormInt > 0.15) {
+      // Real-time Thunder Crack & Valley Rolling Echo synchronized with storm / weather lightning bolts!
+      const combinedLightning = Math.max(lightning, this.terreno.atmoUniforms?.uWeatherLightning?.value || 0);
+      if (combinedLightning > 0.72 && this._prevLightning <= 0.72 && effectivePrecipAudio > 0.12) {
         this.audio.playThunder(140 + Math.random() * 540);
       }
-      this._prevLightning = lightning;
+      this._prevLightning = combinedLightning;
     }
-    this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
+    // Strict 6m × 6m × 6m player-bubble dynamic animation gate on mist, lamp flicker & courtyard fireflies!
+    if (this.atmosphere?.group?.visible && Math.abs(this.playerPos.x - 1.5) <= 14.0 && Math.abs(this.playerPos.z - 4.5) <= 14.0) {
+      this.atmosphere.update(elapsed, this.house.camper.pose, this.house.kei.pose);
+    }
 
     const propStates = {};
     for (const p of this.house.interactiveProps) propStates[p.id] = p.isOn;
@@ -5310,15 +5649,21 @@ export class FirstPersonHouseExplorer {
     for (const [lname, isOn, a1, a2] of flickerCfg) {
       const entry = this.house.interiorLights.find((l) => l.name === lname);
       if (entry && isOn && entry.light.visible) {
-        entry.light.intensity += (Math.sin(elapsed * 3.1) * a1 + Math.sin(elapsed * 7.3) * a2) * dt * 9;
+        const lp = entry.light.position;
+        if (this._in6mBubble(lp.x, lp.y, lp.z)) {
+          entry.light.intensity += (Math.sin(elapsed * 3.1) * a1 + Math.sin(elapsed * 7.3) * a2) * dt * 9;
+        }
       }
     }
 
     if (this.house.fireflies && this.house.fireflies.visible) {
       const posAttr = this.house.fireflies.geometry.attributes.position;
       const seeds = this.house.ffSeeds;
+      let anyMoved = false;
       for (let i = 0; i < seeds.length; i++) {
         const s = seeds[i];
+        if (!this._in6mBubble(s.x, s.y, s.z)) continue;
+        anyMoved = true;
         posAttr.setXYZ(
           i,
           s.x + Math.sin(elapsed * s.sp + s.ph) * 0.45,
@@ -5326,7 +5671,7 @@ export class FirstPersonHouseExplorer {
           s.z + Math.cos(elapsed * (s.sp * 0.9) + s.ph) * 0.45,
         );
       }
-      posAttr.needsUpdate = true;
+      if (anyMoved) posAttr.needsUpdate = true;
     }
 
     // Acoustic occlusion & Full 4-Space 3D Spatial Soundscape Environment State!
@@ -5863,6 +6208,7 @@ export class FirstPersonHouseExplorer {
 
         const storm = this.terreno ? this.terreno.storm : null;
         const activeRoute = this.autopilotRoutes[this.selectedAutopilotVehicle] || this.autopilotRoutes.k11 || this.autopilotRoutes.camper || this.autopilotRoutes.armor;
+        const hasAnyAuto = Boolean(this.autopilotRoutes.camper || this.autopilotRoutes.armor || this.autopilotRoutes.k11);
         this.callbacks.onPoseUpdate({
           x: this.playerPos.x,
           z: this.playerPos.z,
@@ -5891,8 +6237,10 @@ export class FirstPersonHouseExplorer {
             armor: this.autopilotRoutes.armor ? this.autopilotRoutes.armor.points : null,
             k11: this.autopilotRoutes.k11 ? this.autopilotRoutes.k11.points : null,
           },
+          autopilotPredictions: hasAnyAuto ? this.getLiveAutopilotPredictions() : null,
           autopilotRoute: activeRoute ? activeRoute.points : null,
           autopilotTargetId: activeRoute ? activeRoute.targetId : null,
+          weatherState: this.terreno?.weather ? this.terreno.weather.getState(this.floorY) : null,
         });
       }
 

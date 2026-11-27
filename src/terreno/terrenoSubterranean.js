@@ -86,7 +86,7 @@ void main() {
   vec3 N = normalize(gl_FrontFacing ? vWorldNormal : -vWorldNormal);
   vec3 V = normalize(cameraPosition - wp);
   float asl = uBaseElevationASL + wp.y;
-  float depthBelowSea = clamp(-asl / 1500.0, 0.0, 1.0);
+  float depthBelowSea = clamp((-asl - 801.0) / 1099.0, 0.0, 1.0);
 
   // Photorealistic multi-octave fractured basalt & stratified sedimentary bedding
   vec3 wWarp = wp * 0.085 + vec3(noise3(wp * 0.045), noise3(wp * 0.045 + 11.7), noise3(wp * 0.045 - 8.3)) * 1.8;
@@ -104,16 +104,16 @@ void main() {
   );
   vec3 Ndet = normalize(N + nPerturb * 0.95);
 
-  // Depth-driven photorealistic lithology:
-  //   Upper Karst (-50..-350m): weathered ochre limestone & damp calcite flowstone
-  //   Mid Crust (-350..-900m): dark wet volcanic basalt & fractured slate
-  //   Deep Abyss (-900..-1,500m): dark obsidian-gabbro with damp mineral sheen & rare deep embers
+  // Depth-driven photorealistic lithology (-801m .. -1,900m ASL):
+  //   Upper Karst (-801..-1,150m): weathered ochre limestone & damp calcite flowstone
+  //   Mid Crust (-1,150..-1,520m): dark wet volcanic basalt & fractured slate
+  //   Deep Abyss (-1,520..-1,900m): dark obsidian-gabbro with crystalline quartz & geothermal ember fissures
   vec3 colKarst = mix(vec3(0.28, 0.25, 0.20), vec3(0.46, 0.42, 0.34), strata * 0.7 + midRock * 0.3);
   vec3 colBasalt = mix(vec3(0.06, 0.07, 0.09), vec3(0.16, 0.17, 0.20), strata * 0.5 + midRock * 0.5);
   vec3 colAbyss = mix(vec3(0.045, 0.048, 0.058), vec3(0.14, 0.125, 0.135), strata * 0.45 + midRock * 0.55);
 
-  vec3 rockCol = mix(colKarst, colBasalt, smoothstep(0.18, 0.42, depthBelowSea));
-  rockCol = mix(rockCol, colAbyss, smoothstep(0.58, 0.85, depthBelowSea));
+  vec3 rockCol = mix(colKarst, colBasalt, smoothstep(0.18, 0.44, depthBelowSea));
+  rockCol = mix(rockCol, colAbyss, smoothstep(0.58, 0.86, depthBelowSea));
   // Darken deep cracks and add fine rock mineral grain
   rockCol *= (0.55 + 0.65 * fineGrain) * (0.72 + 0.38 * macroRock) * (1.0 - jointCrevice * 0.68);
   // Subtle damp calcite/iron staining on downward-sloping wet cavern walls
@@ -382,7 +382,8 @@ export function createTerrenoSubterranean(geomorph, atmoUniforms) {
   return {
     group,
     portals: SUBTERRANEAN_PORTALS,
-    maxDepthM: TERRENO_WORLD.maxSubterraneanDepthM, // -1,500m!
+    topDepthM: TERRENO_WORLD.subterraneanTopASL,       // -801 m ASL!
+    maxDepthM: TERRENO_WORLD.maxSubterraneanDepthM,    // -1,900 m ASL!
     queryPortalAt,
     evalSubterraneanElevation,
     getFloorYAt,
@@ -393,6 +394,12 @@ export function createTerrenoSubterranean(geomorph, atmoUniforms) {
       ensurePortalBuilt(st);
       return st.meta;
     },
+    getStats: () => ({
+      portalCount: SUBTERRANEAN_PORTALS.length,
+      topDepthM: TERRENO_WORLD.subterraneanTopASL,
+      maxDepthM: TERRENO_WORLD.maxSubterraneanDepthM,
+      activePortalId: activePortalState?.portal?.id || null,
+    }),
     update,
     getActivePortal: () => activePortalState?.portal || null,
   };
