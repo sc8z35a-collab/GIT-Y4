@@ -219,97 +219,101 @@ export function createTerrenoNaturalLocations(geomorph, atmoUniforms) {
   const waterBasins = geoState.emergentWaterBasins || [];
   const vaporSites = geoState.emergentVaporSites || [];
 
-  // Shared physical water palettes keyed by real hydrological lake genesis
-  const waterMats = {
-    caldera: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.02, 0.10, 0.28),
-      shallowCol: new THREE.Color(0.10, 0.34, 0.50),
-      absorb: new THREE.Vector3(0.62, 0.24, 0.14),
-      maxOpacity: 0.96,
-    }),
-    tarn: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.04, 0.28, 0.38),
-      shallowCol: new THREE.Color(0.22, 0.60, 0.64),
-      absorb: new THREE.Vector3(0.82, 0.24, 0.20),
-      maxOpacity: 0.94,
-    }),
-    maar: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.02, 0.15, 0.22),
-      shallowCol: new THREE.Color(0.10, 0.34, 0.36),
-      absorb: new THREE.Vector3(0.76, 0.30, 0.24),
-      maxOpacity: 0.95,
-    }),
-    oxbow: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.05, 0.18, 0.17),
-      shallowCol: new THREE.Color(0.18, 0.36, 0.30),
-      absorb: new THREE.Vector3(0.95, 0.42, 0.38),
-      maxOpacity: 0.93,
-    }),
-    dammed: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.03, 0.20, 0.26),
-      shallowCol: new THREE.Color(0.16, 0.48, 0.48),
-      absorb: new THREE.Vector3(0.84, 0.28, 0.26),
-      maxOpacity: 0.94,
-    }),
-    kettle: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.04, 0.16, 0.18),
-      shallowCol: new THREE.Color(0.15, 0.36, 0.34),
-      absorb: new THREE.Vector3(0.90, 0.38, 0.34),
-      maxOpacity: 0.92,
-    }),
-    bog: createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, {
-      deepCol: new THREE.Color(0.06, 0.12, 0.10),
-      shallowCol: new THREE.Color(0.18, 0.26, 0.20),
-      absorb: new THREE.Vector3(1.15, 0.65, 0.58),
-      maxOpacity: 0.90,
-    }),
+  // Lazy-compiled shared physical water palettes keyed by real hydrological lake genesis (0ms boot cost!)
+  const WATER_PALETTES = {
+    caldera: { deepCol: new THREE.Color(0.02, 0.10, 0.28), shallowCol: new THREE.Color(0.10, 0.34, 0.50), absorb: new THREE.Vector3(0.62, 0.24, 0.14), maxOpacity: 0.96 },
+    tarn:    { deepCol: new THREE.Color(0.04, 0.28, 0.38), shallowCol: new THREE.Color(0.22, 0.60, 0.64), absorb: new THREE.Vector3(0.82, 0.24, 0.20), maxOpacity: 0.94 },
+    maar:    { deepCol: new THREE.Color(0.02, 0.15, 0.22), shallowCol: new THREE.Color(0.10, 0.34, 0.36), absorb: new THREE.Vector3(0.76, 0.30, 0.24), maxOpacity: 0.95 },
+    oxbow:   { deepCol: new THREE.Color(0.05, 0.18, 0.17), shallowCol: new THREE.Color(0.18, 0.36, 0.30), absorb: new THREE.Vector3(0.95, 0.42, 0.38), maxOpacity: 0.93 },
+    dammed:  { deepCol: new THREE.Color(0.03, 0.20, 0.26), shallowCol: new THREE.Color(0.16, 0.48, 0.48), absorb: new THREE.Vector3(0.84, 0.28, 0.26), maxOpacity: 0.94 },
+    kettle:  { deepCol: new THREE.Color(0.04, 0.16, 0.18), shallowCol: new THREE.Color(0.15, 0.36, 0.34), absorb: new THREE.Vector3(0.90, 0.38, 0.34), maxOpacity: 0.92 },
+    bog:     { deepCol: new THREE.Color(0.06, 0.12, 0.10), shallowCol: new THREE.Color(0.18, 0.26, 0.20), absorb: new THREE.Vector3(1.15, 0.65, 0.58), maxOpacity: 0.90 },
   };
-
-  const vaporMat = createGeothermalVaporMaterial(atmoUniforms);
-  const visEntries = [];
-
-  // 1. Mount ONLY Terrain-Clipped Natural Basin Water Sheets (ZERO artificial rims/circles/props!)
-  for (let i = 0; i < waterBasins.length; i++) {
-    const b = waterBasins[i];
-    const mat = waterMats[b.lakeKind] || waterMats.dammed;
-    const segsX = Math.max(8, Math.min(32, Math.round(b.spanX / 45)));
-    const segsZ = Math.max(8, Math.min(32, Math.round(b.spanZ / 45)));
-    const geo = new THREE.PlaneGeometry(b.spanX, b.spanZ, segsX, segsZ);
-    geo.rotateX(-Math.PI * 0.5);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.name = `NATURAL_WATER_${b.id}`;
-    mesh.position.set(b.cx, b.waterY, b.cz);
-    mesh.renderOrder = 3;
-    root.add(mesh);
-
-    const maxVisDist = Math.max(4500, Math.hypot(b.spanX, b.spanZ) * 8.5);
-    visEntries.push({ obj: mesh, x: b.cx, z: b.cz, maxVisDist });
+  const waterMats = {};
+  function getWaterMat(kind) {
+    const key = WATER_PALETTES[kind] ? kind : 'dammed';
+    if (!waterMats[key]) {
+      waterMats[key] = createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, WATER_PALETTES[key]);
+    }
+    return waterMats[key];
   }
 
-  // 2. Ultra-subtle ground-hugging natural geothermal vapor wisps in fumarole / travertine zones
+  let vaporMat = null;
+  function getVaporMat() {
+    if (!vaporMat) vaporMat = createGeothermalVaporMaterial(atmoUniforms);
+    return vaporMat;
+  }
+
   const getGround = (wx, wz) => (
     typeof geomorph.getTerrainHeightAt === 'function'
       ? geomorph.getTerrainHeightAt(wx, wz)
       : geomorph.getHeightAt(wx, wz)
   );
+
+  // Lazy visibility entries — build geometry + shader ONLY when player approaches within range!
+  const visEntries = [];
+  for (let i = 0; i < waterBasins.length; i++) {
+    const b = waterBasins[i];
+    const maxVisDist = Math.min(3400, Math.max(2000, Math.hypot(b.spanX, b.spanZ) * 4.2));
+    visEntries.push({
+      type: 'water',
+      data: b,
+      x: b.cx,
+      z: b.cz,
+      maxVisDist2: maxVisDist * maxVisDist,
+      obj: null,
+    });
+  }
   for (let i = 0; i < vaporSites.length; i++) {
     const v = vaporSites[i];
+    visEntries.push({
+      type: 'vapor',
+      data: v,
+      idx: i,
+      x: v.x,
+      z: v.z,
+      maxVisDist2: 2400 * 2400,
+      obj: null,
+    });
+  }
+
+  function ensureEntryBuilt(e) {
+    if (e.obj) return e.obj;
+    if (e.type === 'water') {
+      const b = e.data;
+      const mat = getWaterMat(b.lakeKind);
+      const segsX = Math.max(8, Math.min(28, Math.round(b.spanX / 50)));
+      const segsZ = Math.max(8, Math.min(28, Math.round(b.spanZ / 50)));
+      const geo = new THREE.PlaneGeometry(b.spanX, b.spanZ, segsX, segsZ);
+      geo.rotateX(-Math.PI * 0.5);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `NATURAL_WATER_${b.id}`;
+      mesh.position.set(b.cx, b.waterY, b.cz);
+      mesh.renderOrder = 3;
+      root.add(mesh);
+      mesh.updateMatrixWorld(true);
+      e.obj = mesh;
+      return mesh;
+    }
+    const v = e.data;
     const g = new THREE.Group();
     g.name = `GEOTHERMAL_VAPOR_${v.id}`;
-    const by = getGround(v.x, v.z);
+    const mat = getVaporMat();
     for (let k = 0; k < 3; k++) {
-      const ang = (k / 3) * Math.PI + (i * 0.7);
+      const ang = (k / 3) * Math.PI + (e.idx * 0.7);
       const ox = Math.cos(ang) * (v.radius * 0.22);
       const oz = Math.sin(ang) * (v.radius * 0.22);
       const wy = getGround(v.x + ox, v.z + oz);
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(34, 14, 2, 2), vaporMat);
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(34, 14, 2, 2), mat);
       plane.position.set(v.x + ox, wy + 5.2, v.z + oz);
       plane.rotation.y = ang;
       plane.renderOrder = 5;
       g.add(plane);
     }
     root.add(g);
-    visEntries.push({ obj: g, x: v.x, z: v.z, maxVisDist: 3200 });
+    g.updateMatrixWorld(true);
+    e.obj = g;
+    return g;
   }
 
   function update(cameraPos) {
@@ -318,7 +322,13 @@ export function createTerrenoNaturalLocations(geomorph, atmoUniforms) {
       const e = visEntries[i];
       const dx = cameraPos.x - e.x;
       const dz = cameraPos.z - e.z;
-      e.obj.visible = (dx * dx + dz * dz) < (e.maxVisDist * e.maxVisDist);
+      const inRange = (dx * dx + dz * dz) < e.maxVisDist2;
+      if (inRange) {
+        const obj = ensureEntryBuilt(e);
+        obj.visible = true;
+      } else if (e.obj) {
+        e.obj.visible = false;
+      }
     }
   }
 
@@ -332,6 +342,7 @@ export function createTerrenoNaturalLocations(geomorph, atmoUniforms) {
       totalLandforms: GEOLOGY_PROCESS_CATALOG_100.length,
       newLandformsV5: GEOLOGY_PROCESS_CATALOG_100.filter((l) => l.isNewV5).length,
       newLandformsV6: GEOLOGY_PROCESS_CATALOG_100.filter((l) => l.isNewV6).length,
+      newLandformsV7: GEOLOGY_PROCESS_CATALOG_100.filter((l) => l.isNewV7).length,
       activeProcessCount: geoState.activeProcessCount || 0,
       multiOccurrenceFeatures: (geoState.features || []).length,
       naturalWaterBasins: waterBasins.length,

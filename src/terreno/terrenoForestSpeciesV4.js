@@ -77,7 +77,11 @@ function mergeGeos(geos) {
 function limb(ax, ay, az, bx, by, bz, rBot, rTop, segs = 6) {
   const dx = bx - ax, dy = by - ay, dz = bz - az;
   const len = Math.hypot(dx, dy, dz) || 0.001;
-  const c = new THREE.CylinderGeometry(rTop, rBot, len, segs, 1, true);
+  const pad = Math.min(len * 0.10, Math.max(rBot, rTop) * 0.50);
+  const dr = (rTop - rBot) / len;
+  const rBotExt = Math.max(0.002, rBot - dr * pad);
+  const rTopExt = Math.max(0.002, rTop + dr * pad);
+  const c = new THREE.CylinderGeometry(rTopExt, rBotExt, len + pad * 2.0, segs, 1, true);
   c.translate(0, len * 0.5, 0);
   const q = new THREE.Quaternion().setFromUnitVectors(
     new THREE.Vector3(0, 1, 0),

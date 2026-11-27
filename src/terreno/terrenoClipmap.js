@@ -412,6 +412,7 @@ void main() {
   vec3 N = normalize(vec3(nXZ.x, nY, nXZ.y));
 
   float macroSlope = nrmPack.b * 2.2222222;
+  float curv = nrmPack.a; // <0.48 = concave gully/hollow, >0.54 = convex ridge/crest!
   float skyViewAO = horz.b;
   float canopyDensity = horz.a * (1.0 - vOutRim * 0.35);
   float soilDepth = eco.r;
@@ -424,8 +425,8 @@ void main() {
   vec4 micFast = texture2D(uMicroNoiseTex, (xz * 0.028 + 0.5) / 256.0);
   if (dist < 280.0) {
     float nearFade = 1.0 - smoothstep(100.0, 280.0, dist);
-    float cliffAmp = mix(0.26, 1.25, smoothstep(0.18, 0.62, macroSlope)) * nearFade;
-    N = normalize(N + vec3((micFast.r - micFast.g), 0.0, (micFast.b - micFast.a)) * cliffAmp * 1.45);
+    float cliffAmp = mix(0.28, 1.38, smoothstep(0.18, 0.62, macroSlope)) * nearFade;
+    N = normalize(N + vec3((micFast.r - micFast.g), 0.0, (micFast.b - micFast.a)) * cliffAmp * 1.48);
   }
 
   float slopeRad = acos(clamp(N.y, 0.0, 1.0));
@@ -452,72 +453,100 @@ void main() {
     texMeadowRgb = vec3(0.068, 0.115, 0.032) * gVar;
   }
 
-  vec3 albedo = mix(texForestRgb * vec3(0.72, 0.84, 0.56), texMeadowRgb * vec3(0.78, 0.88, 0.52), smoothstep(0.45, 0.85, macroVar) * (1.0 - wetness * 0.65) * 0.42);
-  albedo = mix(albedo, albedo * vec3(0.72, 0.82, 0.78), smoothstep(80.0, -320.0, asl) * 0.45);
+  // Rich curvature-driven forest floor: damp mossy humus in gullies vs warm needle-duff/meadow on sunlit spurs!
+  float gullyHumus = smoothstep(0.52, 0.36, curv);
+  vec3 humusCol = texForestRgb * vec3(0.54, 0.66, 0.42);
+  vec3 spurMeadow = texMeadowRgb * vec3(0.80, 0.88, 0.50);
+  vec3 albedo = mix(texForestRgb * vec3(0.70, 0.82, 0.54), spurMeadow, smoothstep(0.45, 0.85, macroVar) * (1.0 - wetness * 0.65) * 0.44);
+  albedo = mix(albedo, humusCol, gullyHumus * 0.48);
+  albedo = mix(albedo, albedo * vec3(0.68, 0.80, 0.78), smoothstep(80.0, -340.0, asl) * 0.52);
 
   if (litho.a > 0.06) {
-    vec3 colPeat = mix(vec3(0.018, 0.036, 0.020), texForestRgb * vec3(0.40, 0.48, 0.28), 0.48 + 0.32 * microVar);
-    albedo = mix(albedo, colPeat, smoothstep(0.10, 0.72, litho.a) * (1.0 - smoothstep(0.32, 0.60, slopeRad)) * 0.72);
+    vec3 colPeat = mix(vec3(0.016, 0.034, 0.018), texForestRgb * vec3(0.38, 0.48, 0.26), 0.48 + 0.32 * microVar);
+    albedo = mix(albedo, colPeat, smoothstep(0.10, 0.72, litho.a) * (1.0 - smoothstep(0.32, 0.60, slopeRad)) * 0.74);
   }
   if (litho.b > 0.06) {
-    vec3 colOchre = texGravelRgb * vec3(0.70, 0.48, 0.28);
-    vec3 colSulfur = texGravelRgb * vec3(0.82, 0.78, 0.54);
+    vec3 colOchre = texGravelRgb * vec3(0.68, 0.44, 0.25);
+    vec3 colSulfur = texGravelRgb * vec3(0.84, 0.78, 0.50);
     albedo = mix(albedo, mix(colOchre, colSulfur, smoothstep(0.24, 0.68, litho.g)), smoothstep(0.14, 0.76, litho.b) * 0.86);
   }
   if (litho.g > 0.08 && litho.b < 0.55) {
-    albedo = mix(albedo, texGravelRgb * vec3(0.84, 0.82, 0.73), smoothstep(0.28, 0.82, litho.g) * 0.56);
+    albedo = mix(albedo, texGravelRgb * vec3(0.82, 0.80, 0.72), smoothstep(0.28, 0.82, litho.g) * 0.56);
   }
   if (litho.r > 0.08) {
-    albedo = mix(albedo, texGravelRgb * vec3(0.22, 0.21, 0.23), smoothstep(0.22, 0.82, litho.r) * 0.84);
+    albedo = mix(albedo, texGravelRgb * vec3(0.20, 0.19, 0.22), smoothstep(0.22, 0.82, litho.r) * 0.84);
   }
 
-  // Wet River & Stream Cobble Banks
-  float riverCobble = smoothstep(0.62, 0.92, wetness);
+  // Automatic Alpine Talus / Scree Boulder Aprons (ガレ場) at concave foot of steep cliffs!
+  float talusMask = smoothstep(0.50, 0.36, curv) * smoothstep(0.32, 0.52, slopeRad) * (1.0 - smoothstep(0.58, 0.78, slopeRad)) * smoothstep(540.0, 1080.0, asl);
+  if (talusMask > 0.01) {
+    float screeSpeck = 0.72 + 0.52 * micFast.b;
+    vec3 colTalus = texGravelRgb * vec3(0.50, 0.48, 0.46) * screeSpeck;
+    albedo = mix(albedo, colTalus, talusMask * 0.76);
+  }
+
+  // Wet River, Dendritic Brook & Stream Cobble Banks
+  float riverCobble = smoothstep(0.60, 0.92, wetness);
   float wetShore = 0.0;
   if (riverCobble > 0.01) {
-    wetShore = smoothstep(0.80, 0.96, wetness);
-    vec3 colCobble = texGravelRgb * vec3(0.42, 0.44, 0.42) * mix(1.0, 0.52, wetShore);
-    albedo = mix(albedo, colCobble, riverCobble * 0.80);
+    wetShore = smoothstep(0.78, 0.96, wetness);
+    vec3 colCobble = texGravelRgb * vec3(0.40, 0.42, 0.40) * mix(1.0, 0.48, wetShore);
+    albedo = mix(albedo, colCobble, riverCobble * 0.82);
   }
 
-  // Dramatic 75°–88° Stratified Exposed Rock Cliffs (ONLY on real cliffs >32° or bare rock soilDepth <0.24!)
+  // Dramatic 75°–88° Multi-Lithology Stratified Exposed Rock Cliffs (ONLY on real cliffs >32° or bare rock soilDepth <0.24!)
   float bareRockMask = smoothstep(0.56, 0.80, slopeRad + smoothstep(0.34, 0.08, soilDepth) * 0.45 + smoothstep(1780.0, 2220.0, asl) * 0.26);
+  float wetSeep = 0.0;
   if (bareRockMask > 0.01) {
     vec3 rockRgb;
     if (dist < 180.0) {
       rockRgb = sampleTriplanarCliffFast(vWorldPos, N, 0.068).rgb;
     } else {
-      vec4 cragMic = texture2D(uMicroNoiseTex, (xz * 0.0085 + vec2(vWorldPos.y * 0.006, -vWorldPos.y * 0.004) + 0.5) / 256.0);
+      vec4 cragMic = texture2D(uMicroNoiseTex, (xz * 0.0085 + vec2(vWorldPos.y * 0.0045, -vWorldPos.y * 0.0035) + 0.5) / 256.0);
+      vec4 cragFine = texture2D(uMicroNoiseTex, (xz * 0.022 + vec2(-vWorldPos.y * 0.011, vWorldPos.y * 0.009) + 0.5) / 256.0);
       float fracRidge = 1.0 - abs(cragMic.r * 2.0 - 1.0);
-      float jointBand = sin(vWorldPos.y * 0.14 + cragMic.g * 7.5 + macroVar * 5.2) * 0.5 + 0.5;
-      float rockVar = clamp(0.42 + 0.44 * fracRidge * fracRidge + 0.26 * jointBand * cragMic.b + 0.18 * microVar, 0.22, 1.18);
-      rockRgb = vec3(0.088, 0.092, 0.098) * rockVar;
+      float diagCrag = 1.0 - abs(cragFine.g * 2.0 - 1.0);
+      float rockVar = clamp(0.38 + 0.42 * fracRidge * fracRidge + 0.30 * diagCrag * cragMic.b + 0.16 * microVar, 0.20, 1.24);
+      rockRgb = vec3(0.088, 0.092, 0.100) * rockVar;
     }
-    vec3 colCliff = rockRgb * vec3(0.44, 0.46, 0.49);
-    float bJoint = 0.78 + 0.28 * micFast.g;
-    colCliff = mix(colCliff, rockRgb * vec3(0.22, 0.24, 0.27) * bJoint, smoothstep(0.18, 0.72, litho.r));
-    colCliff = mix(colCliff, rockRgb * vec3(0.64, 0.61, 0.54), smoothstep(0.22, 0.75, litho.g) * (1.0 - smoothstep(0.3, 0.7, litho.r)));
-    colCliff = mix(colCliff, rockRgb * vec3(0.56, 0.38, 0.24), smoothstep(0.24, 0.76, litho.b));
-    colCliff *= mix(1.0, 0.52, smoothstep(0.30, 0.80, litho.a) * smoothstep(0.35, 0.75, slopeRad));
-    float ledgeMoss = smoothstep(0.56, 0.86, N.y) * (1.0 - smoothstep(1450.0, 1800.0, asl)) * smoothstep(0.38, 0.76, microVar);
-    colCliff = mix(colCliff, vec3(0.022, 0.048, 0.018), ledgeMoss * 0.58);
+    // 1) Alpine Fractured Granite (default) with subtle pale alpine lichen on convex faces
+    float lichen = smoothstep(0.54, 0.78, curv) * smoothstep(0.55, 0.86, micFast.a) * (1.0 - smoothstep(1850.0, 2200.0, asl));
+    vec3 colCliff = rockRgb * mix(vec3(0.43, 0.45, 0.49), vec3(0.49, 0.54, 0.46), lichen * 0.35);
+    // 2) Columnar Volcanic Basalt (organic broken basalt vertical columns!)
+    float colFlute = 0.76 + 0.30 * (0.5 + 0.5 * sin((xz.x * 0.22 + xz.y * 0.17) + micFast.g * 5.2 + macroVar * 4.0));
+    colCliff = mix(colCliff, rockRgb * vec3(0.20, 0.21, 0.25) * colFlute, smoothstep(0.18, 0.72, litho.r));
+    // 3) Karst Limestone & Travertine (organic warped pale fractured calcite!)
+    float karstBed = 0.84 + 0.22 * (micFast.r * 0.6 + micFast.b * 0.4);
+    colCliff = mix(colCliff, rockRgb * vec3(0.66, 0.63, 0.55) * karstBed, smoothstep(0.22, 0.75, litho.g) * (1.0 - smoothstep(0.3, 0.7, litho.r)));
+    // 4) Cross-Bedded Red-Ochre Sandstone / Volcanic Tuff!
+    float tuffBand = 0.80 + 0.28 * sin(vWorldPos.y * 0.08 + xz.x * 0.015 + micFast.b * 5.5 + macroVar * 6.0);
+    colCliff = mix(colCliff, rockRgb * vec3(0.58, 0.36, 0.22) * tuffBand, smoothstep(0.24, 0.76, litho.b));
+    // 5) Dark glossy vertical water seepage streaks down damp canyon walls
+    wetSeep = smoothstep(0.30, 0.76, wetness) * smoothstep(0.42, 0.78, slopeRad) * smoothstep(0.35, 0.75, micFast.b);
+    colCliff *= mix(1.0, 0.46, max(wetSeep, smoothstep(0.30, 0.80, litho.a) * smoothstep(0.35, 0.75, slopeRad) * 0.85));
+    // 6) Emerald alpine moss gripping north-facing horizontal rock ledges
+    float ledgeMoss = smoothstep(0.54, 0.84, N.y) * (0.65 + 0.35 * clamp(-N.z, 0.0, 1.0)) * (1.0 - smoothstep(1480.0, 1840.0, asl)) * smoothstep(0.36, 0.74, microVar);
+    colCliff = mix(colCliff, vec3(0.020, 0.050, 0.018), ledgeMoss * 0.62);
     albedo = mix(albedo, colCliff, bareRockMask * 0.96);
   }
 
-  // High-Alpine Perpetual Snowfields & Blue-White Glaciers (+1,900m .. +2,500m ASL — realistic Japanese Alps timberline!)
+  // High-Alpine Wind-Sculpted Snowdrifts & Blue-Ice Glacier Crevasses (+1,880m .. +2,500m ASL)
+  // Snow accumulates thickly in concave couloirs & north-facing hollows while sharp convex granite ridges stay exposed!
   float northAspect = clamp(-N.z * 0.55 + 0.35, 0.0, 1.0);
-  float snowAlt = smoothstep(1900.0, 2360.0, asl + (macroVar - 0.5) * 240.0 + northAspect * 140.0 + (micFast.g - 0.5) * 90.0);
-  float snowSlope = 1.0 - smoothstep(0.58, 0.96, slopeRad);
-  float snowMask = clamp(snowAlt * snowSlope, 0.0, 0.95);
-  vec3 colSnow = mix(vec3(0.76, 0.82, 0.90), vec3(0.58, 0.75, 0.90), smoothstep(2050.0, 2420.0, asl) * litho.a * 0.55);
+  float hollowDrift = clamp((0.52 - curv) * 440.0, -180.0, 220.0);
+  float snowAlt = smoothstep(1880.0, 2340.0, asl + hollowDrift + (macroVar - 0.5) * 210.0 + northAspect * 165.0 + (micFast.g - 0.5) * 85.0);
+  float snowSlope = 1.0 - smoothstep(0.58, 0.94, slopeRad);
+  float snowMask = clamp(snowAlt * snowSlope, 0.0, 0.96);
+  float crevasseIce = smoothstep(2060.0, 2400.0, asl) * smoothstep(0.28, 0.62, slopeRad) * smoothstep(0.45, 0.82, micFast.b);
+  vec3 colSnow = mix(vec3(0.78, 0.84, 0.92), vec3(0.46, 0.72, 0.90), clamp(litho.a * 0.45 + crevasseIce * 0.65, 0.0, 0.82));
   albedo = mix(albedo, colSnow, snowMask);
 
-  // 4. ORGANIC PLUSH VOLUMETRIC MOUNTAIN CANOPY CARPET (120m .. 60,000m — ZERO square grid, pure mossy velvet billows!)
+  // 4. 4-BELT ORGANIC PLUSH VOLUMETRIC MOUNTAIN CANOPY CARPET (120m .. 60,000m — pure mossy velvet billows!)
   float dComp = length(xz - uCompoundCenter);
   float dVill = length(xz - uVillageCenter);
   float isSettledPad = max(1.0 - smoothstep(20.0, 32.0, dComp), 1.0 - smoothstep(38.0, 54.0, dVill));
   float isNullPad = evalSouthRectWeight(xz);
-  float farCanopyBlend = smoothstep(115.0, 310.0, dist) * canopyDensity * (1.0 - bareRockMask * 0.94) * (1.0 - snowMask * 0.95) * (1.0 - isSettledPad) * (1.0 - isNullPad);
+  float farCanopyBlend = smoothstep(115.0, 310.0, dist) * canopyDensity * (1.0 - bareRockMask * 0.94) * (1.0 - snowMask * 0.95) * (1.0 - talusMask * 0.65) * (1.0 - isSettledPad) * (1.0 - isNullPad);
 
   float plushWrap = 0.0;
   if (farCanopyBlend > 0.01) {
@@ -534,26 +563,28 @@ void main() {
     float b2 = smoothstep(0.22, 0.86, puffB.g) * 0.34;
     float b3 = puffC.b * 0.22;
     float crownHeight = b1 + b2 + b3;
-    float cavityAO = smoothstep(0.14, 0.78, crownHeight);
+    float cavityAO = smoothstep(0.12, 0.78, crownHeight);
 
-    vec3 colDeepCedar  = vec3(0.014, 0.038, 0.017);
-    vec3 colBunaBeech  = vec3(0.029, 0.060, 0.019);
-    vec3 colSubalpine  = vec3(0.011, 0.030, 0.018);
-    vec3 colRedPine    = vec3(0.022, 0.046, 0.020);
-    vec3 colWarmBroad  = vec3(0.016, 0.043, 0.016);
+    vec3 colDeepCedar  = vec3(0.013, 0.037, 0.016); // Valley Sugi/Hinoki
+    vec3 colBunaBeech  = vec3(0.030, 0.062, 0.018); // Mid-elevation Buna beech
+    vec3 colSubalpine  = vec3(0.010, 0.030, 0.019); // Subalpine Shirabiso fir
+    vec3 colHaimatsu   = vec3(0.020, 0.042, 0.022); // Timberline dwarf Haimatsu pine krummholz
+    vec3 colRedPine    = vec3(0.022, 0.046, 0.019); // Sunlit dry Akamatsu pine spur
+    vec3 colWarmBroad  = vec3(0.016, 0.044, 0.015); // Lowland warm broadleaf
 
     vec3 standCol = mix(colDeepCedar, colBunaBeech, smoothstep(0.36, 0.64, standCohort));
     standCol = mix(standCol, colRedPine, smoothstep(0.68, 0.88, standCohort) * (1.0 - wetness * 0.7));
     standCol = mix(standCol, colWarmBroad, smoothstep(0.72, 0.92, climTemp) * 0.65);
-    standCol = mix(standCol, colSubalpine, smoothstep(1380.0, 1740.0, asl));
+    standCol = mix(standCol, colSubalpine, smoothstep(1340.0, 1680.0, asl));
+    standCol = mix(standCol, colHaimatsu, smoothstep(1680.0, 1920.0, asl));
 
-    vec3 crownTip = standCol * vec3(1.58, 1.68, 1.24) + vec3(0.007, 0.014, 0.004);
-    vec3 plushCol = mix(standCol * 0.26, crownTip, cavityAO);
+    vec3 crownTip = standCol * vec3(1.62, 1.72, 1.24) + vec3(0.008, 0.015, 0.004);
+    vec3 plushCol = mix(standCol * 0.24, crownTip, cavityAO);
     albedo = mix(albedo, plushCol, farCanopyBlend * 0.96);
 
     vec2 billowGrad = vec2((puffA.r - puffA.g) + (puffB.r - puffB.b) * 0.7, (puffA.b - puffA.a) + (puffB.g - puffB.a) * 0.7);
-    vec3 crownN = normalize(vec3(billowGrad.x * 1.45, 0.92, billowGrad.y * 1.45));
-    N = normalize(mix(N, crownN, farCanopyBlend * 0.56));
+    vec3 crownN = normalize(vec3(billowGrad.x * 1.48, 0.90, billowGrad.y * 1.48));
+    N = normalize(mix(N, crownN, farCanopyBlend * 0.58));
     plushWrap = farCanopyBlend;
   }
 
@@ -572,7 +603,7 @@ void main() {
   float hemiMix = N.y * 0.5 + 0.5;
   vec3 ambientLight = mix(uHemiGroundColor, uHemiSkyColor, hemiMix) * (uHemiIntensity * (0.40 + 0.60 * skyViewAO) * 0.96);
 
-  float specStr = (0.02 + 0.08 * bareRockMask + 0.28 * wetShore + 0.16 * snowMask) * (1.0 - plushWrap * 0.95);
+  float specStr = (0.02 + 0.08 * bareRockMask + 0.28 * wetShore + 0.34 * wetSeep + 0.16 * snowMask) * (1.0 - plushWrap * 0.95);
   float spec = 0.0;
   if (specStr > 0.015 && NdotL > 0.01) {
     vec3 H = normalize(sunDir + V);

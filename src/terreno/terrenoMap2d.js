@@ -91,7 +91,7 @@ function formatMetricScale(meters) {
   return `${meters < 10 && meters % 1 !== 0 ? meters.toFixed(1) : Math.round(meters)} m`;
 }
 
-export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = null) {
+export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = null, forest = null) {
   const tributaryPolylines = buildTributaryPolylines();
 
   // Pre-query exact summit ASL for all natural tectonic peaks (instant < 0.2ms)
@@ -169,6 +169,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
     const H = geomorph.H;
     const heights = geomorph.heights;
     const normalRGBA = geomorph.normalRGBA;
+    const horizonRGBA = geomorph.horizonRGBA;
     const lithoRGBA = geomorph.lithoRGBA;
     const soilEcoRGBA = geomorph.soilEcoRGBA;
     const basinWaterY = geomorph.basinWaterY;
@@ -268,11 +269,14 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
 
         const natWater = basinWaterY[i00];
         if (natWater > h) {
-          const wd = Math.min(1, (natWater - h) * 0.038);
-          const wr = (62 - wd * 44) | 0;
-          const wg = (164 - wd * 92) | 0;
-          const wb = (194 - wd * 62) | 0;
-          u32[rowOff + px] = (255 << 24) | (wb << 16) | (wg << 8) | wr;
+          const dW = natWater - h;
+          const wd = Math.min(1, dW * 0.032);
+          let wr = 70 - wd * 52;
+          let wg = 182 - wd * 114;
+          let wb = 208 - wd * 80;
+          const qB = dW * 0.1 + 65536.5;
+          if (Math.abs(qB - (qB | 0) - 0.5) < 0.06) { wr += 18; wg += 22; wb += 22; }
+          u32[rowOff + px] = (255 << 24) | ((wb > 255 ? 255 : wb | 0) << 16) | ((wg > 255 ? 255 : wg | 0) << 8) | (wr > 255 ? 255 : wr | 0);
           continue;
         }
 
@@ -282,49 +286,53 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         const sl = normalRGBA[o4 + 2] * (1 / 114.75);
         const ny = Math.sqrt(Math.max(0.02, 1.0 - nx * nx - nz * nz));
 
-        // Swiss Imhof dual hillshade
+        const eo4 = (eRow + ((un * ecoWm1 + 0.5) | 0)) << 2;
+        const skyAO = horizonRGBA ? (0.76 + horizonRGBA[eo4 + 2] * (0.28 / 255)) : 1.0;
+        const westH = horizonRGBA ? horizonRGBA[eo4 + 1] * (1 / 255) : 0.0;
+        const castS = westH > 0.36 ? 0.80 : 1.0;
+
+        // Swiss Imhof dual hillshade + cast mountain shadow & sky-view AO
         let sun1 = nx * -0.646 + ny * 0.565 + nz * -0.514;
         if (sun1 < 0) sun1 = 0;
         let sun2 = nx * 0.521 + ny * 0.722 + nz * -0.456;
         if (sun2 < 0) sun2 = 0;
-        const shade = Math.min(1.24, Math.max(0.46, sun1 * 0.84 + sun2 * 0.24 + 0.30));
+        const shade = Math.min(1.26, Math.max(0.42, (sun1 * 0.86 * castS + sun2 * 0.24 + 0.28) * skyAO));
 
         // SwissTopo hypsometric ramp (-500m .. +2,500m ASL)
         let r, g, b;
         if (asl < 0) {
           const t = Math.max(0, (asl + 500) * 0.002);
-          r = 22 + t * 24; g = 62 + t * 44; b = 62 + t * 14;
+          r = 20 + t * 24; g = 58 + t * 44; b = 62 + t * 14;
         } else if (asl < 420) {
           const t = asl * (1 / 420);
-          r = 46 + t * 38; g = 106 + t * 28; b = 76 + t * 6;
+          r = 44 + t * 38; g = 102 + t * 28; b = 76 + t * 6;
         } else if (asl < 980) {
           const t = (asl - 420) * (1 / 560);
-          r = 84 + t * 62; g = 134 + t * 34; b = 82 + t * 26;
+          r = 82 + t * 62; g = 130 + t * 34; b = 82 + t * 26;
         } else if (asl < 1560) {
           const t = (asl - 980) * (1 / 580);
-          r = 146 + t * 46; g = 168 + t * 16; b = 108 + t * 36;
-        } else if (asl < 2040) {
-          const t = (asl - 1560) * (1 / 480);
-          r = 192 - t * 16; g = 184 - t * 12; b = 144 + t * 32;
+          r = 144 + t * 46; g = 164 + t * 16; b = 108 + t * 36;
+        } else if (asl < 2020) {
+          const t = (asl - 1560) * (1 / 460);
+          r = 190 - t * 18; g = 180 - t * 12; b = 144 + t * 32;
         } else {
-          const t = Math.min(1, (asl - 2040) * (1 / 340));
-          r = 176 + t * 68; g = 172 + t * 76; b = 176 + t * 78;
+          const t = Math.min(1, (asl - 2020) * (1 / 320));
+          r = 172 + t * 72; g = 168 + t * 80; b = 176 + t * 78;
         }
 
-        const eo4 = (eRow + ((un * ecoWm1 + 0.5) | 0)) << 2;
         const soilD = soilEcoRGBA[eo4] * (1 / 255);
         const rockW = Math.min(1, Math.max(0, (sl + (1.0 - soilD) * 0.35 - 0.44) * 2.1));
         if (rockW > 0.02 && asl < 2180) {
           const rk = rockW * 0.72;
-          r = r * (1 - rk) + 116 * rk;
-          g = g * (1 - rk) + 119 * rk;
+          r = r * (1 - rk) + 114 * rk;
+          g = g * (1 - rk) + 117 * rk;
           b = b * (1 - rk) + 125 * rk;
         }
 
         const lVol = lithoRGBA[o4] * (1 / 255);
-        if (lVol > 0.15) { const m = lVol * 0.35; r = r * (1 - m) + 74 * m; g = g * (1 - m) + 76 * m; b = b * (1 - m) + 84 * m; }
+        if (lVol > 0.15) { const m = lVol * 0.38; r = r * (1 - m) + 70 * m; g = g * (1 - m) + 72 * m; b = b * (1 - m) + 82 * m; }
         const lOch = lithoRGBA[o4 + 2] * (1 / 255);
-        if (lOch > 0.15) { const m = lOch * 0.40; r = r * (1 - m) + 194 * m; g = g * (1 - m) + 142 * m; b = b * (1 - m) + 96 * m; }
+        if (lOch > 0.15) { const m = lOch * 0.42; r = r * (1 - m) + 194 * m; g = g * (1 - m) + 136 * m; b = b * (1 - m) + 88 * m; }
 
         r *= shade; g *= shade; b *= shade;
 
@@ -332,7 +340,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         const qMaj = asl * invMajor + 65536.5;
         const cmMaj = Math.abs(qMaj - (qMaj | 0) - 0.5);
         if (cmMaj < 0.045) {
-          r *= 0.58; g *= 0.54; b *= 0.50;
+          r *= 0.56; g *= 0.52; b *= 0.48;
         } else {
           const qMin = asl * invMinor + 65536.5;
           const cmMin = Math.abs(qMin - (qMin | 0) - 0.5);
@@ -1055,13 +1063,23 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
     hudScaleLabelEl.textContent = formatMetricScale(bestM);
 
     const refW = hoverWorld || pxToWorld(canvas.width * 0.5, canvas.height * 0.5) || { x: state?.x ?? 0, z: state?.z ?? 0 };
-    const asl = Math.round(TERRENO_WORLD.baseElevationASL + getTerrainY(refW.x, refW.z));
+    const tel = typeof geomorph.getGeoTelemetryAt === 'function'
+      ? geomorph.getGeoTelemetryAt(refW.x, refW.z)
+      : null;
+    const asl = tel ? tel.asl : Math.round(TERRENO_WORLD.baseElevationASL + getTerrainY(refW.x, refW.z));
     const zone = getZoneLabelJp(refW.x, refW.z, asl);
     const sign = asl >= 0 ? '+' : '';
     // ZERO zoom multiplier ("×") text anywhere!
     if (subLayer > 0) {
       const layer = SUB_LAYERS[subLayer];
-      hudInfoEl.textContent = `${layer.labelJp}  •  ${layer.depthTxt}  •  地表 ${sign}${asl} m`;
+      const lithoBit = tel && tel.lithoJp ? `  •  ${tel.lithoJp}` : '';
+      hudInfoEl.textContent = `${layer.labelJp}  •  ${layer.depthTxt}  •  地表 ${sign}${asl} m${lithoBit}`;
+    } else if (tel) {
+      const place = tel.landformShortJp && zoom >= 2.2 ? `${zone} / ${tel.landformShortJp}` : zone;
+      const metric = tel.waterDepthM > 0
+        ? `水面 ${sign}${asl + tel.waterDepthM} m  •  水深 ${tel.waterDepthM} m`
+        : `標高 ${sign}${asl} m  •  傾斜 ${tel.slopeDeg}°`;
+      hudInfoEl.textContent = `${place}  •  ${metric}  •  ${tel.lithoJp}`;
     } else {
       hudInfoEl.textContent = `${zone}  •  標高 ${sign}${asl} m`;
     }
@@ -1184,6 +1202,38 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py);
       }
       ctx.stroke();
+
+      // Subtle SwissTopo metric coordinate margin ticks (E/W along top, N/S along left — avoids HUD zones!)
+      if (gpuTakeoverReady) {
+        const fmtCoord = (v, posCh, negCh) => {
+          if (v === 0) return '0';
+          const av = Math.abs(v);
+          const ch = v > 0 ? posCh : negCh;
+          return av >= 1000 ? `${ch}${(av / 1000).toFixed(av % 1000 === 0 ? 0 : 1)}k` : `${ch}${av}`;
+        };
+        ctx.font = `600 ${Math.round(6.6 * dpr)}px ui-monospace, monospace`;
+        ctx.fillStyle = subLayer > 0 ? 'rgba(186, 230, 253, 0.56)' : 'rgba(241, 245, 249, 0.56)';
+        ctx.strokeStyle = 'rgba(6, 11, 18, 0.72)';
+        ctx.lineWidth = 2.0 * dpr;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (let gx = x0; gx <= x1; gx += gStep) {
+          const p = worldToPx(gx, viewMinZ);
+          if (p.px < 215 * dpr || p.px > CW - 48 * dpr) continue;
+          const t = fmtCoord(gx, 'E', 'W');
+          ctx.strokeText(t, p.px, 6 * dpr);
+          ctx.fillText(t, p.px, 6 * dpr);
+        }
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        for (let gz = z0; gz <= z1; gz += gStep) {
+          const p = worldToPx(viewMinX, gz);
+          if (p.py < 68 * dpr || p.py > CH - 90 * dpr) continue;
+          const t = fmtCoord(-gz, 'N', 'S');
+          ctx.strokeText(t, 7 * dpr, p.py);
+          ctx.fillText(t, 7 * dpr, p.py);
+        }
+      }
       ctx.restore();
     }
 
@@ -1256,18 +1306,32 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         ctx.stroke();
       }
 
-      // Natural Shallow Cobble Fords (dashed stone crossing markers at medium/high zoom!)
+      // Natural Shallow Cobble Fords (dashed stone crossing markers + subtle ford names at medium/high zoom!)
       if (zoom >= 10 && NATURAL_FORDS && NATURAL_FORDS.length > 0) {
         ctx.setLineDash([3 * dpr, 3 * dpr]);
-        ctx.strokeStyle = 'rgba(226, 232, 240, 0.72)';
-        ctx.lineWidth = 1.5 * dpr;
+        ctx.strokeStyle = 'rgba(226, 232, 240, 0.80)';
+        ctx.lineWidth = 1.6 * dpr;
         for (let i = 0; i < NATURAL_FORDS.length; i++) {
           const fd = NATURAL_FORDS[i];
           const rv = evalMainRiver(fd.z);
-          const a = worldToPx(rv.x - rv.halfWidth * 1.1, fd.z);
-          const b = worldToPx(rv.x + rv.halfWidth * 1.1, fd.z);
+          const a = worldToPx(rv.x - rv.halfWidth * 1.15, fd.z);
+          const b = worldToPx(rv.x + rv.halfWidth * 1.15, fd.z);
           if (a.px < -40 || a.px > CW + 40 || a.py < -40 || a.py > CH + 40) continue;
           ctx.beginPath(); ctx.moveTo(a.px, a.py); ctx.lineTo(b.px, b.py); ctx.stroke();
+          if (zoom >= 18 && zoom < 320 && fd.nameJp) {
+            ctx.save();
+            ctx.setLineDash([]);
+            ctx.font = `600 ${Math.round(7.4 * dpr)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.lineWidth = 2.4 * dpr;
+            ctx.strokeStyle = 'rgba(6, 12, 20, 0.86)';
+            ctx.fillStyle = '#e0f2fe';
+            const mx = (a.px + b.px) * 0.5, my = (a.py + b.py) * 0.5 - 4 * dpr;
+            ctx.strokeText(fd.nameJp, mx, my);
+            ctx.fillText(fd.nameJp, mx, my);
+            ctx.restore();
+          }
         }
         ctx.setLineDash([]);
       }
@@ -1344,7 +1408,88 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
       ctx.restore();
     }
 
-    // 2e. Smart Non-Overlapping Mountain Peaks & 100-Process Geology Labels
+    // 2d-bis. 1:1 True-Scale Individual 3D Forest Trees (Organic Scalloped Botanical Crowns) & Boulders at Ultra-Zoom!
+    if (subLayer === 0 && zoom >= 160 && forest && typeof forest.getLocalColliders === 'function') {
+      const cols = forest.getLocalColliders();
+      if (cols && cols.length > 0) {
+        const alphaT = Math.min(1.0, (zoom - 160) / 140);
+        ctx.save();
+        let drawn = 0;
+        for (let i = 0; i < cols.length && drawn < 220; i++) {
+          const c = cols[i];
+          if (c.x < viewMinX - 18 || c.x > viewMaxX + 18 || c.z < viewMinZ - 18 || c.z > viewMaxZ + 18) continue;
+          const p = worldToPx(c.x, c.z);
+
+          if (c.kind === 'boulder') {
+            // Crisp dark-slate angular rock symbol matching actual 3D boulder footprint
+            const rr = Math.max(1.8 * dpr, Math.min(12 * dpr, (c.r || 0.7) * pxPerMeter));
+            ctx.fillStyle = `rgba(71, 85, 105, ${(0.58 * alphaT).toFixed(3)})`;
+            ctx.strokeStyle = `rgba(15, 23, 42, ${(0.68 * alphaT).toFixed(3)})`;
+            ctx.lineWidth = 0.85 * dpr;
+            ctx.beginPath();
+            for (let k = 0; k < 5; k++) {
+              const a = (k / 5) * Math.PI * 2 + (c.yaw || 0);
+              const kr = rr * (0.76 + 0.30 * ((k * 37 + i) % 3) * 0.5);
+              const vx = p.px + Math.cos(a) * kr;
+              const vy = p.py + Math.sin(a) * kr;
+              if (k === 0) ctx.moveTo(vx, vy);
+              else ctx.lineTo(vx, vy);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            drawn++;
+            continue;
+          }
+          if (c.kind !== 'tree') continue;
+
+          const trunkR = Math.max(1.3 * dpr, (c.r || 0.32) * pxPerMeter);
+          const crownR = Math.max(trunkR * 4.2, Math.min(34 * dpr, (c.r || 0.32) * 8.2 * pxPerMeter));
+          const seedA = (c.x * 0.13 + c.z * 0.19);
+          // Organic 7-lobe scalloped botanical crown path helper
+          const traceCrown = (cx, cy, rad) => {
+            ctx.beginPath();
+            const lobes = 14;
+            for (let k = 0; k <= lobes; k++) {
+              const a = (k / lobes) * Math.PI * 2 + seedA;
+              const wobble = 1.0 + 0.14 * Math.sin(k * Math.PI) + 0.08 * Math.cos(a * 3.0 + seedA);
+              const vx = cx + Math.cos(a) * rad * wobble;
+              const vy = cy + Math.sin(a) * rad * wobble;
+              if (k === 0) ctx.moveTo(vx, vy);
+              else ctx.lineTo(vx, vy);
+            }
+            ctx.closePath();
+          };
+          // Soft cast crown shadow SE
+          traceCrown(p.px + crownR * 0.22, p.py + crownR * 0.22, crownR * 0.94);
+          ctx.fillStyle = `rgba(6, 14, 10, ${(0.22 * alphaT).toFixed(3)})`;
+          ctx.fill();
+          // Organic botanical crown canopy with NW sunlit highlight & soft feathered edge
+          traceCrown(p.px, p.py, crownR);
+          const cg = ctx.createRadialGradient(p.px - crownR * 0.28, p.py - crownR * 0.28, crownR * 0.1, p.px, p.py, crownR * 1.15);
+          cg.addColorStop(0, `rgba(76, 152, 82, ${(0.42 * alphaT).toFixed(3)})`);
+          cg.addColorStop(0.65, `rgba(34, 96, 52, ${(0.34 * alphaT).toFixed(3)})`);
+          cg.addColorStop(1, `rgba(18, 56, 32, ${(0.12 * alphaT).toFixed(3)})`);
+          ctx.fillStyle = cg;
+          ctx.fill();
+          ctx.strokeStyle = `rgba(116, 192, 124, ${(0.28 * alphaT).toFixed(3)})`;
+          ctx.lineWidth = 0.7 * dpr;
+          ctx.stroke();
+          // Exact 0.1 mm trunk core dot
+          ctx.fillStyle = `rgba(108, 66, 38, ${(0.90 * alphaT).toFixed(3)})`;
+          ctx.strokeStyle = `rgba(24, 14, 8, ${(0.78 * alphaT).toFixed(3)})`;
+          ctx.lineWidth = 0.75 * dpr;
+          ctx.beginPath();
+          ctx.arc(p.px, p.py, trunkR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          drawn++;
+        }
+        ctx.restore();
+      }
+    }
+
+    // 2e. Smart Non-Overlapping Mountain Peaks, Inline Contour Numerals & 160-Process Geology Symbols
     const placedLabels = [];
     const canPlaceLabel = (x, y, minDist) => {
       for (let i = 0; i < placedLabels.length; i++) {
@@ -1360,47 +1505,138 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
       ctx.textBaseline = 'top';
       for (let i = 0; i < peaksData.length; i++) {
         const pk = peaksData[i];
-        if (zoom < 2.0 && pk.elevASL < 1200) continue;
+        if (zoom < 2.0 && !pk.isAbyss && pk.elevASL < 1200) continue;
         const p = worldToPx(pk.x, pk.z);
         if (p.px < -40 || p.px > CW + 40 || p.py < -40 || p.py > CH + 40) continue;
-        if (!canPlaceLabel(p.px, p.py, 78 * dpr)) continue;
-        const tri = (pk.elevASL > 1800 ? 4.4 : 3.4) * dpr;
-        ctx.fillStyle = '#0f172a'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2 * dpr;
-        ctx.beginPath();
-        ctx.moveTo(p.px, p.py - tri);
-        ctx.lineTo(p.px + tri * 0.92, p.py + tri * 0.72);
-        ctx.lineTo(p.px - tri * 0.92, p.py + tri * 0.72);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
+        if (!canPlaceLabel(p.px, p.py, 76 * dpr)) continue;
+        if (pk.isAbyss) {
+          // Inverted Abyssal Rift Depth Diamond (▼)
+          const dm = 4.2 * dpr;
+          ctx.fillStyle = '#0e7490'; ctx.strokeStyle = '#cffafe'; ctx.lineWidth = 1.2 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(p.px, p.py + dm);
+          ctx.lineTo(p.px + dm * 0.85, p.py - dm * 0.65);
+          ctx.lineTo(p.px - dm * 0.85, p.py - dm * 0.65);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+        } else {
+          // Official Survey Triangulation Peak Triangle (▲) with center dot
+          const tri = (pk.elevASL > 1800 ? 4.6 : 3.6) * dpr;
+          ctx.fillStyle = '#0f172a'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.25 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(p.px, p.py - tri);
+          ctx.lineTo(p.px + tri * 0.92, p.py + tri * 0.72);
+          ctx.lineTo(p.px - tri * 0.92, p.py + tri * 0.72);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(p.px - 0.8 * dpr, p.py - 0.2 * dpr, 1.6 * dpr, 1.6 * dpr);
+        }
 
         ctx.font = `700 ${Math.round(8.6 * dpr)}px sans-serif`;
-        ctx.lineWidth = 2.8 * dpr; ctx.strokeStyle = 'rgba(8, 14, 22, 0.84)'; ctx.fillStyle = '#f8fafc';
-        ctx.strokeText(pk.nameJp, p.px, p.py + tri + 2.5 * dpr);
-        ctx.fillText(pk.nameJp, p.px, p.py + tri + 2.5 * dpr);
+        ctx.lineWidth = 2.8 * dpr; ctx.strokeStyle = 'rgba(8, 14, 22, 0.86)';
+        ctx.fillStyle = pk.isAbyss ? '#a5f3fc' : '#f8fafc';
+        ctx.strokeText(pk.nameJp, p.px, p.py + 6.5 * dpr);
+        ctx.fillText(pk.nameJp, p.px, p.py + 6.5 * dpr);
         ctx.font = `600 ${Math.round(7.4 * dpr)}px ui-monospace, monospace`;
-        ctx.fillStyle = '#cbd5e1';
-        ctx.strokeText(`${pk.elevASL}m`, p.px, p.py + tri + 12.2 * dpr);
-        ctx.fillText(`${pk.elevASL}m`, p.px, p.py + tri + 12.2 * dpr);
+        ctx.fillStyle = pk.isAbyss ? '#67e8f9' : '#cbd5e1';
+        ctx.strokeText(`${pk.elevASL}m`, p.px, p.py + 16.2 * dpr);
+        ctx.fillText(`${pk.elevASL}m`, p.px, p.py + 16.2 * dpr);
       }
 
+      // 2e-bis. 160-Process Natural Landform Callouts + Cartographic Survey Symbols (Waterfall / Hot Spring / Saddle / Wetland!)
       const emergentFeats = geomorph.emergentFeatures || [];
-      if (emergentFeats.length > 0 && zoom >= 2.2 && zoom < 220) {
+      if (emergentFeats.length > 0 && zoom >= 2.0 && zoom < 260) {
         ctx.font = `600 ${Math.round(7.8 * dpr)}px sans-serif`;
         ctx.textBaseline = 'middle';
         ctx.lineWidth = 2.6 * dpr;
-        ctx.strokeStyle = 'rgba(6, 11, 18, 0.86)';
+        ctx.strokeStyle = 'rgba(6, 11, 18, 0.88)';
         for (let i = 0; i < emergentFeats.length; i++) {
           const f = emergentFeats[i];
-          const minZ = f.hasLake ? 2.2 : (f.radius >= 650 ? 3.4 : 5.6);
+          if (f.isSubterranean) continue;
+          const minZ = f.hasLake ? 2.0 : (f.hasWaterfall || f.hasHotSpring ? 2.8 : (f.radius >= 650 ? 3.2 : 5.2));
           if (zoom < minZ) continue;
           const p = worldToPx(f.x, f.z);
           if (p.px < -90 || p.px > CW + 90 || p.py < -90 || p.py > CH + 90) continue;
-          if (!canPlaceLabel(p.px, p.py, 96 * dpr)) continue;
+          if (!canPlaceLabel(p.px, p.py, 92 * dpr)) continue;
+
+          // Subtle hairline cartographic symbol right above label
+          const sy = p.py - 8.5 * dpr;
+          if (f.hasWaterfall) {
+            // Waterfall cascade triple-wave bar symbol
+            ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 1.3 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(p.px - 4.5 * dpr, sy - 2 * dpr); ctx.lineTo(p.px + 4.5 * dpr, sy - 2 * dpr);
+            ctx.moveTo(p.px - 3.5 * dpr, sy + 1 * dpr); ctx.lineTo(p.px + 3.5 * dpr, sy + 1 * dpr);
+            ctx.stroke();
+          } else if (f.hasHotSpring) {
+            // Geothermal hot spring concentric ring
+            ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 1.2 * dpr;
+            ctx.beginPath(); ctx.arc(p.px, sy, 3.0 * dpr, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = '#fde68a';
+            ctx.beginPath(); ctx.arc(p.px, sy, 1.1 * dpr, 0, Math.PI * 2); ctx.fill();
+          } else if (f.kind === 'alpine_saddle' || f.kind === 'glacial_col_transfluence' || f.kind === 'fault_line_wind_gap') {
+            // Mountain Pass Saddle )( symbol
+            ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.2 * dpr;
+            ctx.beginPath();
+            ctx.arc(p.px - 4.0 * dpr, sy, 2.8 * dpr, -0.9, 0.9);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(p.px + 4.0 * dpr, sy, 2.8 * dpr, Math.PI - 0.9, Math.PI + 0.9);
+            ctx.stroke();
+          } else if (f.hasBogPools) {
+            // Marsh / Peat Bog reed tuft
+            ctx.strokeStyle = '#34d399'; ctx.lineWidth = 1.1 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(p.px - 4 * dpr, sy + 1.5 * dpr); ctx.lineTo(p.px + 4 * dpr, sy + 1.5 * dpr);
+            ctx.moveTo(p.px - 2 * dpr, sy + 1.5 * dpr); ctx.lineTo(p.px - 3 * dpr, sy - 2.2 * dpr);
+            ctx.moveTo(p.px, sy + 1.5 * dpr); ctx.lineTo(p.px, sy - 2.8 * dpr);
+            ctx.moveTo(p.px + 2 * dpr, sy + 1.5 * dpr); ctx.lineTo(p.px + 3 * dpr, sy - 2.2 * dpr);
+            ctx.stroke();
+          }
+
+          ctx.lineWidth = 2.6 * dpr;
+          ctx.strokeStyle = 'rgba(6, 11, 18, 0.88)';
           const accent = f.hasLake ? '#7dd3fc'
             : (f.hasWaterfall ? '#38bdf8' : (f.hasHotSpring ? '#fde68a' : (f.hasBogPools ? '#6ee7b7' : '#e2e8f0')));
           const lbl = f.shortJp || f.nameJp;
           ctx.fillStyle = accent;
           ctx.strokeText(lbl, p.px, p.py);
           ctx.fillText(lbl, p.px, p.py);
+        }
+      }
+
+      // 2e-ter. SwissTopo Inline Index Contour Elevation Numerals (計曲線標高数値 — sparse, fast, non-overlapping!)
+      if (zoom >= 2.2) {
+        const logZ = Math.min(11.6, Math.max(0.0, Math.log2(Math.max(1.0, zoom))));
+        const minorStep = Math.max(0.25, Math.pow(2.0, Math.floor(Math.max(-2.0, Math.min(5.65, 5.65 - logZ * 0.72)))));
+        const majorStep = minorStep * 5.0;
+        ctx.font = `600 ${Math.round(7.0 * dpr)}px ui-monospace, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 2.4 * dpr;
+        const colsN = 6, rowsN = 4;
+        const marginX = CW * 0.12, marginY = CH * 0.14;
+        const stepPxX = (CW - marginX * 2) / (colsN - 1);
+        const stepPxY = (CH - marginY * 2) / (rowsN - 1);
+        for (let r = 0; r < rowsN; r++) {
+          for (let c = 0; c < colsN; c++) {
+            const sx = marginX + c * stepPxX + ((r & 1) ? stepPxX * 0.35 : 0);
+            const sy = marginY + r * stepPxY;
+            if (sx > CW - 64 * dpr || sy > CH - 64 * dpr) continue;
+            const wPt = pxToWorld(sx, sy);
+            if (!wPt) continue;
+            const asl = TERRENO_WORLD.baseElevationASL + getTerrainY(wPt.x, wPt.z);
+            const nearestMaj = Math.round(asl / majorStep) * majorStep;
+            // Only annotate points lying close to an actual index contour line!
+            if (Math.abs(asl - nearestMaj) > majorStep * 0.18) continue;
+            if (!canPlaceLabel(sx, sy, 88 * dpr)) continue;
+            const numTxt = nearestMaj >= 1 || nearestMaj <= -1 || majorStep >= 1
+              ? `${Math.round(nearestMaj)}`
+              : `${nearestMaj.toFixed(1)}`;
+            ctx.strokeStyle = nearestMaj >= 2020 ? 'rgba(12, 24, 38, 0.72)' : 'rgba(18, 14, 10, 0.78)';
+            ctx.fillStyle = nearestMaj >= 2020 ? '#bae6fd' : (nearestMaj < 0 ? '#67e8f9' : '#f5e6cc');
+            ctx.strokeText(numTxt, sx, sy);
+            ctx.fillText(numTxt, sx, sy);
+          }
         }
       }
 

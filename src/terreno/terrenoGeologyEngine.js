@@ -103,12 +103,13 @@ function makeRng(seed) {
 }
 
 // ============================================================================
-// MASTER CATALOG: ALL 100 CONTINUOUS REAL-WORLD GEOMORPHOLOGICAL PROCESSES
-//   Indices  1..22: Legacy 22 Upgraded Continuous Processes
-//   Indices 23..62: V5 40 Continuous Earth Processes
-//   Indices 63..100: V6 +38 BRAND-NEW Ultra-Natural Cliff/Alpine/Rift/Subterranean Processes!
+// MASTER CATALOG: ALL 160 CONTINUOUS REAL-WORLD GEOMORPHOLOGICAL PROCESSES
+//   Indices   1..22:  Legacy 22 Upgraded Continuous Processes
+//   Indices  23..62:  V5 40 Continuous Earth Processes
+//   Indices  63..100: V6 +38 Cliff / Alpine / Rift / Subterranean Processes
+//   Indices 101..160: V7 +60 BRAND-NEW High-Realism Tectonic / Volcanic / Fluvial / Glacial / Karst / Aeolian / Subterranean Processes!
 // ============================================================================
-export const GEOLOGY_PROCESS_CATALOG_100 = [
+export const GEOLOGY_PROCESS_CATALOG_160 = [
   // --- 1..22: Upgraded Core Geomorphological Processes ---
   { index: 1,   id: 'waterfall_multitier',       kind: 'waterfall_multitier',       category: 'fluvial',      isNewV5: false, isNewV6: false, nameJp: '段瀑・急崖滝地形',                 shortJp: '段瀑急崖',     hasWaterfall: true },
   { index: 2,   id: 'waterfall_veil',            kind: 'waterfall_veil',            category: 'fluvial',      isNewV5: false, isNewV6: false, nameJp: '潜流瀑・湧水懸崖地形',             shortJp: '潜流瀑崖',     hasWaterfall: true },
@@ -175,7 +176,7 @@ export const GEOLOGY_PROCESS_CATALOG_100 = [
   { index: 61,  id: 'spring_sapping_alcove',     kind: 'spring_sapping_alcove',     category: 'karst',        isNewV5: true,  isNewV6: false, nameJp: '湧水侵食アンフィシアター',         shortJp: '湧水凹湾谷',   hasWaterfall: true },
   { index: 62,  id: 'alpine_seepage_fen_terrace',kind: 'alpine_seepage_fen_terrace',category: 'wetland',      isNewV5: true,  isNewV6: false, nameJp: '傾斜湿原・湧水フェン',             shortJp: '湧水傾斜湿原', hasBogPools: true },
 
-  // --- 63..100: V6 +38 BRAND-NEW ULTRA-NATURAL CLIFF / ALPINE / RIFT / SUBTERRANEAN PROCESSES! ---
+  // --- 63..100: V6 +38 Cliff / Alpine / Rift / Subterranean Processes ---
   { index: 63,  id: 'granite_exfoliation_dome',  kind: 'granite_exfoliation_dome',  category: 'cliff',        isNewV5: false, isNewV6: true,  nameJp: '玉ねぎ状剥離花崗岩ドーム絶壁',     shortJp: '剥離岩ドーム' },
   { index: 64,  id: 'sheer_dihedral_wall',       kind: 'sheer_dihedral_wall',       category: 'cliff',        isNewV5: false, isNewV6: true,  nameJp: '垂直花崗岩大岩壁・ダイヒドラル',   shortJp: '垂直大岩壁' },
   { index: 65,  id: 'slot_canyon_labyrinth',     kind: 'slot_canyon_labyrinth',     category: 'fluvial',      isNewV5: false, isNewV6: true,  nameJp: 'スロットキャニオン（極狭蛇行岩溝）', shortJp: '極狭岩溝' },
@@ -215,12 +216,81 @@ export const GEOLOGY_PROCESS_CATALOG_100 = [
   { index: 98,  id: 'sub_mineral_crystal_vault', kind: 'sub_mineral_crystal_vault', category: 'subterranean', isNewV5: false, isNewV6: true,  nameJp: '深部熱水鉱脈・結晶大空洞',         shortJp: '深部結晶空洞', subDepthRange: [-800, -1320] },
   { index: 99,  id: 'sub_geothermal_steam_vent', kind: 'sub_geothermal_steam_vent', category: 'subterranean', isNewV5: false, isNewV6: true,  nameJp: '深部地熱蒸気チムニー空洞',         shortJp: '深部地熱空洞', subDepthRange: [-950, -1420], hasHotSpring: true },
   { index: 100, id: 'sub_abyssal_magma_chasm',   kind: 'sub_abyssal_magma_chasm',   category: 'subterranean', isNewV5: false, isNewV6: true,  nameJp: '最深-1,500m アビサル地殻裂谷',     shortJp: '最深アビサル', subDepthRange: [-1200, -1500] },
+
+  // --- 101..160: V7 +60 BRAND-NEW WORLD-CLASS NATURAL GEOMORPHOLOGICAL PROCESSES! ---
+  // Volcanic & Igneous (101..112)
+  { index: 101, id: 'columnar_basalt_organ',       kind: 'columnar_basalt_organ',       category: 'volcano',      isNewV7: true, nameJp: '柱状節理オルガン岩壁（六角柱断崖）', shortJp: '柱状節理岩壁' },
+  { index: 102, id: 'pahoehoe_rope_sheet',         kind: 'pahoehoe_rope_sheet',         category: 'volcano',      isNewV7: true, nameJp: 'パホイホイ縄状溶岩台地',           shortJp: '縄状溶岩台地' },
+  { index: 103, id: 'aa_clinker_badland',          kind: 'aa_clinker_badland',          category: 'volcano',      isNewV7: true, nameJp: 'アア溶岩塊状クリンカー荒原',       shortJp: 'アア溶岩荒原' },
+  { index: 104, id: 'volcanic_neck_plug',          kind: 'volcanic_neck_plug',          category: 'volcano',      isNewV7: true, nameJp: '火山岩頸（マグマプラグ残峰）',     shortJp: '火山岩頸峰' },
+  { index: 105, id: 'radial_dike_wall',            kind: 'radial_dike_wall',            category: 'volcano',      isNewV7: true, nameJp: '放射状貫入岩脈壁（ダイクウォール）', shortJp: '放射岩脈壁' },
+  { index: 106, id: 'obsidian_coulee_flow',        kind: 'obsidian_coulee_flow',        category: 'volcano',      isNewV7: true, nameJp: '黒曜石流紋岩クーリー厚溶岩舌',     shortJp: '黒曜石溶岩舌' },
+  { index: 107, id: 'sinter_geyser_mound',         kind: 'sinter_geyser_mound',         category: 'volcano',      isNewV7: true, nameJp: '珪華間欠泉マウンド＆熱水段棚',     shortJp: '珪華熱水段棚', hasHotSpring: true },
+  { index: 108, id: 'collapse_pit_crater',         kind: 'collapse_pit_crater',         category: 'volcano',      isNewV7: true, nameJp: '溶岩洞陥没ピットクレーター連穴',   shortJp: '陥没溶岩孔群' },
+  { index: 109, id: 'ash_tuff_hoodoo_yard',        kind: 'ash_tuff_hoodoo_yard',        category: 'volcano',      isNewV7: true, nameJp: '凝灰岩風食奇岩群（フードゥー原）', shortJp: '凝灰岩奇岩群' },
+  { index: 110, id: 'cinder_breached_cone',        kind: 'cinder_breached_cone',        category: 'volcano',      isNewV7: true, nameJp: '決壊スコリア馬蹄火口丘',           shortJp: '馬蹄火口丘' },
+  { index: 111, id: 'caldera_resurgent_dome',      kind: 'caldera_resurgent_dome',      category: 'volcano',      isNewV7: true, nameJp: 'カルデラ内再生中央火口丘',         shortJp: '中央火口丘', hasLake: true },
+  { index: 112, id: 'mud_pot_solfatara_flat',      kind: 'mud_pot_solfatara_flat',      category: 'volcano',      isNewV7: true, nameJp: '泥火山・酸性熱泥噴出平地',         shortJp: '泥火山熱泥帯', hasHotSpring: true },
+  // Fluvial, Canyon & Waterfall (113..124)
+  { index: 113, id: 'box_canyon_headwall',         kind: 'box_canyon_headwall',         category: 'fluvial',      isNewV7: true, nameJp: 'ボックスキャニオン袋小路大絶壁',   shortJp: 'ボックス大絶壁', hasWaterfall: true },
+  { index: 114, id: 'stepped_cascade_chasm',       kind: 'stepped_cascade_chasm',       category: 'fluvial',      isNewV7: true, nameJp: '連続大段瀑チョークストン峡谷',     shortJp: '連続大段瀑峡', hasWaterfall: true },
+  { index: 115, id: 'entrenched_gooseneck',        kind: 'entrenched_gooseneck',        category: 'fluvial',      isNewV7: true, nameJp: '穿入グースネック極曲蛇行峡',       shortJp: '極曲蛇行峡' },
+  { index: 116, id: 'alluvial_megafan_delta',      kind: 'alluvial_megafan_delta',      category: 'fluvial',      isNewV7: true, nameJp: '巨大複合扇状地・網状分流原',       shortJp: '巨大複合扇状地' },
+  { index: 117, id: 'terrace_strath_bench',        kind: 'terrace_strath_bench',        category: 'fluvial',      isNewV7: true, nameJp: '侵食岩盤段丘（ストラス段丘）',     shortJp: '岩盤ストラス段丘' },
+  { index: 118, id: 'plunging_amphitheater',       kind: 'plunging_amphitheater',       category: 'fluvial',      isNewV7: true, nameJp: '滝壺円形浸食大岩壁（プランジ）',   shortJp: '滝壺大岩壁', hasWaterfall: true, hasLake: true },
+  { index: 119, id: 'crevasse_splay_lobe',         kind: 'crevasse_splay_lobe',         category: 'fluvial',      isNewV7: true, nameJp: '破堤堆積スプレイ微高地扇',         shortJp: 'スプレイ堆積扇' },
+  { index: 120, id: 'cutbank_slipoff_bend',        kind: 'cutbank_slipoff_bend',        category: 'fluvial',      isNewV7: true, nameJp: '攻撃斜面急崖と滑走斜面砂礫洲',     shortJp: '攻撃急崖曲流' },
+  { index: 121, id: 'braided_glaciofluvial',       kind: 'braided_glaciofluvial',       category: 'fluvial',      isNewV7: true, nameJp: '氷河融水網状礫川原（ブレイデッド）', shortJp: '氷河融水礫原' },
+  { index: 122, id: 'canyon_alcove_overhang',      kind: 'canyon_alcove_overhang',      category: 'fluvial',      isNewV7: true, nameJp: '砂岩侵食大アルコーブ凹壁',         shortJp: '砂岩大アルコーブ' },
+  { index: 123, id: 'abandoned_waterfall_dry',     kind: 'abandoned_waterfall_dry',     category: 'fluvial',      isNewV7: true, nameJp: '涸れ滝・旧瀑布大段差崖',           shortJp: '旧瀑布涸れ滝' },
+  { index: 124, id: 'confluence_eddy_bar',         kind: 'confluence_eddy_bar',         category: 'fluvial',      isNewV7: true, nameJp: '河川合流部大渦礫州・淵地形',       shortJp: '合流大渦礫州' },
+  // Tectonic, Structural & Alpine Cliff (125..136)
+  { index: 125, id: 'flatiron_triangular_facet',   kind: 'flatiron_triangular_facet',   category: 'tectonic',     isNewV7: true, nameJp: 'フラットアイアン三角末端面連峰',   shortJp: '三角末端面連峰' },
+  { index: 126, id: 'monocline_flexure_ramp',      kind: 'monocline_flexure_ramp',      category: 'tectonic',     isNewV7: true, nameJp: '単斜撓曲大スロープ急崖',           shortJp: '単斜撓曲急崖' },
+  { index: 127, id: 'horst_block_massif',          kind: 'horst_block_massif',          category: 'tectonic',     isNewV7: true, nameJp: '地塁（ホルスト）断層塊状山塊',     shortJp: 'ホルスト断層塊' },
+  { index: 128, id: 'pull_apart_rift_basin',       kind: 'pull_apart_rift_basin',       category: 'tectonic',     isNewV7: true, nameJp: 'プルアパート横ずれ陥没盆地湖',     shortJp: '断層陥没盆地湖', hasLake: true },
+  { index: 129, id: 'chevron_folded_ridges',       kind: 'chevron_folded_ridges',       category: 'tectonic',     isNewV7: true, nameJp: 'シェブロン褶曲V字連稜線',          shortJp: 'シェブロン連稜' },
+  { index: 130, id: 'domal_batholith_monolith',    kind: 'domal_batholith_monolith',    category: 'cliff',        isNewV7: true, nameJp: 'バソリス花崗岩巨大モノリス岩峰',   shortJp: '花崗岩モノリス' },
+  { index: 131, id: 'shattered_fault_gouge',       kind: 'shattered_fault_gouge',       category: 'tectonic',     isNewV7: true, nameJp: '断層破砕谷・直線状リニアメント溝', shortJp: '断層リニアメント' },
+  { index: 132, id: 'tilted_fault_block_range',    kind: 'tilted_fault_block_range',    category: 'tectonic',     isNewV7: true, nameJp: '傾動地塊非対称断層山脈',           shortJp: '傾動地塊山脈' },
+  { index: 133, id: 'breached_anticline_valley',   kind: 'breached_anticline_valley',   category: 'tectonic',     isNewV7: true, nameJp: '背斜開析浸食谷（アンチクライナル）', shortJp: '背斜開析谷' },
+  { index: 134, id: 'step_fault_staircase',        kind: 'step_fault_staircase',        category: 'tectonic',     isNewV7: true, nameJp: '階段断層（ステップフォルト）連段崖', shortJp: '階段断層連崖' },
+  { index: 135, id: 'alpine_gendarmes_crest',      kind: 'alpine_gendarmes_crest',      category: 'cliff',        isNewV7: true, nameJp: 'ジャンダルム鋸歯状岩塔稜線',       shortJp: 'ジャンダルム稜' },
+  { index: 136, id: 'tectonic_sag_pond',           kind: 'tectonic_sag_pond',           category: 'tectonic',     isNewV7: true, nameJp: '活断層サグポンド（断層陥没池）',   shortJp: '断層サグポンド', hasLake: true },
+  // Glacial, Periglacial & High-Alpine (137..146)
+  { index: 137, id: 'paternoster_lake_chain',      kind: 'paternoster_lake_chain',      category: 'glacial',      isNewV7: true, nameJp: 'パテルノステル氷河階段連湖',       shortJp: '氷河階段連湖', hasLake: true },
+  { index: 138, id: 'glacial_col_transfluence',    kind: 'glacial_col_transfluence',    category: 'glacial',      isNewV7: true, nameJp: '氷河溢流大鞍部（トランスフルエンス）', shortJp: '氷河溢流大峠' },
+  { index: 139, id: 'trimline_ice_scoured_wall',   kind: 'trimline_ice_scoured_wall',   category: 'glacial',      isNewV7: true, nameJp: '氷河トリムライン擦痕磨岩壁',       shortJp: '氷食磨岩壁' },
+  { index: 140, id: 'fjord_deep_trough_lake',      kind: 'fjord_deep_trough_lake',      category: 'glacial',      isNewV7: true, nameJp: '内陸氷食大深湖（フィヨルド型谷湖）', shortJp: '氷食フィヨルド湖', hasLake: true },
+  { index: 141, id: 'cryoplanation_summit_step',   kind: 'cryoplanation_summit_step',   category: 'glacial',      isNewV7: true, nameJp: '周氷河クライオプラネーション段丘', shortJp: '周氷河山頂段丘' },
+  { index: 142, id: 'blockfield_felsenmeer',       kind: 'blockfield_felsenmeer',       category: 'glacial',      isNewV7: true, nameJp: '岩塊流・高山岩海（フェルゼンメール）', shortJp: '高山岩海原' },
+  { index: 143, id: 'pingo_frost_mound',           kind: 'pingo_frost_mound',           category: 'glacial',      isNewV7: true, nameJp: 'ピンゴ（永久凍土氷核隆起丘）',     shortJp: '凍土ピンゴ丘' },
+  { index: 144, id: 'talus_protalus_rampart',      kind: 'talus_protalus_rampart',      category: 'glacial',      isNewV7: true, nameJp: '残雪末端プロタラス岩屑堤',         shortJp: 'プロタラス岩屑堤' },
+  { index: 145, id: 'recessional_moraine_waves',   kind: 'recessional_moraine_waves',   category: 'glacial',      isNewV7: true, nameJp: '後退モレーン波状堆石連丘',         shortJp: '後退モレーン丘' },
+  { index: 146, id: 'glacial_erratic_apron',       kind: 'glacial_erratic_apron',       category: 'glacial',      isNewV7: true, nameJp: '迷子石・氷河漂礫堆積斜面',         shortJp: '氷河漂礫斜面' },
+  // Karst, Sandstone, Erosion, Aeolian & Wetland (147..156)
+  { index: 147, id: 'karst_mogote_haystack',       kind: 'karst_mogote_haystack',       category: 'karst',        isNewV7: true, nameJp: 'モゴテ円頂石灰岩急峻残丘群',       shortJp: 'モゴテ石灰岩丘' },
+  { index: 148, id: 'karst_collapse_bridge_gorge', kind: 'karst_collapse_bridge_gorge', category: 'karst',        isNewV7: true, nameJp: '石灰岩陥没天然大渓谷',             shortJp: '石灰岩陥没峡' },
+  { index: 149, id: 'sandstone_fins_labyrinth',    kind: 'sandstone_fins_labyrinth',    category: 'erosion',      isNewV7: true, nameJp: '砂岩平行フィン（板状岩壁迷宮）',   shortJp: '砂岩板状迷宮' },
+  { index: 150, id: 'butte_caprock_pillar',        kind: 'butte_caprock_pillar',        category: 'erosion',      isNewV7: true, nameJp: 'ビュート硬岩キャップ孤立残丘',     shortJp: 'ビュート孤立丘' },
+  { index: 151, id: 'yardang_wind_scoured_keels',  kind: 'yardang_wind_scoured_keels',  category: 'erosion',      isNewV7: true, nameJp: 'ヤルダン風食流線型岩稜群',         shortJp: 'ヤルダン風食稜' },
+  { index: 152, id: 'earth_pillar_demoiselles',    kind: 'earth_pillar_demoiselles',    category: 'erosion',      isNewV7: true, nameJp: '土柱（浸食柱状急崖群）',           shortJp: '浸食土柱崖' },
+  { index: 153, id: 'alluvial_mudflat_playa',      kind: 'alluvial_mudflat_playa',      category: 'wetland',      isNewV7: true, nameJp: '乾湖プラヤ・塩類亀裂平地',         shortJp: '乾湖プラヤ原' },
+  { index: 154, id: 'string_bog_aapa_mire',        kind: 'string_bog_aapa_mire',        category: 'wetland',      isNewV7: true, nameJp: 'アアパ湿原・縞状泥炭池塘群',       shortJp: 'アアパ縞状湿原', hasBogPools: true },
+  { index: 155, id: 'spring_travertine_cascade',   kind: 'spring_travertine_cascade',   category: 'karst',        isNewV7: true, nameJp: '湧水石灰華階段滝・段丘池',         shortJp: '石灰華階段池', hasWaterfall: true, hasHotSpring: true },
+  { index: 156, id: 'coastal_drowned_ria_basin',   kind: 'coastal_drowned_ria_basin',   category: 'tectonic',     isNewV7: true, nameJp: '沈水リアス型複雑入り江盆地（-500m帯）', shortJp: '沈水リアス盆地', hasLake: true },
+  // Deep Subterranean (-280m .. -1,500m) (157..160)
+  { index: 157, id: 'sub_sunken_cenote_lake',      kind: 'sub_sunken_cenote_lake',      category: 'subterranean', isNewV7: true, nameJp: '地底透水セノーテ大地下湖（-280m）', shortJp: '地底セノーテ湖', subDepthRange: [-120, -340] },
+  { index: 158, id: 'sub_basalt_column_vault',     kind: 'sub_basalt_column_vault',     category: 'subterranean', isNewV7: true, nameJp: '地底柱状節理溶岩大聖堂（-640m）',   shortJp: '地底柱状溶岩堂', subDepthRange: [-380, -760] },
+  { index: 159, id: 'sub_quartz_geode_cavern',     kind: 'sub_quartz_geode_cavern',     category: 'subterranean', isNewV7: true, nameJp: '深部熱水石英ジオード大空洞（-1,120m）', shortJp: '深部石英大空洞', subDepthRange: [-860, -1240] },
+  { index: 160, id: 'sub_mantle_plume_rift',       kind: 'sub_mantle_plume_rift',       category: 'subterranean', isNewV7: true, nameJp: '最深-1,500m マントル熱水深淵裂谷', shortJp: '深淵熱水裂谷',   subDepthRange: [-1250, -1500], hasHotSpring: true },
 ];
 
 // Backwards-compatible exports
-export const GEOLOGY_PROCESS_CATALOG_62 = GEOLOGY_PROCESS_CATALOG_100;
-export const GEOLOGY_BY_INDEX = new Map(GEOLOGY_PROCESS_CATALOG_100.map((g) => [g.index, g]));
-export const GEOLOGY_BY_ID = new Map(GEOLOGY_PROCESS_CATALOG_100.map((g) => [g.id, g]));
+export const GEOLOGY_PROCESS_CATALOG_100 = GEOLOGY_PROCESS_CATALOG_160;
+export const GEOLOGY_PROCESS_CATALOG_62 = GEOLOGY_PROCESS_CATALOG_160;
+export const GEOLOGY_BY_INDEX = new Map(GEOLOGY_PROCESS_CATALOG_160.map((g) => [g.index, g]));
+export const GEOLOGY_BY_ID = new Map(GEOLOGY_PROCESS_CATALOG_160.map((g) => [g.id, g]));
 
 // ============================================================================
 // CONTINUOUS GEOLOGICAL PROVINCE FIELDS (Fast LUT-backed!)
@@ -486,7 +556,80 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
   spawnSuite('karst_limestone_pavement', 5, 480, 840, 0.95, 1.25, pickWild);
   spawnSuite('rockfall_megablock_apron', 6, 560, 980, 1.10, 1.40, pickHighAlpine);
 
-  // Subterranean Deep Geological Processes (93..100 — tied to portals + organic deep crust networks!)
+  // --- D. ALL 60 BRAND-NEW V7 HIGH-REALISM PROCESSES (101..160 — 930+ Total Multi-Occurrence Formations!) ---
+  // Near-home dramatic natural landmarks showcasing v7 morphology immediately on horizon
+  addFeat('columnar_basalt_organ', 1620, 420, 480, 1.38, { angle: -0.45 });
+  addFeat('flatiron_triangular_facet', -2680, -1820, 680, 1.35, { angle: 0.62 });
+  addFeat('box_canyon_headwall', -1880, 1680, 520, 1.32, { angle: -0.85 });
+  addFeat('butte_caprock_pillar', 2840, -2140, 440, 1.30, { angle: 0.20 });
+
+  // V7 Volcanic & Igneous (101..112)
+  spawnSuite('columnar_basalt_organ', 6, 380, 680, 1.10, 1.45, pickVolcanic);
+  spawnSuite('pahoehoe_rope_sheet', 5, 520, 880, 0.95, 1.25, pickVolcanic);
+  spawnSuite('aa_clinker_badland', 5, 480, 820, 1.00, 1.30, pickVolcanic);
+  spawnSuite('volcanic_neck_plug', 6, 320, 560, 1.20, 1.55, pickVolcanic);
+  spawnSuite('radial_dike_wall', 6, 460, 820, 1.15, 1.45, pickVolcanic);
+  spawnSuite('obsidian_coulee_flow', 5, 480, 820, 1.05, 1.35, pickVolcanic);
+  spawnSuite('sinter_geyser_mound', 5, 280, 480, 0.95, 1.25, pickVolcanic);
+  spawnSuite('collapse_pit_crater', 5, 280, 480, 1.15, 1.45, pickVolcanic);
+  spawnSuite('ash_tuff_hoodoo_yard', 5, 420, 740, 1.05, 1.35, pickVolcanic);
+  spawnSuite('cinder_breached_cone', 5, 380, 660, 1.10, 1.40, pickVolcanic);
+  spawnSuite('caldera_resurgent_dome', 4, 620, 980, 1.15, 1.45, pickVolcanic, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('mud_pot_solfatara_flat', 5, 320, 560, 0.95, 1.25, pickVolcanic);
+
+  // V7 Fluvial, Canyon & Waterfall (113..124)
+  spawnSuite('box_canyon_headwall', 6, 420, 760, 1.15, 1.45, pickTributary);
+  spawnSuite('stepped_cascade_chasm', 6, 360, 640, 1.10, 1.40, pickTributary);
+  spawnSuite('entrenched_gooseneck', 5, 560, 920, 1.15, 1.45, pickTributary);
+  spawnSuite('alluvial_megafan_delta', 5, 640, 1020, 0.95, 1.25, pickTributary);
+  spawnSuite('terrace_strath_bench', 6, 480, 820, 1.00, 1.30, () => pickRiverFlank(110, 460));
+  spawnSuite('plunging_amphitheater', 5, 320, 560, 1.15, 1.45, pickTributary, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('crevasse_splay_lobe', 5, 420, 720, 0.90, 1.20, () => pickRiverFlank(80, 340));
+  spawnSuite('cutbank_slipoff_bend', 6, 440, 760, 1.05, 1.35, () => pickRiverFlank(90, 360));
+  spawnSuite('braided_glaciofluvial', 5, 540, 900, 0.95, 1.25, pickHighAlpine);
+  spawnSuite('canyon_alcove_overhang', 5, 360, 620, 1.15, 1.45, pickSlopeMid);
+  spawnSuite('abandoned_waterfall_dry', 5, 320, 560, 1.10, 1.40, pickSlopeMid);
+  spawnSuite('confluence_eddy_bar', 5, 260, 440, 0.95, 1.20, () => pickRiverFlank(45, 180));
+
+  // V7 Tectonic, Structural & Alpine Cliff (125..136)
+  spawnSuite('flatiron_triangular_facet', 7, 560, 960, 1.15, 1.50, pickHighAlpine);
+  spawnSuite('monocline_flexure_ramp', 6, 620, 1020, 1.10, 1.40, pickSlopeMid);
+  spawnSuite('horst_block_massif', 6, 620, 1040, 1.15, 1.45, pickHighAlpine);
+  spawnSuite('pull_apart_rift_basin', 5, 560, 920, 1.15, 1.45, pickRift, () => ({ lakeKind: 'caldera' }));
+  spawnSuite('chevron_folded_ridges', 6, 600, 980, 1.10, 1.40, pickSlopeMid);
+  spawnSuite('domal_batholith_monolith', 6, 460, 820, 1.25, 1.55, pickHighAlpine);
+  spawnSuite('shattered_fault_gouge', 6, 560, 940, 1.10, 1.40, pickRift);
+  spawnSuite('tilted_fault_block_range', 6, 640, 1040, 1.15, 1.45, pickHighAlpine);
+  spawnSuite('breached_anticline_valley', 5, 580, 960, 1.05, 1.35, pickSlopeMid);
+  spawnSuite('step_fault_staircase', 6, 580, 980, 1.15, 1.45, pickSlopeMid);
+  spawnSuite('alpine_gendarmes_crest', 6, 460, 820, 1.20, 1.50, pickGlacialPeak);
+  spawnSuite('tectonic_sag_pond', 5, 280, 480, 1.05, 1.35, pickRift, () => ({ lakeKind: 'kettle' }));
+
+  // V7 Glacial, Periglacial & High-Alpine (137..146)
+  spawnSuite('paternoster_lake_chain', 5, 560, 920, 1.10, 1.40, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('glacial_col_transfluence', 5, 460, 780, 1.05, 1.35, pickGlacialPeak);
+  spawnSuite('trimline_ice_scoured_wall', 6, 520, 880, 1.15, 1.45, pickGlacialPeak);
+  spawnSuite('fjord_deep_trough_lake', 4, 640, 1040, 1.20, 1.50, pickGlacialPeak, () => ({ lakeKind: 'tarn' }));
+  spawnSuite('cryoplanation_summit_step', 5, 460, 780, 1.00, 1.30, pickGlacialPeak);
+  spawnSuite('blockfield_felsenmeer', 5, 480, 820, 0.95, 1.25, pickGlacialPeak);
+  spawnSuite('pingo_frost_mound', 5, 280, 480, 1.00, 1.30, pickHighAlpine);
+  spawnSuite('talus_protalus_rampart', 5, 420, 740, 1.00, 1.30, pickGlacialPeak);
+  spawnSuite('recessional_moraine_waves', 5, 520, 880, 0.95, 1.25, pickHighAlpine);
+  spawnSuite('glacial_erratic_apron', 5, 480, 820, 0.95, 1.25, pickHighAlpine);
+
+  // V7 Karst, Sandstone, Erosion, Aeolian & Wetland (147..156)
+  spawnSuite('karst_mogote_haystack', 6, 440, 760, 1.15, 1.45, pickWild);
+  spawnSuite('karst_collapse_bridge_gorge', 5, 420, 720, 1.15, 1.45, pickWild);
+  spawnSuite('sandstone_fins_labyrinth', 6, 480, 840, 1.15, 1.45, pickSlopeMid);
+  spawnSuite('butte_caprock_pillar', 6, 360, 620, 1.20, 1.50, pickSlopeMid);
+  spawnSuite('yardang_wind_scoured_keels', 5, 500, 860, 1.05, 1.35, pickWild);
+  spawnSuite('earth_pillar_demoiselles', 5, 360, 620, 1.10, 1.40, pickSlopeMid);
+  spawnSuite('alluvial_mudflat_playa', 4, 560, 920, 0.95, 1.25, pickWild);
+  spawnSuite('string_bog_aapa_mire', 5, 520, 880, 0.95, 1.25, () => ({ x: 4200 + rng() * 14500, z: -8000 + rng() * 19000 }), () => ({ lakeKind: 'bog' }));
+  spawnSuite('spring_travertine_cascade', 5, 340, 580, 1.05, 1.35, pickVolcanic);
+  spawnSuite('coastal_drowned_ria_basin', 4, 680, 1080, 1.15, 1.45, pickRift, () => ({ lakeKind: 'caldera' }));
+
+  // Subterranean Deep Geological Processes (93..100 + 157..160 — tied to portals + organic deep crust networks!)
   const subTypes = [
     'sub_karst_cenote_hall',
     'sub_phreatic_river_gorge',
@@ -496,12 +639,16 @@ function generateMultiOccurrenceFeatures100(sampleGrid) {
     'sub_mineral_crystal_vault',
     'sub_geothermal_steam_vent',
     'sub_abyssal_magma_chasm',
+    'sub_sunken_cenote_lake',
+    'sub_basalt_column_vault',
+    'sub_quartz_geode_cavern',
+    'sub_mantle_plume_rift',
   ];
   for (let si = 0; si < subTypes.length; si++) {
     const id = subTypes[si];
     const portal = SUBTERRANEAN_PORTALS[si % SUBTERRANEAN_PORTALS.length];
     addFeat(id, portal.x, portal.z, 540 + (si % 3) * 180, 1.2, { isSubterranean: true });
-    spawnSuite(id, 4, 480, 920, 1.0, 1.3, si >= 5 ? pickRift : pickWild, () => ({ isSubterranean: true }));
+    spawnSuite(id, 4, 480, 880, 1.0, 1.3, si >= 5 ? pickRift : pickWild, () => ({ isSubterranean: true }));
   }
 
   return features;
@@ -644,33 +791,70 @@ export function runContinuousGeologyEngine({
     OP_TIANKENG = 7, OP_CALDERA = 8, OP_CIRQUE = 9, OP_UTROUGH = 10, OP_HORN = 11,
     OP_BASIN = 12, OP_BADLANDS = 13, OP_LANDSLIDE = 14, OP_FUMAROLE = 15, OP_LAVA = 16,
     OP_TERRACE = 17, OP_WATERFALL = 18, OP_BRAIDED = 19, OP_DRUMLIN = 20, OP_ESKER = 21,
-    OP_ROCKGLACIER = 22, OP_SUB = 23, OP_SADDLE = 24;
+    OP_ROCKGLACIER = 22, OP_SUB = 23, OP_SADDLE = 24,
+    // V7 +14 BRAND-NEW Distinct Geomorphological Operators!
+    OP_COLUMNAR = 25, OP_VOLC_PLUG = 26, OP_BOX_CANYON = 27, OP_GOOSENECK = 28,
+    OP_FLATIRON = 29, OP_CHEVRON = 30, OP_STEP_FAULT = 31, OP_PATERNOSTER = 32,
+    OP_FINS = 33, OP_BUTTE = 34, OP_YARDANG = 35, OP_AAPA_BOG = 36,
+    OP_SINTER = 37, OP_RIA_BASIN = 38;
 
   function getOpCode(kind, isSub) {
     if (isSub) return OP_SUB;
     switch (kind) {
-      case 'sheer_dihedral_wall': case 'thrust_nappe_escarpment': case 'fault_scarp_step': case 'cuesta_ridge': return OP_CLIFF;
-      case 'granite_exfoliation_dome': return OP_DOME;
-      case 'stepped_basalt_traps': case 'volcanic_mesa': case 'ignimbrite_sheet_bench': case 'structural_bench_steps': return OP_TRAPS;
-      case 'basalt_cliff': case 'volcanic_rhyolite_spine': case 'hogback_strike_ridge': case 'knife_edge_arete': return OP_SPINE;
-      case 'slot_canyon_labyrinth': case 'v_gorge': case 'incised_meander_gorge': case 'gorge_pothole_terraces': case 'river_piracy_elbow': return OP_SLOT;
-      case 'rift_abyss_trench': case 'graben_rift_trough': return OP_RIFT;
-      case 'karst_tiankeng_shaft': case 'karst_doline': case 'karst_uvala_compound': case 'karst_blind_valley': case 'cave_grotto': return OP_TIANKENG;
-      case 'caldera_lake': case 'maar_crater_lake': case 'tuff_ring_amphitheater': case 'collapsed_caldera_rim': case 'phreatic_explosion_pit': return OP_CALDERA;
-      case 'glacial_cirque': case 'bergshrund_headwall': case 'glacial_hanging_glacier': case 'nivation_snow_hollow': return OP_CIRQUE;
-      case 'glacial_u_trough': case 'hanging_tributary_valley': return OP_UTROUGH;
-      case 'glacial_horn_peak': case 'karst_tower_fengcong': case 'granite_hoodoos': return OP_HORN;
-      case 'oxbow_cutoff_lake': case 'kettle_hole_ponds': case 'landslide_dammed_lake': case 'peat_bog': case 'natural_levee_backswamp': case 'karst_polje_flat_basin': case 'alpine_seepage_fen_terrace': return OP_BASIN;
+      case 'sheer_dihedral_wall': case 'thrust_nappe_escarpment': case 'fault_scarp_step': case 'cuesta_ridge':
+      case 'monocline_flexure_ramp': case 'tilted_fault_block_range': case 'trimline_ice_scoured_wall': return OP_CLIFF;
+      case 'granite_exfoliation_dome': case 'domal_batholith_monolith': return OP_DOME;
+      case 'stepped_basalt_traps': case 'volcanic_mesa': case 'ignimbrite_sheet_bench': case 'structural_bench_steps':
+      case 'horst_block_massif': case 'cryoplanation_summit_step': return OP_TRAPS;
+      case 'basalt_cliff': case 'volcanic_rhyolite_spine': case 'hogback_strike_ridge': case 'knife_edge_arete':
+      case 'radial_dike_wall': case 'alpine_gendarmes_crest': return OP_SPINE;
+      case 'slot_canyon_labyrinth': case 'v_gorge': case 'incised_meander_gorge': case 'gorge_pothole_terraces':
+      case 'river_piracy_elbow': case 'karst_collapse_bridge_gorge': case 'shattered_fault_gouge': return OP_SLOT;
+      case 'rift_abyss_trench': case 'graben_rift_trough': case 'breached_anticline_valley': return OP_RIFT;
+      case 'karst_tiankeng_shaft': case 'karst_doline': case 'karst_uvala_compound': case 'karst_blind_valley':
+      case 'cave_grotto': case 'collapse_pit_crater': return OP_TIANKENG;
+      case 'caldera_lake': case 'maar_crater_lake': case 'tuff_ring_amphitheater': case 'collapsed_caldera_rim':
+      case 'phreatic_explosion_pit': case 'cinder_breached_cone': case 'caldera_resurgent_dome': return OP_CALDERA;
+      case 'glacial_cirque': case 'bergshrund_headwall': case 'glacial_hanging_glacier': case 'nivation_snow_hollow':
+      case 'canyon_alcove_overhang': return OP_CIRQUE;
+      case 'glacial_u_trough': case 'hanging_tributary_valley': case 'fjord_deep_trough_lake': return OP_UTROUGH;
+      case 'glacial_horn_peak': case 'karst_tower_fengcong': case 'granite_hoodoos':
+      case 'karst_mogote_haystack': case 'ash_tuff_hoodoo_yard': case 'earth_pillar_demoiselles': return OP_HORN;
+      case 'oxbow_cutoff_lake': case 'kettle_hole_ponds': case 'landslide_dammed_lake': case 'peat_bog':
+      case 'natural_levee_backswamp': case 'karst_polje_flat_basin': case 'alpine_seepage_fen_terrace':
+      case 'tectonic_sag_pond': case 'pull_apart_rift_basin': case 'alluvial_mudflat_playa': return OP_BASIN;
       case 'badlands_rilled_gullies': case 'pyroclastic_gully_fan': case 'avalanche_chute_couloir': case 'talus_chute': return OP_BADLANDS;
-      case 'landslide_scar_hummocks': case 'rockfall_megablock_apron': case 'lahar_debris_lobe': case 'debris_flow_levee_cone': return OP_LANDSLIDE;
-      case 'fumarole_sulfur_basin': case 'travertine_onsen': return OP_FUMAROLE;
-      case 'lava_dome_extrusion': case 'scoria_cone': case 'shield_lava_apron': case 'pillow_lava_mound_field': return OP_LAVA;
-      case 'river_terraces': case 'alluvial_terrace_riser': case 'kame_terrace_bench': return OP_TERRACE;
-      case 'waterfall_multitier': case 'waterfall_veil': case 'knickpoint_rock_rapids': case 'moss_cascade_ravine': case 'spring_sapping_alcove': return OP_WATERFALL;
-      case 'braided_island': case 'braided_gravel_apron': case 'point_bar_scroll_plain': case 'outwash_sandur_plain': return OP_BRAIDED;
-      case 'drumlin_hills': case 'roche_moutonnee_knolls': case 'anticline_folded_dome': case 'pediment_inselberg_knoll': case 'syncline_perched_ridge': case 'strike_slip_shutter_ridge': return OP_DRUMLIN;
-      case 'esker_sinuous_ridge': case 'lateral_moraine_ridge': case 'terminal_moraine_arc': return OP_ESKER;
-      case 'alpine_rock_glacier': case 'solifluction_lobe_slope': case 'frost_patterned_ground': case 'karst_limestone_pavement': return OP_ROCKGLACIER;
+      case 'landslide_scar_hummocks': case 'rockfall_megablock_apron': case 'lahar_debris_lobe':
+      case 'debris_flow_levee_cone': case 'alluvial_megafan_delta': case 'crevasse_splay_lobe': return OP_LANDSLIDE;
+      case 'fumarole_sulfur_basin': case 'travertine_onsen': case 'mud_pot_solfatara_flat': return OP_FUMAROLE;
+      case 'lava_dome_extrusion': case 'scoria_cone': case 'shield_lava_apron': case 'pillow_lava_mound_field':
+      case 'pahoehoe_rope_sheet': case 'aa_clinker_badland': case 'obsidian_coulee_flow': return OP_LAVA;
+      case 'river_terraces': case 'alluvial_terrace_riser': case 'kame_terrace_bench': case 'terrace_strath_bench': return OP_TERRACE;
+      case 'waterfall_multitier': case 'waterfall_veil': case 'knickpoint_rock_rapids': case 'moss_cascade_ravine':
+      case 'spring_sapping_alcove': case 'stepped_cascade_chasm': case 'plunging_amphitheater': case 'abandoned_waterfall_dry': return OP_WATERFALL;
+      case 'braided_island': case 'braided_gravel_apron': case 'point_bar_scroll_plain': case 'outwash_sandur_plain':
+      case 'braided_glaciofluvial': case 'confluence_eddy_bar': case 'cutbank_slipoff_bend': return OP_BRAIDED;
+      case 'drumlin_hills': case 'roche_moutonnee_knolls': case 'anticline_folded_dome': case 'pediment_inselberg_knoll':
+      case 'syncline_perched_ridge': case 'strike_slip_shutter_ridge': case 'pingo_frost_mound': return OP_DRUMLIN;
+      case 'esker_sinuous_ridge': case 'lateral_moraine_ridge': case 'terminal_moraine_arc':
+      case 'talus_protalus_rampart': case 'recessional_moraine_waves': return OP_ESKER;
+      case 'alpine_rock_glacier': case 'solifluction_lobe_slope': case 'frost_patterned_ground':
+      case 'karst_limestone_pavement': case 'blockfield_felsenmeer': case 'glacial_erratic_apron': return OP_ROCKGLACIER;
+      // V7 Specialized Distinct Morphology Operators!
+      case 'columnar_basalt_organ': return OP_COLUMNAR;
+      case 'volcanic_neck_plug': return OP_VOLC_PLUG;
+      case 'box_canyon_headwall': return OP_BOX_CANYON;
+      case 'entrenched_gooseneck': return OP_GOOSENECK;
+      case 'flatiron_triangular_facet': return OP_FLATIRON;
+      case 'chevron_folded_ridges': return OP_CHEVRON;
+      case 'step_fault_staircase': return OP_STEP_FAULT;
+      case 'paternoster_lake_chain': return OP_PATERNOSTER;
+      case 'sandstone_fins_labyrinth': return OP_FINS;
+      case 'butte_caprock_pillar': return OP_BUTTE;
+      case 'yardang_wind_scoured_keels': return OP_YARDANG;
+      case 'string_bog_aapa_mire': return OP_AAPA_BOG;
+      case 'sinter_geyser_mound': case 'spring_travertine_cascade': return OP_SINTER;
+      case 'coastal_drowned_ria_basin': return OP_RIA_BASIN;
       default: return OP_SADDLE;
     }
   }
@@ -983,6 +1167,138 @@ export function runContinuousGeologyEngine({
             domWeight = env * 1.45;
             break;
           }
+          // --- V7 +14 BRAND-NEW DISTINCT MORPHOLOGY OPERATORS ---
+          case OP_COLUMNAR: {
+            // Sheer organ-pipe columnar basalt escarpment with polygonal stepped flutes
+            const side = rx + (nF - 0.5) * 0.16;
+            const u = side * 14.5;
+            const cliff = 0.5 + 0.5 * (u / (1.0 + (u < 0 ? -u : u)));
+            const flutes = Math.cos(rz * 28.0 + nF * 4.0) * 9.5 + Math.cos(rx * 22.0) * 5.0;
+            const tier = (((cliff * 2.5) | 0) * 0.4) * 0.35 + cliff * 0.65;
+            dh = ((tier - 0.38) * 185.0 + flutes * cliff) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.94 * env, 0.0, 0.0, 0.0);
+            break;
+          }
+          case OP_VOLC_PLUG: {
+            // Steep volcanic neck plug monolith with 3 radial radiating dike ribs
+            const ang = Math.atan2(rz, rx);
+            const dike = Math.pow(Math.max(0.0, Math.cos(ang * 3.0 + seed)), 6.0) * (1.0 - rClamped);
+            const core = 1.0 / (1.0 + rClamped * rClamped * 16.0);
+            dh = (core * 225.0 + dike * 82.0 + (nR - 0.4) * 24.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.92 * env, 0.0, 0.15 * env, 0.0);
+            break;
+          }
+          case OP_BOX_CANYON: {
+            // Sheer dead-end horseshoe box canyon with vertical amphitheater headwall
+            const az = rz < 0 ? 0.0 : rz;
+            const boxD = Math.sqrt(rx * rx * 2.8 + az * az * 1.2);
+            const u = (0.48 - boxD) * 15.0;
+            const cut = (0.5 + 0.5 * (u / (1.0 + (u < 0 ? -u : u)))) * smoothstep(-0.85, -0.25, rz);
+            dh = -cut * 165.0 * str * env + (1.0 - cut) * 28.0 * env;
+            addLithoTop(lithoRGBA, o4, 0.15 * env, 0.20 * env, 0.72 * cut, 0.48 * cut);
+            break;
+          }
+          case OP_GOOSENECK: {
+            // Extreme 270-degree entrenched horseshoe meander canyon with elevated central rock core
+            const loopR = Math.abs(rDist - 0.54 + (nF - 0.5) * 0.10);
+            const u = (0.14 - loopR) * 18.0;
+            const cut = (0.5 + 0.5 * (u / (1.0 + (u < 0 ? -u : u)))) * smoothstep(-0.75, -0.15, rz + 0.35);
+            const core = smoothstep(0.46, 0.20, rDist) * 36.0;
+            dh = (-cut * 152.0 + core) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.25 * env, 0.76 * cut, 0.35 * cut);
+            break;
+          }
+          case OP_FLATIRON: {
+            // Row of asymmetric tilted triangular faceted flatiron slabs along mountain flank
+            const teeth = 1.0 - Math.abs(((rz * 2.6 + 64.0) % 1.0) * 2.0 - 1.0);
+            const dip = smoothstep(-0.65, 0.12, rx) * (1.0 - smoothstep(0.12, 0.42, rx));
+            const scarp = dip * (0.45 + 0.55 * teeth);
+            dh = (scarp * 195.0 + (nR - 0.45) * 24.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.15 * scarp, 0.35 * scarp, 0.62 * scarp, 0.0);
+            break;
+          }
+          case OP_CHEVRON: {
+            // Sharp V-folded parallel chevron stratigraphic ridges
+            const vWave = Math.abs(rx) * 1.4 + rz;
+            const rib = 1.0 - Math.abs(Math.sin(vWave * 9.5 + nF * 2.2));
+            dh = (rib * rib * 112.0 - 26.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.20 * env, 0.45 * rib, 0.48 * rib, 0.0);
+            break;
+          }
+          case OP_STEP_FAULT: {
+            // Cascading 4-tier normal fault block staircase escarpments
+            const sNorm = clamp01((rx + 0.75) * 0.666);
+            const stepIdx = (sNorm * 4.0) | 0;
+            const frac = (sNorm * 4.0) - stepIdx;
+            const sharpRise = smoothstep(0.0, 0.14, frac);
+            const stair = (stepIdx + sharpRise) * 0.25;
+            dh = ((stair - 0.48) * 220.0 + (nR - 0.5) * 18.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.32 * env, 0.22 * env, 0.28 * env, 0.0);
+            break;
+          }
+          case OP_PATERNOSTER: {
+            // Stepped glacial trough housing a chain of 3 alpine tarn lake basins
+            const trough = 1.0 - smoothstep(0.15, 0.55, rx < 0 ? -rx : rx);
+            const b1 = Math.max(0.0, 1.0 - ((rz + 0.52) * (rz + 0.52) * 18.0 + rx * rx * 14.0));
+            const b2 = Math.max(0.0, 1.0 - (rz * rz * 18.0 + rx * rx * 14.0));
+            const b3 = Math.max(0.0, 1.0 - ((rz - 0.52) * (rz - 0.52) * 18.0 + rx * rx * 14.0));
+            const bowls = b1 > b2 ? (b1 > b3 ? b1 : b3) : (b2 > b3 ? b2 : b3);
+            const stepSlope = -rz * 42.0 * trough;
+            dh = (stepSlope - bowls * 48.0 - trough * 24.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.18 * env, 0.0, 0.72 * bowls);
+            if (bowls > 0.18) setWater = true;
+            break;
+          }
+          case OP_FINS: {
+            // Parallel narrow sandstone wall fins & vertical slot passages
+            const wave = Math.cos(rx * 22.0 + nF * 3.0);
+            const fin = wave > 0.15 ? Math.pow((wave - 0.15) * 1.18, 0.55) : -0.35;
+            dh = fin * 128.0 * (1.0 - rz * rz * 0.55) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.15 * env, 0.90 * env, 0.0);
+            break;
+          }
+          case OP_BUTTE: {
+            // Sheer flat-topped caprock pillar above concave talus skirt
+            const u = (0.34 - rClamped) * 20.0;
+            const cap = 0.5 + 0.5 * (u / (1.0 + (u < 0 ? -u : u)));
+            const skirt = Math.max(0.0, 1.0 - rClamped * 1.08);
+            dh = (cap * 168.0 + skirt * skirt * 58.0 + (nR - 0.5) * 14.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.35 * cap, 0.25 * cap, 0.85 * env, 0.0);
+            break;
+          }
+          case OP_YARDANG: {
+            // Wind-scoured parallel streamlined aerodynamic rock keels
+            const keel = Math.max(0.0, Math.cos(rx * 18.0 + nF * 2.4));
+            const taper = smoothstep(-0.85, -0.15, rz) * (1.0 - smoothstep(0.15, 0.90, rz));
+            dh = (keel * keel * taper * 68.0 - 12.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.25 * env, 0.84 * env, 0.0);
+            break;
+          }
+          case OP_AAPA_BOG: {
+            // Striped boreal aapa string bog: ribbed peat hummock strings & shallow water flarks
+            const band = Math.sin(rx * 26.0 + nF * 5.2);
+            dh = (band * 2.2 - 5.5) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.0, 0.0, 0.94 * env);
+            if (band < -0.10) setWater = true;
+            break;
+          }
+          case OP_SINTER: {
+            // Concentric stepped geothermal travertine/silica rimstone cascade pools
+            const poolStep = (((1.0 - rClamped) * 6.0 + nF * 0.45) | 0) * (1 / 6.0);
+            dh = (poolStep * 48.0 - 12.0) * str * env;
+            addLithoTop(lithoRGBA, o4, 0.0, 0.92 * env, 0.52 * env, 0.45 * env);
+            break;
+          }
+          case OP_RIA_BASIN: {
+            // Drowned dendritic finger-valley ria lake basin in deep rift terrain
+            const ang = Math.atan2(rz, rx);
+            const fingers = Math.pow(Math.abs(Math.sin(ang * 3.5 + nF * 3.2)), 1.6);
+            const armCut = (1.0 - smoothstep(0.15, 0.88, rClamped / (0.45 + 0.55 * fingers)));
+            dh = -armCut * 98.0 * str * env;
+            addLithoTop(lithoRGBA, o4, 0.20 * env, 0.25 * env, 0.15 * env, 0.78 * armCut);
+            if (armCut > 0.22) setWater = true;
+            break;
+          }
           default: {
             dh = isSaddle
               ? ((rx * rx - rz * rz) * 52.0 * str * env)
@@ -1043,13 +1359,14 @@ export function runContinuousGeologyEngine({
     }
   }
 
-  // Ensure every single one of the 100 processes has active coverage (guarantee 100/100!)
-  const processCellCounts = new Int32Array(101);
+  // Ensure every single one of the 160 processes has active coverage (guarantee 160/160!)
+  const TOTAL_PROCESSES = GEOLOGY_PROCESS_CATALOG_160.length;
+  const processCellCounts = new Int32Array(TOTAL_PROCESSES + 1);
   for (let i = 0; i < N; i++) {
     const k = dominantKindId[i];
-    if (k >= 1 && k <= 100) processCellCounts[k]++;
+    if (k >= 1 && k <= TOTAL_PROCESSES) processCellCounts[k]++;
   }
-  for (let k = 1; k <= 100; k++) {
+  for (let k = 1; k <= TOTAL_PROCESSES; k++) {
     if (processCellCounts[k] === 0) {
       const fMatch = features.find((ff) => ff.kindIndex === k);
       const fx = fMatch ? fMatch.x : ((k * 3137) % 44000) - 22000;
@@ -1066,7 +1383,7 @@ export function runContinuousGeologyEngine({
   }
 
   let activeProcessCount = 0;
-  for (let k = 1; k <= 100; k++) if (processCellCounts[k] > 0) activeProcessCount++;
+  for (let k = 1; k <= TOTAL_PROCESSES; k++) if (processCellCounts[k] > 0) activeProcessCount++;
 
   const featureOccurrenceCounts = {};
   for (let i = 0; i < features.length; i++) {
@@ -1124,7 +1441,7 @@ export function runContinuousGeologyEngine({
   }
 
   return {
-    catalog: GEOLOGY_PROCESS_CATALOG_100,
+    catalog: GEOLOGY_PROCESS_CATALOG_160,
     features,
     emergentWaterBasins,
     emergentVaporSites,

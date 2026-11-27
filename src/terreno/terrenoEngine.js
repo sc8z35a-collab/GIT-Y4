@@ -153,7 +153,7 @@ export function createTerrenoEngine(scene, initialTodId = 'day', renderer = null
 
   function getOrCreateMap2D(callbacks) {
     if (!map2dInstance) {
-      map2dInstance = createTerrenoMap2D(geomorph, callbacks, renderer);
+      map2dInstance = createTerrenoMap2D(geomorph, callbacks, renderer, forest);
     }
     return map2dInstance;
   }
