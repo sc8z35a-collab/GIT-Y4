@@ -314,6 +314,9 @@ function createUnifiedFoliageMaterial(geomorph, atmoUniforms, masterAtlas, realU
     attribute vec4 aTreeMeta;  // x = crownDensityScale, y = bendFlex, z = crownCenterY, w = unused
 
     uniform float uTime;
+    uniform vec3 uWeatherWind;
+    uniform vec3 uPlayerBubbleCenter;
+    uniform float uAnimBubbleHalf;
     uniform float uSwayAmp;
     uniform float uFlutterAmp;
     uniform float uIsMidImpostor;
@@ -345,18 +348,24 @@ function createUnifiedFoliageMaterial(geomorph, atmoUniforms, masterAtlas, realU
       }
 
       vec3 instOrigin = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
-      float phase = instOrigin.x * 0.13 + instOrigin.z * 0.17 + uTime * 1.48;
+      // TERRENO 9.0 Ultra-Lightweight Strict 6m × 6m × 6m Player-Bubble Dynamic Animation Gate!
+      vec3 dBub = abs(instOrigin - uPlayerBubbleCenter);
+      float in6mAnim = 1.0 - smoothstep(uAnimBubbleHalf - 0.35, uAnimBubbleHalf, max(max(dBub.x, dBub.y), dBub.z));
 
-      if (uSwayAmp > 0.0001) {
-        float hFactor = clamp(localPos.y, 0.0, 1.3);
-        float gust = sin(phase) * 0.65 + sin(phase * 2.25 + 1.4) * 0.35;
-        localPos.x += gust * uSwayAmp * hFactor * hFactor;
-        localPos.z += cos(phase * 0.82) * uSwayAmp * 0.65 * hFactor * hFactor;
-      }
-      if (uFlutterAmp > 0.0001) {
-        float flPhase = uTime * 3.8 + (localPos.x * 19.0 + localPos.z * 23.0) + instOrigin.x * 0.5;
-        localPos.y += sin(flPhase) * uFlutterAmp * aMeta.y;
-        localPos.x += cos(flPhase * 1.15) * uFlutterAmp * 0.7 * aMeta.y;
+      if (in6mAnim > 0.005) {
+        float windMag = clamp(0.65 + uWeatherWind.y * 1.45, 0.65, 3.6);
+        float phase = instOrigin.x * 0.13 + instOrigin.z * 0.17 + uTime * (1.42 + uWeatherWind.y * 0.85);
+        if (uSwayAmp > 0.0001) {
+          float hFactor = clamp(localPos.y, 0.0, 1.3);
+          float gust = sin(phase) * 0.65 + sin(phase * 2.25 + 1.4) * 0.35;
+          localPos.x += (gust * uSwayAmp * windMag + uWeatherWind.x * uSwayAmp * 0.06) * hFactor * hFactor * in6mAnim;
+          localPos.z += (cos(phase * 0.82) * uSwayAmp * 0.65 * windMag + uWeatherWind.z * uSwayAmp * 0.06) * hFactor * hFactor * in6mAnim;
+        }
+        if (uFlutterAmp > 0.0001) {
+          float flPhase = uTime * (3.6 + uWeatherWind.y * 1.4) + (localPos.x * 19.0 + localPos.z * 23.0) + instOrigin.x * 0.5;
+          localPos.y += sin(flPhase) * uFlutterAmp * windMag * aMeta.y * in6mAnim;
+          localPos.x += cos(flPhase * 1.15) * uFlutterAmp * 0.7 * windMag * aMeta.y * in6mAnim;
+        }
       }
 
       vec4 wp = modelMatrix * instanceMatrix * vec4(localPos, 1.0);
@@ -432,12 +441,18 @@ function createUnifiedFoliageMaterial(geomorph, atmoUniforms, masterAtlas, realU
 
       vec4 tex = texture2D(uFoliageAtlas, vUv);
       float alphaCut = uIsMidImpostor > 0.5
-        ? 0.20
-        : mix(0.42, 0.22, smoothstep(14.0, 120.0, vCamDist));
-      if (tex.a < alphaCut) discard;
+        ? 0.22
+        : mix(0.44, 0.24, smoothstep(16.0, 125.0, vCamDist));
+      // Sub-pixel derivative-sharpened organic leaf margin (ZERO jagged pixel blocks at close range!)
+      float fw = max(fwidth(tex.a), 0.04);
+      float microEdge = (sin(vUv.x * 520.0 + vUv.y * 340.0) * cos(vUv.y * 480.0 - vUv.x * 290.0)) * 0.045 * (1.0 - smoothstep(4.0, 22.0, vCamDist));
+      float sharpA = clamp((tex.a + microEdge - alphaCut) / fw + 0.5, 0.0, 1.0);
+      if (sharpA < 0.48) discard;
 
       vec3 texLinear = tex.rgb * tex.rgb;
-      vec3 albedo = texLinear * vColor * vAo;
+      // Subtle high-frequency cellular leaf-cuticle variation when inspected up close (< 18m)
+      float closeDetail = 1.0 + (sin(vUv.x * 680.0) * cos(vUv.y * 680.0)) * 0.045 * (1.0 - smoothstep(3.0, 18.0, vCamDist));
+      vec3 albedo = texLinear * vColor * vAo * closeDetail;
 
       vec3 N = normalize(vWorldNormal);
       vec3 sunDir = normalize(uSunDir);
@@ -457,11 +472,13 @@ function createUnifiedFoliageMaterial(geomorph, atmoUniforms, masterAtlas, realU
       float ndl = max(0.0, (dot(N, sunDir) + 0.36) / 1.36);
       vec3 direct = uSunColor * (uSunIntensity * ndl * horizonShadow * komorebi * 0.92);
 
-      // Subtle warm sunlit leaf translucency (fast cubic multiply instead of pow!)
+      // Subtle waxy leaf cuticle specular highlight + warm sunlit leaf translucency
+      vec3 H = normalize(sunDir + V);
+      float leafSpec = pow(max(0.0, dot(N, H)), 18.0) * 0.14 * horizonShadow * komorebi;
       float bs = max(0.0, dot(-V, sunDir));
       float backScatter = (bs * bs * bs) * (0.35 + 0.65 * clamp(vAo, 0.2, 1.2));
       vec3 sssTint = mix(vec3(0.58, 0.90, 0.28), vec3(1.05, 0.58, 0.24), clamp((vColor.r - vColor.g) * 3.5, 0.0, 1.0));
-      direct += uSunColor * sssTint * (backScatter * uSunIntensity * horizonShadow * komorebi * uSssStrength);
+      direct += uSunColor * (sssTint * (backScatter * uSunIntensity * horizonShadow * komorebi * uSssStrength) + vec3(leafSpec));
 
       float hemiT = N.y * 0.5 + 0.5;
       vec3 ambient = mix(uHemiGroundColor, uHemiSkyColor, hemiT) * (uHemiIntensity * (0.44 + 0.56 * skyViewAO) * 0.98);
@@ -858,13 +875,13 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
 
       const y = getGroundY(wx, wz);
       const elevASL = TERRENO_WORLD.baseElevationASL + y;
-      if (elevASL > 2050 || elevASL < -180) continue;
+      if (elevASL > 2550 || elevASL < -1250) continue;
 
       const nrm = geomorph.getNormalAt(wx, wz, 2.2);
       if (nrm.slope > 0.64) continue;
 
       // Natural density thinning near alpine treeline & rocky ledges
-      const treelineKeep = elevASL > 1750 ? Math.max(0.18, 1.0 - (elevASL - 1750) / 340.0) : 1.0;
+      const treelineKeep = elevASL > 2150 ? Math.max(0.18, 1.0 - (elevASL - 2150) / 420.0) : 1.0;
       const soilKeep = Math.min(1.0, (eco.soilDepth - 0.20) * 2.4);
       if (rng() > treelineKeep * soilKeep * 0.92) continue;
 
@@ -891,7 +908,7 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
       else if (stratumRoll < 0.82) stratumMul = 0.52 + rng() * 0.28; // 26% Sub-Canopy
       else stratumMul = 0.28 + rng() * 0.22;                         // 18% Saplings / Understory
 
-      const alpineShrink = elevASL > 1600 ? Math.max(0.32, 1.0 - (elevASL - 1600) / 560.0) : 1.0;
+      const alpineShrink = elevASL > 1950 ? Math.max(0.32, 1.0 - (elevASL - 1950) / 680.0) : 1.0;
       let h = (spec.minH + rng() * (spec.maxH - spec.minH)) * stratumMul * alpineShrink;
       if (inVista) h *= 0.52;
       h = Math.max(2.8, Math.min(58.0, h));
@@ -959,7 +976,7 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
       const rv = evalMainRiver(wz);
       const y = getGroundY(wx, wz);
       const elevASL = TERRENO_WORLD.baseElevationASL + y;
-      if (elevASL > 1650 || elevASL < -120) continue;
+      if (elevASL > 2150 || elevASL < -1250) continue;
       if (Math.abs(wx - rv.x) < rv.halfWidth * 1.14 || y < rv.waterY + 0.30) continue;
       const nrm = geomorph.getNormalAt(wx, wz, 1.5);
       if (nrm.slope > 0.62) continue;
@@ -1124,12 +1141,12 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
       const rv = evalMainRiver(wz);
       const y = getGroundY(wx, wz);
       const elevASL = TERRENO_WORLD.baseElevationASL + y;
-      if (elevASL > 1880 || elevASL < -120) continue;
+      if (elevASL > 2380 || elevASL < -1250) continue;
       if (Math.abs(wx - rv.x) < rv.halfWidth * 1.12 || y < rv.waterY + 0.16) continue;
       const nrm = geomorph.getNormalAt(wx, wz, 1.2);
       if (nrm.slope > 0.60) continue;
 
-      const isSasa = i >= 165 && elevASL < 1550;
+      const isSasa = i >= 165 && elevASL < 1920;
       const inYard = isInsideCompoundClearing(wx, wz, 1.5);
       if (isSasa && inYard) continue;
 
@@ -1191,7 +1208,7 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
     const rng = makeTileRng(mx, mz, 4461);
     // 14 generously-sized overlapping plush pillowy canopy cloud clusters per 160m×160m tile!
     // Each cluster is 40m–68m wide -> >100% velvety overlapping forest cover on wooded mountains,
-    // while bare rock cliffs (`soilDepth < 0.22`) and alpine summits (`> 2,050m`) stay crisply exposed!
+    // while bare rock cliffs (`soilDepth < 0.22`) and alpine summits (`> 2,520m`) stay crisply exposed!
     for (let k = 0; k < 14; k++) {
       const wx = tileX0 + rng() * MID_TILE_SIZE;
       const wz = tileZ0 + rng() * MID_TILE_SIZE;
@@ -1207,7 +1224,7 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
 
       const y = getGroundY(wx, wz);
       const elevASL = TERRENO_WORLD.baseElevationASL + y;
-      if (elevASL > 2020 || elevASL < -150) continue;
+      if (elevASL > 2520 || elevASL < -1250) continue;
 
       const nrm = geomorph.getNormalAt(wx, wz, 5.0);
       if (nrm.slope > 0.62) continue;
@@ -1216,7 +1233,7 @@ export function createTerrenoForest(geomorph, atmoUniforms, realEngine = null) {
       if (spIdx < 0) continue;
       const spec = ALL_TREE_SPECIES_28[spIdx];
 
-      const alpineShrink = elevASL > 1650 ? Math.max(0.42, 1.0 - (elevASL - 1650) / 480.0) : 1.0;
+      const alpineShrink = elevASL > 2020 ? Math.max(0.42, 1.0 - (elevASL - 2020) / 560.0) : 1.0;
       const h = (24.0 + rng() * 20.0) * alpineShrink;
       // Wide lush pillowy canopy dome cluster!
       const wS = (38.0 + rng() * 30.0) * alpineShrink;

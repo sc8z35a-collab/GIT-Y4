@@ -25,6 +25,8 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
       uWorldSize: { value: new THREE.Vector2(TERRENO_WORLD.width, TERRENO_WORLD.depth) },
       uAtlasSize: { value: new THREE.Vector2(geomorph.W, geomorph.H) },
       uTime: atmoUniforms.uTime,
+      uPlayerBubbleCenter: atmoUniforms.uPlayerBubbleCenter,
+      uAnimBubbleHalf: atmoUniforms.uAnimBubbleHalf,
       uSunDir: atmoUniforms.uSunDir,
       uSunColor: atmoUniforms.uSunColor,
       uDeepCol: { value: deepCol },
@@ -40,10 +42,14 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
         varying float vIsPerspective;
       #endif
       uniform float uTime;
+      uniform vec3 uPlayerBubbleCenter;
+      uniform float uAnimBubbleHalf;
       void main() {
         vUv = uv;
         vec4 wp = modelMatrix * vec4(position, 1.0);
-        wp.y += sin(dot(wp.xz, vec2(0.24, 0.17)) + uTime * 1.45) * 0.018;
+        vec3 dBub = abs(wp.xyz - uPlayerBubbleCenter);
+        float in6m = 1.0 - smoothstep(uAnimBubbleHalf - 0.35, uAnimBubbleHalf, max(max(dBub.x, dBub.y), dBub.z));
+        wp.y += sin(dot(wp.xz, vec2(0.24, 0.17)) + uTime * 1.45 * in6m) * 0.018 * in6m;
         vWorldPos = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
         #ifdef USE_LOGDEPTHBUF
@@ -65,6 +71,8 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
       uniform vec2 uWorldSize;
       uniform vec2 uAtlasSize;
       uniform float uTime;
+      uniform vec3 uPlayerBubbleCenter;
+      uniform float uAnimBubbleHalf;
       uniform vec3 uSunDir;
       uniform vec3 uSunColor;
       uniform vec3 uDeepCol;
@@ -80,16 +88,19 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
         if (suppressFactor >= 0.999) return 0.0;
         vec4 m0 = texture2D(uMicroNoiseTex, (xz * 0.024 + 0.5) / 256.0);
         float micro = (m0.r - 0.5) * 1.15 + (m0.g - 0.5) * 0.52 + (m0.b - 0.5) * 0.22;
-        if (macroSlope > 0.24) {
-          float cliffT = clamp((macroSlope - 0.24) / 0.58, 0.0, 1.0);
-          float cliffSq = cliffT * cliffT;
+        if (macroSlope > 0.34) {
+          float cliffT = clamp((macroSlope - 0.34) * 1.66666667, 0.0, 1.0);
+          float cliffSmooth = cliffT * cliffT * (3.0 - 2.0 * cliffT);
           vec4 m1 = texture2D(uMicroNoiseTex, (xz * 0.056 + vec2(7.4, -3.9) + 0.5) / 256.0);
-          float ridge1 = 1.0 - abs(m1.r * 2.0 - 1.0);
-          float ridge2 = 1.0 - abs(m1.b * 2.0 - 1.0);
-          float crag = (ridge1 * ridge1 - 0.42) * 5.8 + (ridge2 * ridge2 - 0.42) * 1.95;
-          float sp = fract(macroH * 0.11 + (m0.r - 0.5) * 1.35);
-          float tri = 1.0 - abs(sp * 4.0 - 2.0);
-          micro += (crag + (tri * tri * tri) * 2.85) * cliffSq;
+          float d1 = m1.r * 2.0 - 1.0;
+          float ridge1 = 1.0 - d1 * d1;
+          float d2 = m1.b * 2.0 - 1.0;
+          float ridge2 = 1.0 - d2 * d2;
+          float crag = (ridge1 * ridge1 - 0.50) * 6.0 + (ridge2 * ridge2 - 0.50) * 2.1;
+          float sp = fract(macroH * 0.105 + (m0.r - 0.5) * 1.35);
+          float uTri = 1.0 - abs(sp * 2.0 - 1.0);
+          float sWave = uTri * uTri * (3.0 - 2.0 * uTri);
+          micro += (crag + (sWave * sWave * 2.0 - 0.65) * 2.35) * cliffSmooth;
         }
         return micro * (1.0 - suppressFactor);
       }
@@ -119,11 +130,15 @@ function createTerrainClippedBasinWaterMaterial(geomorph, atmoUniforms, opts = {
         float depth = vWorldPos.y - terrainY;
         if (depth <= 0.01) discard;
 
+        vec3 dBub = abs(vWorldPos - uPlayerBubbleCenter);
+        float in6m = 1.0 - smoothstep(uAnimBubbleHalf - 0.35, uAnimBubbleHalf, max(max(dBub.x, dBub.y), dBub.z));
+        float animT = uTime * in6m;
+
         vec2 wp2 = vWorldPos.xz;
-        float w1 = sin(dot(wp2, vec2(0.53, 0.31)) + uTime * 1.75);
-        float w2 = sin(dot(wp2, vec2(-0.41, 0.77)) - uTime * 1.42 + w1 * 0.42);
-        float w3 = sin(dot(wp2, vec2(0.97, -0.63)) + uTime * 2.35 + w2 * 0.32);
-        float fineRip = (sampleMicroLut(wp2 * 0.85 + vec2(uTime * 0.35, -uTime * 0.28)) - 0.5) * 0.04;
+        float w1 = sin(dot(wp2, vec2(0.53, 0.31)) + animT * 1.75);
+        float w2 = sin(dot(wp2, vec2(-0.41, 0.77)) - animT * 1.42 + w1 * 0.42);
+        float w3 = sin(dot(wp2, vec2(0.97, -0.63)) + animT * 2.35 + w2 * 0.32);
+        float fineRip = (sampleMicroLut(wp2 * 0.85 + vec2(animT * 0.35, -animT * 0.28)) - 0.5) * 0.04;
         vec3 nrm = normalize(vec3(
           (w1 * 0.45 + w2 * 0.35 + w3 * 0.20) * 0.045 + fineRip,
           1.0,

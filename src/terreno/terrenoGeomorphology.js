@@ -110,9 +110,10 @@ export function sampleSharedMicroLut(x, z) {
 }
 
 /**
- * 1:1 CPU/GPU Bit-Identical Rugged Cliff-Fracture, Rock-Strata & Forest Micro-Relief!
- *   - Ultra-fast 1-tap pre-combined bilinear loam on gentle slopes (macroSlope <= 0.24)
- *   - 2-tap angular rock crags + branchless zero-sin periodic strata benches on steep cliffs!
+ * 1:1 CPU/GPU Bit-Identical Rugged Cliff-Fracture, Rock-Strata & Forest Micro-Relief (TERRENO 8.0 C1-Smooth)!
+ *   - Ultra-fast 1-tap pre-combined bilinear loam on gentle slopes (macroSlope <= 0.22)
+ *   - C1-smooth rounded-crag ridges & branchless cubic periodic strata benches on steep cliffs
+ *     (eliminates micro-kink slope flips during diagonal walking while keeping dramatic rocky ledges!)
  */
 export function evalSharedCliffAndStrataRelief(wx, wz, macroSlope, suppressFactor, macroH = 0.0) {
   if (suppressFactor >= 0.999) return 0.0;
@@ -135,11 +136,11 @@ export function evalSharedCliffAndStrataRelief(wx, wz, macroSlope, suppressFacto
   const la = MICRO_LOAM_F32[i00], lb = MICRO_LOAM_F32[i10], lc = MICRO_LOAM_F32[i01], ld = MICRO_LOAM_F32[i11];
   let micro = la + (lb - la) * fx0 + (lc - la) * fz0 + (la - lb - lc + ld) * fxz0;
 
-  // Rugged non-smooth cliff fracture & rock strata ledges on slopes/cliffs!
-  if (macroSlope > 0.24) {
-    let cliffT = (macroSlope - 0.24) * 1.72413793; // / 0.58
+  // Rugged yet C1-continuous cliff fracture & rock strata ledges on rocky cliffs/slopes (> 19 deg)!
+  if (macroSlope > 0.34) {
+    let cliffT = (macroSlope - 0.34) * 1.66666667; // / 0.60
     if (cliffT > 1.0) cliffT = 1.0;
-    const cliffSq = cliffT * cliffT;
+    const cliffSmooth = cliffT * cliffT * (3.0 - 2.0 * cliffT);
 
     const ra = MICRO_R_F32[i00], rb = MICRO_R_F32[i10], rc = MICRO_R_F32[i01], rd = MICRO_R_F32[i11];
     const m0r = ra + (rb - ra) * fx0 + (rc - ra) * fz0 + (ra - rb - rc + rd) * fxz0;
@@ -160,19 +161,21 @@ export function evalSharedCliffAndStrataRelief(wx, wz, macroSlope, suppressFacto
     const b1a = MICRO_B_F32[c00], b1b = MICRO_B_F32[c10], b1c = MICRO_B_F32[c01], b1d = MICRO_B_F32[c11];
     const m1b = b1a + (b1b - b1a) * fx1 + (b1c - b1a) * fz1 + (b1a - b1b - b1c + b1d) * fxz1;
 
+    // Zero-sqrt C-infinity smooth polynomial ridges (0 derivative at peak & trough -> zero walking snagging!)
     const d1 = m1r * 2.0 - 1.0;
-    const ridge1 = 1.0 - (d1 < 0.0 ? -d1 : d1);
+    const ridge1 = 1.0 - d1 * d1;
     const d2 = m1b * 2.0 - 1.0;
-    const ridge2 = 1.0 - (d2 < 0.0 ? -d2 : d2);
-    const crag = (ridge1 * ridge1 - 0.42) * 5.8 + (ridge2 * ridge2 - 0.42) * 1.95;
+    const ridge2 = 1.0 - d2 * d2;
+    const crag = (ridge1 * ridge1 - 0.50) * 6.0 + (ridge2 * ridge2 - 0.50) * 2.1;
 
-    // Zero-sin branchless periodic strata bench (1:1 identical to GPU fract/tri!)
-    const phase = macroH * 0.11 + (m0r - 0.5) * 1.35 + 65536.0;
+    // Zero-sin branchless C1-smooth periodic strata bench (1:1 bit-identical to GPU!)
+    const phase = macroH * 0.105 + (m0r - 0.5) * 1.35 + 65536.0;
     const sp = phase - (phase | 0);
-    const td = sp * 4.0 - 2.0;
-    const tri = 1.0 - (td < 0.0 ? -td : td);
-    const bench = (tri * tri * tri) * 2.85;
-    micro += (crag + bench) * cliffSq;
+    const du = sp * 2.0 - 1.0;
+    const uTri = 1.0 - (du < 0.0 ? -du : du);
+    const sWave = uTri * uTri * (3.0 - 2.0 * uTri);
+    const bench = (sWave * sWave * 2.0 - 0.65) * 2.35;
+    micro += (crag + bench) * cliffSmooth;
   }
 
   return micro * (1.0 - suppressFactor);
@@ -181,6 +184,103 @@ export function evalSharedCliffAndStrataRelief(wx, wz, macroSlope, suppressFacto
 // Backwards-compatible alias
 export function evalSharedMicroRelief(wx, wz, suppressFactor, macroSlope = 0.0, macroH = 0.0) {
   return evalSharedCliffAndStrataRelief(wx, wz, macroSlope, suppressFactor, macroH);
+}
+
+// ============================================================================
+// TERRENO 8.0 — 24 DISTINCT NAMED ECOLOGICAL BIOMES (-2,000 m .. +4,100 m ASL)
+// ============================================================================
+export const BIOME_CATALOG_24 = [
+  { id: 'abyssal_brine_trench',      index: 1,  zone: 'abyssal',    nameJp: '深淵塩水海溝底帯' },
+  { id: 'abyssal_hydrothermal_rift', index: 2,  zone: 'abyssal',    nameJp: '深淵熱水・硫気地溝帯' },
+  { id: 'sunken_obsidian_chasm',     index: 3,  zone: 'abyssal',    nameJp: '暗黒玄武岩・沈降裂谷帯' },
+  { id: 'sunken_karst_cenote_belt',  index: 4,  zone: 'abyssal',    nameJp: '深渓カルスト天坑・鍾乳帯' },
+  { id: 'abyssal_cloud_fern_gorge',  index: 5,  zone: 'abyssal',    nameJp: '深谷雲霧・巨大シダ原生林帯' },
+  { id: 'subterranean_mist_canyon',  index: 6,  zone: 'lowland',    nameJp: '地下霧渓谷・苔むす照葉林帯' },
+  { id: 'alluvial_emerald_riparian', index: 7,  zone: 'riparian',   nameJp: '清流河畔・ヤナギ礫原帯' },
+  { id: 'misty_peat_mire',           index: 8,  zone: 'wetland',    nameJp: '東水郷・高層泥炭湿原帯' },
+  { id: 'warm_laurel_rainforest',    index: 9,  zone: 'lowland',    nameJp: '南部暖温帯・照葉樹原生林' },
+  { id: 'kurosugi_oldgrowth_valley', index: 10, zone: 'montane',    nameJp: '黒杉・原生巨樹渓谷林' },
+  { id: 'redrock_canyon_scrub',      index: 11, zone: 'arid_rock',  nameJp: '朱岩キャニオン・乾燥低木帯' },
+  { id: 'susuki_highland_steppe',    index: 12, zone: 'meadow',     nameJp: '南西ススキ・草原高原帯' },
+  { id: 'karst_limestone_maquis',    index: 13, zone: 'karst',      nameJp: '石灰岩ドリーネ・カレンフェルト帯' },
+  { id: 'basalt_lava_heath',         index: 14, zone: 'volcanic',   nameJp: '溶岩台地・玄武岩荒原帯' },
+  { id: 'montane_beech_primeval',    index: 15, zone: 'montane',    nameJp: '山地帯・ブナ＆ミズナラ原生林' },
+  { id: 'akama_redpine_ridge',       index: 16, zone: 'montane',    nameJp: '乾燥岩尾根・アカマツ＆ヒノキ林' },
+  { id: 'birch_cloud_woodland',      index: 17, zone: 'subalpine',  nameJp: '北部高原・ダケカンバ＆白樺帯' },
+  { id: 'subalpine_fir_taiga',       index: 18, zone: 'subalpine',  nameJp: '亜高山帯・シラビソ針葉樹タイガ' },
+  { id: 'subalpine_moor_tarns',      index: 19, zone: 'wetland',    nameJp: '亜高山・池塘＆高山湿原帯' },
+  { id: 'krummholz_dwarf_pine',      index: 20, zone: 'timberline', nameJp: '森林限界・ハイマツ這松帯' },
+  { id: 'alpine_flower_tundra',      index: 21, zone: 'alpine',     nameJp: '高山お花畑・ツンドラ草原帯' },
+  { id: 'alpine_granite_scree',      index: 22, zone: 'alpine',     nameJp: '高山岩稜・ガレ場＆断崖帯' },
+  { id: 'nival_snowfield_glacier',   index: 23, zone: 'nival',      nameJp: '氷雪・万年雪カール氷河帯' },
+  { id: 'extreme_summit_serac',      index: 24, zone: 'nival',      nameJp: '4000m級・極高氷壁＆セラック尖峰帯' },
+];
+
+export function evalBiomeAt(asl, slope, moisture, litho, regions, inRiver = false) {
+  const lVolc = litho ? litho.volcanic : 0.0;
+  const lLime = litho ? litho.limestone : 0.0;
+  const lOchre = litho ? litho.ochre : 0.0;
+  const lPeat = litho ? litho.peat : 0.0;
+
+  if (inRiver) return BIOME_CATALOG_24[6]; // alluvial_emerald_riparian
+
+  // 1. Extreme High Alpine & Glaciated Nival Belts (+2,120 m .. +4,000 m ASL)
+  if (asl >= 3420) return BIOME_CATALOG_24[23]; // extreme_summit_serac
+  if (asl >= 2860) return slope > 0.92 ? BIOME_CATALOG_24[21] : BIOME_CATALOG_24[22]; // nival_snowfield_glacier / granite scree
+  if (asl >= 2440) {
+    if (slope > 0.54 || lVolc > 0.45 || lOchre > 0.45) return BIOME_CATALOG_24[21]; // alpine_granite_scree
+    return BIOME_CATALOG_24[20]; // alpine_flower_tundra
+  }
+  if (asl >= 2120) {
+    if (slope > 0.68) return BIOME_CATALOG_24[21]; // alpine_granite_scree
+    return BIOME_CATALOG_24[19]; // krummholz_dwarf_pine
+  }
+
+  // 2. Deep Sunken Abyssal & Rift Chasm Biomes (-800 m .. -60 m ASL)
+  if (asl <= -540) {
+    if (lVolc > 0.30 || lOchre > 0.32) return BIOME_CATALOG_24[1]; // abyssal_hydrothermal_rift
+    return BIOME_CATALOG_24[0]; // abyssal_brine_trench
+  }
+  if (asl <= -180) {
+    if (lVolc > 0.42 || (slope > 0.72 && lLime < 0.35)) return BIOME_CATALOG_24[2]; // sunken_obsidian_chasm
+    if (lLime > 0.40) return BIOME_CATALOG_24[3]; // sunken_karst_cenote_belt
+    if (lOchre > 0.44 && asl < -380) return BIOME_CATALOG_24[1]; // abyssal_hydrothermal_rift
+    return BIOME_CATALOG_24[4]; // abyssal_cloud_fern_gorge
+  }
+  if (asl <= 60) {
+    if (lLime > 0.46) return BIOME_CATALOG_24[3];
+    if (lPeat > 0.52 && slope < 0.28) return BIOME_CATALOG_24[7]; // misty_peat_mire
+    return BIOME_CATALOG_24[5]; // subterranean_mist_canyon
+  }
+
+  // 3. Subalpine Belts (+1,460 m .. +2,140 m ASL)
+  if (asl >= 1460) {
+    if (lPeat > 0.42 && slope < 0.26) return BIOME_CATALOG_24[18]; // subalpine_moor_tarns
+    if (lVolc > 0.58 && slope > 0.45) return BIOME_CATALOG_24[13]; // basalt_lava_heath
+    if (asl >= 1680 || (regions && regions.hills > 0.35)) return BIOME_CATALOG_24[17]; // subalpine_fir_taiga
+    return BIOME_CATALOG_24[16]; // birch_cloud_woodland
+  }
+
+  // 4. Lithology-Dominant & Wetland Specialist Biomes (+60 m .. +1,460 m ASL)
+  if (lPeat > 0.48 && slope < 0.25 && asl < 920) return BIOME_CATALOG_24[7]; // misty_peat_mire
+  if (lOchre > 0.50 && moisture < 0.52) return BIOME_CATALOG_24[10]; // redrock_canyon_scrub
+  if (lLime > 0.50) return BIOME_CATALOG_24[12]; // karst_limestone_maquis
+  if (lVolc > 0.54) return BIOME_CATALOG_24[13]; // basalt_lava_heath
+
+  // 5. Cool & Warm Montane Regional Forest Biomes (+60 m .. +1,460 m ASL)
+  if (asl >= 1120) {
+    if (regions && regions.plateau > 0.34) return BIOME_CATALOG_24[16]; // birch_cloud_woodland
+    return moisture < 0.38 ? BIOME_CATALOG_24[15] : BIOME_CATALOG_24[14]; // akama_redpine_ridge / montane_beech_primeval
+  }
+  if (asl >= 680) {
+    if (regions && regions.meadow > 0.42 && slope < 0.36) return BIOME_CATALOG_24[11]; // susuki_highland_steppe
+    if (moisture < 0.36 || slope > 0.52) return BIOME_CATALOG_24[15]; // akama_redpine_ridge
+    return BIOME_CATALOG_24[14]; // montane_beech_primeval
+  }
+  if (regions && regions.southPlain > 0.40) return BIOME_CATALOG_24[8]; // warm_laurel_rainforest
+  if (regions && regions.meadow > 0.44 && moisture < 0.48) return BIOME_CATALOG_24[11]; // susuki_highland_steppe
+  if (regions && regions.wetland > 0.48 && slope < 0.22) return BIOME_CATALOG_24[7]; // misty_peat_mire
+  return BIOME_CATALOG_24[9]; // kurosugi_oldgrowth_valley
 }
 
 export function evalSouthRectWeight(wx, wz) {
@@ -451,7 +551,7 @@ function computeFastHorizonAndSoilEcoAtlases(heights, lithoRGBA, flowArea512, W,
       if (nearCompZ) {
         const dxC = wx - compX;
         const d2 = dxC * dxC + dzComp * dzComp;
-        if (d2 < 2304.0) padMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, 46.0, Math.sqrt(d2));
+        if (d2 < 3136.0) padMask = 1.0 - quinticSmoothstep(TERRENO_WORLD.compoundFlatRadius, TERRENO_WORLD.compoundBlendRadius, Math.sqrt(d2));
       }
       if (nearVillZ) {
         const dxV = wx - villX;
@@ -469,9 +569,9 @@ function computeFastHorizonAndSoilEcoAtlases(heights, lithoRGBA, flowArea512, W,
     }
   }
 
-  // 3B. 4× Faster 512×512 Soil-Climate Phytosociology + Horizon Shadow Atlas (GPU bilinearly filtered!)
-  const shiftHA = Math.round(Math.log2(HW / AOW)); // 2 for 512/128
-  const shiftHF = Math.round(Math.log2(HW / 256)); // 1 for 512/256
+  // 3B. 4× Faster Soil-Climate Phytosociology + Horizon Shadow Atlas (GPU bilinearly filtered!)
+  const shiftHA = Math.round(Math.log2(HW / AOW));
+  const shiftHF = Math.round(Math.log2(HW / 256));
   for (let hz = 0; hz < HH; hz++) {
     const iz = hz << 1;
     const wz = minZ + iz * invHm1 * worldD;
@@ -479,7 +579,7 @@ function computeFastHorizonAndSoilEcoAtlases(heights, lithoRGBA, flowArea512, W,
     const rivHW = riverRowHW[iz];
     const dzComp = wz - compZ;
     const dzVill = wz - villZ;
-    const nearCompZ = dzComp > -48.0 && dzComp < 48.0;
+    const nearCompZ = dzComp > -58.0 && dzComp < 58.0;
     const nearVillZ = dzVill > -76.0 && dzVill < 76.0;
     const hRow = hz * HW;
     const srcRow = iz * W;
@@ -505,10 +605,13 @@ function computeFastHorizonAndSoilEcoAtlases(heights, lithoRGBA, flowArea512, W,
       const lVolc = lithoRGBA[so4] * (1 / 255);
       const lLime = lithoRGBA[so4 + 1] * (1 / 255);
       const lOchre = lithoRGBA[so4 + 2] * (1 / 255);
-      const lPeat = lithoRGBA[so4 + 3] * (1 / 255);
 
       const slopeSoil = 1.0 - quinticSmoothstep(0.28, 0.58, slope);
-      const altSoil = 1.0 - quinticSmoothstep(1680.0, 2060.0, asl);
+      // TERRENO 9.0 (-800 m .. +4,000 m): Lush forests up to +2,450 m timberline & inside sheltered -680 m cloud-fern ravines;
+      // strictly barren above +2,540 m alpine rock/glaciers and below -710 m abyssal salt/obsidian trench floor!
+      const altSoilHigh = 1.0 - quinticSmoothstep(2160.0, 2540.0, asl);
+      const altSoilLow = quinticSmoothstep(-730.0, -560.0, asl);
+      const altSoil = altSoilHigh * altSoilLow;
       const rockPenA = lVolc * 0.92;
       const rockPenB = lOchre * 0.95;
       const rockPenC = lLime > 0.35 ? (lLime - 0.35) * 0.75 : 0.0;
@@ -518,7 +621,8 @@ function computeFastHorizonAndSoilEcoAtlases(heights, lithoRGBA, flowArea512, W,
       const soilDepth = clamp01(slopeSoil * altSoil * rivSoilClear * (1.0 - rockPenalty * 0.88) * (0.78 + 0.22 * (1.0 - curv)));
 
       const southSunBias = clamp01(nz * 0.5 + 0.5);
-      const tempNorm = clamp01(1.0 - (asl + 450.0) * (1 / 2850.0) + (southSunBias - 0.5) * 0.08);
+      // Full 4,800 m lapse-rate normalization across [-800 m .. +4,000 m]
+      const tempNorm = clamp01(1.0 - (asl + 800.0) * (1.0 / 4800.0) + (southSunBias - 0.5) * 0.07);
       const moisture = geoRGBA[so4 + 1];
 
       soilEcoRGBA[ho4] = (soilDepth * 255.0 + 0.5) | 0;
@@ -769,7 +873,7 @@ function bakeTerrenoAtlasesCore(W, H) {
     };
   });
 
-  // PASS 1A: 256×256 Asymmetric Orogenic Chain + Macro-Relief Envelope
+  // PASS 1A: 256×256 Asymmetric Orogenic Chains + High-Contrast Multi-Scale Continental Foothill Relief
   const CW = 256, CH = 256;
   const orogUp256 = new Float32Array(CW * CH);
   const orogDown256 = new Float32Array(CW * CH);
@@ -786,23 +890,43 @@ function bakeTerrenoAtlasesCore(W, H) {
     const rowC = cz * CW;
     for (let cx = 0; cx < CW; cx++) {
       const wx = minX + (cx / (CW - 1)) * worldW;
-      const warpX = (fastNoiseLUT(wx * 0.00017 + 4.1, wz * 0.00017 - 2.3) - 0.5) * 2400.0;
-      const warpZ = (fastNoiseLUT(wx * 0.00017 - 8.7, wz * 0.00017 + 6.9) - 0.5) * 2400.0;
-      const fMacro = fastNoiseLUT((wx + warpX) * 0.00019, (wz + warpZ) * 0.00019);
-      const r1 = 1.0 - Math.abs(fastNoiseLUT((wx + warpX * 0.75) * 0.00025 + 5.2, (wz + warpZ * 0.75) * 0.00025 - 3.8) * 2.0 - 1.0);
-      const r2 = 1.0 - Math.abs(fastNoiseLUT(wx * 0.0012 - 7.3, wz * 0.0012 + 9.6) * 2.0 - 1.0);
-      // Cross-axis anisotropic folded spur octave -> serrated alpine drainage ribs instead of smooth mounds!
-      const rxF = (wx * 0.80 - wz * 0.60) * 0.00068 + 13.4;
-      const rzF = (wx * 0.60 + wz * 0.80) * 0.00032 - 8.1;
+      const warpX = (fastNoiseLUT(wx * 0.00016 + 4.1, wz * 0.00016 - 2.3) - 0.5) * 3200.0;
+      const warpZ = (fastNoiseLUT(wx * 0.00016 - 8.7, wz * 0.00016 + 6.9) - 0.5) * 3200.0;
+      const wxW = wx + warpX;
+      const wzW = wz + warpZ;
+
+      // Continental relief-contrast envelope: creates strong authentic contrast between sheltered valley basins
+      // and bold steep folded foothill massifs / escarpments across the ENTIRE 60x60 km world (zero flat plains!)
+      const relRaw = fastFbm2(wxW * 0.000095 + 3.1, wzW * 0.000095 - 5.4);
+      const reliefEnergy = quinticSmoothstep(0.18, 0.80, relRaw);
+
+      const fMacro = fastNoiseLUT(wxW * 0.00021, wzW * 0.00021);
+      const r1 = 1.0 - Math.abs(fastNoiseLUT((wx + warpX * 0.72) * 0.00027 + 5.2, (wz + warpZ * 0.72) * 0.00027 - 3.8) * 2.0 - 1.0);
+      const r2 = 1.0 - Math.abs(fastNoiseLUT(wx * 0.00115 - 7.3, wz * 0.00115 + 9.6) * 2.0 - 1.0);
+      // Cross-axis anisotropic folded spur octave -> serrated alpine drainage ribs & asymmetric hogback ridges!
+      const rxF = (wxW * 0.80 - wzW * 0.60) * 0.00066 + 13.4;
+      const rzF = (wxW * 0.60 + wzW * 0.80) * 0.00029 - 8.1;
       const rSpur = 1.0 - Math.abs(fastNoiseLUT(rxF, rzF) * 2.0 - 1.0);
-      const rMac = r1 * r1 * 0.74 + rSpur * rSpur * 0.26;
+      // Secondary counter-strike folded cuesta / foothill escarpment rib
+      const rxC = (wx * 0.45 + wz * 0.89) * 0.00048 - 11.2;
+      const rzC = (-wx * 0.89 + wz * 0.45) * 0.00022 + 19.6;
+      const rCuesta = 1.0 - Math.abs(fastNoiseLUT(rxC, rzC) * 2.0 - 1.0);
+
+      const rMac = r1 * r1 * 0.64 + rSpur * rSpur * 0.36;
+      const rFold = rCuesta * rCuesta * rCuesta;
       const rMed = r2 * r2;
-      macroBase256[rowC + cx] = fMacro * 54.0 + rMac * 98.0 + rMed * 32.0 - 18.0;
+
+      // Rich real-world foothill relief (~-65 m sunken basins .. +580 m dramatic folded ridges even outside major chains!)
+      macroBase256[rowC + cx] =
+        (fMacro - 0.34) * (135.0 + 185.0 * reliefEnergy) +
+        rMac * (150.0 + 240.0 * reliefEnergy) +
+        rFold * (88.0 + 150.0 * reliefEnergy) +
+        rMed * (46.0 + 68.0 * reliefEnergy) - 34.0;
       rMacro256[rowC + cx] = rMac;
       rMed256[rowC + cx] = rMed;
 
       if (rowSegs.length === 0) continue;
-      const spurWobble = 1.0 + (fastNoiseLUT(wx * 0.00052 + 11.4, wz * 0.00052 - 6.8) - 0.5) * 0.36;
+      const spurWobble = 1.0 + (fastNoiseLUT(wx * 0.00052 + 11.4, wz * 0.00052 - 6.8) - 0.5) * 0.38;
       let upBest = 0.0;
       let downBest = 0.0;
       for (let si = 0; si < rowSegs.length; si++) {
@@ -825,15 +949,16 @@ function bakeTerrenoAtlasesCore(W, H) {
           const amp = sg.ah + (sg.bh - sg.ah) * t;
           if (sg.sign > 0) {
             const baseU = 1.0 - distN * 0.8474576;
-            const contrib = amp * baseU * Math.sqrt(baseU);
-            if (contrib > upBest) upBest = contrib + upBest * 0.16;
-            else upBest += contrib * 0.18;
+            // Stepped alpine fault-shoulder profile: steeper escarpments & concave glacial valleys instead of smooth cones
+            const contrib = amp * baseU * Math.pow(baseU, 0.62);
+            if (contrib > upBest) upBest = contrib + upBest * 0.14;
+            else upBest += contrib * 0.16;
           } else {
-            const u1 = (0.56 - distN) * 10.5;
-            const u2 = (0.24 - distN) * 15.0;
+            const u1 = (0.58 - distN) * 10.5;
+            const u2 = (0.25 - distN) * 15.5;
             const w1 = 0.5 + 0.5 * (u1 / (1.0 + (u1 < 0 ? -u1 : u1)));
             const w2 = 0.5 + 0.5 * (u2 / (1.0 + (u2 < 0 ? -u2 : u2)));
-            const contrib = amp * (w1 * 0.58 + w2 * 0.42);
+            const contrib = amp * (w1 * 0.55 + w2 * 0.45);
             if (contrib > downBest) downBest = contrib;
           }
         }
@@ -843,7 +968,7 @@ function bakeTerrenoAtlasesCore(W, H) {
     }
   }
 
-  // PASS 1B: Register-Hot Base Terrain + Orogenic Synthesis
+  // PASS 1B: Register-Hot Base Terrain + Orogenic Synthesis (-2,000 m .. +4,100 m ASL)
   const compX = TERRENO_WORLD.compoundCenterX;
   const compZ = TERRENO_WORLD.compoundCenterZ;
   const villX = TERRENO_WORLD.villageCenterX;
@@ -859,8 +984,8 @@ function bakeTerrenoAtlasesCore(W, H) {
     const rivHW = riverRowHW[iz];
     const dzComp = wz - compZ;
     const dzVill = wz - villZ;
-    const nearCompZ = dzComp > -240.0 && dzComp < 240.0;
-    const nearVillZ = dzVill > -240.0 && dzVill < 240.0;
+    const nearCompZ = dzComp > -125.0 && dzComp < 125.0;
+    const nearVillZ = dzVill > -170.0 && dzVill < 170.0;
     const rowBase = iz * W;
 
     const fzC = iz * cScaleZ;
@@ -869,7 +994,6 @@ function bakeTerrenoAtlasesCore(W, H) {
     const omz = 1.0 - tzC;
     const oRow0 = cz0 * CW;
     const oRow1 = (cz0 + 1) * CW;
-    const eastLowZ = quinticSmoothstep(-14000.0, 4000.0, wz) * quinticSmoothstep(19000.0, 6000.0, wz);
 
     for (let ix = 0; ix < W; ix++) {
       const idx = rowBase + ix;
@@ -889,20 +1013,20 @@ function bakeTerrenoAtlasesCore(W, H) {
       if (nearCompZ) {
         const dcx = wx - compX;
         const d2 = dcx * dcx + dzComp * dzComp;
-        if (d2 < 52900.0) settleRelief = quinticSmoothstep(56.0, 230.0, Math.sqrt(d2));
+        if (d2 < 12544.0) settleRelief = quinticSmoothstep(28.0, 112.0, Math.sqrt(d2));
       }
       if (nearVillZ) {
         const dvx = wx - villX;
         const d2 = dvx * dvx + dzVill * dzVill;
-        if (d2 < 52900.0) {
-          const srV = quinticSmoothstep(56.0, 230.0, Math.sqrt(d2));
+        if (d2 < 24025.0) {
+          const srV = quinticSmoothstep(52.0, 155.0, Math.sqrt(d2));
           if (srV < settleRelief) settleRelief = srV;
         }
       }
 
-      const eastLow = eastLowZ > 0.001 ? quinticSmoothstep(2200.0, 14800.0, wx) * eastLowZ : 0.0;
-      const valleyFlank = dxRiv > rivHW + 1500.0 ? 1.0 : quinticSmoothstep(rivHW + 85.0, rivHW + 1500.0, dxRiv);
-      let h = rivBed + 5.2 + macroBase * settleRelief * (1.0 - eastLow * 0.62) * (0.28 + 0.72 * valleyFlank);
+      // Tight natural river-valley flank (390 m instead of 1,500 m flat tabletop!) & ZERO eastLow flattening!
+      const valleyFlank = dxRiv > rivHW + 390.0 ? 1.0 : quinticSmoothstep(rivHW + 46.0, rivHW + 390.0, dxRiv);
+      let h = rivBed + 5.4 + macroBase * settleRelief * (0.34 + 0.66 * valleyFlank);
 
       const upEnv = orogUp256[i00] * w00 + orogUp256[i01] * w01 + orogUp256[i10] * w10 + orogUp256[i11] * w11;
       const dnEnv = orogDown256[i00] * w00 + orogDown256[i01] * w01 + orogDown256[i10] * w10 + orogDown256[i11] * w11;
@@ -910,14 +1034,15 @@ function bakeTerrenoAtlasesCore(W, H) {
       if (upEnv > 0.1 || dnEnv > 0.1) {
         const rMacro = rMacro256[i00] * w00 + rMacro256[i01] * w01 + rMacro256[i10] * w10 + rMacro256[i11] * w11;
         const rMed = rMed256[i00] * w00 + rMed256[i01] * w01 + rMed256[i10] * w10 + rMed256[i11] * w11;
-        const rivClear = dxRiv > rivHW + 480.0 ? 1.0 : quinticSmoothstep(rivHW + 48.0, rivHW + 480.0, dxRiv);
-        const upSculpt = upEnv * (0.62 + 0.56 * rMacro + 0.28 * rMed);
-        const dnSculpt = dnEnv * (0.85 + 0.28 * rMed);
+        const rivClear = dxRiv > rivHW + 320.0 ? 1.0 : quinticSmoothstep(rivHW + 38.0, rivHW + 320.0, dxRiv);
+        // Sculpted asymmetric alpine massifs up to +4,100 m & stepped abyssal trenches down to -2,000 m!
+        const upSculpt = upEnv * (0.58 + 0.38 * rMacro + 0.16 * rMed);
+        const dnSculpt = dnEnv * (0.86 + 0.26 * rMed);
         h += (upSculpt - dnSculpt) * settleRelief * rivClear;
       }
 
-      if (dxRiv < rivHW + 210.0) {
-        const riverBankEnv = quinticSmoothstep(rivHW * 0.92, rivHW + 210.0, dxRiv);
+      if (dxRiv < rivHW + 150.0) {
+        const riverBankEnv = quinticSmoothstep(rivHW * 0.90, rivHW + 150.0, dxRiv);
         const riverFloor = rivBed + quinticSmoothstep(0.0, rivHW * 1.25, dxRiv) * (rivWaterY - rivBed + 2.4);
         h = riverFloor + (h - riverFloor) * riverBankEnv;
       }
@@ -947,7 +1072,7 @@ function bakeTerrenoAtlasesCore(W, H) {
       const row = iz * W;
       const dzC = wz - compZ;
       const dzV = wz - villZ;
-      const nearSetZ = (dzC > -240.0 && dzC < 240.0) || (dzV > -240.0 && dzV < 240.0);
+      const nearSetZ = (dzC > -140.0 && dzC < 140.0) || (dzV > -170.0 && dzV < 170.0);
 
       for (let ix = ix0; ix <= ix1; ix++) {
         const wx = minX + ix * invWm1 * worldW;
@@ -965,7 +1090,7 @@ function bakeTerrenoAtlasesCore(W, H) {
             const d2c = (wx - compX) * (wx - compX) + dzC * dzC;
             const d2v = (wx - villX) * (wx - villX) + dzV * dzV;
             const dMin2 = d2c < d2v ? d2c : d2v;
-            if (dMin2 < 52900.0) settleRelief = quinticSmoothstep(56.0, 230.0, Math.sqrt(dMin2));
+            if (dMin2 < 24025.0) settleRelief = quinticSmoothstep(42.0, 155.0, Math.sqrt(d2c < d2v ? d2c : d2v));
           }
           const swaleEnv = (1.0 - quinticSmoothstep(0.0, halfW * 2.8, perp)) * (1.0 - u * 0.78) * quinticSmoothstep(-60.0, 140.0, along) * settleRelief;
           const idx = row + ix;
@@ -977,7 +1102,7 @@ function bakeTerrenoAtlasesCore(W, H) {
     }
   }
 
-  // PASS 2: 100-Process Continuous Geology Engine + Selective Erosion
+  // PASS 2: 210-Process Continuous Geology Engine + Selective Erosion
   const geologyState = runContinuousGeologyEngine({
     heights,
     W,
@@ -989,9 +1114,11 @@ function bakeTerrenoAtlasesCore(W, H) {
 
   const flowArea512 = runFastHydrologyAndSelectiveRelax(heights, geologyState.lithoRGBA, W, H, cellX, cellZ);
 
-  // PASS 3: Local-Strip River Channel + Fords + Settlements + Vector Clamp
+  // PASS 3: Local-Strip River Channel + Fords + Settlements + Smooth Rational Summit/Abyss Limiter
   const minLocalY = TERRENO_WORLD.minSurfaceASL - TERRENO_WORLD.baseElevationASL;
   const maxLocalY = TERRENO_WORLD.maxSurfaceASL - TERRENO_WORLD.baseElevationASL;
+  const softTopKnee = maxLocalY - 48.0;
+  const softBotKnee = minLocalY + 42.0;
   const braidedIslands = geologyState.features.filter((l) => l.kind === 'braided_island');
   const compBlendR2 = TERRENO_WORLD.compoundBlendRadius * TERRENO_WORLD.compoundBlendRadius;
   const villBlendR2 = TERRENO_WORLD.villageBlendRadius * TERRENO_WORLD.villageBlendRadius;
@@ -1045,10 +1172,20 @@ function bakeTerrenoAtlasesCore(W, H) {
   flattenBoxTop(heights, W, H, minX, minZ, worldW, worldD, invWm1, invHm1, invWorldW, invWorldD, villX, villZ, TERRENO_WORLD.villageFlatRadius, TERRENO_WORLD.villageBlendRadius, villBlendR2, TERRENO_WORLD.villageGroundY);
   flattenBoxTop(heights, W, H, minX, minZ, worldW, worldD, invWm1, invHm1, invWorldW, invWorldD, compX, compZ, TERRENO_WORLD.compoundFlatRadius, TERRENO_WORLD.compoundBlendRadius, compBlendR2, TERRENO_WORLD.compoundGroundY);
 
+  // Smooth C1 rational knee keeps +4,000 m peaks razor-sharp spires and -800 m abysses dramatic trenches (ZERO flat clipping!)
   for (let i = 0; i < N; i++) {
-    const hh = heights[i];
-    if (hh < minLocalY) heights[i] = minLocalY;
-    else if (hh > maxLocalY) heights[i] = maxLocalY;
+    let hh = heights[i];
+    if (hh > softTopKnee) {
+      const ex = hh - softTopKnee;
+      hh = softTopKnee + (48.0 * ex) / (48.0 + ex);
+      if (hh > maxLocalY) hh = maxLocalY;
+      heights[i] = hh;
+    } else if (hh < softBotKnee) {
+      const ex = softBotKnee - hh;
+      hh = softBotKnee - (42.0 * ex) / (42.0 + ex);
+      if (hh < minLocalY) hh = minLocalY;
+      heights[i] = hh;
+    }
   }
 
   // PASS 4: Atlases
@@ -1149,14 +1286,18 @@ export function buildTerrenoGeomorphology() {
     const fz = v - z0;
     const i00 = z0 * W + x0;
     const i01 = i00 + W;
-    const w00 = (1.0 - fx) * (1.0 - fz);
-    const w10 = fx * (1.0 - fz);
-    const w01 = (1.0 - fx) * fz;
+    const omx = 1.0 - fx;
+    const omz = 1.0 - fz;
+    const w00 = omx * omz;
+    const w10 = fx * omz;
+    const w01 = omx * fz;
     const w11 = fx * fz;
+    const g00 = (i00 << 2) + 3;
+    const g01 = (i01 << 2) + 3;
     return {
       h: heights[i00] * w00 + heights[i00 + 1] * w10 + heights[i01] * w01 + heights[i01 + 1] * w11,
-      sl: slopeArr[i00],
-      sup: geoRGBA[(i00 << 2) + 3],
+      sl: slopeArr[i00] * w00 + slopeArr[i00 + 1] * w10 + slopeArr[i01] * w01 + slopeArr[i01 + 1] * w11,
+      sup: geoRGBA[g00] * w00 + geoRGBA[g00 + 4] * w10 + geoRGBA[g01] * w01 + geoRGBA[g01 + 4] * w11,
     };
   }
 
@@ -1233,7 +1374,7 @@ export function buildTerrenoGeomorphology() {
     const idx = iz * W + ix;
     const wy = basinWaterY[idx];
     if (wy > -1e5 && heights[idx] < wy + 0.65) return true;
-    // Soil depth check on 512x512 eco atlas: bare rock/cliffs/scree/high alpine have soilDepth < 0.22 -> NO TREES!
+    // Soil depth check on eco atlas: bare rock/cliffs/scree/high alpine/abyssal brine have soilDepth < 0.22 -> NO TREES!
     const eix = Math.min(ecoW - 1, ix >> 1);
     const eiz = Math.min(ecoH - 1, iz >> 1);
     if (soilEcoRGBA[(eiz * ecoW + eix) << 2] < 56) return true; // 56/255 ≈ 0.22
@@ -1264,7 +1405,8 @@ export function buildTerrenoGeomorphology() {
   const villGroundY = TERRENO_WORLD.villageGroundY;
 
   /**
-   * ULTRA-FAST ZERO-ALLOCATION TERRAIN HEIGHT QUERY (~0.35 µs / call = 11×–14× faster!)
+   * ULTRA-FAST ZERO-ALLOCATION C0/C1 CONTINUOUS TERRAIN HEIGHT QUERY (~0.38 µs / call = 11×–14× faster!)
+   * Bilinearly interpolates hMacro, macroSlope & padMask across all 4 corners -> ZERO DEM cell-edge step jumps!
    */
   function getTerrainHeightAt(wx, wz) {
     const dcx = wx - compX, dcz = wz - compZ;
@@ -1285,17 +1427,22 @@ export function buildTerrenoGeomorphology() {
     const omx = 1.0 - fx;
     const omz = 1.0 - fz;
     const hMacro = (heights[i00] * omx + heights[i00 + 1] * fx) * omz + (heights[i01] * omx + heights[i01 + 1] * fx) * fz;
+    const slMacro = (slopeArr[i00] * omx + slopeArr[i00 + 1] * fx) * omz + (slopeArr[i01] * omx + slopeArr[i01 + 1] * fx) * fz;
+    let sup = 0.0;
+    if ((dcx > -130.0 && dcx < 130.0 && dcz > -130.0 && dcz < 130.0) || (dvx > -150.0 && dvx < 150.0 && dvz > -150.0 && dvz < 150.0)) {
+      const g00 = (i00 << 2) + 3;
+      const g01 = (i01 << 2) + 3;
+      sup = (geoRGBA[g00] * omx + geoRGBA[g00 + 4] * fx) * omz + (geoRGBA[g01] * omx + geoRGBA[g01 + 4] * fx) * fz;
+    }
 
     if (wz > sr.minZ - sr.blend && wx > sr.minX - sr.blend && wx < sr.maxX + sr.blend) {
       const sW = evalSouthRectWeight(wx, wz);
       if (sW >= 0.999) return southRectY;
-      const sup = geoRGBA[(i00 << 2) + 3];
-      const hNat = hMacro + evalSharedCliffAndStrataRelief(wx, wz, slopeArr[i00], sup, hMacro);
+      const hNat = hMacro + evalSharedCliffAndStrataRelief(wx, wz, slMacro, sup, hMacro);
       return sW > 0.0 ? (hNat * (1.0 - sW) + southRectY * sW) : hNat;
     }
 
-    const sup = geoRGBA[(i00 << 2) + 3];
-    return hMacro + evalSharedCliffAndStrataRelief(wx, wz, slopeArr[i00], sup, hMacro);
+    return hMacro + evalSharedCliffAndStrataRelief(wx, wz, slMacro, sup, hMacro);
   }
 
   function getHeightAt(wx, wz) {
@@ -1310,28 +1457,40 @@ export function buildTerrenoGeomorphology() {
   }
 
   /**
-   * ULTRA-FAST PRE-BAKED NORMAL + LOCAL CLIFF GRADIENT QUERY (~10× faster!)
+   * ULTRA-FAST CONTINUOUS BILINEAR NORMAL + LOCAL CLIFF GRADIENT QUERY (~10× faster, ZERO cell-edge snaps!)
    */
-  const _nrmScratch = { x: 0, y: 1, z: 0, slope: 0 };
   function getNormalAt(wx, wz, step = 1.2, outObj = null) {
-    let ix = ((wx - minX) * scaleToGridX + 0.5) | 0;
-    let iz = ((wz - minZ) * scaleToGridZ + 0.5) | 0;
-    if (ix < 0) ix = 0; else if (ix >= W) ix = W - 1;
-    if (iz < 0) iz = 0; else if (iz >= H) iz = H - 1;
-    const idx = iz * W + ix;
-    const slMacro = slopeArr[idx];
+    let u = (wx - minX) * scaleToGridX;
+    let v = (wz - minZ) * scaleToGridZ;
+    if (u < 0.0) u = 0.0; else if (u > maxU) u = maxU;
+    if (v < 0.0) v = 0.0; else if (v > maxV) v = maxV;
+    const x0 = u | 0;
+    const z0 = v | 0;
+    const fx = u - x0;
+    const fz = v - z0;
+    const i00 = z0 * W + x0;
+    const i01 = i00 + W;
+    const omx = 1.0 - fx;
+    const omz = 1.0 - fz;
 
-    const o4 = idx << 2;
-    let nx = (normalRGBA[o4] * (2 / 255)) - 1.0;
-    let nz = (normalRGBA[o4 + 1] * (2 / 255)) - 1.0;
+    const slMacro = (slopeArr[i00] * omx + slopeArr[i00 + 1] * fx) * omz + (slopeArr[i01] * omx + slopeArr[i01 + 1] * fx) * fz;
+
+    const o00 = i00 << 2;
+    const o10 = o00 + 4;
+    const o01 = i01 << 2;
+    const o11 = o01 + 4;
+    const nxU8 = (normalRGBA[o00] * omx + normalRGBA[o10] * fx) * omz + (normalRGBA[o01] * omx + normalRGBA[o11] * fx) * fz;
+    const nzU8 = (normalRGBA[o00 + 1] * omx + normalRGBA[o10 + 1] * fx) * omz + (normalRGBA[o01 + 1] * omx + normalRGBA[o11 + 1] * fx) * fz;
+    let nx = nxU8 * (2 / 255) - 1.0;
+    let nz = nzU8 * (2 / 255) - 1.0;
     const ny2 = 1.0 - nx * nx - nz * nz;
     let ny = ny2 > 0.0001 ? Math.sqrt(ny2) : 0.01;
 
-    // On steep escarpment faces (> ~26 deg), add fast local micro-cliff slope contribution so player climb-blocking sees exact cliff steps!
-    if (slMacro > 0.48) {
-      const sup = geoRGBA[o4 + 3];
+    // On steep escarpment faces (> ~25 deg), blend smooth local cliff micro-gradient so climb-blocking sees exact rocky ledges!
+    if (slMacro > 0.46) {
+      const sup = (geoRGBA[o00 + 3] * omx + geoRGBA[o10 + 3] * fx) * omz + (geoRGBA[o01 + 3] * omx + geoRGBA[o11 + 3] * fx) * fz;
       if (sup < 0.999) {
-        const hMacro = heights[idx];
+        const hMacro = (heights[i00] * omx + heights[i00 + 1] * fx) * omz + (heights[i01] * omx + heights[i01 + 1] * fx) * fz;
         const mC = evalSharedCliffAndStrataRelief(wx, wz, slMacro, sup, hMacro);
         const mX = evalSharedCliffAndStrataRelief(wx + step, wz, slMacro, sup, hMacro);
         const mZ = evalSharedCliffAndStrataRelief(wx, wz + step, slMacro, sup, hMacro);
@@ -1354,16 +1513,27 @@ export function buildTerrenoGeomorphology() {
   }
 
   function getMacroNormalAt(wx, wz) {
-    let ix = ((wx - minX) * scaleToGridX + 0.5) | 0;
-    let iz = ((wz - minZ) * scaleToGridZ + 0.5) | 0;
-    if (ix < 0) ix = 0; else if (ix >= W) ix = W - 1;
-    if (iz < 0) iz = 0; else if (iz >= H) iz = H - 1;
-    const idx = iz * W + ix;
-    const o4 = idx << 2;
-    const nx = (normalRGBA[o4] * (2 / 255)) - 1.0;
-    const nz = (normalRGBA[o4 + 1] * (2 / 255)) - 1.0;
+    let u = (wx - minX) * scaleToGridX;
+    let v = (wz - minZ) * scaleToGridZ;
+    if (u < 0.0) u = 0.0; else if (u > maxU) u = maxU;
+    if (v < 0.0) v = 0.0; else if (v > maxV) v = maxV;
+    const x0 = u | 0;
+    const z0 = v | 0;
+    const fx = u - x0;
+    const fz = v - z0;
+    const i00 = z0 * W + x0;
+    const i01 = i00 + W;
+    const omx = 1.0 - fx;
+    const omz = 1.0 - fz;
+    const o00 = i00 << 2;
+    const o10 = o00 + 4;
+    const o01 = i01 << 2;
+    const o11 = o01 + 4;
+    const nx = ((normalRGBA[o00] * omx + normalRGBA[o10] * fx) * omz + (normalRGBA[o01] * omx + normalRGBA[o11] * fx) * fz) * (2 / 255) - 1.0;
+    const nz = ((normalRGBA[o00 + 1] * omx + normalRGBA[o10 + 1] * fx) * omz + (normalRGBA[o01 + 1] * omx + normalRGBA[o11 + 1] * fx) * fz) * (2 / 255) - 1.0;
     const ny2 = 1.0 - nx * nx - nz * nz;
-    return { x: nx, y: ny2 > 0.0001 ? Math.sqrt(ny2) : 0.01, z: nz, slope: slopeArr[idx] };
+    const sl = (slopeArr[i00] * omx + slopeArr[i00 + 1] * fx) * omz + (slopeArr[i01] * omx + slopeArr[i01 + 1] * fx) * fz;
+    return { x: nx, y: ny2 > 0.0001 ? Math.sqrt(ny2) : 0.01, z: nz, slope: sl };
   }
 
   function getBiomeInfoAt(wx, wz) {
@@ -1376,33 +1546,25 @@ export function buildTerrenoGeomorphology() {
     const dVill = Math.hypot(wx - villX, wz - villZ);
     const inVillage = dVill < TERRENO_WORLD.villageFlatRadius;
     const rw = evalRegionWeights(wx, wz);
+    const litho = getLithoAt(wx, wz);
     const eco = getSoilEcoAt(wx, wz);
     const inNullErea = isInsideSouthRect(wx, wz, 2.0);
     const lfHit = queryLandformAt(wx, wz, 0);
+    const biome = evalBiomeAt(asl, n.slope, g.wetness, litho, rw, inRiver);
 
-    let zoneJp = '黒杉・原生渓谷林';
+    let zoneJp = biome.nameJp;
     if (inNullErea) zoneJp = 'NULL EREA・地下40m飛行船基地';
     else if (inVillage) zoneJp = '杉ノ郷集落';
-    else if (asl < -100) zoneJp = '深淵テクトニクス地溝谷';
     else if (lfHit && lfHit.landform) zoneJp = lfHit.landform.nameJp;
     else if (inRiver) zoneJp = evalFordFactor(wz) > 0.35 ? '黒杉川・渡河浅瀬' : '黒杉川の清流';
-    else if (asl > 2150) zoneJp = '氷河・万年雪主稜帯';
-    else if (asl > 1750) zoneJp = '高山岩稜・大絶壁帯';
-    else if (asl > 1350) zoneJp = '亜高山針葉樹林帯';
-    else if (n.slope > 0.72) zoneJp = '露出花崗岩・断崖岩壁';
-    else {
-      let bestW = rw.valley;
-      if (rw.hills > bestW) { bestW = rw.hills; zoneJp = '西嶺断層山麓・ブナ原生林'; }
-      if (rw.plateau > bestW) { bestW = rw.plateau; zoneJp = '北部高地・白樺＆ブナ林'; }
-      if (rw.wetland > bestW) { bestW = rw.wetland; zoneJp = '東水郷・霧の湿原帯'; }
-      if (rw.meadow > bestW) { bestW = rw.meadow; zoneJp = '南西ススキ高原・赤松尾根'; }
-      if (rw.southPlain > bestW) { bestW = rw.southPlain; zoneJp = '南部暖温帯照葉樹渓谷'; }
-    }
 
     return {
       y, asl, slope: n.slope, normal: n,
       wetness: g.wetness, ridge: g.ridge, roadPad: 0.0,
-      regions: rw, litho: getLithoAt(wx, wz), eco,
+      regions: rw, litho, eco,
+      biomeId: biome.id,
+      biomeJp: biome.nameJp,
+      biomeZone: biome.zone,
       isRoad: false, onBridge: false, bridge: null,
       landform: lfHit ? lfHit.landform : null,
       inRiver, inVillage, riverY: rv.waterY, zoneJp,
@@ -1410,7 +1572,7 @@ export function buildTerrenoGeomorphology() {
   }
 
   /**
-   * Fast survey-grade geomorphological telemetry for the TERRENO 7.0 2D map HUD (< 0.01 ms).
+   * Fast survey-grade geomorphological & 24-biome telemetry for the TERRENO 8.0 2D map HUD (< 0.01 ms).
    */
   function getGeoTelemetryAt(wx, wz) {
     const y = getTerrainHeightAt(wx, wz);
@@ -1421,14 +1583,17 @@ export function buildTerrenoGeomorphology() {
     if (iz < 0) iz = 0; else if (iz >= H) iz = H - 1;
     const idx = iz * W + ix;
     const o4 = idx << 2;
-    const slopeDeg = Math.round((Math.atan(slopeArr[idx]) * 180) / Math.PI);
+    const sl = slopeArr[idx];
+    const slopeDeg = Math.round((Math.atan(sl) * 180) / Math.PI);
     const natW = basinWaterY[idx];
     const rv = evalMainRiver(wz);
     let waterDepthM = 0;
+    let inRiver = false;
     if (natW > y + 0.05) {
       waterDepthM = Math.round(natW - y);
     } else if (Math.abs(wx - rv.x) < rv.halfWidth * 1.05 && rv.waterY > y + 0.05) {
       waterDepthM = Math.max(1, Math.round(rv.waterY - y));
+      inRiver = true;
     }
 
     const lVol = lithoRGBA[o4];
@@ -1437,13 +1602,25 @@ export function buildTerrenoGeomorphology() {
     const lPeat = lithoRGBA[o4 + 3];
     let lithoJp = '花崗岩・森林土壌';
     if (waterDepthM > 0) lithoJp = natW > y + 0.05 ? '自然湖盆' : '清流河床';
-    else if (asl > 2020 && slopeDeg < 45) lithoJp = '氷雪・万年雪';
+    else if (asl >= 3400 && slopeDeg < 52) lithoJp = '極高氷河・青氷セラック';
+    else if (asl >= 2780 && slopeDeg < 48) lithoJp = '万年雪・氷雪圏';
+    else if (asl <= -1350) lithoJp = lVol >= 75 ? '深淵熱水・黒曜玄武岩' : '深淵岩塩・裂谷堆積岩';
     else if (lVol >= 90 && lVol >= lLim && lVol >= lOch) lithoJp = slopeDeg > 28 ? '柱状玄武岩' : '溶岩玄武岩';
     else if (lLim >= 90 && lLim >= lOch) lithoJp = '石灰岩カルスト';
-    else if (lOch >= 90) lithoJp = lLim >= 70 ? '硫気・石灰華' : '凝灰岩・砂岩';
+    else if (lOch >= 90) lithoJp = lLim >= 70 ? '硫気・石灰華' : '凝灰岩・赤色砂岩';
     else if (lPeat >= 95 && slopeDeg < 22) lithoJp = '泥炭湿原';
     else if (slopeDeg >= 36) lithoJp = '花崗岩断崖';
-    else if (slopeDeg >= 24 && asl > 680) lithoJp = '高山崖錐ガレ場';
+    else if (slopeDeg >= 24 && asl > 900) lithoJp = '高山崖錐ガレ場';
+
+    const rw = evalRegionWeights(wx, wz);
+    const biome = evalBiomeAt(
+      asl,
+      sl,
+      geoRGBA[o4 + 1],
+      { volcanic: lVol * (1 / 255), limestone: lLim * (1 / 255), ochre: lOch * (1 / 255), peat: lPeat * (1 / 255) },
+      rw,
+      inRiver,
+    );
 
     const lfHit = queryLandformAt(wx, wz, 0);
     const lf = lfHit && lfHit.landform ? lfHit.landform : null;
@@ -1452,6 +1629,9 @@ export function buildTerrenoGeomorphology() {
       slopeDeg,
       waterDepthM,
       lithoJp,
+      biomeId: biome.id,
+      biomeJp: biome.nameJp,
+      biomeZone: biome.zone,
       landformShortJp: lf ? (lf.shortJp || lf.nameJp) : null,
       landformNameJp: lf ? lf.nameJp : null,
       landformCategory: lf ? lf.category : null,
@@ -1507,7 +1687,8 @@ export function buildTerrenoGeomorphology() {
     roadDense: [],
     roadElevs: new Float32Array(0),
     roadIndex,
-    landforms: ALL_LANDFORMS_100,
+    landforms: geologyState.catalog || ALL_LANDFORMS_100,
+    biomes: BIOME_CATALOG_24,
     southRectY,
     minElev,
     maxElev,

@@ -28,10 +28,10 @@ const MIN_ZOOM = 0.88;
 const MAX_ZOOM = 3000.0;
 
 const SUB_LAYERS = [
-  { id: 0, labelJp: '地表', depthTxt: '' },
-  { id: 1, labelJp: '地下・石灰洞', depthTxt: '深度 -200m' },
-  { id: 2, labelJp: '地下・溶岩洞脈', depthTxt: '深度 -700m' },
-  { id: 3, labelJp: '深層・地殻裂罅', depthTxt: '深度 -1,500m' },
+  { id: 0, labelJp: '地表 (-800m〜+4,000m)', depthTxt: '' },
+  { id: 1, labelJp: '地下・石灰洞', depthTxt: '深度 -801m〜-1,150m' },
+  { id: 2, labelJp: '地下・溶岩洞脈', depthTxt: '深度 -1,150m〜-1,520m' },
+  { id: 3, labelJp: '深層・アビサル裂罅', depthTxt: '深度 -1,520m〜-1,900m' },
 ];
 
 function buildTributaryPolylines() {
@@ -69,17 +69,20 @@ function getZoneLabelJp(wx, wz, asl) {
   if (Math.abs(wx) < 200 && Math.abs(wz - 29910) < 120) return 'NULL EREA';
   const rv = evalMainRiver(wz);
   if (Math.abs(wx - rv.x) < rv.halfWidth * 2.2) return '黒杉川 渓流';
-  if (asl < -120) return '深層地溝帯';
-  if (asl > 2050) return '氷雪高山稜線';
-  if (asl > 1450) return '亜高山岩稜帯';
+  if (asl < -1350) return '深淵アビサル海溝底';
+  if (asl < -200) return '深谷雲霧・沈降裂谷帯';
+  if (asl > 3450) return '4000m級極高氷壁帯';
+  if (asl > 2820) return '氷雪・万年雪カール帯';
+  if (asl > 2150) return '高山岩稜・森林限界帯';
+  if (asl > 1480) return '亜高山針葉樹連峰';
   const rw = evalRegionWeights(wx, wz);
   const pairs = [
     [rw.valley, '黒杉渓谷 原生林'],
     [rw.hills, '西嶺 断崖連峰'],
     [rw.plateau, '北部 ブナ・白樺高地'],
     [rw.wetland, '東水郷 湿原'],
-    [rw.meadow, '南西 溶岩・草原高地'],
-    [rw.southPlain, '南部 松原渓谷'],
+    [rw.meadow, '南西 朱岩・草原高地'],
+    [rw.southPlain, '南部 暖温帯照葉樹渓谷'],
   ];
   pairs.sort((a, b) => b[0] - a[0]);
   return pairs[0][1];
@@ -91,7 +94,7 @@ function formatMetricScale(meters) {
   return `${meters < 10 && meters % 1 !== 0 ? meters.toFixed(1) : Math.round(meters)} m`;
 }
 
-export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = null, forest = null) {
+export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = null, forest = null, ecosystems = null, weather = null) {
   const tributaryPolylines = buildTributaryPolylines();
 
   // Pre-query exact summit ASL for all natural tectonic peaks (instant < 0.2ms)
@@ -119,6 +122,12 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
   let hudScaleBarEl = null;
   let hudInfoEl = null;
 
+  // Hysteresis & DOM memoization state for ZERO meter-label flicker during scroll/pan!
+  let lastScaleM = 1000;
+  let lastScaleBarPx = -1;
+  let lastScaleTxt = '';
+  let lastHudInfoTxt = '';
+
   let zoom = 18.0;
   let panX = 0;
   let panY = 0;
@@ -127,7 +136,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
   let hasInitialFocus = false;
   let isFollowing = true;      // Live player/active-vehicle auto-follow!
   let followZoomStage = 0;     // 0: Close (48), 1: Valley (12), 2: Basin Overview (1.05)
-  let subLayer = 0;            // 0=Surface, 1=-200m Karst, 2=-700m LavaTube, 3=-1500m Abyss
+  let subLayer = 0;            // 0=Surface, 1=-420m Karst, 2=-1200m LavaTube, 3=-2600m Abyss
 
   // Live player breadcrumb trail ring buffer
   const trailPoints = [];
@@ -243,7 +252,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
           const vByte = curSubLayer === 1 ? subRGBA[so4] : (curSubLayer === 2 ? subRGBA[so4 + 1] : subRGBA[so4 + 2]);
           const v = vByte * (1 / 255);
           const port = subRGBA[so4 + 3] * (1 / 255);
-          const lum = Math.max(0, Math.min(1, (asl + 500) * (1 / 3000)));
+          const lum = Math.max(0, Math.min(1, (asl + 2000) * (1 / 6100)));
           let rr = 10 + lum * 14;
           let gg = 17 + lum * 21;
           let bb = 27 + lum * 28;
@@ -298,31 +307,34 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         if (sun2 < 0) sun2 = 0;
         const shade = Math.min(1.26, Math.max(0.42, (sun1 * 0.86 * castS + sun2 * 0.24 + 0.28) * skyAO));
 
-        // SwissTopo hypsometric ramp (-500m .. +2,500m ASL)
+        // SwissTopo 4,800m hypsometric ramp (-800m .. +4,000m ASL)
         let r, g, b;
-        if (asl < 0) {
-          const t = Math.max(0, (asl + 500) * 0.002);
-          r = 20 + t * 24; g = 58 + t * 44; b = 62 + t * 14;
-        } else if (asl < 420) {
-          const t = asl * (1 / 420);
-          r = 44 + t * 38; g = 102 + t * 28; b = 76 + t * 6;
-        } else if (asl < 980) {
-          const t = (asl - 420) * (1 / 560);
-          r = 82 + t * 62; g = 130 + t * 34; b = 82 + t * 26;
-        } else if (asl < 1560) {
-          const t = (asl - 980) * (1 / 580);
-          r = 144 + t * 46; g = 164 + t * 16; b = 108 + t * 36;
-        } else if (asl < 2020) {
-          const t = (asl - 1560) * (1 / 460);
-          r = 190 - t * 18; g = 180 - t * 12; b = 144 + t * 32;
+        if (asl < -400) {
+          const t = Math.max(0, (asl + 800) * 0.0025);
+          r = 15 + t * 14; g = 40 + t * 32; b = 64 + t * 14;
+        } else if (asl < 0) {
+          const t = (asl + 400) * 0.0025;
+          r = 29 + t * 18; g = 72 + t * 34; b = 78 + t * 2;
+        } else if (asl < 580) {
+          const t = asl * (1 / 580);
+          r = 47 + t * 35; g = 106 + t * 24; b = 80 + t * 0;
+        } else if (asl < 1400) {
+          const t = (asl - 580) * (1 / 820);
+          r = 82 + t * 62; g = 130 + t * 34; b = 80 + t * 26;
+        } else if (asl < 2200) {
+          const t = (asl - 1400) * (1 / 800);
+          r = 144 + t * 44; g = 164 + t * 14; b = 106 + t * 34;
+        } else if (asl < 2820) {
+          const t = (asl - 2200) * (1 / 620);
+          r = 188 - t * 24; g = 178 - t * 14; b = 140 + t * 32;
         } else {
-          const t = Math.min(1, (asl - 2020) * (1 / 320));
-          r = 172 + t * 72; g = 168 + t * 80; b = 176 + t * 78;
+          const t = Math.min(1, (asl - 2820) * (1 / 720));
+          r = 164 + t * 80; g = 164 + t * 86; b = 172 + t * 82;
         }
 
         const soilD = soilEcoRGBA[eo4] * (1 / 255);
         const rockW = Math.min(1, Math.max(0, (sl + (1.0 - soilD) * 0.35 - 0.44) * 2.1));
-        if (rockW > 0.02 && asl < 2180) {
+        if (rockW > 0.02 && asl < 3180) {
           const rk = rockW * 0.72;
           r = r * (1 - rk) + 114 * rk;
           g = g * (1 - rk) + 117 * rk;
@@ -1049,39 +1061,62 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
     const pxPerMeter = (baseRect.w * zoom) / TERRENO_WORLD.width;
     const cssPxPerMeter = pxPerMeter / Math.max(1, dpr);
 
-    // Cartographic metric scale steps all the way from 20 km down to 50 cm at 3,000× zoom!
+    // Cartographic metric scale steps with hysteresis [38 px .. 140 px] -> ZERO oscillation/flicker while wheel-zooming!
     const steps = [20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1, 0.5];
-    let bestM = 1000;
-    for (let i = 0; i < steps.length; i++) {
-      const wPx = steps[i] * cssPxPerMeter;
-      if (wPx >= 42 && wPx <= 128) { bestM = steps[i]; break; }
-      if (wPx < 42) { bestM = steps[Math.max(0, i - 1)]; break; }
-      bestM = steps[i];
+    let bestM = lastScaleM;
+    const curW = bestM * cssPxPerMeter;
+    if (curW < 38 || curW > 140) {
+      bestM = 1000;
+      for (let i = 0; i < steps.length; i++) {
+        const wPx = steps[i] * cssPxPerMeter;
+        if (wPx >= 48 && wPx <= 122) { bestM = steps[i]; break; }
+        if (wPx < 48) { bestM = steps[Math.max(0, i - 1)]; break; }
+        bestM = steps[i];
+      }
+      lastScaleM = bestM;
     }
-    const barCssW = Math.max(32, Math.min(144, bestM * cssPxPerMeter));
-    hudScaleBarEl.style.width = `${barCssW.toFixed(1)}px`;
-    hudScaleLabelEl.textContent = formatMetricScale(bestM);
+    const barCssPx = Math.round(Math.max(32, Math.min(144, bestM * cssPxPerMeter)));
+    if (barCssPx !== lastScaleBarPx) {
+      lastScaleBarPx = barCssPx;
+      hudScaleBarEl.style.width = `${barCssPx}px`;
+    }
+    const nextScaleTxt = formatMetricScale(bestM);
+    if (nextScaleTxt !== lastScaleTxt) {
+      lastScaleTxt = nextScaleTxt;
+      hudScaleLabelEl.textContent = nextScaleTxt;
+    }
 
     const refW = hoverWorld || pxToWorld(canvas.width * 0.5, canvas.height * 0.5) || { x: state?.x ?? 0, z: state?.z ?? 0 };
     const tel = typeof geomorph.getGeoTelemetryAt === 'function'
       ? geomorph.getGeoTelemetryAt(refW.x, refW.z)
       : null;
     const asl = tel ? tel.asl : Math.round(TERRENO_WORLD.baseElevationASL + getTerrainY(refW.x, refW.z));
-    const zone = getZoneLabelJp(refW.x, refW.z, asl);
+    const zone = (tel && tel.biomeJp) ? tel.biomeJp : getZoneLabelJp(refW.x, refW.z, asl);
     const sign = asl >= 0 ? '+' : '';
+    const wState = weather && weather.getState ? weather.getState(asl - TERRENO_WORLD.baseElevationASL) : null;
+    const wTag = wState ? `  •  ${wState.nameJp} ${Math.round(wState.localTempC)}℃` : '';
+    const ecoHere = ecosystems && ecosystems.getActiveEcosystemAt && zoom >= 4.0 ? ecosystems.getActiveEcosystemAt(refW.x, refW.z) : null;
+    const ecoTag = ecoHere
+      ? (ecoHere.nearRiver ? '  •  川生態20種' : (ecoHere.nearLake ? '  •  湖生態16種' : ''))
+      : '';
     // ZERO zoom multiplier ("×") text anywhere!
+    let nextInfoTxt;
     if (subLayer > 0) {
       const layer = SUB_LAYERS[subLayer];
       const lithoBit = tel && tel.lithoJp ? `  •  ${tel.lithoJp}` : '';
-      hudInfoEl.textContent = `${layer.labelJp}  •  ${layer.depthTxt}  •  地表 ${sign}${asl} m${lithoBit}`;
+      nextInfoTxt = `${layer.labelJp}  •  ${layer.depthTxt}  •  地表 ${sign}${asl} m${lithoBit}`;
     } else if (tel) {
-      const place = tel.landformShortJp && zoom >= 2.2 ? `${zone} / ${tel.landformShortJp}` : zone;
+      const place = tel.landformShortJp && zoom >= 2.0 ? `${zone} / ${tel.landformShortJp}` : zone;
       const metric = tel.waterDepthM > 0
         ? `水面 ${sign}${asl + tel.waterDepthM} m  •  水深 ${tel.waterDepthM} m`
         : `標高 ${sign}${asl} m  •  傾斜 ${tel.slopeDeg}°`;
-      hudInfoEl.textContent = `${place}  •  ${metric}  •  ${tel.lithoJp}`;
+      nextInfoTxt = `${place}  •  ${metric}  •  ${tel.lithoJp}${ecoTag}${wTag}`;
     } else {
-      hudInfoEl.textContent = `${zone}  •  標高 ${sign}${asl} m`;
+      nextInfoTxt = `${zone}  •  標高 ${sign}${asl} m${wTag}`;
+    }
+    if (nextInfoTxt !== lastHudInfoTxt) {
+      lastHudInfoTxt = nextInfoTxt;
+      hudInfoEl.textContent = nextInfoTxt;
     }
   }
 
@@ -1505,13 +1540,13 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
       ctx.textBaseline = 'top';
       for (let i = 0; i < peaksData.length; i++) {
         const pk = peaksData[i];
-        if (zoom < 2.0 && !pk.isAbyss && pk.elevASL < 1200) continue;
+        if (zoom < 1.8 && !pk.isAbyss && pk.elevASL < 1800) continue;
         const p = worldToPx(pk.x, pk.z);
         if (p.px < -40 || p.px > CW + 40 || p.py < -40 || p.py > CH + 40) continue;
-        if (!canPlaceLabel(p.px, p.py, 76 * dpr)) continue;
+        if (!canPlaceLabel(p.px, p.py, 72 * dpr)) continue;
         if (pk.isAbyss) {
           // Inverted Abyssal Rift Depth Diamond (▼)
-          const dm = 4.2 * dpr;
+          const dm = 4.4 * dpr;
           ctx.fillStyle = '#0e7490'; ctx.strokeStyle = '#cffafe'; ctx.lineWidth = 1.2 * dpr;
           ctx.beginPath();
           ctx.moveTo(p.px, p.py + dm);
@@ -1520,7 +1555,7 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
           ctx.closePath(); ctx.fill(); ctx.stroke();
         } else {
           // Official Survey Triangulation Peak Triangle (▲) with center dot
-          const tri = (pk.elevASL > 1800 ? 4.6 : 3.6) * dpr;
+          const tri = (pk.elevASL > 2800 ? 4.8 : 3.6) * dpr;
           ctx.fillStyle = '#0f172a'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.25 * dpr;
           ctx.beginPath();
           ctx.moveTo(p.px, p.py - tri);
@@ -1542,21 +1577,22 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         ctx.fillText(`${pk.elevASL}m`, p.px, p.py + 16.2 * dpr);
       }
 
-      // 2e-bis. 160-Process Natural Landform Callouts + Cartographic Survey Symbols (Waterfall / Hot Spring / Saddle / Wetland!)
+      // 2e-bis. 210-Process / 1,620+ Natural Formation Callouts + Cartographic Survey Symbols (Waterfall / Hot Spring / Saddle / Wetland!)
       const emergentFeats = geomorph.emergentFeatures || [];
-      if (emergentFeats.length > 0 && zoom >= 2.0 && zoom < 260) {
+      if (emergentFeats.length > 0 && zoom >= 1.6 && zoom < 320) {
         ctx.font = `600 ${Math.round(7.8 * dpr)}px sans-serif`;
         ctx.textBaseline = 'middle';
         ctx.lineWidth = 2.6 * dpr;
         ctx.strokeStyle = 'rgba(6, 11, 18, 0.88)';
+        const labelPad = (zoom >= 5.0 ? 74 : 88) * dpr;
         for (let i = 0; i < emergentFeats.length; i++) {
           const f = emergentFeats[i];
           if (f.isSubterranean) continue;
-          const minZ = f.hasLake ? 2.0 : (f.hasWaterfall || f.hasHotSpring ? 2.8 : (f.radius >= 650 ? 3.2 : 5.2));
+          const minZ = f.hasLake ? 1.6 : (f.hasWaterfall || f.hasHotSpring ? 2.2 : (f.radius >= 560 ? 2.8 : 4.2));
           if (zoom < minZ) continue;
           const p = worldToPx(f.x, f.z);
           if (p.px < -90 || p.px > CW + 90 || p.py < -90 || p.py > CH + 90) continue;
-          if (!canPlaceLabel(p.px, p.py, 92 * dpr)) continue;
+          if (!canPlaceLabel(p.px, p.py, labelPad)) continue;
 
           // Subtle hairline cartographic symbol right above label
           const sy = p.py - 8.5 * dpr;
@@ -1604,38 +1640,61 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
         }
       }
 
-      // 2e-ter. SwissTopo Inline Index Contour Elevation Numerals (計曲線標高数値 — sparse, fast, non-overlapping!)
+      // 2e-ter. WORLD-SPACE ANCHORED SwissTopo Index Contour Elevation Numerals (計曲線標高数値)
+      // Anchored to deterministic world-space cells + 1-step gradient snap -> glides seamlessly with terrain, ZERO pan/scroll flicker!
       if (zoom >= 2.2) {
         const logZ = Math.min(11.6, Math.max(0.0, Math.log2(Math.max(1.0, zoom))));
         const minorStep = Math.max(0.25, Math.pow(2.0, Math.floor(Math.max(-2.0, Math.min(5.65, 5.65 - logZ * 0.72)))));
         const majorStep = minorStep * 5.0;
-        ctx.font = `600 ${Math.round(7.0 * dpr)}px ui-monospace, monospace`;
+        // Quantize world cell spacing cleanly to power-of-2 meters so labels stay 100% terrain-locked while panning!
+        const targetWorldSpan = (165 * dpr) / Math.max(1e-4, pxPerMeter);
+        const wGrid = Math.max(8, Math.pow(2, Math.ceil(Math.log2(Math.max(8, targetWorldSpan)))));
+        const gx0 = Math.max(Math.floor(TERRENO_WORLD.minX / wGrid), Math.floor(viewMinX / wGrid) - 1);
+        const gx1 = Math.min(Math.ceil(TERRENO_WORLD.maxX / wGrid), Math.ceil(viewMaxX / wGrid) + 1);
+        const gz0 = Math.max(Math.floor(TERRENO_WORLD.minZ / wGrid), Math.floor(viewMinZ / wGrid) - 1);
+        const gz1 = Math.min(Math.ceil(TERRENO_WORLD.maxZ / wGrid), Math.ceil(viewMaxZ / wGrid) + 1);
+
+        ctx.font = `600 ${Math.round(7.1 * dpr)}px ui-monospace, monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.lineWidth = 2.4 * dpr;
-        const colsN = 6, rowsN = 4;
-        const marginX = CW * 0.12, marginY = CH * 0.14;
-        const stepPxX = (CW - marginX * 2) / (colsN - 1);
-        const stepPxY = (CH - marginY * 2) / (rowsN - 1);
-        for (let r = 0; r < rowsN; r++) {
-          for (let c = 0; c < colsN; c++) {
-            const sx = marginX + c * stepPxX + ((r & 1) ? stepPxX * 0.35 : 0);
-            const sy = marginY + r * stepPxY;
-            if (sx > CW - 64 * dpr || sy > CH - 64 * dpr) continue;
-            const wPt = pxToWorld(sx, sy);
-            if (!wPt) continue;
-            const asl = TERRENO_WORLD.baseElevationASL + getTerrainY(wPt.x, wPt.z);
-            const nearestMaj = Math.round(asl / majorStep) * majorStep;
-            // Only annotate points lying close to an actual index contour line!
-            if (Math.abs(asl - nearestMaj) > majorStep * 0.18) continue;
-            if (!canPlaceLabel(sx, sy, 88 * dpr)) continue;
-            const numTxt = nearestMaj >= 1 || nearestMaj <= -1 || majorStep >= 1
+        const eps = Math.max(2.0, Math.min(48.0, wGrid * 0.14));
+
+        for (let iz = gz0; iz <= gz1; iz++) {
+          const wzBase = (iz + 0.5) * wGrid;
+          for (let ix = gx0; ix <= gx1; ix++) {
+            const wxBase = (ix + ((iz & 1) ? 0.72 : 0.32)) * wGrid;
+            if (wxBase < TERRENO_WORLD.minX + 60 || wxBase > TERRENO_WORLD.maxX - 60 || wzBase < TERRENO_WORLD.minZ + 60 || wzBase > TERRENO_WORLD.maxZ - 60) continue;
+
+            const y0 = getTerrainY(wxBase, wzBase);
+            const asl0 = TERRENO_WORLD.baseElevationASL + y0;
+            const nearestMaj = Math.round(asl0 / majorStep) * majorStep;
+            const err = nearestMaj - asl0;
+
+            // 1-step analytical gradient snap onto the EXACT nearest index contour inside this world cell
+            const gxH = (getTerrainY(wxBase + eps, wzBase) - getTerrainY(wxBase - eps, wzBase)) / (2.0 * eps);
+            const gzH = (getTerrainY(wxBase, wzBase + eps) - getTerrainY(wxBase, wzBase - eps)) / (2.0 * eps);
+            const g2 = gxH * gxH + gzH * gzH;
+            if (g2 < 0.00025) continue; // skip flat pans where contours are far apart
+            const moveScale = err / g2;
+            const dxSnap = gxH * moveScale;
+            const dzSnap = gzH * moveScale;
+            const snapDist = Math.hypot(dxSnap, dzSnap);
+            if (snapDist > wGrid * 0.40) continue;
+
+            const wx = wxBase + dxSnap;
+            const wz = wzBase + dzSnap;
+            const p = worldToPx(wx, wz);
+            if (p.px < 36 * dpr || p.px > CW - 44 * dpr || p.py < 36 * dpr || p.py > CH - 52 * dpr) continue;
+            if (!canPlaceLabel(p.px, p.py, 92 * dpr)) continue;
+
+            const numTxt = majorStep >= 1
               ? `${Math.round(nearestMaj)}`
               : `${nearestMaj.toFixed(1)}`;
-            ctx.strokeStyle = nearestMaj >= 2020 ? 'rgba(12, 24, 38, 0.72)' : 'rgba(18, 14, 10, 0.78)';
-            ctx.fillStyle = nearestMaj >= 2020 ? '#bae6fd' : (nearestMaj < 0 ? '#67e8f9' : '#f5e6cc');
-            ctx.strokeText(numTxt, sx, sy);
-            ctx.fillText(numTxt, sx, sy);
+            ctx.strokeStyle = nearestMaj >= 2820 ? 'rgba(12, 24, 38, 0.76)' : 'rgba(18, 14, 10, 0.80)';
+            ctx.fillStyle = nearestMaj >= 2820 ? '#bae6fd' : (nearestMaj < 0 ? '#67e8f9' : '#f5e6cc');
+            ctx.strokeText(numTxt, p.px, p.py);
+            ctx.fillText(numTxt, p.px, p.py);
           }
         }
       }
@@ -1668,49 +1727,194 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
       ctx.restore();
     }
 
-    // 2f. Active Autonomous Routes (Glowing Dual-Layer Route + Distance Pill)
-    const drawRoute = (routePts, strokeCol, glowCol, vehLabel) => {
-      if (!routePts || routePts.length < 2) return;
+    // 2f. Active Autonomous Routes — TERRENO 9.0 Ultra-Fast Coupled Real-Time Trajectory Prediction!
+    const drawCoupledPrediction = (pred, fallbackPts, strokeCol, glowCol, vehLabel) => {
+      const hasPred = Boolean(pred && ((pred.nearPts && pred.nearPts.length >= 2) || (pred.farPts && pred.farPts.length >= 2)));
+      if (!hasPred && (!fallbackPts || fallbackPts.length < 2)) return;
+
+      const isEmergency = Boolean(pred && pred.isEmergencyStop);
+      const isPickup = Boolean(pred && pred.isPickupMode);
+      const mainCol = isEmergency ? '#ef4444' : (isPickup ? '#10b981' : strokeCol);
+      const mainGlow = isEmergency ? 'rgba(239, 68, 68, 0.34)' : (isPickup ? 'rgba(16, 185, 129, 0.34)' : glowCol);
+
       ctx.save();
-      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.beginPath();
-      let totalDist = 0;
-      for (let i = 0; i < routePts.length; i++) {
-        const p = worldToPx(routePts[i][0], routePts[i][1]);
-        if (i === 0) ctx.moveTo(p.px, p.py);
-        else {
-          ctx.lineTo(p.px, p.py);
-          totalDist += Math.hypot(routePts[i][0] - routePts[i - 1][0], routePts[i][1] - routePts[i - 1][1]);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (hasPred) {
+        const farPts = pred.farPts || [];
+        const nearPts = pred.nearPts || [];
+        const revPts = pred.revPts || [];
+
+        // 1) Remaining Optimal Macro Terrain Path (Trimmed — ZERO stale driven tail behind vehicle!)
+        if (farPts.length >= 2) {
+          ctx.beginPath();
+          for (let i = 0; i < farPts.length; i++) {
+            const p = worldToPx(farPts[i][0], farPts[i][1]);
+            if (i === 0) ctx.moveTo(p.px, p.py);
+            else ctx.lineTo(p.px, p.py);
+          }
+          ctx.strokeStyle = mainGlow;
+          ctx.lineWidth = 6.2 * dpr;
+          ctx.stroke();
+          ctx.strokeStyle = mainCol;
+          ctx.lineWidth = 2.4 * dpr;
+          ctx.setLineDash([7 * dpr, 6 * dpr]);
+          ctx.lineDashOffset = -(performance.now() * 0.032) * dpr;
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
+
+        // 2) Reverse K-Turn Avoidance Arc (if active in SE(2) Hybrid A*)
+        if (revPts.length >= 2) {
+          ctx.beginPath();
+          for (let i = 0; i < revPts.length; i++) {
+            const p = worldToPx(revPts[i][0], revPts[i][1]);
+            if (i === 0) ctx.moveTo(p.px, p.py);
+            else ctx.lineTo(p.px, p.py);
+          }
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2.6 * dpr;
+          ctx.setLineDash([3 * dpr, 4 * dpr]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // 3) High-Precision Live Coupled Kinematic / SE(2) Predicted Steering Ribbon (Next ~75 m!)
+        if (nearPts.length >= 2) {
+          ctx.beginPath();
+          for (let i = 0; i < nearPts.length; i++) {
+            const p = worldToPx(nearPts[i][0], nearPts[i][1]);
+            if (i === 0) ctx.moveTo(p.px, p.py);
+            else ctx.lineTo(p.px, p.py);
+          }
+          ctx.strokeStyle = mainGlow;
+          ctx.lineWidth = 10.5 * dpr;
+          ctx.stroke();
+          ctx.strokeStyle = mainCol;
+          ctx.lineWidth = 3.8 * dpr;
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.88)';
+          ctx.lineWidth = 1.45 * dpr;
+          ctx.stroke();
+
+          // Live Directional Chevrons along predicted wheel trajectory!
+          const chevStride = Math.max(2, Math.floor(nearPts.length / 4));
+          for (let i = chevStride; i < nearPts.length - 1; i += chevStride) {
+            const pA = worldToPx(nearPts[i - 1][0], nearPts[i - 1][1]);
+            const pB = worldToPx(nearPts[i][0], nearPts[i][1]);
+            const segPx = Math.hypot(pB.px - pA.px, pB.py - pA.py);
+            if (segPx < 8 * dpr) continue;
+            const ang = Math.atan2(pB.py - pA.py, pB.px - pA.px);
+            ctx.save();
+            ctx.translate(pB.px, pB.py);
+            ctx.rotate(ang);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.6 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(-4.2 * dpr, -3.5 * dpr);
+            ctx.lineTo(1.8 * dpr, 0);
+            ctx.lineTo(-4.2 * dpr, 3.5 * dpr);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        // 4) Dynamic Braking Stop Marker & Emergency Pulse Ring
+        if (pred.stopPt) {
+          const sp = worldToPx(pred.stopPt[0], pred.stopPt[1]);
+          ctx.fillStyle = isEmergency ? '#ef4444' : '#ffffff';
+          ctx.strokeStyle = mainCol;
+          ctx.lineWidth = 1.6 * dpr;
+          ctx.beginPath();
+          ctx.arc(sp.px, sp.py, (isEmergency ? 5.2 : 3.2) * dpr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        if (isEmergency || isPickup) {
+          const v0 = nearPts[0];
+          if (v0) {
+            const vp = worldToPx(v0[0], v0[1]);
+            const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.008);
+            ctx.strokeStyle = mainCol;
+            ctx.globalAlpha = 0.35 + 0.55 * pulse;
+            ctx.lineWidth = 2.2 * dpr;
+            ctx.beginPath();
+            ctx.arc(vp.px, vp.py, (12 + pulse * 14) * dpr, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+          }
+        }
+
+        // 5) Destination Pin + Live Distance, Mode & ETA Pill!
+        const last = pred.goalPt || (farPts.length ? farPts[farPts.length - 1] : nearPts[nearPts.length - 1]);
+        const dp = worldToPx(last[0], last[1]);
+        ctx.fillStyle = mainCol;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.0 * dpr;
+        ctx.beginPath();
+        ctx.arc(dp.px, dp.py, 5.8 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        const remM = pred.remainingDistM || 0;
+        const etaS = Math.max(1, Math.round(pred.etaSec || 0));
+        const etaTxt = etaS >= 60 ? `${Math.floor(etaS / 60)}m${String(etaS % 60).padStart(2, '0')}s` : `${etaS}s`;
+        const statusPrefix = isEmergency ? '緊急停止 ' : (isPickup ? '送迎中 ' : '');
+        const distTag = `${statusPrefix}${vehLabel} ${formatMetricScale(remM)} • ${etaTxt}`;
+        ctx.font = `700 ${Math.round(8.6 * dpr)}px sans-serif`;
+        const tw = ctx.measureText(distTag).width + 14 * dpr;
+        const th = 16.5 * dpr;
+        const bx = dp.px - tw * 0.5;
+        const by = dp.py - 12 * dpr - th;
+        ctx.fillStyle = 'rgba(7, 12, 20, 0.88)';
+        ctx.strokeStyle = mainCol;
+        ctx.lineWidth = 1.15 * dpr;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, tw, th, 8 * dpr);
+        ctx.fill();
+        ctx.stroke();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(distTag, dp.px, by + th * 0.5 + 0.5 * dpr);
+      } else {
+        // Clean fallback route rendering
+        ctx.beginPath();
+        let totalDist = 0;
+        for (let i = 0; i < fallbackPts.length; i++) {
+          const p = worldToPx(fallbackPts[i][0], fallbackPts[i][1]);
+          if (i === 0) ctx.moveTo(p.px, p.py);
+          else {
+            ctx.lineTo(p.px, p.py);
+            totalDist += Math.hypot(fallbackPts[i][0] - fallbackPts[i - 1][0], fallbackPts[i][1] - fallbackPts[i - 1][1]);
+          }
+        }
+        ctx.strokeStyle = mainGlow; ctx.lineWidth = 7.0 * dpr; ctx.stroke();
+        ctx.strokeStyle = mainCol; ctx.lineWidth = 2.8 * dpr; ctx.stroke();
+        const last = fallbackPts[fallbackPts.length - 1];
+        const dp = worldToPx(last[0], last[1]);
+        ctx.fillStyle = mainCol; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.0 * dpr;
+        ctx.beginPath(); ctx.arc(dp.px, dp.py, 5.8 * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        const distTag = `${vehLabel} ${formatMetricScale(totalDist)}`;
+        ctx.font = `700 ${Math.round(8.6 * dpr)}px sans-serif`;
+        const tw = ctx.measureText(distTag).width + 12 * dpr, th = 16 * dpr;
+        const bx = dp.px - tw * 0.5, by = dp.py - 12 * dpr - th;
+        ctx.fillStyle = 'rgba(7, 12, 20, 0.84)'; ctx.strokeStyle = mainCol; ctx.lineWidth = 1.0 * dpr;
+        ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 8 * dpr); ctx.fill(); ctx.stroke();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
+        ctx.fillText(distTag, dp.px, by + th * 0.5 + 0.5 * dpr);
       }
-      ctx.strokeStyle = glowCol; ctx.lineWidth = 7.0 * dpr; ctx.stroke();
-      ctx.strokeStyle = strokeCol; ctx.lineWidth = 2.8 * dpr; ctx.stroke();
-      ctx.setLineDash([6 * dpr, 10 * dpr]);
-      ctx.lineDashOffset = -(performance.now() * 0.025) * dpr;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)'; ctx.lineWidth = 1.3 * dpr; ctx.stroke();
-      ctx.setLineDash([]);
-
-      const last = routePts[routePts.length - 1];
-      const dp = worldToPx(last[0], last[1]);
-      ctx.fillStyle = strokeCol; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.0 * dpr;
-      ctx.beginPath(); ctx.arc(dp.px, dp.py, 5.8 * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-      const distTag = `${vehLabel} ${formatMetricScale(totalDist)}`;
-      ctx.font = `700 ${Math.round(8.6 * dpr)}px sans-serif`;
-      const tw = ctx.measureText(distTag).width + 12 * dpr, th = 16 * dpr;
-      const bx = dp.px - tw * 0.5, by = dp.py - 12 * dpr - th;
-      ctx.fillStyle = 'rgba(7, 12, 20, 0.84)'; ctx.strokeStyle = strokeCol; ctx.lineWidth = 1.0 * dpr;
-      ctx.beginPath(); ctx.roundRect(bx, by, tw, th, 8 * dpr); ctx.fill(); ctx.stroke();
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffffff';
-      ctx.fillText(distTag, dp.px, by + th * 0.5 + 0.5 * dpr);
       ctx.restore();
     };
-    if (routesByVeh) {
-      drawRoute(routesByVeh.camper, '#38bdf8', 'rgba(56, 189, 248, 0.28)', 'RV');
-      drawRoute(routesByVeh.armor, '#34d399', 'rgba(52, 211, 153, 0.28)', '装甲');
-      drawRoute(routesByVeh.k11, '#c084fc', 'rgba(192, 132, 252, 0.28)', 'K-11');
+
+    const predsByVeh = state?.autopilotPredictions || null;
+    if (routesByVeh || predsByVeh) {
+      drawCoupledPrediction(predsByVeh?.camper, routesByVeh?.camper, '#38bdf8', 'rgba(56, 189, 248, 0.28)', 'RV');
+      drawCoupledPrediction(predsByVeh?.armor, routesByVeh?.armor, '#34d399', 'rgba(52, 211, 153, 0.28)', '装甲');
+      drawCoupledPrediction(predsByVeh?.k11, routesByVeh?.k11, '#c084fc', 'rgba(192, 132, 252, 0.28)', 'K-11');
     } else if (state?.autopilotRoute && state.autopilotRoute.length >= 2) {
-      drawRoute(state.autopilotRoute, '#38bdf8', 'rgba(56, 189, 248, 0.28)', '目的地');
+      drawCoupledPrediction(null, state.autopilotRoute, '#38bdf8', 'rgba(56, 189, 248, 0.28)', '目的地');
     }
 
     // 2g. Tap Dispatch Ripple Feedback
@@ -1790,23 +1994,75 @@ export function createTerrenoMap2D(geomorph, callbacks = {}, sharedRenderer = nu
       ctx.restore();
     }
 
-    // 2j. Live Player GPS Beacon & Luminous Heading Cone
+    // 2j. Unmistakable Live Player Directional Heading Cone & Aviation Navigation Chevron (exact pYaw!)
     {
       const pYaw = state?.yaw ?? 0;
       const pp = worldToPx(pxW, pzW);
       ctx.save();
       const ang = Math.atan2(-Math.cos(pYaw), -Math.sin(pYaw));
-      const coneR = 26 * dpr;
-      const grad = ctx.createRadialGradient(pp.px, pp.py, 2 * dpr, pp.px, pp.py, coneR);
-      grad.addColorStop(0, 'rgba(56, 189, 248, 0.62)');
-      grad.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath(); ctx.moveTo(pp.px, pp.py); ctx.arc(pp.px, pp.py, coneR, ang - 0.42, ang + 0.42); ctx.closePath(); ctx.fill();
+      const coneHalf = 0.50; // ~57 deg camera FOV cone
+      const coneR = 60 * dpr;
 
-      ctx.fillStyle = 'rgba(14, 165, 233, 0.24)';
-      ctx.beginPath(); ctx.arc(pp.px, pp.py, 11.0 * dpr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#0ea5e9'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.2 * dpr;
-      ctx.beginPath(); ctx.arc(pp.px, pp.py, 5.2 * dpr, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      // 1) Wide luminous FOV radar cone with subtle dark outer edge glow so it pops over both white glaciers & dark forests
+      const grad = ctx.createRadialGradient(pp.px, pp.py, 4 * dpr, pp.px, pp.py, coneR);
+      grad.addColorStop(0.0, 'rgba(56, 189, 248, 0.72)');
+      grad.addColorStop(0.45, 'rgba(56, 189, 248, 0.34)');
+      grad.addColorStop(0.82, 'rgba(125, 211, 252, 0.12)');
+      grad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(pp.px, pp.py);
+      ctx.arc(pp.px, pp.py, coneR, ang - coneHalf, ang + coneHalf);
+      ctx.closePath();
+      ctx.fill();
+
+      // Crisp FOV boundary rays + faint center sightline pointing straight ahead
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.62)';
+      ctx.lineWidth = 1.15 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(pp.px + Math.cos(ang - coneHalf) * 9 * dpr, pp.py + Math.sin(ang - coneHalf) * 9 * dpr);
+      ctx.lineTo(pp.px + Math.cos(ang - coneHalf) * (coneR * 0.88), pp.py + Math.sin(ang - coneHalf) * (coneR * 0.88));
+      ctx.moveTo(pp.px + Math.cos(ang + coneHalf) * 9 * dpr, pp.py + Math.sin(ang + coneHalf) * 9 * dpr);
+      ctx.lineTo(pp.px + Math.cos(ang + coneHalf) * (coneR * 0.88), pp.py + Math.sin(ang + coneHalf) * (coneR * 0.88));
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.76)';
+      ctx.lineWidth = 1.25 * dpr;
+      ctx.setLineDash([3.5 * dpr, 3.5 * dpr]);
+      ctx.beginPath();
+      ctx.moveTo(pp.px + Math.cos(ang) * 14 * dpr, pp.py + Math.sin(ang) * 14 * dpr);
+      ctx.lineTo(pp.px + Math.cos(ang) * (coneR * 0.94), pp.py + Math.sin(ang) * (coneR * 0.94));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 2) High-contrast dark backdrop disc + razor-sharp white-rimmed directional navigation chevron!
+      ctx.translate(pp.px, pp.py);
+      ctx.rotate(ang);
+
+      ctx.fillStyle = 'rgba(4, 10, 20, 0.62)';
+      ctx.beginPath();
+      ctx.arc(0, 0, 12.2 * dpr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sharp directional navigation arrow (+X is exact forward viewing direction!)
+      ctx.beginPath();
+      ctx.moveTo(12.5 * dpr, 0);              // elongated nose tip
+      ctx.lineTo(-7.2 * dpr, -7.8 * dpr);     // left wing
+      ctx.lineTo(-3.4 * dpr, 0);              // crisp tail notch
+      ctx.lineTo(-7.2 * dpr, 7.8 * dpr);      // right wing
+      ctx.closePath();
+      ctx.fillStyle = '#0ea5e9';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.2 * dpr;
+      ctx.lineJoin = 'round';
+      ctx.fill();
+      ctx.stroke();
+
+      // Tiny bright nose glint dot for instant glance readability
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.arc(3.2 * dpr, 0, 1.8 * dpr, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 

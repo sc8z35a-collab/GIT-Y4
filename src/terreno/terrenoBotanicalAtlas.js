@@ -86,42 +86,34 @@ function dilateTransparentRgbFast(imageData) {
   const { width: w, height: h, data } = imageData;
   const total = w * h;
   const srcA = new Uint8Array(total);
-  for (let i = 0; i < total; i++) srcA[i] = data[(i << 2) + 3] > 22 ? 1 : 0;
-
-  // Fill deep-transparent background pixels with cell-appropriate muted leaf green first (0 dark fringe at deep mip levels!)
+  // Pre-fill transparent pixels with soft natural canopy pigment (0 dark mip halos!)
   for (let i = 0; i < total; i++) {
-    if (!srcA[i]) {
-      const o4 = i << 2;
-      data[o4] = 88;
-      data[o4 + 1] = 122;
-      data[o4 + 2] = 66;
+    const o4 = i << 2;
+    if (data[o4 + 3] > 20) {
+      srcA[i] = 1;
+    } else {
+      data[o4] = 92;
+      data[o4 + 1] = 128;
+      data[o4 + 2] = 68;
     }
   }
-
-  // 2 fast 4-neighbor passes around opaque silhouette fringes
-  for (let pass = 0; pass < 2; pass++) {
-    for (let y = 1; y < h - 1; y++) {
-      const row = y * w;
-      for (let x = 1; x < w - 1; x++) {
-        const idx = row + x;
-        if (srcA[idx]) continue;
-        let rS = 0, gS = 0, bS = 0, cnt = 0;
-        const n0 = idx - 1, n1 = idx + 1, n2 = idx - w, n3 = idx + w;
-        if (srcA[n0]) { const p = n0 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
-        if (srcA[n1]) { const p = n1 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
-        if (srcA[n2]) { const p = n2 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
-        if (srcA[n3]) { const p = n3 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
-        if (cnt > 0) {
-          const o4 = idx << 2;
-          data[o4] = (rS / cnt) | 0;
-          data[o4 + 1] = (gS / cnt) | 0;
-          data[o4 + 2] = (bS / cnt) | 0;
-          srcA[idx] = 2;
-        }
-      }
-    }
-    if (pass === 0) {
-      for (let i = 0; i < total; i++) if (srcA[i] === 2) srcA[i] = 1;
+  // Single fast 4-neighbor RGB frontier bleed right around opaque leaf silhouettes
+  for (let y = 1; y < h - 1; y++) {
+    const row = y * w;
+    for (let x = 1; x < w - 1; x++) {
+      const idx = row + x;
+      if (srcA[idx]) continue;
+      const n0 = idx - 1, n1 = idx + 1, n2 = idx - w, n3 = idx + w;
+      if ((srcA[n0] | srcA[n1] | srcA[n2] | srcA[n3]) === 0) continue;
+      let rS = 0, gS = 0, bS = 0, cnt = 0;
+      if (srcA[n0]) { const p = n0 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
+      if (srcA[n1]) { const p = n1 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
+      if (srcA[n2]) { const p = n2 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
+      if (srcA[n3]) { const p = n3 << 2; rS += data[p]; gS += data[p + 1]; bS += data[p + 2]; cnt++; }
+      const o4 = idx << 2;
+      data[o4] = (rS / cnt) | 0;
+      data[o4 + 1] = (gS / cnt) | 0;
+      data[o4 + 2] = (bS / cnt) | 0;
     }
   }
 }
@@ -380,21 +372,52 @@ function paintBeechLeaf(ctx, x, y, angle, len, wid, r, g, b) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
+  // Finely serrated organic broadleaf silhouette (7 delicate marginal teeth per side — ZERO smooth blobs or squares!)
+  const teeth = 7;
   ctx.fillStyle = `rgb(${r},${g},${b})`;
   ctx.beginPath();
-  ctx.moveTo(len * 0.08, 0);
-  ctx.bezierCurveTo(len * 0.30, -wid * 1.15, len * 0.74, -wid * 0.92, len, 0);
-  ctx.bezierCurveTo(len * 0.74, wid * 0.92, len * 0.30, wid * 1.15, len * 0.08, 0);
+  ctx.moveTo(len * 0.04, 0);
+  for (let i = 1; i <= teeth; i++) {
+    const t0 = (i - 0.5) / teeth;
+    const t1 = i / teeth;
+    const w0 = wid * Math.sin(Math.pow(t0, 0.72) * Math.PI) * 1.12;
+    const w1 = wid * Math.sin(Math.pow(t1, 0.72) * Math.PI) * 0.90;
+    ctx.lineTo(len * (0.04 + t0 * 0.96), -w0);
+    if (i < teeth) ctx.lineTo(len * (0.04 + t1 * 0.96), -w1);
+  }
+  ctx.lineTo(len, 0);
+  for (let i = teeth; i >= 1; i--) {
+    const t0 = (i - 0.5) / teeth;
+    const t1 = i / teeth;
+    const w0 = wid * Math.sin(Math.pow(t0, 0.72) * Math.PI) * 1.12;
+    const w1 = wid * Math.sin(Math.pow(t1, 0.72) * Math.PI) * 0.90;
+    if (i < teeth) ctx.lineTo(len * (0.04 + t1 * 0.96), w1);
+    ctx.lineTo(len * (0.04 + t0 * 0.96), w0);
+  }
   ctx.closePath();
   ctx.fill();
+  // Subtle sunlit central midrib & delicate pinnate veins
+  ctx.strokeStyle = `rgba(${Math.min(255, r + 34)},${Math.min(255, g + 38)},${Math.min(255, b + 18)},0.58)`;
+  ctx.lineWidth = Math.max(0.8, len * 0.032);
+  ctx.beginPath();
+  ctx.moveTo(len * 0.05, 0);
+  ctx.lineTo(len * 0.92, 0);
+  for (let v = 1; v <= 4; v++) {
+    const tf = v * 0.19;
+    const vx = len * tf;
+    const vw = wid * Math.sin(Math.pow(tf, 0.72) * Math.PI) * 0.72;
+    ctx.moveTo(vx, 0); ctx.lineTo(vx + len * 0.11, -vw);
+    ctx.moveTo(vx, 0); ctx.lineTo(vx + len * 0.11, vw);
+  }
+  ctx.stroke();
   ctx.restore();
 }
 
 function paintCellBuna(ctx, ox, oy, size, rng) {
   ctx.save();
   ctx.beginPath(); ctx.rect(ox + 1, oy + 1, size - 2, size - 2); ctx.clip();
-  const s = size / 512;
-  ctx.translate(ox, oy); ctx.scale(s, s);
+  const s = (size / 512) * 0.92;
+  ctx.translate(ox + size * 0.04, oy + size * 0.04); ctx.scale(s, s);
   const twigs = [];
   function growTwig(x, y, ang, len, thick, depth) {
     const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
@@ -409,7 +432,7 @@ function paintCellBuna(ctx, ox, oy, size, rng) {
       growTwig(x + (x2 - x) * frac, y + (y2 - y) * frac, ang + (i % 2 === 0 ? -1 : 1) * (0.54 + rng() * 0.24), len * (0.50 + rng() * 0.22), thick * 0.62, depth + 1);
     }
   }
-  growTwig(256, 492, -Math.PI * 0.5, 404, 7.0, 0);
+  growTwig(256, 488, -Math.PI * 0.5, 386, 7.0, 0);
   for (let pass = 0; pass < 2; pass++) {
     for (let ti = 0; ti < twigs.length; ti++) {
       const tw = twigs[ti];
@@ -419,7 +442,7 @@ function paintCellBuna(ctx, ox, oy, size, rng) {
         const lx = tw.x1 + (tw.x2 - tw.x1) * f + (rng() - 0.5) * 16.0;
         const ly = tw.y1 + (tw.y2 - tw.y1) * f + (rng() - 0.5) * 16.0;
         const side = (i + ti + pass) % 2 === 0 ? -1 : 1;
-        const leafLen = 32.0 + rng() * 28.0;
+        const leafLen = 30.0 + rng() * 26.0;
         const lum = pass === 0 ? 0.72 + rng() * 0.16 : 0.94 + rng() * 0.20;
         paintBeechLeaf(ctx, lx, ly, tw.ang + side * (0.45 + rng() * 0.62), leafLen, leafLen * 0.42,
           Math.min(244, Math.round((130 + rng() * 38) * lum)),
@@ -434,8 +457,8 @@ function paintCellBuna(ctx, ox, oy, size, rng) {
 function paintCellBirch(ctx, ox, oy, size, rng) {
   ctx.save();
   ctx.beginPath(); ctx.rect(ox + 1, oy + 1, size - 2, size - 2); ctx.clip();
-  const s = size / 512;
-  ctx.translate(ox, oy); ctx.scale(s, s);
+  const s = (size / 512) * 0.92;
+  ctx.translate(ox + size * 0.04, oy + size * 0.04); ctx.scale(s, s);
   const twigs = [];
   function growBirch(x, y, ang, len, thick, depth) {
     const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
@@ -450,7 +473,7 @@ function paintCellBirch(ctx, ox, oy, size, rng) {
       growBirch(x + (x2 - x) * f, y + (y2 - y) * f, ang + (i % 2 === 0 ? -1 : 1) * (0.42 + rng() * 0.34), len * (0.50 + rng() * 0.20), thick * 0.58, depth + 1);
     }
   }
-  growBirch(256, 492, -Math.PI * 0.5, 420, 5.2, 0);
+  growBirch(256, 488, -Math.PI * 0.5, 400, 5.2, 0);
   for (let pass = 0; pass < 2; pass++) {
     for (let ti = 0; ti < twigs.length; ti++) {
       const tw = twigs[ti];
@@ -459,12 +482,12 @@ function paintCellBirch(ctx, ox, oy, size, rng) {
         const f = 0.18 + (i / cnt) * 0.82;
         const lx = tw.x1 + (tw.x2 - tw.x1) * f + (rng() - 0.5) * 18;
         const ly = tw.y1 + (tw.y2 - tw.y1) * f + (rng() - 0.5) * 18;
-        const L = 21.0 + rng() * 14.0, W = L * 0.46;
+        const L = 22.0 + rng() * 15.0, W = L * 0.44;
         const lum = pass === 0 ? 0.74 + rng() * 0.16 : 0.96 + rng() * 0.16;
-        ctx.save(); ctx.translate(lx, ly); ctx.rotate(tw.ang + (rng() - 0.5) * 1.5);
-        ctx.fillStyle = `rgb(${Math.min(248, Math.round((156 + rng() * 34) * lum))},${Math.min(248, Math.round((196 + rng() * 30) * lum))},${Math.min(180, Math.round((90 + rng() * 24) * lum))})`;
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L * 0.36, -W); ctx.lineTo(L, 0); ctx.lineTo(L * 0.36, W); ctx.closePath(); ctx.fill();
-        ctx.restore();
+        paintBeechLeaf(ctx, lx, ly, tw.ang + (rng() - 0.5) * 1.5, L, W,
+          Math.min(248, Math.round((156 + rng() * 34) * lum)),
+          Math.min(248, Math.round((196 + rng() * 30) * lum)),
+          Math.min(180, Math.round((90 + rng() * 24) * lum)));
       }
     }
   }
@@ -608,11 +631,11 @@ function paintCellUnderstoryPack(ctx, ox, oy, size, rng) {
 }
 
 function paintExtendedCells(ctx, cellSize, rng) {
-  const s = cellSize / 512;
+  const s = (cellSize / 512) * 0.92;
   const drawCell = (col, row, fn) => {
     ctx.save();
     ctx.beginPath(); ctx.rect(col * cellSize + 1, row * cellSize + 1, cellSize - 2, cellSize - 2); ctx.clip();
-    ctx.translate(col * cellSize, row * cellSize);
+    ctx.translate(col * cellSize + cellSize * 0.04, row * cellSize + cellSize * 0.04);
     ctx.scale(s, s);
     fn();
     ctx.restore();
@@ -786,11 +809,11 @@ let cachedBambooBark = null;
 let cachedSakuraBark = null;
 
 /**
- * Unified 1024×1024 Master Botanical Atlas (ALL 16 flora & understory cells in 1 texture bind!).
+ * Unified 2048×2048 High-Definition Master Botanical Atlas (512×512 native cell per species — 16× pixel density!).
  */
 export function getMasterBotanicalAtlas() {
   if (cachedMasterAtlas) return cachedMasterAtlas;
-  const W = 512, H = 512, cell = 128;
+  const W = 2048, H = 2048, cell = 512;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -821,7 +844,7 @@ export function getMasterBotanicalAtlas() {
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   tex.colorSpace = THREE.NoColorSpace;
   tex.needsUpdate = true;
 

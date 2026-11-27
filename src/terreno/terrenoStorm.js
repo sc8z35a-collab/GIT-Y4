@@ -47,7 +47,8 @@ const RAIN_VERT = /* glsl */ `
       return;
     }
 
-    vec3 box = vec3(52.0, 28.0, 52.0);
+    // Strict 6m × 6m × 6m dynamic rain bubble around player!
+    vec3 box = vec3(6.0, 6.0, 6.0);
     float fallSpeed = 24.0 + aSeed.x * 9.0;
     vec3 worldOffset = vec3(
       fract(aSeed.x + (uWind.x * uTime) / box.x - uCamPos.x / box.x) - 0.5,
@@ -61,12 +62,12 @@ const RAIN_VERT = /* glsl */ `
     vec3 toCam = normalize(uCamPos - basePos);
     vec3 right = normalize(cross(vel, toCam));
 
-    float streakLen = (0.75 + uIntensity * 0.95) * (0.7 + aSeed.z * 0.6);
-    float streakW = 0.016 + uIntensity * 0.010;
+    float streakLen = (0.32 + uIntensity * 0.32) * (0.7 + aSeed.z * 0.6);
+    float streakW = 0.008 + uIntensity * 0.005;
     vec3 pos = basePos + right * (aQuad.x * streakW) + vel * (aQuad.y * streakLen);
 
     float dist = length(worldOffset);
-    float distFade = (1.0 - smoothstep(14.0, 25.0, dist)) * smoothstep(1.1, 2.8, dist);
+    float distFade = (1.0 - smoothstep(2.2, 3.0, max(max(abs(worldOffset.x), abs(worldOffset.y)), abs(worldOffset.z)))) * smoothstep(0.45, 1.0, dist);
     vAlpha = distFade * uIntensity * (1.0 - abs(aQuad.y - 0.5) * 1.4) * 0.52;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
     #ifdef USE_LOGDEPTHBUF
@@ -380,15 +381,28 @@ export function createTerrenoStorm(geomorph, water, atmoUniforms) {
       ls.group.visible = ls.progress > 0.02;
       if (ls.group.visible) {
         ls.group.scale.y = Math.max(0.05, ls.progress);
-        // Animate active tumbling boulders rushing downslope while storm is raging
+        // Strict 6m × 6m × 6m player-bubble dynamic animation gate on cascading storm boulders!
+        const in6mLs = cameraPos
+          && Math.abs(ls.x - cameraPos.x) <= 3.0 + ls.radius
+          && Math.abs(ls.z - cameraPos.z) <= 3.0 + ls.radius;
         for (let t = 0; t < ls.tumblingRocks.length; t++) {
           const tr = ls.tumblingRocks[t];
+          if (!in6mLs) {
+            tr.mesh.visible = false;
+            continue;
+          }
           const cyc = (elapsed * 0.48 + tr.phase) % 1.0;
           const upDist = (1.0 - cyc) * 18.0;
           const downDist = cyc * ls.radius * 0.9;
           const ox = -ls.slopeDirX * upDist + ls.slopeDirX * downDist - ls.slopeDirZ * tr.offsetSide;
           const oz = -ls.slopeDirZ * upDist + ls.slopeDirZ * downDist + ls.slopeDirX * tr.offsetSide;
-          const wy = geomorph.getHeightAt(ls.x + ox, ls.z + oz) - ls.baseY;
+          const rx = ls.x + ox;
+          const rz = ls.z + oz;
+          if (Math.abs(rx - cameraPos.x) > 3.0 || Math.abs(rz - cameraPos.z) > 3.0) {
+            tr.mesh.visible = false;
+            continue;
+          }
+          const wy = geomorph.getHeightAt(rx, rz) - ls.baseY;
           tr.mesh.position.set(ox, wy + 0.35 + Math.sin(cyc * Math.PI * 6) * 0.25, oz);
           tr.mesh.rotation.x += dt * 4.2;
           tr.mesh.rotation.z += dt * 3.1;

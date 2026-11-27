@@ -144,12 +144,12 @@ export function buildArmorCamperAndContainer3D(ctx) {
   hitchBall.position.set(0, yFloor - 0.02, rz(ARMOR_CAMPER.hitchLocalZ));
   aStatic.add(hitchBall);
 
-  // Side armored rock-slider steel skirts & retractable entry step box under DAM-1 (lz = 13.95..14.87)
-  addABox(aStatic, 0.14, 0.28, L - 1.2, heavyIronMat, 0.05, yFloor - 0.16, L / 2, false);
-  addABox(aStatic, 0.14, 0.28, L - 1.2, heavyIronMat, W - 0.05, yFloor - 0.16, L / 2, false);
+  // Side armored rock-slider steel skirts & retractable entry step box under DAM-1 (cleanly outside hull walls!)
+  addABox(aStatic, 0.10, 0.28, L - 1.2, heavyIronMat, -0.056, yFloor - 0.16, L / 2, false);
+  addABox(aStatic, 0.10, 0.28, L - 1.2, heavyIronMat, W + 0.056, yFloor - 0.16, L / 2, false);
   // Steel boarding steps on West side leading up into DAM-1 airlock (ground -0.32 -> floor +0.62)
-  addABox(aStatic, 0.46, 0.06, 1.04, makeSurfaceMat('metal_grate', 0.46, 1.04), -0.23, yFloor - 0.32, 14.41, false);
-  addABox(aStatic, 0.46, 0.06, 1.04, makeSurfaceMat('metal_grate', 0.46, 1.04), -0.26, yFloor - 0.62, 14.41, false);
+  addABox(aStatic, 0.46, 0.06, 1.04, makeSurfaceMat('metal_grate', 0.46, 1.04), -0.24, yFloor - 0.32, 14.41, false);
+  addABox(aStatic, 0.46, 0.06, 1.04, makeSurfaceMat('metal_grate', 0.46, 1.04), -0.27, yFloor - 0.62, 14.41, false);
 
   // 8×8 Heavy Off-Road Wheels (Front 2 axles steer, all 8 spin!)
   const wheelMeshes = [];
@@ -159,9 +159,9 @@ export function buildArmorCamperAndContainer3D(ctx) {
   ARMOR_CAMPER.axlesZ.forEach((az, aIdx) => {
     // Heavy solid axle beam across chassis
     addABox(aStatic, W - 0.40, 0.18, 0.20, heavyIronMat, W / 2, yGround + wRad, az, false);
-    // Steel wheel-arch armor flare
-    [0.06, W - 0.06].forEach((fx) => {
-      addABox(aStatic, 0.24, 0.14, 1.38, darkArmorTrimMat, fx, yFloor + 0.14, az, false);
+    // Steel wheel-arch armor flare (cleanly exterior of wall!)
+    [-0.10, W + 0.10].forEach((fx) => {
+      addABox(aStatic, 0.18, 0.14, 1.38, darkArmorTrimMat, fx, yFloor + 0.14, az, false);
     });
     [0.24, W - 0.24].forEach((wx) => {
       const steerPivot = new THREE.Group();
