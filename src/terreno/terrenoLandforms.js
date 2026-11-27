@@ -1,8 +1,9 @@
 /**
- * TERRENO 6.0 — Unified Continuous Geomorphology Facade (100 Natural Earth & Subterranean Processes)
+ * TERRENO 7.0 — Unified Continuous Geomorphology Facade (160 Natural Earth & Subterranean Processes)
  */
 
 import {
+  GEOLOGY_PROCESS_CATALOG_160,
   GEOLOGY_PROCESS_CATALOG_100,
   GEOLOGY_PROCESS_CATALOG_62,
   GEOLOGY_BY_INDEX,
@@ -11,14 +12,17 @@ import {
   runContinuousGeologyEngine,
 } from './terrenoGeologyEngine.js';
 
-export const ALL_LANDFORMS_100 = GEOLOGY_PROCESS_CATALOG_100;
-export const ALL_LANDFORMS_62 = GEOLOGY_PROCESS_CATALOG_100;
-export const LEGACY_LANDFORMS_22 = GEOLOGY_PROCESS_CATALOG_100.filter((g) => !g.isNewV5 && !g.isNewV6);
-export const NEW_LANDFORMS_40 = GEOLOGY_PROCESS_CATALOG_100.filter((g) => g.isNewV5);
-export const NEW_LANDFORMS_V6_38 = GEOLOGY_PROCESS_CATALOG_100.filter((g) => g.isNewV6);
+export const ALL_LANDFORMS_160 = GEOLOGY_PROCESS_CATALOG_160;
+export const ALL_LANDFORMS_100 = GEOLOGY_PROCESS_CATALOG_160;
+export const ALL_LANDFORMS_62 = GEOLOGY_PROCESS_CATALOG_160;
+export const LEGACY_LANDFORMS_22 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => !g.isNewV5 && !g.isNewV6 && !g.isNewV7);
+export const NEW_LANDFORMS_40 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => g.isNewV5);
+export const NEW_LANDFORMS_V6_38 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => g.isNewV6);
+export const NEW_LANDFORMS_V7_60 = GEOLOGY_PROCESS_CATALOG_160.filter((g) => g.isNewV7);
 export const MAJOR_LANDFORMS_22 = LEGACY_LANDFORMS_22;
 
 export {
+  GEOLOGY_PROCESS_CATALOG_160,
   GEOLOGY_PROCESS_CATALOG_100,
   GEOLOGY_PROCESS_CATALOG_62,
   GEOLOGY_BY_INDEX,
